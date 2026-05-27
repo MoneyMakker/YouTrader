@@ -35,7 +35,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "plugins": [
       [
@@ -52,6 +58,12 @@
           "faceIDPermission": "Allow YouTrader to use Face ID for quick secure unlock."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "02ed40d6-5ad8-4a6d-9716-5ba40ec714c6"
+      }
+    },
+    "owner": "pdvl"
   }
 }

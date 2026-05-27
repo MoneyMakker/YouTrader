@@ -1,5 +1,5 @@
 import "react-native-url-polyfill/auto";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   SafeAreaProvider,
   SafeAreaView,
@@ -15,6 +15,11 @@ import * as LocalAuthentication from "expo-local-authentication";
 import * as Notifications from "expo-notifications";
 import * as WebBrowser from "expo-web-browser";
 import { createClient, processLock, type Session } from "@supabase/supabase-js";
+import Purchases, {
+  LOG_LEVEL,
+  type CustomerInfo,
+  type PurchasesPackage,
+} from "react-native-purchases";
 import {
   ActivityIndicator,
   Alert,
@@ -72,6 +77,31 @@ type Trade = {
   photoUri?: string | null;
   voiceUri?: string | null;
   voiceName?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
+type TradeJournalRow = {
+  id?: string;
+  client_id: string;
+  user_id: string;
+  trade_date: string;
+  symbol: string;
+  direction: Direction;
+  contracts: number;
+  entry: number | null;
+  exit: number | null;
+  stop_loss: number | null;
+  take_profit: number | null;
+  pnl: number;
+  mood: string | null;
+  notes: string | null;
+  screenshot_url: string | null;
+  voice_url: string | null;
+  tags?: string[];
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
 };
 
 type MarketNews = {
@@ -108,8 +138,20 @@ const SUPABASE_PUBLISHABLE_KEY =
 const AUTH_REDIRECT_TO = makeRedirectUri({ scheme: "com.youtrader.pro", path: "auth" });
 const ENABLE_NATIVE_APPLE_SIGN_IN =
   process.env.EXPO_PUBLIC_ENABLE_NATIVE_APPLE_SIGN_IN === "true";
-const OWNER_FULL_ACCESS = true;
+const OWNER_FULL_ACCESS = process.env.EXPO_PUBLIC_OWNER_FULL_ACCESS === "true";
 const PREMIUM_PRICE = "$9.99/mo";
+const TRADES_STORAGE_KEY = "trades-v6";
+const FREE_JOURNAL_DAYS = 10;
+const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || "";
+const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY || "";
+const REVENUECAT_ENTITLEMENT_ID =
+  process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || "pro";
+const REVENUECAT_API_KEY =
+  Platform.OS === "ios"
+    ? REVENUECAT_IOS_API_KEY
+    : Platform.OS === "android"
+      ? REVENUECAT_ANDROID_API_KEY
+      : "";
 const supabase = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: {
@@ -203,7 +245,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     restore: "Restore Purchase",
     premiumLocked: "Premium Feature",
     premiumLockedText:
-      "Upgrade your trading workflow with live market context, deeper journal analytics, trade replay and secure backup.",
+      "Keep the core tools free. Upgrade when you want unlimited journal, cloud sync and the full edge profile.",
     plusPnl: "Profit +",
     minusPnl: "Loss −",
     photo: "Trade Screenshot",
@@ -215,14 +257,14 @@ const I18N: Record<Lang, Record<string, string>> = {
     noAudio: "No audio note yet",
     calendarIntel: "Calendar intelligence",
     calendarIntelText: "High impact events can expand volatility. Check ES/NQ/GOLD/OIL/BTC bias before trading.",
-    premiumBenefit1: "Live market news feed for faster market context",
-    premiumBenefit2: "Economic calendar with key events and market bias",
-    premiumBenefit3: "Pro analytics: cumulative P&L, daily P&L, drawdown, EV, profit factor, Avg R:R and win rate",
-    premiumBenefit4: "Replay Mode: review trades with screenshots, notes and voice notes",
-    premiumBenefit5: "Unlimited trade journal with screenshot and voice note database",
-    premiumBenefit6: "Cloud Sync + Multi Device backup for your full trade database",
-    premiumBenefit7: "Advanced calculators: Tick, Point, Risk/Reward and % Risk",
-    premiumBenefit8: "My Stats: best/worst days, time of day, setup performance, drawdown and equity curve",
+    premiumBenefit1: "Unlimited trade journal after the free 10 trading days",
+    premiumBenefit2: "Full analytics: expectancy, Sharpe, consistency and streaks",
+    premiumBenefit3: "Full edge profile, full radar and recovery analytics",
+    premiumBenefit4: "Session, day and symbol performance breakdowns",
+    premiumBenefit5: "Advanced news sentiment for ES/NQ/GOLD/OIL/BTC",
+    premiumBenefit6: "Cloud Sync + multi-device journal backup",
+    premiumBenefit7: "AI edge insights, export and replay tools planned next",
+    premiumBenefit8: "Keep calculator, economic calendar and basic news free",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -243,7 +285,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     restoreBackup: "Import Backup",
     backupText: "Save a full backup of your trades and screenshots to iCloud Drive. If the app is deleted, import this file to restore your journal.",
     cloudSync: "Cloud Sync",
-    cloudSyncText: "Premium cloud sync is prepared for production. Connect Supabase/Firebase backend before App Store launch for automatic cross-device backup.",
+    cloudSyncText: "Premium Cloud Sync keeps your journal available across devices after you sign in.",
     backupReady: "Backup ready",
     backupFailed: "Backup failed",
     restoreDone: "Backup restored. Restart the app to reload your journal.",
@@ -309,7 +351,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     restore: "Восстановить покупку",
     premiumLocked: "Premium функция",
     premiumLockedText:
-      "Открой live новости, экономический календарь, аналитику журнала, AI market summaries и cloud sync.",
+      "Базовые инструменты остаются бесплатными. Premium нужен для unlimited journal, cloud sync и полного edge profile.",
     plusPnl: "Профит +",
     minusPnl: "Лосс −",
     photo: "Скрин сделки",
@@ -321,14 +363,14 @@ const I18N: Record<Lang, Record<string, string>> = {
     noAudio: "Пока нет аудио",
     calendarIntel: "Интеллект календаря",
     calendarIntelText: "High impact события могут резко увеличить волатильность. Проверь bias по ES/NQ/GOLD/OIL/BTC перед торговлей.",
-    premiumBenefit1: "Live новости рынка для быстрого контекста",
-    premiumBenefit2: "Экономический календарь с важными событиями и bias",
-    premiumBenefit3: "Pro аналитика: cumulative P&L, daily P&L, drawdown, EV, PF, Avg R:R и win rate",
-    premiumBenefit4: "Replay Mode: screenshots, notes и voice notes для разбора каждой сделки",
-    premiumBenefit5: "Unlimited journal database",
-    premiumBenefit6: "Cloud Sync + Multi Device backup всей базы сделок",
-    premiumBenefit7: "Tick, Point, Risk/Reward и % Risk calculators",
-    premiumBenefit8: "My Stats: лучшие/худшие дни, время торговли, setup performance, drawdown и equity curve",
+    premiumBenefit1: "Unlimited journal после 10 бесплатных торговых дней",
+    premiumBenefit2: "Полная аналитика: expectancy, Sharpe, consistency и серии",
+    premiumBenefit3: "Full edge profile, full radar и recovery analytics",
+    premiumBenefit4: "Разбор по session/day/symbol",
+    premiumBenefit5: "Advanced news sentiment для ES/NQ/GOLD/OIL/BTC",
+    premiumBenefit6: "Cloud Sync + multi-device backup журнала",
+    premiumBenefit7: "AI edge insights, export и replay добавим следующими",
+    premiumBenefit8: "Calculator, economic calendar и basic news остаются free",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -338,7 +380,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     restoreBackup: "Импорт backup",
     backupText: "Сохраняй полный backup сделок и скриншотов в iCloud Drive. Если приложение удалится, импортируй этот файл и восстанови журнал.",
     cloudSync: "Cloud Sync",
-    cloudSyncText: "Premium cloud sync подготовлен для production. Перед App Store нужно подключить Supabase/Firebase backend для авто-синхронизации.",
+    cloudSyncText: "Premium Cloud Sync синхронизирует журнал между устройствами после входа в аккаунт.",
     backupReady: "Backup готов",
     backupFailed: "Backup не удался",
     restoreDone: "Backup восстановлен. Перезапусти приложение, чтобы журнал обновился.",
@@ -882,6 +924,147 @@ function dayMoney(n: number) {
 function moodLabel(key: string) {
   const m = MOODS.find((x) => x.key === key);
   return m ? `${m.emoji} ${m.key}` : key;
+}
+
+function customerHasPro(customerInfo?: CustomerInfo | null) {
+  return !!customerInfo?.entitlements?.active?.[REVENUECAT_ENTITLEMENT_ID];
+}
+
+function packagePrice(pkg?: PurchasesPackage | null) {
+  return pkg?.product?.priceString || PREMIUM_PRICE;
+}
+
+function packageTitle(pkg: PurchasesPackage) {
+  const id = `${pkg.identifier} ${pkg.product.identifier}`.toLowerCase();
+  if (id.includes("annual") || id.includes("year")) return "YEARLY";
+  if (id.includes("month")) return "MONTHLY";
+  return pkg.packageType || "PRO";
+}
+
+function normalizeTrade(trade: Trade): Trade {
+  const fallbackTime = typeof (trade as any).createdAt === "number" ? (trade as any).createdAt : Date.now();
+  return {
+    ...trade,
+    id: String(trade.id || uid()),
+    createdAt: typeof trade.createdAt === "number" ? trade.createdAt : fallbackTime,
+    updatedAt: typeof trade.updatedAt === "number" ? trade.updatedAt : fallbackTime,
+  };
+}
+
+function sortTrades(trades: Trade[]) {
+  return [...trades].sort((a, b) => {
+    const dateSort = b.date.localeCompare(a.date);
+    if (dateSort) return dateSort;
+    return (b.updatedAt || 0) - (a.updatedAt || 0);
+  });
+}
+
+function normalizeTrades(trades: Trade[]) {
+  const map = new Map<string, Trade>();
+  trades.forEach((trade) => {
+    const next = normalizeTrade(trade);
+    const current = map.get(next.id);
+    if (!current || (next.updatedAt || 0) >= (current.updatedAt || 0)) {
+      map.set(next.id, next);
+    }
+  });
+  return sortTrades([...map.values()]);
+}
+
+function tradeToCloudRow(trade: Trade, userId: string): TradeJournalRow {
+  const normalized = normalizeTrade(trade);
+  const updatedAt = new Date(normalized.updatedAt || Date.now()).toISOString();
+  const createdAt = new Date(normalized.createdAt || normalized.updatedAt || Date.now()).toISOString();
+  return {
+    client_id: normalized.id,
+    user_id: userId,
+    trade_date: normalized.date,
+    symbol: normalized.symbol,
+    direction: normalized.direction,
+    contracts: normalized.contracts,
+    entry: normalized.entry ?? null,
+    exit: normalized.exit ?? null,
+    stop_loss: normalized.stopLoss ?? null,
+    take_profit: normalized.takeProfit ?? null,
+    pnl: normalized.pnl,
+    mood: normalized.mood || null,
+    notes: normalized.notes || null,
+    screenshot_url: normalized.photoUri || null,
+    voice_url: normalized.voiceUri || null,
+    tags: [],
+    created_at: createdAt,
+    updated_at: updatedAt,
+    deleted_at: null,
+  };
+}
+
+function cloudRowToTrade(row: TradeJournalRow): Trade {
+  const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+  const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+  return normalizeTrade({
+    id: String(row.client_id || row.id || uid()),
+    date: row.trade_date,
+    symbol: row.symbol,
+    direction: row.direction,
+    entry: row.entry,
+    exit: row.exit,
+    contracts: Number(row.contracts || 1),
+    stopLoss: row.stop_loss,
+    takeProfit: row.take_profit,
+    pnl: Number(row.pnl || 0),
+    mood: row.mood || "Focused",
+    notes: row.notes || "",
+    photoUri: row.screenshot_url || null,
+    voiceUri: row.voice_url || null,
+    voiceName: row.voice_url ? "Voice note" : null,
+    createdAt,
+    updatedAt,
+  });
+}
+
+function mergeLocalAndCloudTrades(localTrades: Trade[], cloudRows: TradeJournalRow[]) {
+  const merged = new Map<string, Trade>();
+  normalizeTrades(localTrades).forEach((trade) => merged.set(trade.id, trade));
+
+  cloudRows.forEach((row) => {
+    const clientId = String(row.client_id || row.id || "");
+    if (!clientId) return;
+    const deletedAt = row.deleted_at ? Date.parse(row.deleted_at) : 0;
+    if (deletedAt) {
+      const local = merged.get(clientId);
+      if (!local || deletedAt >= (local.updatedAt || 0)) merged.delete(clientId);
+      return;
+    }
+    const cloudTrade = cloudRowToTrade(row);
+    const local = merged.get(cloudTrade.id);
+    if (!local || (cloudTrade.updatedAt || 0) > (local.updatedAt || 0)) {
+      merged.set(cloudTrade.id, cloudTrade);
+    }
+  });
+
+  return sortTrades([...merged.values()]);
+}
+
+function tradesSignature(trades: Trade[]) {
+  return JSON.stringify(
+    normalizeTrades(trades).map((trade) => ({
+      id: trade.id,
+      date: trade.date,
+      symbol: trade.symbol,
+      direction: trade.direction,
+      contracts: trade.contracts,
+      entry: trade.entry ?? null,
+      exit: trade.exit ?? null,
+      stopLoss: trade.stopLoss ?? null,
+      takeProfit: trade.takeProfit ?? null,
+      pnl: trade.pnl,
+      mood: trade.mood,
+      notes: trade.notes,
+      photoUri: trade.photoUri ?? null,
+      voiceUri: trade.voiceUri ?? null,
+      updatedAt: trade.updatedAt || 0,
+    })),
+  );
 }
 
 function estimateBias(text: string): Record<Asset, Bias> {
@@ -2090,7 +2273,23 @@ function SplitCount({
   );
 }
 
-function PaywallPreview() {
+function PaywallPreview({
+  packages,
+  purchaseBusy,
+  revenueCatConfigured,
+  paywallError,
+  onPurchase,
+  onRestore,
+}: {
+  packages: PurchasesPackage[];
+  purchaseBusy: boolean;
+  revenueCatConfigured: boolean;
+  paywallError: string;
+  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  onRestore: () => void;
+}) {
+  const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
+  const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || packages[1] || null;
   return (
     <View style={styles.paywallPreview}>
       <Text style={styles.paywallTitle}>Unlock Full Edge Analysis</Text>
@@ -2098,18 +2297,40 @@ function PaywallPreview() {
         Unlimited journal, full radar profile, recovery factor, consistency, session/symbol breakdowns and advanced performance metrics.
       </Text>
       <View style={styles.planRow}>
-        <View style={styles.monthlyPlan}>
+        <Pressable
+          disabled={purchaseBusy || !revenueCatConfigured}
+          onPress={() => onPurchase(monthly)}
+          style={[styles.monthlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+        >
           <Text style={styles.planName}>MONTHLY</Text>
-          <Text style={styles.planPrice}>$9.99/mo</Text>
-        </View>
-        <View style={styles.yearlyPlan}>
+          <Text style={styles.planPrice}>{packagePrice(monthly)}</Text>
+        </Pressable>
+        <Pressable
+          disabled={purchaseBusy || !revenueCatConfigured}
+          onPress={() => onPurchase(yearly || monthly)}
+          style={[styles.yearlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+        >
           <View style={styles.bestValueBadge}>
             <Text style={styles.bestValueText}>BEST VALUE</Text>
           </View>
           <Text style={styles.planName}>YEARLY</Text>
-          <Text style={styles.planPrice}>$79.99/year</Text>
-        </View>
+          <Text style={styles.planPrice}>{yearly ? packagePrice(yearly) : "$79.99/year"}</Text>
+        </Pressable>
       </View>
+      <Pressable
+        disabled={purchaseBusy || !revenueCatConfigured}
+        onPress={onRestore}
+        style={[styles.secondaryBig, styles.restorePurchaseBtn, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+      >
+        <Text style={styles.secondaryText}>{purchaseBusy ? "Connecting..." : "Restore Purchases"}</Text>
+      </Pressable>
+      {!revenueCatConfigured ? (
+        <Text style={[styles.sub, { marginTop: 10 }]}>
+          RevenueCat key is missing. Add EXPO_PUBLIC_REVENUECAT_IOS_API_KEY before TestFlight.
+        </Text>
+      ) : paywallError ? (
+        <Text style={[styles.sub, { color: C.red, marginTop: 10 }]}>{paywallError}</Text>
+      ) : null}
     </View>
   );
 }
@@ -2314,8 +2535,27 @@ function consistencyScoreFromTrades(trades: Trade[]) {
   return Math.max(0, Math.min(100, greenRate * 0.55 + stability * 0.45));
 }
 
-function Stats({ trades, lang }: { trades: Trade[]; lang: Lang }) {
-  const isPremium = OWNER_FULL_ACCESS;
+function Stats({
+  trades,
+  lang,
+  isPremium,
+  packages,
+  purchaseBusy,
+  revenueCatConfigured,
+  paywallError,
+  onPurchase,
+  onRestore,
+}: {
+  trades: Trade[];
+  lang: Lang;
+  isPremium: boolean;
+  packages: PurchasesPackage[];
+  purchaseBusy: boolean;
+  revenueCatConfigured: boolean;
+  paywallError: string;
+  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  onRestore: () => void;
+}) {
   const freeDays = 10;
   const sortedUniqueDays = [...new Set(trades.map((t) => t.date))].sort();
   const allowedDays = sortedUniqueDays.slice(0, freeDays);
@@ -2462,12 +2702,41 @@ function Stats({ trades, lang }: { trades: Trade[]; lang: Lang }) {
         <PerformanceBreakdown title="Performance by symbol" data={s.bySetup} maxItems={5} />
       )}
 
-      {!isPremium && <PaywallPreview />}
+      {!isPremium && (
+        <PaywallPreview
+          packages={packages}
+          purchaseBusy={purchaseBusy}
+          revenueCatConfigured={revenueCatConfigured}
+          paywallError={paywallError}
+          onPurchase={onPurchase}
+          onRestore={onRestore}
+        />
+      )}
     </Card>
   );
 }
 
-function StatsScreen({ trades, lang }: { trades: Trade[]; lang: Lang }) {
+function StatsScreen({
+  trades,
+  lang,
+  isPremium,
+  packages,
+  purchaseBusy,
+  revenueCatConfigured,
+  paywallError,
+  onPurchase,
+  onRestore,
+}: {
+  trades: Trade[];
+  lang: Lang;
+  isPremium: boolean;
+  packages: PurchasesPackage[];
+  purchaseBusy: boolean;
+  revenueCatConfigured: boolean;
+  paywallError: string;
+  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  onRestore: () => void;
+}) {
   const [period, setPeriod] = useState<"day" | "week" | "month" | "year">("month");
   const [selectedDate] = useState(todayISO());
   const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
@@ -2490,7 +2759,17 @@ function StatsScreen({ trades, lang }: { trades: Trade[]; lang: Lang }) {
           </Pressable>
         ))}
       </View>
-      <Stats trades={periodTrades} lang={lang} />
+      <Stats
+        trades={periodTrades}
+        lang={lang}
+        isPremium={isPremium}
+        packages={packages}
+        purchaseBusy={purchaseBusy}
+        revenueCatConfigured={revenueCatConfigured}
+        paywallError={paywallError}
+        onPurchase={onPurchase}
+        onRestore={onRestore}
+      />
     </ScrollView>
   );
 }
@@ -2551,10 +2830,16 @@ function JournalScreen({
   lang,
   trades,
   setTrades,
+  isPremium,
+  onUpgrade,
+  onTradeDeleted,
 }: {
   lang: Lang;
   trades: Trade[];
   setTrades: React.Dispatch<React.SetStateAction<Trade[]>>;
+  isPremium: boolean;
+  onUpgrade: () => void;
+  onTradeDeleted: (tradeId: string) => void;
 }) {
   const t = (k: string) => tText(lang, k);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -2594,6 +2879,20 @@ function JournalScreen({
     })();
   }, []);
   const filtered = trades.filter((x) => x.date === selectedDate);
+  const uniqueTradingDays = useMemo(() => [...new Set(trades.map((trade) => trade.date))], [trades]);
+  const canAddTradeOnDate = useCallback((date: string) => {
+    return isPremium || uniqueTradingDays.includes(date) || uniqueTradingDays.length < FREE_JOURNAL_DAYS;
+  }, [isPremium, uniqueTradingDays]);
+  const showJournalLimit = useCallback(() => {
+    Alert.alert(
+      "YouTrader Pro",
+      `Free plan includes ${FREE_JOURNAL_DAYS} trading days. Upgrade to unlock unlimited journal, cloud sync and full analytics.`,
+      [
+        { text: t("close"), style: "cancel" },
+        { text: "Upgrade", onPress: onUpgrade },
+      ],
+    );
+  }, [onUpgrade, t]);
   const monthDays = useMemo(() => {
     const y = viewMonth.getFullYear();
     const m = viewMonth.getMonth();
@@ -2612,6 +2911,10 @@ function JournalScreen({
     return rows;
   }, [monthDays]);
   const openNew = (date = selectedDate) => {
+    if (!canAddTradeOnDate(date)) {
+      showJournalLimit();
+      return;
+    }
     setSelectedDate(date);
     setEditId(null);
     setPnlSide("plus");
@@ -2656,9 +2959,15 @@ function JournalScreen({
     );
   };
   const save = () => {
+    if (!editId && !canAddTradeOnDate(selectedDate)) {
+      showJournalLimit();
+      return;
+    }
     const pnl = calcPnl();
     if (!form.pnl.trim() && (!form.entry || !form.exit))
       return Alert.alert(t("addPnl"));
+    const now = Date.now();
+    const previousTrade = editId ? trades.find((x) => x.id === editId) : null;
     const item: Trade = {
       id: editId || uid(),
       date: selectedDate,
@@ -2675,8 +2984,9 @@ function JournalScreen({
       photoUri: form.photoUri || null,
       voiceUri: form.voiceUri || null,
       voiceName: form.voiceName || null,
-      createdAt: editId ? ((trades.find((x) => x.id === editId) as any)?.createdAt || Date.now()) : Date.now(),
-    } as any;
+      createdAt: editId ? (previousTrade?.createdAt || now) : now,
+      updatedAt: now,
+    };
     setTrades((prev) =>
       editId ? prev.map((x) => (x.id === editId ? item : x)) : [item, ...prev],
     );
@@ -2690,6 +3000,7 @@ function JournalScreen({
         text: t("deleteTrade"),
         style: "destructive",
         onPress: () => {
+          onTradeDeleted(editId);
           setTrades((prev) => prev.filter((x) => x.id !== editId));
           setModal(false);
         },
@@ -2754,6 +3065,16 @@ function JournalScreen({
       >
         <Text style={styles.primaryText}>{t("addTrade")}</Text>
       </Pressable>
+      {!isPremium && (
+        <View style={[styles.freeNotice, { marginBottom: 12 }]}>
+          <Text style={styles.freeNoticeTitle}>
+            Free journal: {Math.min(uniqueTradingDays.length, FREE_JOURNAL_DAYS)}/{FREE_JOURNAL_DAYS} trading days
+          </Text>
+          <Text style={styles.freeNoticeText}>
+            Calculator, calendar and basic news are free. Pro unlocks unlimited journal, cloud sync and full analytics.
+          </Text>
+        </View>
+      )}
       <Card style={styles.calendarCard}>
         <View style={{ alignItems: "center", marginBottom: 12 }}>
           <Text style={styles.h2}>
@@ -3129,7 +3450,7 @@ function JournalScreen({
   );
 }
 
-function NewsScreen({ lang }: { lang: Lang }) {
+function NewsScreen({ lang, isPremium }: { lang: Lang; isPremium: boolean }) {
   const t = (k: string) => tText(lang, k);
   const [items, setItems] = useState<MarketNews[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3197,27 +3518,34 @@ function NewsScreen({ lang }: { lang: Lang }) {
                     {item.summary.slice(0, 240)}
                   </Text>
                 )}
-                <View style={styles.assetGrid}>
-                  {ASSETS.map((a) => (
-                    <View key={a} style={styles.assetCell}>
-                      <Text style={styles.asset}>{a}</Text>
-                      <Text
-                        style={{
-                          color:
-                            item.bias[a] === "LONG"
-                              ? C.green
-                              : item.bias[a] === "SHORT"
-                                ? C.red
-                                : C.sub,
-                          fontWeight: "900",
-                          fontSize: 11,
-                        }}
-                      >
-                        {item.bias[a] === "LONG" ? "LONG ↑" : item.bias[a] === "SHORT" ? "SHORT ↓" : "NEUTRAL -"}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                {isPremium ? (
+                  <View style={styles.assetGrid}>
+                    {ASSETS.map((a) => (
+                      <View key={a} style={styles.assetCell}>
+                        <Text style={styles.asset}>{a}</Text>
+                        <Text
+                          style={{
+                            color:
+                              item.bias[a] === "LONG"
+                                ? C.green
+                                : item.bias[a] === "SHORT"
+                                  ? C.red
+                                  : C.sub,
+                            fontWeight: "900",
+                            fontSize: 11,
+                          }}
+                        >
+                          {item.bias[a] === "LONG" ? "LONG ↑" : item.bias[a] === "SHORT" ? "SHORT ↓" : "NEUTRAL -"}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.lockedNewsIntel}>
+                    <Text style={styles.lockedNewsTitle}>Advanced sentiment is Pro</Text>
+                    <Text style={styles.lockedNewsText}>Basic headlines stay free. Upgrade for ES/NQ/GOLD/OIL/BTC directional bias.</Text>
+                  </View>
+                )}
               </Card>
             </Pressable>
           )}
@@ -3435,8 +3763,28 @@ function CalcScreen({ lang }: { lang: Lang }) {
     </ScrollView>
   );
 }
-function PremiumScreen({ lang, onClose }: { lang: Lang; onClose: () => void }) {
+function PremiumScreen({
+  lang,
+  onClose,
+  packages,
+  purchaseBusy,
+  revenueCatConfigured,
+  paywallError,
+  onPurchase,
+  onRestore,
+}: {
+  lang: Lang;
+  onClose: () => void;
+  packages: PurchasesPackage[];
+  purchaseBusy: boolean;
+  revenueCatConfigured: boolean;
+  paywallError: string;
+  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  onRestore: () => void;
+}) {
   const t = (k: string) => tText(lang, k);
+  const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
+  const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || packages[1] || null;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.modalHeader}>
@@ -3461,20 +3809,50 @@ function PremiumScreen({ lang, onClose }: { lang: Lang; onClose: () => void }) {
             ✓ {t(k)}
           </Text>
         ))}
+        <View style={styles.planRow}>
+          <Pressable
+            disabled={purchaseBusy || !revenueCatConfigured}
+            onPress={() => onPurchase(monthly)}
+            style={[styles.monthlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+          >
+            <Text style={styles.planName}>MONTHLY</Text>
+            <Text style={styles.planPrice}>{packagePrice(monthly)}</Text>
+          </Pressable>
+          <Pressable
+            disabled={purchaseBusy || !revenueCatConfigured}
+            onPress={() => onPurchase(yearly || monthly)}
+            style={[styles.yearlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+          >
+            <View style={styles.bestValueBadge}>
+              <Text style={styles.bestValueText}>BEST VALUE</Text>
+            </View>
+            <Text style={styles.planName}>YEARLY</Text>
+            <Text style={styles.planPrice}>{yearly ? packagePrice(yearly) : "$79.99/year"}</Text>
+          </Pressable>
+        </View>
         <Pressable
-          onPress={() =>
-            Alert.alert(
-              t("premiumAccess"),
-              "App Store purchase will be enabled after the $4.99/month product is created in App Store Connect. This owner build keeps full access on.",
-            )
-          }
-          style={styles.primaryBig}
+          disabled={purchaseBusy || !revenueCatConfigured}
+          onPress={() => onPurchase(monthly)}
+          style={[styles.primaryBig, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
         >
-          <Text style={styles.primaryText}>{t("subscribe")}</Text>
+          <Text style={styles.primaryText}>
+            {purchaseBusy ? "Connecting..." : `Start Pro • ${packagePrice(monthly)}`}
+          </Text>
         </Pressable>
-        <Pressable style={styles.secondaryBig}>
+        <Pressable
+          disabled={purchaseBusy || !revenueCatConfigured}
+          onPress={onRestore}
+          style={[styles.secondaryBig, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+        >
           <Text style={styles.secondaryText}>{t("restore")}</Text>
         </Pressable>
+        {!revenueCatConfigured ? (
+          <Text style={[styles.sub, { marginTop: 10 }]}>
+            Add EXPO_PUBLIC_REVENUECAT_IOS_API_KEY and configure the pro entitlement in RevenueCat.
+          </Text>
+        ) : paywallError ? (
+          <Text style={[styles.sub, { color: C.red, marginTop: 10 }]}>{paywallError}</Text>
+        ) : null}
       </Card>
     </ScrollView>
   );
@@ -3569,9 +3947,21 @@ function SettingsScreen({
   session,
   authBusy,
   authConfigured,
+  isPremium,
+  packages,
+  purchaseBusy,
+  revenueCatConfigured,
+  paywallError,
+  cloudSyncEnabled,
+  cloudSyncStatus,
+  cloudSyncMessage,
+  lastCloudSyncAt,
   faceLockEnabled,
   onOAuth,
   onSignOut,
+  onPurchase,
+  onRestore,
+  onSyncNow,
   onEnableFaceId,
   onDisableFaceId,
 }: {
@@ -3580,9 +3970,21 @@ function SettingsScreen({
   session: Session | null;
   authBusy: boolean;
   authConfigured: boolean;
+  isPremium: boolean;
+  packages: PurchasesPackage[];
+  purchaseBusy: boolean;
+  revenueCatConfigured: boolean;
+  paywallError: string;
+  cloudSyncEnabled: boolean;
+  cloudSyncStatus: "off" | "syncing" | "synced" | "error";
+  cloudSyncMessage: string;
+  lastCloudSyncAt: string | null;
   faceLockEnabled: boolean;
   onOAuth: (provider: AuthProvider) => void;
   onSignOut: () => void;
+  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  onRestore: () => void;
+  onSyncNow: () => void;
   onEnableFaceId: () => void;
   onDisableFaceId: () => void;
 }) {
@@ -3646,6 +4048,65 @@ YouTrader does not knowingly collect data from or market to individuals under th
           onEnableFaceId={onEnableFaceId}
           onDisableFaceId={onDisableFaceId}
         />
+
+        <Card>
+          <Text style={styles.h2}>Subscription</Text>
+          <Text style={styles.sub}>
+            {isPremium
+              ? "YouTrader Pro is active."
+              : revenueCatConfigured
+                ? "Unlock full analytics, market context and Pro tools."
+                : "RevenueCat is ready in code. Add the public API key before TestFlight."}
+          </Text>
+          <View style={styles.row}>
+            <Pressable
+              disabled={isPremium || purchaseBusy || !revenueCatConfigured}
+              onPress={() => onPurchase(packages[0] || null)}
+              style={[styles.secondaryPhoto, styles.purpleAction, (isPremium || purchaseBusy || !revenueCatConfigured) && styles.disabledBtn]}
+            >
+              <Text style={styles.secondaryText}>{isPremium ? "Pro Active" : "Upgrade"}</Text>
+            </Pressable>
+            <Pressable
+              disabled={purchaseBusy || !revenueCatConfigured}
+              onPress={onRestore}
+              style={[styles.secondaryPhoto, styles.purpleAction, (purchaseBusy || !revenueCatConfigured) && styles.disabledBtn]}
+            >
+              <Text style={styles.secondaryText}>Restore</Text>
+            </Pressable>
+          </View>
+          {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
+        </Card>
+
+        <Card>
+          <View style={styles.rowBetween}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.h2}>Cloud Sync</Text>
+              <Text style={styles.sub}>{cloudSyncMessage}</Text>
+              {lastCloudSyncAt ? (
+                <Text style={[styles.sub, { marginTop: 4 }]}>
+                  Last sync: {new Date(lastCloudSyncAt).toLocaleString()}
+                </Text>
+              ) : null}
+            </View>
+            <View
+              style={[
+                styles.syncStatusDot,
+                cloudSyncStatus === "synced" && { backgroundColor: C.green },
+                cloudSyncStatus === "syncing" && { backgroundColor: C.yellow },
+                cloudSyncStatus === "error" && { backgroundColor: C.red },
+              ]}
+            />
+          </View>
+          <Pressable
+            disabled={!cloudSyncEnabled || cloudSyncStatus === "syncing"}
+            onPress={onSyncNow}
+            style={[styles.secondaryBig, styles.restorePurchaseBtn, (!cloudSyncEnabled || cloudSyncStatus === "syncing") && styles.disabledBtn]}
+          >
+            <Text style={styles.secondaryText}>
+              {cloudSyncStatus === "syncing" ? "Syncing..." : "Sync Now"}
+            </Text>
+          </Pressable>
+        </Card>
 
         <Card>
           <Text style={styles.h2}>{t("language")}</Text>
@@ -3752,13 +4213,28 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("journal");
   const [lang, setLang] = useState<Lang>("en");
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [tradesHydrated, setTradesHydrated] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [revenueCatReady, setRevenueCatReady] = useState(false);
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [paywallError, setPaywallError] = useState("");
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<"off" | "syncing" | "synced" | "error">("off");
+  const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in and upgrade to Pro to sync your journal.");
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
   const [faceLockEnabled, setFaceLockEnabled] = useState(false);
   const [biometricUnlocked, setBiometricUnlocked] = useState(true);
   const [biometricChecking, setBiometricChecking] = useState(true);
+  const purchasesConfigured = useRef(false);
+  const cloudSyncInFlight = useRef(false);
 
   const authConfigured = !!supabase;
+  const revenueCatConfigured = !!REVENUECAT_API_KEY && Platform.OS !== "web";
+  const isPremium = OWNER_FULL_ACCESS || customerHasPro(customerInfo);
+  const cloudSyncEnabled = !!supabase && !!session?.user.id && isPremium;
+  const currentTradeSignature = useMemo(() => tradesSignature(trades), [trades]);
   const promptBiometricUnlock = useCallback(async () => {
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
@@ -3789,14 +4265,58 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem("trades-v6").then((value) => {
-      if (value) setTrades(JSON.parse(value));
-    });
+    AsyncStorage.getItem(TRADES_STORAGE_KEY)
+      .then((value) => {
+        if (value) setTrades(normalizeTrades(JSON.parse(value)));
+      })
+      .finally(() => setTradesHydrated(true));
   }, []);
 
   useEffect(() => {
-    AsyncStorage.setItem("trades-v6", JSON.stringify(trades));
-  }, [trades]);
+    if (!tradesHydrated) return;
+    AsyncStorage.setItem(TRADES_STORAGE_KEY, JSON.stringify(normalizeTrades(trades)));
+  }, [trades, tradesHydrated]);
+
+  const refreshRevenueCat = useCallback(async () => {
+    if (!purchasesConfigured.current) return;
+    try {
+      const [nextCustomerInfo, offerings] = await Promise.all([
+        Purchases.getCustomerInfo(),
+        Purchases.getOfferings(),
+      ]);
+      setCustomerInfo(nextCustomerInfo);
+      setPackages(offerings.current?.availablePackages || []);
+      setPaywallError("");
+    } catch (error: any) {
+      setPaywallError(error?.message || "RevenueCat connection failed.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!revenueCatConfigured || purchasesConfigured.current) return;
+    try {
+      Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
+      Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+      purchasesConfigured.current = true;
+      setRevenueCatReady(true);
+      refreshRevenueCat();
+      const listener = (info: CustomerInfo) => setCustomerInfo(info);
+      Purchases.addCustomerInfoUpdateListener(listener);
+      return () => {
+        Purchases.removeCustomerInfoUpdateListener(listener);
+      };
+    } catch (error: any) {
+      setPaywallError(error?.message || "RevenueCat setup failed.");
+    }
+  }, [refreshRevenueCat, revenueCatConfigured]);
+
+  useEffect(() => {
+    if (!purchasesConfigured.current || !session?.user.id) return;
+    Purchases.logIn(session.user.id)
+      .then(({ customerInfo: nextCustomerInfo }) => setCustomerInfo(nextCustomerInfo))
+      .then(refreshRevenueCat)
+      .catch(() => {});
+  }, [refreshRevenueCat, session?.user.id]);
 
   useEffect(() => {
     AsyncStorage.getItem("face-lock-v1").then(async (value) => {
@@ -3844,6 +4364,110 @@ export default function App() {
     const subscription = Linking.addEventListener("url", ({ url }) => handleUrl(url));
     return () => subscription.remove();
   }, []);
+
+  const syncTradesWithCloud = useCallback(async () => {
+    if (!supabase || !session?.user.id || !isPremium || !tradesHydrated) {
+      setCloudSyncStatus("off");
+      setCloudSyncMessage(
+        !session?.user.id
+          ? "Sign in to sync your journal across devices."
+          : !isPremium
+            ? "Cloud Sync is included in YouTrader Pro."
+            : "Cloud Sync is waiting for the journal to load.",
+      );
+      return;
+    }
+    if (cloudSyncInFlight.current) return;
+    cloudSyncInFlight.current = true;
+    setCloudSyncStatus("syncing");
+    setCloudSyncMessage("Syncing journal with cloud...");
+    try {
+      const { data, error } = await supabase
+        .from("trade_journal")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+
+      const cloudRows = (data || []) as TradeJournalRow[];
+      const activeCloudSignature = tradesSignature(
+        cloudRows.filter((row) => !row.deleted_at).map(cloudRowToTrade),
+      );
+      const merged = mergeLocalAndCloudTrades(trades, cloudRows);
+      const mergedSignature = tradesSignature(merged);
+      if (mergedSignature !== currentTradeSignature) {
+        setTrades(merged);
+      }
+
+      if (merged.length && mergedSignature !== activeCloudSignature) {
+        const rows = merged.map((trade) => tradeToCloudRow(trade, session.user.id));
+        const { error: upsertError } = await supabase
+          .from("trade_journal")
+          .upsert(rows, { onConflict: "user_id,client_id" });
+        if (upsertError) throw upsertError;
+      }
+
+      const syncedAt = new Date().toISOString();
+      setLastCloudSyncAt(syncedAt);
+      setCloudSyncStatus("synced");
+      setCloudSyncMessage(`Synced ${merged.length} trades across devices.`);
+    } catch (error: any) {
+      setCloudSyncStatus("error");
+      setCloudSyncMessage(error?.message || "Cloud Sync failed. Check Supabase setup.");
+    } finally {
+      cloudSyncInFlight.current = false;
+    }
+  }, [currentTradeSignature, isPremium, session?.user.id, trades, tradesHydrated]);
+
+  const markCloudTradeDeleted = useCallback(async (tradeId: string) => {
+    if (!supabase || !session?.user.id || !isPremium) return;
+    try {
+      const now = new Date().toISOString();
+      await supabase
+        .from("trade_journal")
+        .update({ deleted_at: now, updated_at: now })
+        .eq("user_id", session.user.id)
+        .eq("client_id", tradeId);
+    } catch {}
+  }, [isPremium, session?.user.id]);
+
+  useEffect(() => {
+    if (!cloudSyncEnabled || !tradesHydrated) {
+      setCloudSyncStatus("off");
+      setCloudSyncMessage(
+        !session?.user.id
+          ? "Sign in to sync your journal across devices."
+          : !isPremium
+            ? "Cloud Sync is included in YouTrader Pro."
+            : "Cloud Sync is waiting for the journal to load.",
+      );
+      return;
+    }
+    const timeout = setTimeout(syncTradesWithCloud, 900);
+    return () => clearTimeout(timeout);
+  }, [cloudSyncEnabled, currentTradeSignature, isPremium, session?.user.id, syncTradesWithCloud, tradesHydrated]);
+
+  useEffect(() => {
+    if (!cloudSyncEnabled || !supabase || !session?.user.id) return;
+    const channel = supabase
+      .channel(`trade-journal-${session.user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trade_journal",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => {
+          syncTradesWithCloud();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [cloudSyncEnabled, session?.user.id, syncTradesWithCloud]);
 
   const signInWithProvider = useCallback(async (provider: AuthProvider) => {
     if (!supabase) {
@@ -3912,6 +4536,76 @@ export default function App() {
     if (error) Alert.alert("Sign out failed", error.message);
   }, []);
 
+  const purchasePackage = useCallback(async (pkg?: PurchasesPackage | null) => {
+    if (!revenueCatConfigured || !purchasesConfigured.current) {
+      Alert.alert(
+        "YouTrader Pro",
+        "RevenueCat is ready in code. Add the public RevenueCat API key before testing subscriptions.",
+      );
+      return;
+    }
+
+    const selectedPackage = pkg || packages[0] || null;
+    if (!selectedPackage) {
+      Alert.alert(
+        "YouTrader Pro",
+        "No subscription packages found. Create an offering in RevenueCat and attach monthly/yearly products to the pro entitlement.",
+      );
+      return;
+    }
+
+    setPurchaseBusy(true);
+    try {
+      const result = await Purchases.purchasePackage(selectedPackage);
+      setCustomerInfo(result.customerInfo);
+      setPaywallError("");
+      if (customerHasPro(result.customerInfo)) {
+        Alert.alert("YouTrader Pro", "Pro access unlocked.");
+      } else {
+        Alert.alert(
+          "Purchase complete",
+          "The purchase finished, but the pro entitlement is not active yet. Check the RevenueCat entitlement setup.",
+        );
+      }
+    } catch (error: any) {
+      if (!error?.userCancelled) {
+        const message = error?.message || "Purchase failed. Please try again.";
+        setPaywallError(message);
+        Alert.alert("Purchase failed", message);
+      }
+    } finally {
+      setPurchaseBusy(false);
+    }
+  }, [packages, revenueCatConfigured]);
+
+  const restorePurchases = useCallback(async () => {
+    if (!revenueCatConfigured || !purchasesConfigured.current) {
+      Alert.alert(
+        "Restore Purchases",
+        "RevenueCat is ready in code. Add the public RevenueCat API key before testing restore.",
+      );
+      return;
+    }
+
+    setPurchaseBusy(true);
+    try {
+      const info = await Purchases.restorePurchases();
+      setCustomerInfo(info);
+      setPaywallError("");
+      if (customerHasPro(info)) {
+        Alert.alert("Restored", "YouTrader Pro is active.");
+      } else {
+        Alert.alert("No active subscription", "No active YouTrader Pro subscription was found for this store account.");
+      }
+    } catch (error: any) {
+      const message = error?.message || "Restore failed. Please try again.";
+      setPaywallError(message);
+      Alert.alert("Restore failed", message);
+    } finally {
+      setPurchaseBusy(false);
+    }
+  }, [revenueCatConfigured]);
+
   const enableFaceId = useCallback(async () => {
     const ok = await promptBiometricUnlock();
     if (!ok) return;
@@ -3951,21 +4645,47 @@ export default function App() {
     { id: "news", label: tText(lang, "news") },
     { id: "settings", label: tText(lang, "settings") },
   ];
-  const premiumTabs: Tab[] = ["news", "calendar"];
-  const locked = !OWNER_FULL_ACCESS && premiumTabs.includes(tab);
+  const premiumTabs: Tab[] = [];
+  const locked = !isPremium && premiumTabs.includes(tab);
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
         <View style={styles.body}>
           {locked ? (
-            <PremiumScreen lang={lang} onClose={() => setTab("calc")} />
+            <PremiumScreen
+              lang={lang}
+              onClose={() => setTab("calc")}
+              packages={packages}
+              purchaseBusy={purchaseBusy}
+              revenueCatConfigured={revenueCatConfigured}
+              paywallError={paywallError}
+              onPurchase={purchasePackage}
+              onRestore={restorePurchases}
+            />
           ) : tab === "journal" ? (
-            <JournalScreen lang={lang} trades={trades} setTrades={setTrades} />
+            <JournalScreen
+              lang={lang}
+              trades={trades}
+              setTrades={setTrades}
+              isPremium={isPremium}
+              onUpgrade={() => setTab("stats")}
+              onTradeDeleted={markCloudTradeDeleted}
+            />
           ) : tab === "stats" ? (
-            <StatsScreen lang={lang} trades={trades} />
+            <StatsScreen
+              lang={lang}
+              trades={trades}
+              isPremium={isPremium}
+              packages={packages}
+              purchaseBusy={purchaseBusy}
+              revenueCatConfigured={revenueCatConfigured}
+              paywallError={paywallError}
+              onPurchase={purchasePackage}
+              onRestore={restorePurchases}
+            />
           ) : tab === "news" ? (
-            <NewsScreen lang={lang} />
+            <NewsScreen lang={lang} isPremium={isPremium} />
           ) : tab === "calendar" ? (
             <CalendarScreen lang={lang} />
           ) : tab === "calc" ? (
@@ -3977,9 +4697,21 @@ export default function App() {
               session={session}
               authBusy={authBusy}
               authConfigured={authConfigured}
+              isPremium={isPremium}
+              packages={packages}
+              purchaseBusy={purchaseBusy}
+              revenueCatConfigured={revenueCatConfigured}
+              paywallError={paywallError}
+              cloudSyncEnabled={cloudSyncEnabled}
+              cloudSyncStatus={cloudSyncStatus}
+              cloudSyncMessage={cloudSyncMessage}
+              lastCloudSyncAt={lastCloudSyncAt}
               faceLockEnabled={faceLockEnabled}
               onOAuth={signInWithProvider}
               onSignOut={signOut}
+              onPurchase={purchasePackage}
+              onRestore={restorePurchases}
+              onSyncNow={syncTradesWithCloud}
               onEnableFaceId={enableFaceId}
               onDisableFaceId={disableFaceId}
             />
@@ -4097,6 +4829,17 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 8,
+  },
+  restorePurchaseBtn: {
+    borderColor: "rgba(163,255,18,0.42)",
+    backgroundColor: C.greenSoft,
+  },
+  syncStatusDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: C.muted,
+    marginLeft: 10,
   },
   secondaryText: { color: C.text, fontWeight: "800" },
   authButtonStack: { gap: 10, marginTop: 14 },
@@ -5029,6 +5772,16 @@ const styles = StyleSheet.create({
   bestValueText: { color: C.white, fontSize: 9, fontWeight: "900" },
   planName: { color: C.sub, fontSize: 11, fontWeight: "900" },
   planPrice: { color: C.text, fontSize: 17, fontWeight: "900", marginTop: 4 },
+  lockedNewsIntel: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.28)",
+    backgroundColor: C.greenSoft,
+    padding: 12,
+  },
+  lockedNewsTitle: { color: C.green, fontSize: 13, fontWeight: "900" },
+  lockedNewsText: { color: C.sub, fontSize: 12, lineHeight: 17, marginTop: 4 },
   radarOuter: { alignItems: "center", justifyContent: "center", marginTop: 16 },
   radarLabel: { color: C.text, fontSize: 11, fontWeight: "900", textAlign: "center" },
   radarValue: { fontSize: 11, fontWeight: "900", marginTop: 2, textAlign: "center" },

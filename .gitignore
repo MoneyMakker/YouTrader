@@ -1,6 +1,8 @@
 .DS_Store
 *.swp
 *.log
+.env
+.env.local
 node_modules/
 .expo/
 ios/build/
@@ -10,3 +12,6 @@ DerivedData/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+dist/
+bundle-check/

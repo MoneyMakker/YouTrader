@@ -31,6 +31,7 @@ create table if not exists public.user_firm_settings (
 create table if not exists public.trade_journal (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
+  client_id text not null,
   trade_date date not null,
   symbol text not null,
   direction text not null check (direction in ('LONG', 'SHORT')),
@@ -46,8 +47,16 @@ create table if not exists public.trade_journal (
   voice_url text,
   tags text[] not null default '{}',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  unique (user_id, client_id)
 );
+
+alter table public.trade_journal add column if not exists client_id text;
+alter table public.trade_journal add column if not exists deleted_at timestamptz;
+update public.trade_journal set client_id = id::text where client_id is null;
+alter table public.trade_journal alter column client_id set not null;
+create unique index if not exists trade_journal_user_client_id_key on public.trade_journal(user_id, client_id);
 
 create table if not exists public.risk_snapshots (
   id uuid primary key default gen_random_uuid(),
@@ -72,6 +81,7 @@ create table if not exists public.risk_snapshots (
 );
 
 create index if not exists trade_journal_user_date_idx on public.trade_journal(user_id, trade_date desc);
+create index if not exists trade_journal_user_updated_idx on public.trade_journal(user_id, updated_at desc);
 create index if not exists risk_snapshots_user_date_idx on public.risk_snapshots(user_id, snapshot_date desc);
 
 alter table public.prop_firms enable row level security;
@@ -105,6 +115,19 @@ on public.risk_snapshots for all
 to authenticated
 using ((select auth.uid()) = user_id)
 with check ((select auth.uid()) = user_id);
+
+grant select on public.prop_firms to authenticated;
+grant select, insert, update, delete on public.user_firm_settings to authenticated;
+grant select, insert, update, delete on public.trade_journal to authenticated;
+grant select, insert, update, delete on public.risk_snapshots to authenticated;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.trade_journal;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
 
 insert into public.prop_firms
   (slug, name, account_name, account_size, daily_loss_limit, max_loss_limit, evaluation_contracts, live_contracts, trailing_drawdown, rules)
