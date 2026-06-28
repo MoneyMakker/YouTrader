@@ -168,6 +168,12 @@ Local trades
   -> realtime refresh on public.trade_journal user filter
 ```
 
+Current runtime caveat:
+
+- Supabase auth and cloud sync flows exist in code, but current `App.tsx` sets `authConfigured = false` and `cloudSyncEnabled = false`.
+- Sign-in and cloud sync are effectively disabled at runtime until those flags are wired back to validated config and QA-tested.
+- Do not assume Supabase sign-in/cloud sync are live just because the client, handlers, and schema exist.
+
 Premium access flow:
 
 ```text
@@ -1471,6 +1477,12 @@ Auth:
 - Native Apple sign-in controlled by `EXPO_PUBLIC_ENABLE_NATIVE_APPLE_SIGN_IN`, or automatically enabled on iOS when Supabase and cloud sign-in are configured.
 - OAuth redirect uses scheme `com.youtrader.pro` and path `auth`.
 
+Current runtime caveat:
+
+- `App.tsx` currently hardcodes `authConfigured = false`.
+- Cloud sign-in UI and handlers exist, but they show "Sign-in unavailable" until this is changed.
+- Re-enabling auth requires end-to-end QA with Supabase redirect URLs, native Apple/OAuth provider settings, session persistence, and App Review behavior.
+
 Database migration source:
 
 - `supabase/migrations/20260627231000_add_runtime_tables_rls.sql` is now the self-contained migration path.
@@ -1499,6 +1511,12 @@ Security rules:
 - Use parameterized Supabase client methods and SQL policies.
 - Storage bucket policies must be strict if storage features expand.
 - Webhook signature verification is required before any server-side RevenueCat/Stripe/App Store webhook sync.
+
+Edge Function CORS:
+
+- `supabase/functions/_shared/cors.ts` currently uses `Access-Control-Allow-Origin: *`.
+- Treat wildcard CORS as a temporary development/default state.
+- Before production release, replace wildcard CORS with an allow-list for the production app/domain/environment where applicable.
 
 Known backend risk:
 
@@ -1808,6 +1826,13 @@ Sources:
 - `src/observability/analytics.ts`
 - `src/observability/metrics.ts`
 - `src/observability/monitoring.ts`
+
+Current implementation status:
+
+- `src/lib/posthog.ts` currently exports `posthogClient = undefined`.
+- `src/observability/monitoring.ts` is a no-op wrapper except development `console.error` / `console.log`.
+- `wrapAppWithSentry` currently returns the component unchanged.
+- Treat production observability as placeholder until real PostHog/Sentry/Crashlytics wiring is implemented or intentionally removed.
 
 Rules:
 
