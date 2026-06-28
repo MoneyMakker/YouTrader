@@ -1,4 +1,12 @@
 {
   "compilerOptions": {},
-  "extends": "expo/tsconfig.base"
+  "extends": "expo/tsconfig.base",
+  "exclude": [
+    "node_modules",
+    "review-fix-backups",
+    "recovery-backups",
+    "supabase/functions",
+    "ios",
+    "android"
+  ]
 }

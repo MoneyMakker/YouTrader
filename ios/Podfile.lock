@@ -39,6 +39,8 @@ PODS:
     - ExpoModulesCore
   - ExpoAudio (1.1.1):
     - ExpoModulesCore
+  - ExpoBlur (15.0.8):
+    - ExpoModulesCore
   - ExpoCrypto (15.0.9):
     - ExpoModulesCore
   - ExpoDocumentPicker (14.0.8):
@@ -55,6 +57,9 @@ PODS:
     - ExpoModulesCore
   - ExpoLocalAuthentication (17.0.8):
     - ExpoModulesCore
+  - ExpoMediaLibrary (18.2.1):
+    - ExpoModulesCore
+    - React-Core
   - ExpoModulesCore (3.0.30):
     - hermes-engine
     - RCTRequired
@@ -78,6 +83,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - ExpoPrint (15.0.8):
+    - ExpoModulesCore
   - ExpoSecureStore (15.0.8):
     - ExpoModulesCore
   - ExpoSharing (14.0.8):
@@ -1438,6 +1445,28 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-view-shot (4.0.3):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - React-NativeModulesApple (0.81.5):
     - hermes-engine
     - React-callinvoker
@@ -1814,6 +1843,51 @@ PODS:
   - RNPurchases (9.15.2):
     - PurchasesHybridCommon (= 17.55.1)
     - React-Core
+  - RNSVG (15.12.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - RNSVG/common (= 15.12.1)
+    - Yoga
+  - RNSVG/common (15.12.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -1825,6 +1899,7 @@ DEPENDENCIES:
   - ExpoAppleAuthentication (from `../node_modules/expo-apple-authentication/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoAudio (from `../node_modules/expo-audio/ios`)
+  - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoCrypto (from `../node_modules/expo-auth-session/node_modules/expo-crypto/ios`)
   - ExpoDocumentPicker (from `../node_modules/expo-document-picker/ios`)
   - ExpoFileSystem (from `../node_modules/expo-file-system/ios`)
@@ -1833,7 +1908,9 @@ DEPENDENCIES:
   - ExpoKeepAwake (from `../node_modules/expo/node_modules/expo-keep-awake/ios`)
   - ExpoLinking (from `../node_modules/expo-linking/ios`)
   - ExpoLocalAuthentication (from `../node_modules/expo-local-authentication/ios`)
+  - ExpoMediaLibrary (from `../node_modules/expo-media-library/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
+  - ExpoPrint (from `../node_modules/expo-print/ios`)
   - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../node_modules/expo-sharing/ios`)
   - ExpoWebBrowser (from `../node_modules/expo-web-browser/ios`)
@@ -1874,6 +1951,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
+  - react-native-view-shot (from `../node_modules/react-native-view-shot`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
   - React-perflogger (from `../node_modules/react-native/ReactCommon/reactperflogger`)
@@ -1907,6 +1985,7 @@ DEPENDENCIES:
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - RNPurchases (from `../node_modules/react-native-purchases`)
+  - RNSVG (from `../node_modules/react-native-svg`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -1931,6 +2010,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-asset/ios"
   ExpoAudio:
     :path: "../node_modules/expo-audio/ios"
+  ExpoBlur:
+    :path: "../node_modules/expo-blur/ios"
   ExpoCrypto:
     :path: "../node_modules/expo-auth-session/node_modules/expo-crypto/ios"
   ExpoDocumentPicker:
@@ -1947,8 +2028,12 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-linking/ios"
   ExpoLocalAuthentication:
     :path: "../node_modules/expo-local-authentication/ios"
+  ExpoMediaLibrary:
+    :path: "../node_modules/expo-media-library/ios"
   ExpoModulesCore:
     :path: "../node_modules/expo-modules-core"
+  ExpoPrint:
+    :path: "../node_modules/expo-print/ios"
   ExpoSecureStore:
     :path: "../node_modules/expo-secure-store/ios"
   ExpoSharing:
@@ -2028,6 +2113,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
+  react-native-view-shot:
+    :path: "../node_modules/react-native-view-shot"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-oscompat:
@@ -2094,6 +2181,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNPurchases:
     :path: "../node_modules/react-native-purchases"
+  RNSVG:
+    :path: "../node_modules/react-native-svg"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -2106,6 +2195,7 @@ SPEC CHECKSUMS:
   ExpoAppleAuthentication: 9413ae9a5e631a424cc04c1b13b0694dbab7d594
   ExpoAsset: 9e5a7c9c0a9fb83ad5b2bb365141f2bd7f289b66
   ExpoAudio: e4cfe3a2f3317b8487460685385a9867a07fb4fb
+  ExpoBlur: b90747a3f22a8b6ceffd9cb0dc41a4184efdc656
   ExpoCrypto: e2a2c4c748aac8485e5675f027b7901f511d43ff
   ExpoDocumentPicker: 7cd9e71a0f66fb19eb0a586d6f26eee1284692e0
   ExpoFileSystem: ad991457efaa14253723f1dda997eac6024c700d
@@ -2114,7 +2204,9 @@ SPEC CHECKSUMS:
   ExpoKeepAwake: 55f75eca6499bb9e4231ebad6f3e9cb8f99c0296
   ExpoLinking: 2ef632ad5013e3f1568fae9408d56ab9af5efc55
   ExpoLocalAuthentication: 8a31808565da7af926dd9b595e98594d8b1553b6
+  ExpoMediaLibrary: a3093b04365b245bb23b25b6eba84eb6ab55fecb
   ExpoModulesCore: 9e6a5514828e7dd5ded9e99d33557be2d284e660
+  ExpoPrint: 813bfa965eda2ecc4b1cdc61612c820e239c382a
   ExpoSecureStore: d32f751874a2ceb5aaeebeb3578e165c1ba2b24a
   ExpoSharing: 0d983394ed4a80334bab5a0d5384f75710feb7e8
   ExpoWebBrowser: 970dd4c64c29c955c3af664c8058ba768a4c9187
@@ -2155,6 +2247,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 9050ee10c19f4f7fca8963d0211b2854d624973e
   React-microtasksnativemodule: f775db9e991c6f3b8ccbc02bfcde22770f96e23b
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
+  react-native-view-shot: fb3c0774edb448f42705491802a455beac1502a2
   React-NativeModulesApple: 8969913947d5b576de4ed371a939455a8daf28aa
   React-oscompat: ce47230ed20185e91de62d8c6d139ae61763d09c
   React-perflogger: 02b010e665772c7dcb859d85d44c1bfc5ac7c0e4
@@ -2189,6 +2282,7 @@ SPEC CHECKSUMS:
   RevenueCat: 9357239a9f0978285e68983637b8a602e65c94f0
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
   RNPurchases: 4f6b0209e2fb4152bda0d0276a2a46d2b3416752
+  RNSVG: 31d6639663c249b7d5abc9728dde2041eb2a3c34
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
 PODFILE CHECKSUM: 05564106fe573e85bf091d4b662ecd74aed7745f

@@ -7,39 +7,132 @@ import {
 } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
+import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { makeRedirectUri } from "expo-auth-session";
-import * as LocalAuthentication from "expo-local-authentication";
 import * as Notifications from "expo-notifications";
 import * as WebBrowser from "expo-web-browser";
-import { createClient, processLock, type Session } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 import Purchases, {
   LOG_LEVEL,
   type CustomerInfo,
+  type MakePurchaseResult,
   type PurchasesPackage,
+  type PurchasesStoreProduct,
 } from "react-native-purchases";
+import { PostHogProvider } from "posthog-react-native";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   AppState,
+  Easing,
   FlatList,
   Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
+import {
+  BookOpen,
+  BrainCircuit,
+  Calculator as CalculatorIcon,
+  CalendarDays,
+  ChartColumnIncreasing,
+  Lock,
+  Newspaper,
+  Settings as SettingsIcon,
+  Unlock,
+} from "lucide-react-native";
+import Svg, {
+  Circle,
+  Defs,
+  Line,
+  LinearGradient,
+  Path,
+  Polygon,
+  Rect,
+  Stop,
+} from "react-native-svg";
+import * as DocumentPicker from "expo-document-picker";
+import { SharePnLCard } from "./src/components/insights/SharePnLCard";
+import { alertExportError } from "./src/utils/alertExportError";
+import { parseTradesCsvText } from "./src/utils/importTradesCsv";
+import { readCsvFileAsText } from "./src/utils/readCsvFile";
+import { scheduleDailyPropRiskNotification } from "./src/utils/propRiskNotification";
+import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "./src/api/finnhubCalendar";
+import {
+  analyzeTrades,
+  type DetectiveAgentFinding,
+  type TradeAnalysisPayload,
+  type TradeAnalysisResult,
+  type TradePerformanceBreakdown,
+} from "./src/api/tradeAnalysis";
+import {
+  fetchAIDailyChallenge,
+  fetchAIDailyPlan,
+  fetchAIJournalSummary,
+  fetchAINewsExplainer,
+  fetchAIRiskPredictor,
+  fetchAIWeeklyCoach,
+  type AIDailyChallenge,
+  type AIDailyPlan,
+  type AIJournalSummary,
+  type AINewsExplainer,
+  type AIProviderStatus,
+  type AIResponse,
+  type AIRiskPredictor,
+  type AIWeeklyCoach,
+} from "./src/api/aiCoach";
+import { trackEvent, trackScreen } from "./src/observability/analytics";
+import { captureAppError, initializeMonitoring, logCrashlyticsBreadcrumb, wrapAppWithSentry } from "./src/observability/monitoring";
+import { recordMetric } from "./src/observability/metrics";
+import { posthogClient } from "./src/lib/posthog";
+import { logger } from "./src/lib/logger";
+import {
+  enableCloudSignIn,
+  enableNativeAppleSignIn,
+  isRevenueCatConfigured,
+  isSupabaseConfigured,
+  REVENUECAT_API_KEY,
+  REVENUECAT_ENTITLEMENT_ID,
+  REVENUECAT_IOS_PRODUCT_ID,
+  REVENUECAT_IOS_YEARLY_PRODUCT_ID,
+  supabase,
+  userFacingBillingError,
+} from "./src/config/appConfig";
+import { openLegalUrl, PRIVACY_POLICY_URL, TERMS_OF_USE_EULA_URL } from "./src/config/legalUrls";
+import { SubscriptionLegalDisclosure } from "./src/components/subscription/SubscriptionLegalDisclosure";
+import { GlassCard } from "./src/components/ui/GlassCard";
+import { AnimatedEquityCurve } from "./src/components/charts/AnimatedEquityCurve";
+import { PremiumGlassCard } from "./src/components/ui/PremiumGlassCard";
+import { PremiumLockOverlay } from "./src/components/ui/PremiumLockOverlay";
+import { lightHaptic, warningHaptic } from "./src/components/ui/haptics";
+import { calculateAchievements, traderLevelFromScore, type Achievement, type TraderLevel } from "./src/analytics/achievements";
+import { detectTradingPatterns, type PatternDetectionResult } from "./src/analytics/patternDetector";
+import { calculatePropSurvival } from "./src/analytics/propSurvival";
+import { buildSessionHeatmap, type HourHeatmapCell } from "./src/analytics/sessionHeatmap";
+import { calculateTradingScore, type TradingScoreResult } from "./src/analytics/tradingScore";
+import { buildAIAnalyticsContext } from "./src/analytics/aiContextBuilder";
+import { buildUnifiedTradeAnalytics, infinitySafeMetric } from "./src/analytics/tradeMetrics";
+import { calculatePassProbability, type PassProbabilityResult } from "./src/ai/passProbabilityEngine";
+import { detectRevengeTrading, type RevengeTradingResult } from "./src/ai/revengeTradingDetector";
+import { detectHiddenLeaks, type HiddenLeak } from "./src/ai/hiddenLeakDetector";
 
 WebBrowser.maybeCompleteAuthSession();
+initializeMonitoring();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -51,21 +144,26 @@ Notifications.setNotificationHandler({
   }),
 });
 
-type Tab = "journal" | "stats" | "calendar" | "news" | "calc" | "settings";
+type Tab = "journal" | "stats" | "ai" | "calendar" | "news" | "calc" | "settings";
 type Direction = "LONG" | "SHORT";
 type Asset = "ES" | "NQ" | "GOLD" | "OIL" | "BTC" | "ETH";
 type Bias = "LONG" | "SHORT" | "NEUTRAL";
 type Impact = "HIGH" | "MED" | "LOW";
 type Lang = "en" | "ru" | "es" | "fr" | "it" | "uk" | "de";
 type AuthProvider = "google" | "apple";
-type FirmMode = "evaluation" | "live";
+type FirmMode = "evaluation" | "funded";
 type ContractFamily = "micro" | "emini";
+type EvalStrategy = "steady" | "balanced" | "allIn";
+type RiskInstrument = "MES" | "MNQ" | "MGC" | "MCL" | "ES" | "NQ" | "GC" | "CL";
+type RiskStatus = "STOP" | "CAUTION" | "CLEAR";
 
 type Trade = {
   id: string;
   date: string;
   symbol: string;
   direction: Direction;
+  entryTime?: string | null;
+  exitTime?: string | null;
   entry?: number | null;
   exit?: number | null;
   contracts: number;
@@ -74,6 +172,7 @@ type Trade = {
   pnl: number;
   mood: string;
   notes: string;
+  tags?: string[];
   photoUri?: string | null;
   voiceUri?: string | null;
   voiceName?: string | null;
@@ -88,6 +187,8 @@ type TradeJournalRow = {
   trade_date: string;
   symbol: string;
   direction: Direction;
+  entry_time?: string | null;
+  exit_time?: string | null;
   contracts: number;
   entry: number | null;
   exit: number | null;
@@ -125,44 +226,54 @@ type EconEvent = {
   previous: string;
   bias: Record<Asset, Bias>;
 };
+type ServerSubscriptionRow = {
+  status: string | null;
+  expires_at: string | null;
+};
+type ProAccessSource = "none" | "revenuecat_entitlement" | "apple_subscription" | "server_entitlement";
+type ProAccessState = {
+  isPro: boolean;
+  source: ProAccessSource;
+  revenueCatEntitlementActive: boolean;
+  appleMonthlyActive: boolean;
+  serverEntitlementActive: boolean;
+  lastUpdatedAt: number;
+};
 
-const FINNHUB =
-  process.env.EXPO_PUBLIC_FINNHUB_API_KEY ||
-  "d86f9tpr01qgiu456f40d86f9tpr01qgiu456f4g";
+const RAW_FINNHUB = process.env.EXPO_PUBLIC_FINNHUB_API_KEY || "";
+const FINNHUB = /your/i.test(RAW_FINNHUB) ? "" : RAW_FINNHUB;
 const CALENDAR_API_URL = process.env.EXPO_PUBLIC_CALENDAR_API_URL || "";
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_PUBLISHABLE_KEY =
-  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-  "";
+const YOU_TRADER_BULL_LOGO = require("./assets/youtrader-bull-mark.png");
 const AUTH_REDIRECT_TO = makeRedirectUri({ scheme: "com.youtrader.pro", path: "auth" });
-const ENABLE_NATIVE_APPLE_SIGN_IN =
-  process.env.EXPO_PUBLIC_ENABLE_NATIVE_APPLE_SIGN_IN === "true";
-const OWNER_FULL_ACCESS = process.env.EXPO_PUBLIC_OWNER_FULL_ACCESS === "true";
-const PREMIUM_PRICE = "$9.99/mo";
+const PREMIUM_PRICE = "$12.99/mo";
+const PREMIUM_PRICE_YEARLY = "$99.99/yr";
+// RevenueCat product ids. Both must exist in App Store Connect AND be added to the
+// DEFAULT RevenueCat offering as packages. Both unlock the same entitlement
+// (REVENUECAT_ENTITLEMENT_ID, default "YouTrader Pro").
+const YOU_TRADER_MONTHLY_PRODUCT_ID = REVENUECAT_IOS_PRODUCT_ID || "youtrader_pro_monthly";
+const YOU_TRADER_YEARLY_PRODUCT_ID = REVENUECAT_IOS_YEARLY_PRODUCT_ID || "youtrader_pro_yearly";
+// Any of these product ids unlocking the shared entitlement grants Pro access.
+const YOU_TRADER_PRO_PRODUCT_IDS = [YOU_TRADER_MONTHLY_PRODUCT_ID, YOU_TRADER_YEARLY_PRODUCT_ID];
+const BILLING_DEBUG_LOGS = __DEV__ || process.env.EXPO_PUBLIC_BILLING_DEBUG_LOGS === "true";
+const ENTITLEMENT_RETRY_DELAYS_MS = [0, 900, 1800, 3200];
 const TRADES_STORAGE_KEY = "trades-v6";
+const LANG_STORAGE_KEY = "lang-v1";
+const LOCK_SCREEN_BUFFER_KEY = "prop-lock-screen-v1";
+/** @deprecated Journal day limit removed — free users log unlimited days; Pro unlocks media/sync/analytics. */
 const FREE_JOURNAL_DAYS = 10;
-const REVENUECAT_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || "";
-const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY || "";
-const REVENUECAT_ENTITLEMENT_ID =
-  process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || "pro";
-const REVENUECAT_API_KEY =
-  Platform.OS === "ios"
-    ? REVENUECAT_IOS_API_KEY
-    : Platform.OS === "android"
-      ? REVENUECAT_ANDROID_API_KEY
-      : "";
-const supabase = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: {
-        ...(Platform.OS !== "web" ? { storage: AsyncStorage } : {}),
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: false,
-        lock: processLock,
-      },
-    })
-  : null;
+const PROP_RULES_CACHE_KEY = "prop-risk-templates-cache-v1";
+const PROP_RISK_ALERT_ID_KEY = "prop-risk-alert-notification-id-v1";
+const CALENDAR_ALERT_ID_KEY = "calendar-alert-notification-id-v1";
+const MAX_SYMBOL_LENGTH = 12;
+const MAX_NOTES_LENGTH = 2000;
+const MAX_MOOD_LENGTH = 32;
+const MAX_CONTRACTS = 1000;
+const MAX_PRICE = 10000000;
+const MAX_ABS_PNL = 10000000;
+const MAX_LOCAL_TRADES = 25000;
+const MAX_SCREENSHOT_BYTES = 6 * 1024 * 1024;
+const MAX_VOICE_NOTE_BYTES = 12 * 1024 * 1024;
+const TRADE_SAVE_DEBOUNCE_MS = 900;
 
 const C = {
   bg: "#000000",
@@ -181,6 +292,7 @@ const C = {
   yellowSoft: "rgba(255,210,63,0.11)",
   purple: "#B026FF",
   purpleSoft: "rgba(176,38,255,0.12)",
+  orange: "#FF9F1A",
   white: "#FFFFFF",
 };
 
@@ -226,10 +338,10 @@ const I18N: Record<Lang, Record<string, string>> = {
     deleteQuestion: "Delete trade?",
     cannotUndo: "This cannot be undone.",
     liveNews: "Live News",
-    autoRefresh: "Finnhub live feed • auto-refresh every 60 seconds",
+    autoRefresh: "auto-refresh every 60 seconds",
     refresh: "Refresh",
     economicCalendar: "Economic Calendar",
-    calendarSub: "Market-moving events • Eastern Time",
+    calendarSub: "Market-Events • (Eastern Time)",
     act: "ACT",
     fcst: "FCST",
     prev: "PREV",
@@ -240,12 +352,12 @@ const I18N: Record<Lang, Record<string, string>> = {
     resultInUsd: "Result in $",
     language: "Language",
     subscription: "Subscription",
-    premiumAccess: "Premium Access",
-    subscribe: "Start Pro • $9.99/mo",
+    premiumAccess: "YouTrader Pro",
+    subscribe: "Unlock Pro • $12.99/mo",
     restore: "Restore Purchase",
     premiumLocked: "Premium Feature",
     premiumLockedText:
-      "Keep the core tools free. Upgrade when you want unlimited journal, cloud sync and the full edge profile.",
+      "Your manual journal stays free. Pro unlocks AI coaching, prop firm protection, advanced analytics, media notes, import/export, full news, and the full economic calendar.",
     plusPnl: "Profit +",
     minusPnl: "Loss −",
     photo: "Trade Screenshot",
@@ -257,14 +369,14 @@ const I18N: Record<Lang, Record<string, string>> = {
     noAudio: "No audio note yet",
     calendarIntel: "Calendar intelligence",
     calendarIntelText: "High impact events can expand volatility. Check ES/NQ/GOLD/OIL/BTC bias before trading.",
-    premiumBenefit1: "Unlimited trade journal after the free 10 trading days",
-    premiumBenefit2: "Full analytics: expectancy, Sharpe, consistency and streaks",
-    premiumBenefit3: "Full edge profile, full radar and recovery analytics",
-    premiumBenefit4: "Session, day and symbol performance breakdowns",
-    premiumBenefit5: "Advanced news sentiment for ES/NQ/GOLD/OIL/BTC",
-    premiumBenefit6: "Cloud Sync + multi-device journal backup",
-    premiumBenefit7: "AI edge insights, export and replay tools planned next",
-    premiumBenefit8: "Keep calculator, economic calendar and basic news free",
+    premiumBenefit1: "AI Trade Analysis and Prop Firm Coach",
+    premiumBenefit2: "Pass Probability, Revenge Trading alerts, Hidden Leaks, and Pattern Prediction",
+    premiumBenefit3: "Advanced stats: Profit Factor, Expectancy, Drawdown, radar, sessions, symbols, and setups",
+    premiumBenefit4: "CSV import/export, share cards, and monthly PDF reports",
+    premiumBenefit5: "Cloud sync for your journal across devices",
+    premiumBenefit6: "Screenshots, photos, and voice notes for trade reviews",
+    premiumBenefit7: "Full real-time Market Pulse news feed",
+    premiumBenefit8: "Full economic calendar beyond today's preview",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -284,8 +396,8 @@ const I18N: Record<Lang, Record<string, string>> = {
     backupNow: "Export Backup",
     restoreBackup: "Import Backup",
     backupText: "Save a full backup of your trades and screenshots to iCloud Drive. If the app is deleted, import this file to restore your journal.",
-    cloudSync: "Cloud Sync",
-    cloudSyncText: "Premium Cloud Sync keeps your journal available across devices after you sign in.",
+    cloudSync: "Local backup",
+    cloudSyncText: "Keep your journal on this device and export backups when needed.",
     backupReady: "Backup ready",
     backupFailed: "Backup failed",
     restoreDone: "Backup restored. Restart the app to reload your journal.",
@@ -297,8 +409,8 @@ const I18N: Record<Lang, Record<string, string>> = {
     stats: "Stats",
     calendar: "Календарь",
     news: "Новости",
-    calc: "Калькулятор",
-    settings: "Настройки",
+    calc: "Кальк.",
+    settings: "Настр.",
     addTrade: "+ Добавить сделку",
     statistics: "Статистика",
     today: "Сегодня",
@@ -346,12 +458,12 @@ const I18N: Record<Lang, Record<string, string>> = {
     resultInUsd: "Результат в $",
     language: "Язык",
     subscription: "Подписка",
-    premiumAccess: "Premium доступ",
-    subscribe: "Оформить Premium • $4.99/мес",
+    premiumAccess: "YouTrader Pro",
+    subscribe: "Оформить Premium • $12.99/мес",
     restore: "Восстановить покупку",
     premiumLocked: "Premium функция",
     premiumLockedText:
-      "Базовые инструменты остаются бесплатными. Premium нужен для unlimited journal, cloud sync и полного edge profile.",
+      "Ручной журнал остаётся бесплатным. Pro открывает AI-коучинг, защиту prop firm, продвинутую аналитику, медиа-заметки, импорт/экспорт, полные новости и полный экономический календарь.",
     plusPnl: "Профит +",
     minusPnl: "Лосс −",
     photo: "Скрин сделки",
@@ -363,14 +475,14 @@ const I18N: Record<Lang, Record<string, string>> = {
     noAudio: "Пока нет аудио",
     calendarIntel: "Интеллект календаря",
     calendarIntelText: "High impact события могут резко увеличить волатильность. Проверь bias по ES/NQ/GOLD/OIL/BTC перед торговлей.",
-    premiumBenefit1: "Unlimited journal после 10 бесплатных торговых дней",
-    premiumBenefit2: "Полная аналитика: expectancy, Sharpe, consistency и серии",
-    premiumBenefit3: "Full edge profile, full radar и recovery analytics",
-    premiumBenefit4: "Разбор по session/day/symbol",
-    premiumBenefit5: "Advanced news sentiment для ES/NQ/GOLD/OIL/BTC",
-    premiumBenefit6: "Cloud Sync + multi-device backup журнала",
-    premiumBenefit7: "AI edge insights, export и replay добавим следующими",
-    premiumBenefit8: "Calculator, economic calendar и basic news остаются free",
+    premiumBenefit1: "AI-анализ сделок и Prop Firm Coach",
+    premiumBenefit2: "Pass Probability, Revenge Trading alerts, Hidden Leaks и Pattern Prediction",
+    premiumBenefit3: "Продвинутая статистика: Profit Factor, Expectancy, Drawdown, radar, сессии, символы и сетапы",
+    premiumBenefit4: "CSV импорт/экспорт, share cards и monthly PDF reports",
+    premiumBenefit5: "Cloud sync журнала между устройствами",
+    premiumBenefit6: "Скриншоты, фото и голосовые заметки для разбора сделок",
+    premiumBenefit7: "Полная real-time Market Pulse лента новостей",
+    premiumBenefit8: "Полный экономический календарь за пределами сегодняшнего превью",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -379,8 +491,8 @@ const I18N: Record<Lang, Record<string, string>> = {
     backupNow: "Экспорт backup",
     restoreBackup: "Импорт backup",
     backupText: "Сохраняй полный backup сделок и скриншотов в iCloud Drive. Если приложение удалится, импортируй этот файл и восстанови журнал.",
-    cloudSync: "Cloud Sync",
-    cloudSyncText: "Premium Cloud Sync синхронизирует журнал между устройствами после входа в аккаунт.",
+    cloudSync: "Local backup",
+    cloudSyncText: "Журнал хранится на устройстве, а backup можно экспортировать при необходимости.",
     backupReady: "Backup готов",
     backupFailed: "Backup не удался",
     restoreDone: "Backup восстановлен. Перезапусти приложение, чтобы журнал обновился.",
@@ -389,7 +501,7 @@ const I18N: Record<Lang, Record<string, string>> = {
   es: {
     myJournal: "Mi diario",
     journal: "Diario",
-    calendar: "Calendario",
+    calendar: "Calend.",
     news: "Noticias",
     calc: "Calculadora",
     settings: "Ajustes",
@@ -440,25 +552,25 @@ const I18N: Record<Lang, Record<string, string>> = {
     resultInUsd: "Resultado en $",
     language: "Idioma",
     subscription: "Suscripción",
-    premiumAccess: "Acceso Premium",
-    subscribe: "Premium • $4.99/mes",
+    premiumAccess: "YouTrader Pro",
+    subscribe: "Premium • $12.99/mes",
     restore: "Restaurar compra",
     premiumLocked: "Función Premium",
     premiumLockedText:
-      "Desbloquea noticias live, calendario, analytics, AI summaries y cloud sync.",
+      "Desbloquea análisis de trades con IA, notas multimedia, importación CSV, exportación, analíticas completas, noticias Market Pulse y calendario económico de varios días.",
     plusPnl: "Profit +",
     minusPnl: "Loss −",
     photo: "Screenshot",
     takePhoto: "Tomar foto",
     uploadPhoto: "Subir foto",
-    premiumBenefit1: "Noticias live con bias",
-    premiumBenefit2: "Calendario semanal",
-    premiumBenefit3: "Analytics avanzadas",
-    premiumBenefit4: "Replay Mode: screenshots, notes и voice notes для разбора каждой сделки",
-    premiumBenefit5: "Unlimited journal database",
-    premiumBenefit6: "Cloud Sync + Multi Device backup всей базы сделок",
-    premiumBenefit7: "Tick, Point, Risk/Reward и % Risk calculators",
-    premiumBenefit8: "My Stats: лучшие/худшие дни, время торговли, setup performance, drawdown и equity curve",
+    premiumBenefit1: "Análisis de trades con IA y feedback educativo",
+    premiumBenefit2: "Capturas, fotos y notas de voz para cada setup",
+    premiumBenefit3: "Importación CSV y flujo de backup para el journal a largo plazo",
+    premiumBenefit4: "Analíticas completas: Profit Factor, Expectancy, Win Rate, Drawdown y Recovery",
+    premiumBenefit5: "Performance Profile, radar y seguimiento avanzado del edge",
+    premiumBenefit6: "Estadísticas profundas por símbolo, sesión, día y setup",
+    premiumBenefit7: "Noticias Market Pulse en tiempo real y actualizaciones financieras",
+    premiumBenefit8: "Calendario económico de varios días con CPI, PPI, FOMC, NFP, GDP y más",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -518,25 +630,25 @@ const I18N: Record<Lang, Record<string, string>> = {
     resultInUsd: "Résultat en $",
     language: "Langue",
     subscription: "Abonnement",
-    premiumAccess: "Accès Premium",
-    subscribe: "Premium • $4.99/mois",
+    premiumAccess: "YouTrader Pro",
+    subscribe: "Premium • $12.99/mois",
     restore: "Restaurer achat",
     premiumLocked: "Fonction Premium",
     premiumLockedText:
-      "Débloquez news live, calendrier, analytics, AI summaries et cloud sync.",
+      "Débloquez l'analyse IA des trades, les notes multimédias, l'import CSV, l'export, les analytics complets, les news Market Pulse et le calendrier économique sur plusieurs jours.",
     plusPnl: "Profit +",
     minusPnl: "Loss −",
     photo: "Screenshot",
     takePhoto: "Photo",
     uploadPhoto: "Importer",
-    premiumBenefit1: "News live avec bias",
-    premiumBenefit2: "Calendrier semaine",
-    premiumBenefit3: "Analytics avancées",
-    premiumBenefit4: "Replay Mode: screenshots, notes и voice notes для разбора каждой сделки",
-    premiumBenefit5: "Unlimited journal database",
-    premiumBenefit6: "Cloud Sync + Multi Device backup всей базы сделок",
-    premiumBenefit7: "Tick, Point, Risk/Reward и % Risk calculators",
-    premiumBenefit8: "My Stats: лучшие/худшие дни, время торговли, setup performance, drawdown и equity curve",
+    premiumBenefit1: "Analyse IA des trades avec feedback éducatif",
+    premiumBenefit2: "Captures, photos et notes vocales pour chaque setup",
+    premiumBenefit3: "Import CSV et workflow de sauvegarde du journal à long terme",
+    premiumBenefit4: "Analytics complets : Profit Factor, Expectancy, Win Rate, Drawdown et Recovery",
+    premiumBenefit5: "Performance Profile, radar et suivi avancé de l'edge",
+    premiumBenefit6: "Statistiques détaillées par symbole, session, jour et setup",
+    premiumBenefit7: "News Market Pulse en temps réel et mises à jour financières",
+    premiumBenefit8: "Calendrier économique multi-jours avec CPI, PPI, FOMC, NFP, GDP et plus",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -547,8 +659,8 @@ const I18N: Record<Lang, Record<string, string>> = {
     journal: "Diario",
     calendar: "Calendario",
     news: "Notizie",
-    calc: "Calcolatore",
-    settings: "Impostazioni",
+    calc: "Calc.",
+    settings: "Imp.",
     addTrade: "+ Aggiungi trade",
     statistics: "Statistiche",
     today: "Oggi",
@@ -596,25 +708,25 @@ const I18N: Record<Lang, Record<string, string>> = {
     resultInUsd: "Risultato in $",
     language: "Lingua",
     subscription: "Abbonamento",
-    premiumAccess: "Accesso Premium",
-    subscribe: "Premium • $4.99/mese",
+    premiumAccess: "YouTrader Pro",
+    subscribe: "Premium • $12.99/mese",
     restore: "Ripristina",
     premiumLocked: "Funzione Premium",
     premiumLockedText:
-      "Sblocca news live, calendario, analytics, AI summaries e cloud sync.",
+      "Sblocca analisi trade con IA, note multimediali, import CSV, export, analytics completi, news Market Pulse e calendario economico multi-giorno.",
     plusPnl: "Profit +",
     minusPnl: "Loss −",
     photo: "Screenshot",
     takePhoto: "Foto",
     uploadPhoto: "Carica",
-    premiumBenefit1: "News live con bias",
-    premiumBenefit2: "Calendario settimana",
-    premiumBenefit3: "Analytics avanzate",
-    premiumBenefit4: "Replay Mode: screenshots, notes и voice notes для разбора каждой сделки",
-    premiumBenefit5: "Unlimited journal database",
-    premiumBenefit6: "Cloud Sync + Multi Device backup всей базы сделок",
-    premiumBenefit7: "Tick, Point, Risk/Reward и % Risk calculators",
-    premiumBenefit8: "My Stats: лучшие/худшие дни, время торговли, setup performance, drawdown и equity curve",
+    premiumBenefit1: "Analisi trade con IA e feedback educativo",
+    premiumBenefit2: "Screenshot, foto e note vocali per ogni setup",
+    premiumBenefit3: "Import CSV e workflow di backup del journal a lungo termine",
+    premiumBenefit4: "Analytics completi: Profit Factor, Expectancy, Win Rate, Drawdown e Recovery",
+    premiumBenefit5: "Performance Profile, radar e tracking avanzato dell'edge",
+    premiumBenefit6: "Statistiche profonde per simbolo, sessione, giorno e setup",
+    premiumBenefit7: "News Market Pulse in tempo reale e aggiornamenti finanziari",
+    premiumBenefit8: "Calendario economico multi-giorno con CPI, PPI, FOMC, NFP, GDP e altro",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -625,8 +737,8 @@ const I18N: Record<Lang, Record<string, string>> = {
     journal: "Журнал",
     calendar: "Календар",
     news: "Новини",
-    calc: "Калькулятор",
-    settings: "Налаштування",
+    calc: "Кальк.",
+    settings: "Налашт.",
     addTrade: "+ Додати угоду",
     statistics: "Статистика",
     today: "Сьогодні",
@@ -674,25 +786,25 @@ const I18N: Record<Lang, Record<string, string>> = {
     resultInUsd: "Результат у $",
     language: "Мова",
     subscription: "Підписка",
-    premiumAccess: "Premium доступ",
-    subscribe: "Premium • $4.99/міс",
+    premiumAccess: "YouTrader Pro",
+    subscribe: "Premium • $12.99/міс",
     restore: "Відновити",
     premiumLocked: "Premium функція",
     premiumLockedText:
-      "Відкрий live новини, календар, аналітику, AI summaries і cloud sync.",
+      "Відкрий AI-аналіз угод, медіа-нотатки, CSV-імпорт, експорт, повну аналітику, Market Pulse новини та календар на кілька днів.",
     plusPnl: "Профіт +",
     minusPnl: "Лосс −",
     photo: "Скрин",
     takePhoto: "Фото",
     uploadPhoto: "Завантажити",
-    premiumBenefit1: "Live новини з bias",
-    premiumBenefit2: "Календар на тиждень",
-    premiumBenefit3: "Аналітика журналу",
-    premiumBenefit4: "Replay Mode: screenshots, notes и voice notes для разбора каждой сделки",
-    premiumBenefit5: "Unlimited journal database",
-    premiumBenefit6: "Cloud Sync + Multi Device backup всей базы сделок",
-    premiumBenefit7: "Tick, Point, Risk/Reward и % Risk calculators",
-    premiumBenefit8: "My Stats: лучшие/худшие дни, время торговли, setup performance, drawdown и equity curve",
+    premiumBenefit1: "AI-аналіз угод з навчальним фідбеком",
+    premiumBenefit2: "Скриншоти, фото та голосові нотатки для кожного сетапу",
+    premiumBenefit3: "CSV-імпорт і довгостроковий backup журналу",
+    premiumBenefit4: "Повна аналітика: Profit Factor, Expectancy, Win Rate, Drawdown і Recovery",
+    premiumBenefit5: "Performance Profile, radar і просунутий аналіз edge",
+    premiumBenefit6: "Глибока статистика за символами, сесіями, днями та сетапами",
+    premiumBenefit7: "Real-time Market Pulse новини та фінансові оновлення",
+    premiumBenefit8: "Календар на кілька днів: CPI, PPI, FOMC, NFP, GDP та інші події",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -703,8 +815,8 @@ const I18N: Record<Lang, Record<string, string>> = {
     journal: "Journal",
     calendar: "Kalender",
     news: "News",
-    calc: "Rechner",
-    settings: "Einstellungen",
+    calc: "Calc.",
+    settings: "Einst.",
     addTrade: "+ Trade hinzufügen",
     statistics: "Statistik",
     today: "Heute",
@@ -752,25 +864,25 @@ const I18N: Record<Lang, Record<string, string>> = {
     resultInUsd: "Ergebnis in $",
     language: "Sprache",
     subscription: "Abo",
-    premiumAccess: "Premium Zugriff",
-    subscribe: "Premium • $4.99/Monat",
+    premiumAccess: "YouTrader Pro",
+    subscribe: "Premium • $12.99/Monat",
     restore: "Kauf wiederherstellen",
     premiumLocked: "Premium Funktion",
     premiumLockedText:
-      "Live News, Kalender, Analytics, AI summaries und cloud sync freischalten.",
+      "Schalte KI-Trade-Analyse, Mediennotizen, CSV-Import, Export, vollständige Analytics, Market-Pulse-News und den mehrtägigen Wirtschaftskalender frei.",
     plusPnl: "Profit +",
     minusPnl: "Loss −",
     photo: "Screenshot",
     takePhoto: "Foto",
     uploadPhoto: "Hochladen",
-    premiumBenefit1: "Live News mit Bias",
-    premiumBenefit2: "Wochenkalender",
-    premiumBenefit3: "Advanced Analytics",
-    premiumBenefit4: "Replay Mode: screenshots, notes и voice notes для разбора каждой сделки",
-    premiumBenefit5: "Unlimited journal database",
-    premiumBenefit6: "Cloud Sync + Multi Device backup всей базы сделок",
-    premiumBenefit7: "Tick, Point, Risk/Reward и % Risk calculators",
-    premiumBenefit8: "My Stats: лучшие/худшие дни, время торговли, setup performance, drawdown и equity curve",
+    premiumBenefit1: "KI-Trade-Analyse mit edukativem Feedback",
+    premiumBenefit2: "Screenshots, Fotos und Sprachnotizen für jedes Setup",
+    premiumBenefit3: "CSV-Import und langfristiger Journal-Backup-Workflow",
+    premiumBenefit4: "Vollständige Analytics: Profit Factor, Expectancy, Win Rate, Drawdown und Recovery",
+    premiumBenefit5: "Performance Profile, Radar und erweitertes Edge-Tracking",
+    premiumBenefit6: "Tiefe Statistiken nach Symbol, Session, Tag und Setup",
+    premiumBenefit7: "Market-Pulse-News in Echtzeit und Finanz-Updates",
+    premiumBenefit8: "Mehrtägiger Wirtschaftskalender mit CPI, PPI, FOMC, NFP, GDP und mehr",
     percentRiskCalculator: "% Risk Calculator",
     accountBalance: "Account Balance",
     riskPercent: "Risk %",
@@ -796,7 +908,14 @@ const INSTRUMENTS: Record<
 };
 const MINI_INSTRUMENTS = ["ES", "NQ", "GC", "CL"];
 const MICRO_INSTRUMENTS = ["MES", "MNQ", "MGC", "MCL"];
+const MINI_TO_MICRO_MAP: Record<string, RiskInstrument> = {
+  ES: "MES",
+  NQ: "MNQ",
+  GC: "MGC",
+  CL: "MCL",
+};
 const ASSETS: Asset[] = ["ES", "NQ", "GOLD", "OIL", "BTC", "ETH"];
+const COMMON_TRADE_TAGS = ["ORB", "Pullback", "Breakout", "Reversal", "Trend", "News", "Scalp", "A+ Setup"];
 const MOODS = [
   { key: "Calm", emoji: "🧘🏼‍♂️" },
   { key: "Focused", emoji: "🎯" },
@@ -862,6 +981,170 @@ function toNum(v: string) {
   const n = Number(String(v).replace(",", "."));
   return Number.isFinite(n) ? n : 0;
 }
+function clampNumber(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+function safeText(value: string, maxLength: number) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+function normalizeTradeClock(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const match = raw.match(/^(\d{1,2})(?::?(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return "";
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const meridiem = match[3]?.toUpperCase();
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute < 0 || minute > 59) return "";
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  if (hour < 0 || hour > 23) return "";
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+function formatClockFromDate(date = new Date()) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+function parseTagsInput(value?: string | null) {
+  return [...new Set(
+    String(value || "")
+      .split(/[,\s]+/)
+      .map((tag) => tag.replace(/^#/, "").replace(/[^a-z0-9_-]/gi, "").toUpperCase())
+      .filter((tag) => tag.length >= 2)
+      .slice(0, 8),
+  )];
+}
+function tagsToInput(tags?: string[] | null) {
+  return (tags || []).map((tag) => `#${tag.replace(/^#/, "")}`).join(" ");
+}
+function tradeTimestampFromClock(dateISO: string, clock?: string | null) {
+  const safeClock = normalizeTradeClock(clock) || "12:00";
+  const parsed = new Date(`${dateISO}T${safeClock}:00`);
+  return Number.isFinite(parsed.getTime()) ? parsed.getTime() : safeDateFromISO(dateISO).getTime();
+}
+function normalizeSymbolInput(value: string) {
+  const symbol = String(value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9._/-]/g, "")
+    .slice(0, MAX_SYMBOL_LENGTH);
+  return symbol || "MES";
+}
+function optionalPositiveNumber(value: string, label: string, max = MAX_PRICE) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return { value: null as number | null };
+  const n = Number(trimmed.replace(",", "."));
+  if (!Number.isFinite(n) || n < 0 || n > max) {
+    return { value: null as number | null, error: `${label} is outside the safe range.` };
+  }
+  return { value: n };
+}
+function validateTradeForm(
+  form: {
+    symbol: string;
+    direction: Direction;
+    entryTime?: string;
+    exitTime?: string;
+    entry: string;
+    exit: string;
+    contracts: string;
+    stopLoss: string;
+    takeProfit: string;
+    pnl: string;
+    mood: string;
+    notes: string;
+    tags?: string;
+    photoUri: string;
+    voiceUri: string;
+  },
+  pnlSide: "plus" | "minus",
+) {
+  const symbol = normalizeSymbolInput(form.symbol);
+  const entryTime = normalizeTradeClock(form.entryTime);
+  const exitTime = normalizeTradeClock(form.exitTime);
+  if (String(form.entryTime || "").trim() && !entryTime) {
+    return { error: "Entry time must look like 09:30 or 9:30 AM." };
+  }
+  if (String(form.exitTime || "").trim() && !exitTime) {
+    return { error: "Exit time must look like 09:45 or 9:45 AM." };
+  }
+  const contractsRaw = Number(String(form.contracts || "1").replace(",", "."));
+  if (!Number.isFinite(contractsRaw) || contractsRaw <= 0 || contractsRaw > MAX_CONTRACTS) {
+    return { error: "Contracts must be between 1 and 1000." };
+  }
+
+  const entry = optionalPositiveNumber(form.entry, "Entry price");
+  if (entry.error) return { error: entry.error };
+  const exit = optionalPositiveNumber(form.exit, "Exit price");
+  if (exit.error) return { error: exit.error };
+  const stopLoss = optionalPositiveNumber(form.stopLoss, "Stop loss");
+  if (stopLoss.error) return { error: stopLoss.error };
+  const takeProfit = optionalPositiveNumber(form.takeProfit, "Take profit");
+  if (takeProfit.error) return { error: takeProfit.error };
+
+  const manualPnl = String(form.pnl || "").trim();
+  let pnl: number;
+  if (manualPnl) {
+    const amount = Math.abs(Number(manualPnl.replace(",", ".")));
+    if (!Number.isFinite(amount) || amount > MAX_ABS_PNL) {
+      return { error: "P&L is outside the safe range." };
+    }
+    pnl = Number((pnlSide === "minus" ? -amount : amount).toFixed(2));
+  } else {
+    if (entry.value == null || exit.value == null) {
+      return { error: "Add P&L or entry/exit prices." };
+    }
+    const instrument = INSTRUMENTS[symbol];
+    if (!instrument) {
+      return { error: "Manual P&L is required for custom symbols." };
+    }
+    const diff =
+      form.direction === "LONG"
+        ? exit.value - entry.value
+        : entry.value - exit.value;
+    pnl = Number(((diff / instrument.tickSize) * instrument.tickValue * contractsRaw).toFixed(2));
+    if (!Number.isFinite(pnl) || Math.abs(pnl) > MAX_ABS_PNL) {
+      return { error: "Calculated P&L is outside the safe range." };
+    }
+  }
+
+  return {
+    value: {
+      symbol,
+      entry: entry.value,
+      exit: exit.value,
+      stopLoss: stopLoss.value,
+      takeProfit: takeProfit.value,
+      contracts: clampNumber(contractsRaw, 1, MAX_CONTRACTS),
+      pnl,
+      mood: safeText(form.mood, MAX_MOOD_LENGTH) || "Focused",
+      notes: safeText(form.notes, MAX_NOTES_LENGTH),
+      entryTime,
+      exitTime,
+      tags: parseTagsInput(form.tags),
+      photoUri: safeText(form.photoUri, 2048),
+      voiceUri: safeText(form.voiceUri, 2048),
+    },
+  };
+}
+async function fileSizeWithinLimit(uri: string, maxBytes: number) {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists) return false;
+    const size = typeof info.size === "number" ? info.size : 0;
+    return size > 0 && size <= maxBytes;
+  } catch {
+    return false;
+  }
+}
+function cloudSafeAssetUrl(uri?: string | null) {
+  if (!uri) return null;
+  try {
+    const parsed = new URL(uri);
+    return parsed.protocol === "https:" ? uri : null;
+  } catch {
+    return null;
+  }
+}
 function addDays(date: Date, n: number) {
   const d = Number.isFinite(date?.getTime?.()) ? new Date(date) : new Date();
   d.setDate(d.getDate() + n);
@@ -906,6 +1189,45 @@ function fmtTime(ts: number) {
     minute: "2-digit",
   });
 }
+function splitTimeLabel(time: string) {
+  const match = String(time || "").trim().match(/^(.+?)\s*(AM|PM)$/i);
+  if (!match) return { clock: time || "-", meridiem: "" };
+  return { clock: match[1], meridiem: match[2].toUpperCase() };
+}
+function eventValueNumber(value: string | number | null | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text || text === "—" || text === "-") return null;
+  const cleaned = text.replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  if (!cleaned) return null;
+  const n = Number(cleaned[0]);
+  return Number.isFinite(n) ? n : null;
+}
+function calendarMetricColor(event: EconEvent, kind: "actual" | "forecast" | "previous") {
+  const actual = eventValueNumber(event.actual);
+  const forecast = eventValueNumber(event.forecast);
+  const previous = eventValueNumber(event.previous);
+  if (kind === "forecast") return forecast == null ? C.sub : C.purple;
+  if (kind === "actual") {
+    if (actual == null || forecast == null) return C.sub;
+    if (actual > forecast) return C.green;
+    if (actual < forecast) return C.red;
+    return C.yellow;
+  }
+  if (previous == null || actual == null) return C.sub;
+  if (actual > previous) return C.green;
+  if (actual < previous) return C.red;
+  return C.yellow;
+}
+function calendarTimeMinutes(time: string) {
+  const { clock, meridiem } = splitTimeLabel(time);
+  const match = clock.match(/(\d{1,2})(?::(\d{2}))?/);
+  if (!match) return 24 * 60;
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  if (meridiem === "PM" && hour < 12) hour += 12;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  return hour * 60 + minute;
+}
 function money(n: number) {
   return `${n >= 0 ? "+" : "-"}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -917,17 +1239,133 @@ function moneyCompact(n: number) {
   return money(n);
 }
 function dayMoney(n: number) {
+  return formatCompactMoney(n);
+}
+function formatCompactMoney(n: number) {
   const a = Math.abs(n);
-  if (a >= 1000) return `${n >= 0 ? "+" : "-"}$${Math.round(a / 1000)}K`;
-  return `${n >= 0 ? "+" : "-"}$${Math.round(a)}`;
+  if (!a) return "$0";
+  const sign = n >= 0 ? "+" : "-";
+  if (a >= 1000) {
+    const value = a / 1000;
+    const formatted = Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+    return `${sign}$${formatted}K`;
+  }
+  return `${sign}$${Math.round(a)}`;
 }
 function moodLabel(key: string) {
   const m = MOODS.find((x) => x.key === key);
   return m ? `${m.emoji} ${m.key}` : key;
 }
 
+function billingDebugLog(message: string, details?: Record<string, unknown>) {
+  if (!BILLING_DEBUG_LOGS) return;
+  console.log(`[billing] ${message}`, details || {});
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function isFutureOrMissing(dateValue?: string | null) {
+  if (!dateValue) return true;
+  const parsed = Date.parse(dateValue);
+  return Number.isFinite(parsed) && parsed > Date.now();
+}
+
+function customerHasRevenueCatProEntitlement(customerInfo?: CustomerInfo | null) {
+  const entitlement = customerInfo?.entitlements?.active?.[REVENUECAT_ENTITLEMENT_ID];
+  if (!entitlement?.isActive) return false;
+  // The shared "YouTrader Pro" entitlement can be backed by either the monthly OR the
+  // yearly product. Accept any known Pro product id so yearly subscribers unlock Pro.
+  return (
+    !entitlement.productIdentifier ||
+    YOU_TRADER_PRO_PRODUCT_IDS.includes(entitlement.productIdentifier)
+  );
+}
+
+function customerHasActiveProSubscription(customerInfo?: CustomerInfo | null) {
+  if (!customerInfo) return false;
+  return YOU_TRADER_PRO_PRODUCT_IDS.some((productId) => {
+    if (customerInfo.activeSubscriptions?.includes(productId)) return true;
+
+    const subscription = customerInfo.subscriptionsByProductIdentifier?.[productId];
+    if (subscription?.isActive && isFutureOrMissing(subscription.expiresDate)) return true;
+
+    const expirationDate = customerInfo.allExpirationDates?.[productId];
+    return !!expirationDate && isFutureOrMissing(expirationDate);
+  });
+}
+
 function customerHasPro(customerInfo?: CustomerInfo | null) {
-  return !!customerInfo?.entitlements?.active?.[REVENUECAT_ENTITLEMENT_ID];
+  return customerHasRevenueCatProEntitlement(customerInfo) || customerHasActiveProSubscription(customerInfo);
+}
+
+function buildProAccessState(
+  customerInfo: CustomerInfo | null,
+  serverEntitlementActive: boolean,
+): ProAccessState {
+  const revenueCatEntitlementActive = customerHasRevenueCatProEntitlement(customerInfo);
+  const appleMonthlyActive = customerHasActiveProSubscription(customerInfo);
+  const isPro = revenueCatEntitlementActive || appleMonthlyActive || serverEntitlementActive;
+  const source: ProAccessSource = revenueCatEntitlementActive
+    ? "revenuecat_entitlement"
+    : appleMonthlyActive
+      ? "apple_subscription"
+      : serverEntitlementActive
+        ? "server_entitlement"
+        : "none";
+  return {
+    isPro,
+    source,
+    revenueCatEntitlementActive,
+    appleMonthlyActive,
+    serverEntitlementActive,
+    lastUpdatedAt: Date.now(),
+  };
+}
+
+function emptyProAccessState(): ProAccessState {
+  return buildProAccessState(null, false);
+}
+
+function summarizeCustomerInfo(customerInfo?: CustomerInfo | null) {
+  const monthlySubscription = customerInfo?.subscriptionsByProductIdentifier?.[YOU_TRADER_MONTHLY_PRODUCT_ID];
+  const yearlySubscription = customerInfo?.subscriptionsByProductIdentifier?.[YOU_TRADER_YEARLY_PRODUCT_ID];
+  const entitlement = customerInfo?.entitlements?.active?.[REVENUECAT_ENTITLEMENT_ID];
+  return {
+    entitlementId: REVENUECAT_ENTITLEMENT_ID,
+    entitlementActive: !!entitlement?.isActive,
+    entitlementProductId: entitlement?.productIdentifier,
+    entitlementExpirationDate: entitlement?.expirationDate,
+    proProductIds: YOU_TRADER_PRO_PRODUCT_IDS,
+    activeSubscriptionDetected: customerHasActiveProSubscription(customerInfo),
+    activeSubscriptions: customerInfo?.activeSubscriptions || [],
+    monthlyExpirationDate:
+      monthlySubscription?.expiresDate ||
+      customerInfo?.allExpirationDates?.[YOU_TRADER_MONTHLY_PRODUCT_ID] ||
+      null,
+    yearlyExpirationDate:
+      yearlySubscription?.expiresDate ||
+      customerInfo?.allExpirationDates?.[YOU_TRADER_YEARLY_PRODUCT_ID] ||
+      null,
+    monthlyPurchaseDate:
+      monthlySubscription?.purchaseDate ||
+      customerInfo?.allPurchaseDates?.[YOU_TRADER_MONTHLY_PRODUCT_ID] ||
+      null,
+    monthlyIsSandbox: monthlySubscription?.isSandbox,
+    yearlyIsSandbox: yearlySubscription?.isSandbox,
+    monthlyStoreTransactionId: monthlySubscription?.storeTransactionId,
+    yearlyStoreTransactionId: yearlySubscription?.storeTransactionId,
+  };
+}
+
+function serverSubscriptionHasPro(row?: ServerSubscriptionRow | null) {
+  if (!row) return false;
+  const status = String(row.status || "").toLowerCase();
+  if (!["active", "trialing", "grace_period"].includes(status)) return false;
+  if (!row.expires_at) return true;
+  const expiresAt = Date.parse(row.expires_at);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
 }
 
 function packagePrice(pkg?: PurchasesPackage | null) {
@@ -936,17 +1374,53 @@ function packagePrice(pkg?: PurchasesPackage | null) {
 
 function packageTitle(pkg: PurchasesPackage) {
   const id = `${pkg.identifier} ${pkg.product.identifier}`.toLowerCase();
-  if (id.includes("annual") || id.includes("year")) return "YEARLY";
-  if (id.includes("month")) return "MONTHLY";
+  if (id.includes("year") || id.includes("annual") || pkg.packageType === "ANNUAL") return "YEARLY";
+  if (id.includes("month") || pkg.packageType === "MONTHLY") return "MONTHLY";
   return pkg.packageType || "PRO";
 }
 
+// Finds the monthly/yearly RevenueCat package from the loaded offering packages.
+function findProPackage(packages: PurchasesPackage[], productId: string) {
+  return (
+    packages.find((pkg) => pkg.product.identifier === productId) ||
+    packages.find((pkg) =>
+      productId === YOU_TRADER_YEARLY_PRODUCT_ID
+        ? packageTitle(pkg) === "YEARLY"
+        : packageTitle(pkg) === "MONTHLY",
+    ) ||
+    null
+  );
+}
+
 function normalizeTrade(trade: Trade): Trade {
-  const fallbackTime = typeof (trade as any).createdAt === "number" ? (trade as any).createdAt : Date.now();
+  const entryTime = normalizeTradeClock(trade.entryTime);
+  const exitTime = normalizeTradeClock(trade.exitTime);
+  const fallbackTime =
+    entryTime
+      ? tradeTimestampFromClock(trade.date || todayISO(), entryTime)
+      : typeof (trade as any).createdAt === "number"
+        ? (trade as any).createdAt
+        : Date.now();
   return {
     ...trade,
     id: String(trade.id || uid()),
-    createdAt: typeof trade.createdAt === "number" ? trade.createdAt : fallbackTime,
+    date: /^\d{4}-\d{2}-\d{2}$/.test(trade.date || "") ? trade.date : todayISO(),
+    symbol: normalizeSymbolInput(trade.symbol),
+    entryTime: entryTime || null,
+    exitTime: exitTime || null,
+    contracts: clampNumber(Number(trade.contracts || 1), 1, MAX_CONTRACTS),
+    entry: trade.entry == null ? null : clampNumber(Number(trade.entry), 0, MAX_PRICE),
+    exit: trade.exit == null ? null : clampNumber(Number(trade.exit), 0, MAX_PRICE),
+    stopLoss: trade.stopLoss == null ? null : clampNumber(Number(trade.stopLoss), 0, MAX_PRICE),
+    takeProfit: trade.takeProfit == null ? null : clampNumber(Number(trade.takeProfit), 0, MAX_PRICE),
+    pnl: clampNumber(Number(trade.pnl || 0), -MAX_ABS_PNL, MAX_ABS_PNL),
+    mood: safeText(trade.mood || "Focused", MAX_MOOD_LENGTH),
+    notes: safeText(trade.notes || "", MAX_NOTES_LENGTH),
+    tags: Array.isArray(trade.tags) ? parseTagsInput(trade.tags.join(" ")) : [],
+    photoUri: trade.photoUri ? safeText(trade.photoUri, 2048) : null,
+    voiceUri: trade.voiceUri ? safeText(trade.voiceUri, 2048) : null,
+    voiceName: trade.voiceName ? safeText(trade.voiceName, 128) : null,
+    createdAt: entryTime ? tradeTimestampFromClock(trade.date || todayISO(), entryTime) : typeof trade.createdAt === "number" ? trade.createdAt : fallbackTime,
     updatedAt: typeof trade.updatedAt === "number" ? trade.updatedAt : fallbackTime,
   };
 }
@@ -961,7 +1435,7 @@ function sortTrades(trades: Trade[]) {
 
 function normalizeTrades(trades: Trade[]) {
   const map = new Map<string, Trade>();
-  trades.forEach((trade) => {
+  trades.slice(0, MAX_LOCAL_TRADES).forEach((trade) => {
     const next = normalizeTrade(trade);
     const current = map.get(next.id);
     if (!current || (next.updatedAt || 0) >= (current.updatedAt || 0)) {
@@ -989,9 +1463,9 @@ function tradeToCloudRow(trade: Trade, userId: string): TradeJournalRow {
     pnl: normalized.pnl,
     mood: normalized.mood || null,
     notes: normalized.notes || null,
-    screenshot_url: normalized.photoUri || null,
-    voice_url: normalized.voiceUri || null,
-    tags: [],
+    screenshot_url: cloudSafeAssetUrl(normalized.photoUri),
+    voice_url: cloudSafeAssetUrl(normalized.voiceUri),
+    tags: normalized.tags || [],
     created_at: createdAt,
     updated_at: updatedAt,
     deleted_at: null,
@@ -1006,6 +1480,8 @@ function cloudRowToTrade(row: TradeJournalRow): Trade {
     date: row.trade_date,
     symbol: row.symbol,
     direction: row.direction,
+    entryTime: row.entry_time || null,
+    exitTime: row.exit_time || null,
     entry: row.entry,
     exit: row.exit,
     contracts: Number(row.contracts || 1),
@@ -1014,6 +1490,7 @@ function cloudRowToTrade(row: TradeJournalRow): Trade {
     pnl: Number(row.pnl || 0),
     mood: row.mood || "Focused",
     notes: row.notes || "",
+    tags: row.tags || [],
     photoUri: row.screenshot_url || null,
     voiceUri: row.voice_url || null,
     voiceName: row.voice_url ? "Voice note" : null,
@@ -1109,6 +1586,82 @@ function estimateBias(text: string): Record<Asset, Bias> {
     ETH: base,
   };
 }
+
+function numericSurprise(value?: string | null) {
+  if (!value || value === "—") return null;
+  const cleaned = String(value).replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  if (!cleaned) return null;
+  return Number(cleaned[0]);
+}
+
+function biasSet(es: Bias, nq: Bias, gold: Bias, oil: Bias, btc: Bias = es, eth: Bias = btc): Record<Asset, Bias> {
+  return { ES: es, NQ: nq, GOLD: gold, OIL: oil, BTC: btc, ETH: eth };
+}
+
+function compareEventNumbers(actual: string, forecast: string, previous: string) {
+  const actualNumber = numericSurprise(actual);
+  const forecastNumber = numericSurprise(forecast);
+  const previousNumber = numericSurprise(previous);
+  if (actualNumber !== null && forecastNumber !== null) return actualNumber - forecastNumber;
+  if (forecastNumber !== null && previousNumber !== null) return forecastNumber - previousNumber;
+  if (actualNumber !== null && previousNumber !== null) return actualNumber - previousNumber;
+  return null;
+}
+
+function estimateCalendarBias(event: Pick<EconEvent, "name" | "actual" | "forecast" | "previous" | "impact">): Record<Asset, Bias> {
+  const name = event.name.toLowerCase();
+  const delta = compareEventNumbers(event.actual, event.forecast, event.previous);
+  const stronger = delta === null ? null : delta > 0;
+  const weaker = delta === null ? null : delta < 0;
+
+  const isInflation =
+    /cpi|ppi|pce|inflation|prices|price index|deflator/.test(name);
+  const isRates =
+    /fomc|fed|powell|rate decision|cash rate|interest rate|rate statement|central bank/.test(name);
+  const isJobs =
+    /payroll|nfp|employment|unemployment|jobless|claims|wage|earnings/.test(name);
+  const isGrowth =
+    /gdp|pmi|ism|retail sales|industrial production|consumer sentiment|confidence|durable/.test(name);
+  const isOil =
+    /crude|oil|eia|api|inventory|inventories|rig count/.test(name);
+  const isHousing =
+    /housing|home sales|building permits|construction/.test(name);
+
+  if (isOil) {
+    if (stronger) return biasSet("NEUTRAL", "NEUTRAL", "NEUTRAL", "SHORT", "NEUTRAL", "NEUTRAL");
+    if (weaker) return biasSet("NEUTRAL", "NEUTRAL", "NEUTRAL", "LONG", "NEUTRAL", "NEUTRAL");
+    return biasSet("NEUTRAL", "NEUTRAL", "NEUTRAL", "LONG", "NEUTRAL", "NEUTRAL");
+  }
+
+  if (isInflation || isRates) {
+    if (weaker || name.includes("cut")) return biasSet("LONG", "LONG", "SHORT", "NEUTRAL", "LONG", "LONG");
+    return biasSet("SHORT", "SHORT", "LONG", "NEUTRAL", "SHORT", "SHORT");
+  }
+
+  if (isJobs) {
+    if (name.includes("claims") || name.includes("unemployment")) {
+      if (stronger) return biasSet("SHORT", "SHORT", "LONG", "NEUTRAL", "SHORT", "SHORT");
+      if (weaker) return biasSet("LONG", "LONG", "SHORT", "NEUTRAL", "LONG", "LONG");
+    }
+    if (stronger) return biasSet("LONG", "LONG", "SHORT", "LONG", "LONG", "LONG");
+    if (weaker) return biasSet("SHORT", "SHORT", "LONG", "NEUTRAL", "SHORT", "SHORT");
+    return biasSet("LONG", "LONG", "SHORT", "NEUTRAL", "LONG", "LONG");
+  }
+
+  if (isGrowth || isHousing) {
+    if (stronger) return biasSet("LONG", "LONG", "SHORT", "LONG", "LONG", "LONG");
+    if (weaker) return biasSet("SHORT", "SHORT", "LONG", "SHORT", "SHORT", "SHORT");
+    return event.impact === "HIGH"
+      ? biasSet("LONG", "LONG", "SHORT", "NEUTRAL", "LONG", "LONG")
+      : biasSet("NEUTRAL", "NEUTRAL", "NEUTRAL", "NEUTRAL", "NEUTRAL", "NEUTRAL");
+  }
+
+  return estimateBias(event.name);
+}
+
+function applyCalendarBias(event: EconEvent): EconEvent {
+  return { ...event, bias: estimateCalendarBias(event) };
+}
 function impactFromText(text: string): Impact {
   const s = text.toLowerCase();
   if (
@@ -1159,8 +1712,8 @@ const demoNews: MarketNews[] = [
     title: "Fed rate expectations move markets as traders reprice risk",
     summary:
       "Index futures react to rate-cut expectations and bond yield movement.",
-    source: "Demo",
-    time: "Cached",
+    source: "Market desk",
+    time: "Offline",
     impact: "HIGH",
     bias: {
       ES: "LONG",
@@ -1175,8 +1728,8 @@ const demoNews: MarketNews[] = [
     id: "2",
     title: "Oil inventory data creates volatility in energy markets",
     summary: "Crude reacts to supply/demand expectations.",
-    source: "Demo",
-    time: "Cached",
+    source: "Market desk",
+    time: "Offline",
     impact: "MED",
     bias: {
       ES: "NEUTRAL",
@@ -1188,7 +1741,63 @@ const demoNews: MarketNews[] = [
     },
   },
 ];
-function makeDemoEvents(): EconEvent[] {
+
+function decodeHtml(value: string) {
+  return value
+    .replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
+}
+
+function stripHtml(value: string) {
+  return decodeHtml(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " "));
+}
+
+function rssTag(item: string, tag: string) {
+  const match = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return match ? decodeHtml(match[1]) : "";
+}
+
+async function fetchYahooFinanceNews(): Promise<MarketNews[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  try {
+    const res = await fetch(
+      "https://feeds.finance.yahoo.com/rss/2.0/headline?s=ES=F,NQ=F,GC=F,CL=F,BTC-USD,ETH-USD&region=US&lang=en-US",
+      { signal: controller.signal },
+    );
+    if (!res.ok) throw new Error(`Yahoo Finance RSS HTTP ${res.status}`);
+    const xml = await res.text();
+    const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
+    return blocks.slice(0, 40).map((block, index) => {
+      const title = stripHtml(rssTag(block, "title") || "Market update");
+      const summary = stripHtml(rssTag(block, "description"));
+      const link = stripHtml(rssTag(block, "link"));
+      const pubDate = rssTag(block, "pubDate");
+      const timestamp = pubDate ? Date.parse(pubDate) / 1000 : Date.now() / 1000;
+      const text = `${title} ${summary}`;
+      return {
+        id: `yahoo-${timestamp}-${index}`,
+        title,
+        summary,
+        source: "Yahoo Finance",
+        time: fmtTime(timestamp),
+        url: link,
+        bias: estimateBias(text),
+        impact: impactFromText(text),
+      };
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function makeOfflineCalendarEvents(): EconEvent[] {
   const base = new Date();
   return [
     {
@@ -1304,45 +1913,59 @@ function makeDemoEvents(): EconEvent[] {
 async function loadNews(): Promise<MarketNews[]> {
   const cacheRaw = await AsyncStorage.getItem("news-cache-v6");
   const cached = cacheRaw ? JSON.parse(cacheRaw) : null;
-  if (!FINNHUB) return cached?.items || demoNews;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  try {
-    const res = await fetch(
-      `https://finnhub.io/api/v1/news?category=general&token=${FINNHUB}`,
-      { signal: controller.signal },
-    );
-    clearTimeout(timer);
-    const data = await res.json();
-    const items: MarketNews[] = (
-      Array.isArray(data) ? data.slice(0, 80) : []
-    ).map((n: any) => {
-      const text = `${n.headline || ""} ${n.summary || ""}`;
-      return {
-        id: String(n.id || uid()),
-        title: n.headline || "Market update",
-        summary: n.summary || "",
-        source: n.source || "Finnhub",
-        time: fmtTime(n.datetime || Date.now() / 1000),
-        url: n.url || "",
-        bias: estimateBias(text),
-        impact: impactFromText(text),
-      };
-    });
-    if (items.length)
+  const persist = async (items: MarketNews[]) => {
+    if (items.length) {
       await AsyncStorage.setItem(
         "news-cache-v6",
         JSON.stringify({ at: Date.now(), items }),
       );
-    return items.length ? items : cached?.items || demoNews;
-  } catch {
-    clearTimeout(timer);
-    return cached?.items || demoNews;
+    }
+    return items;
+  };
+
+  if (FINNHUB) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    try {
+      const res = await fetch(
+        `https://finnhub.io/api/v1/news?category=general&token=${FINNHUB}`,
+        { signal: controller.signal },
+      );
+      clearTimeout(timer);
+      const data = await res.json();
+      const items: MarketNews[] = (
+        Array.isArray(data) ? data.slice(0, 80) : []
+      ).map((n: any) => {
+        const text = `${n.headline || ""} ${n.summary || ""}`;
+        return {
+          id: String(n.id || uid()),
+          title: n.headline || "Market update",
+          summary: n.summary || "",
+          source: n.source || "Finnhub",
+          time: fmtTime(n.datetime || Date.now() / 1000),
+          url: n.url || "",
+          bias: estimateBias(text),
+          impact: impactFromText(text),
+        };
+      });
+      if (items.length) return persist(items);
+    } catch {
+      clearTimeout(timer);
+    }
   }
+
+  try {
+    const items = await fetchYahooFinanceNews();
+    if (items.length) return persist(items);
+  } catch {
+    // Fall back to the latest cached feed before showing offline placeholders.
+  }
+
+  return cached?.items || demoNews;
 }
 function normalizeEvent(e: any, index: number): EconEvent {
   const text = `${e.name || e.event || e.title || ""} ${e.currency || e.country || ""}`;
-  return {
+  return applyCalendarBias({
     id: String(e.id || `${e.date || todayISO()}-${index}`),
     date: String(e.date || todayISO()).slice(0, 10),
     time: String(e.time || "08:30 AM"),
@@ -1360,40 +1983,136 @@ function normalizeEvent(e: any, index: number): EconEvent {
     forecast: String(e.forecast || e.consensus || "—"),
     previous: String(e.previous || e.prev || "—"),
     bias: e.bias || estimateBias(text),
-  };
+  });
 }
+
+function formatEventTime(date: Date) {
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function mapForexFactoryImpact(raw: unknown): Impact {
+  const value = String(raw || "").toLowerCase();
+  if (value.includes("high") || value.includes("red")) return "HIGH";
+  if (value.includes("medium") || value.includes("med") || value.includes("orange")) return "MED";
+  return "LOW";
+}
+
+async function fetchForexFactoryCalendar(): Promise<EconEvent[]> {
+  const endpoints = [
+    "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+    "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
+  ];
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const responses = await Promise.allSettled(
+      endpoints.map((url) => fetch(url, { signal: controller.signal }).then((res) => {
+        if (!res.ok) throw new Error(`Economic calendar HTTP ${res.status}`);
+        return res.json();
+      })),
+    );
+    const rows = responses.flatMap((result) => {
+      if (result.status !== "fulfilled") return [];
+      return Array.isArray(result.value) ? result.value : [];
+    });
+    const priorityCurrencies = new Set(["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CNY"]);
+    return rows
+      .filter((row: any) => {
+        const currency = String(row.currency || row.country || "").toUpperCase();
+        return !currency || priorityCurrencies.has(currency);
+      })
+      .map((row: any, index: number) => {
+        const parsedDate = row.date ? new Date(row.date) : new Date();
+        const date = Number.isNaN(parsedDate.getTime()) ? todayISO() : isoFromDate(parsedDate);
+        const time = Number.isNaN(parsedDate.getTime()) ? String(row.time || "08:30 AM") : formatEventTime(parsedDate);
+        const name = String(row.title || row.event || row.name || "Economic event");
+        const currency = String(row.currency || row.country || "").toUpperCase();
+        const text = `${name} ${currency}`;
+        return applyCalendarBias({
+          id: `ff-${date}-${index}-${name.slice(0, 20)}`,
+          date,
+          time,
+          name: currency ? `${name} (${currency})` : name,
+          impact: mapForexFactoryImpact(row.impact),
+          actual: String(row.actual || "—"),
+          forecast: String(row.forecast || row.consensus || "—"),
+          previous: String(row.previous || row.prev || "—"),
+          bias: estimateBias(text),
+        } as EconEvent);
+      })
+      .filter((event) => event.date >= todayISO())
+      .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
+      .slice(0, 200);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function loadCalendarEvents(): Promise<EconEvent[]> {
   const cacheRaw = await AsyncStorage.getItem("calendar-cache-v6");
-  const cached = cacheRaw ? JSON.parse(cacheRaw) : null;
-  if (!CALENDAR_API_URL) return cached?.items || makeDemoEvents();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
+  let cached: { items?: EconEvent[] } | null = null;
   try {
-    const start = todayISO();
-    const end = isoFromDate(addDays(new Date(), 7));
-    const sep = CALENDAR_API_URL.includes("?") ? "&" : "?";
-    const res = await fetch(
-      `${CALENDAR_API_URL}${sep}start=${start}&end=${end}`,
-      { signal: controller.signal },
-    );
-    clearTimeout(timer);
-    const data = await res.json();
-    const raw = Array.isArray(data)
-      ? data
-      : Array.isArray(data.events)
-        ? data.events
-        : [];
-    const items = raw.map(normalizeEvent).slice(0, 80);
-    if (items.length)
+    cached = cacheRaw ? JSON.parse(cacheRaw) : null;
+  } catch {
+    cached = null;
+  }
+  const start = todayISO();
+  const end = isoFromDate(addDays(new Date(), 30));
+
+  const persist = async (items: EconEvent[]) => {
+    if (items.length) {
       await AsyncStorage.setItem(
         "calendar-cache-v6",
         JSON.stringify({ at: Date.now(), items }),
       );
-    return items.length ? items : cached?.items || makeDemoEvents();
-  } catch {
-    clearTimeout(timer);
-    return cached?.items || makeDemoEvents();
+    }
+    return items;
+  };
+
+  if (CALENDAR_API_URL) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    try {
+      const sep = CALENDAR_API_URL.includes("?") ? "&" : "?";
+      const res = await fetch(
+        `${CALENDAR_API_URL}${sep}start=${start}&end=${end}`,
+        { signal: controller.signal },
+      );
+      clearTimeout(timer);
+      const data = await res.json();
+      const raw = Array.isArray(data)
+        ? data
+        : Array.isArray(data.events)
+          ? data.events
+          : [];
+      const items = raw.map(normalizeEvent).map(applyCalendarBias).slice(0, 200) as EconEvent[];
+      if (items.length) return persist(items);
+    } catch {
+      clearTimeout(timer);
+    }
   }
+
+  if (FINNHUB) {
+    try {
+      const rows = await fetchFinnhubEconomicCalendar(FINNHUB, start, end);
+      const items = (mapFinnhubEconomicRows(rows, estimateBias) as EconEvent[]).map(applyCalendarBias);
+      if (items.length) return persist(items);
+    } catch {
+      // fall through to cache/demo
+    }
+  }
+
+  try {
+    const items = (await fetchForexFactoryCalendar()).map(applyCalendarBias);
+    if (items.length) return persist(items);
+  } catch {
+    // Fall through to cached data if the public calendar feed is unavailable.
+  }
+
+  return (cached?.items || makeOfflineCalendarEvents()).map(applyCalendarBias);
 }
 
 function paramsFromUrl(url: string) {
@@ -1439,7 +2158,30 @@ async function createSessionFromAuthUrl(url: string) {
 }
 
 function Card({ children, style }: any) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  return <View style={[styles.card, styles.safeCard, style]}>{children}</View>;
+}
+function SafeText({
+  children,
+  style,
+  lines = 1,
+  minScale = 0.75,
+  ...props
+}: any) {
+  return (
+    <Text
+      {...props}
+      style={[styles.safeText, style]}
+      numberOfLines={lines}
+      adjustsFontSizeToFit
+      minimumFontScale={minScale}
+      ellipsizeMode="tail"
+    >
+      {children}
+    </Text>
+  );
+}
+function SafeMetricLabel({ children, style }: any) {
+  return <SafeText style={[styles.safeMetricLabel, style]}>{children}</SafeText>;
 }
 function Label({ children }: any) {
   return <Text style={styles.label}>{children}</Text>;
@@ -1499,6 +2241,7 @@ function Input(props: any) {
 }
 
 function getTradeTime(t: Trade) {
+  if (t.entryTime) return new Date(tradeTimestampFromClock(t.date, t.entryTime));
   const raw = (t as any).createdAt || t.id?.split("-")[0];
   const n = Number(raw);
   return Number.isFinite(n) && n > 1000000000 ? new Date(n) : safeDateFromISO(t.date);
@@ -1523,7 +2266,7 @@ function rrForTrade(t: Trade) {
   return null;
 }
 function maxDrawdownFromTrades(trades: Trade[]) {
-  const ordered = [...trades].sort((a, b) => (a.date + a.id).localeCompare(b.date + b.id));
+  const ordered = [...trades].sort((a, b) => getTradeTime(a).getTime() - getTradeTime(b).getTime());
   let equity = 0;
   let peak = 0;
   let maxDd = 0;
@@ -1571,6 +2314,7 @@ type RiskTemplate = {
   firm: string;
   accountName: string;
   accountSize: number;
+  evaluationTarget: number;
   dailyLossLimit: number;
   maxLossLimit: number;
   evaluationContracts: number;
@@ -1578,66 +2322,133 @@ type RiskTemplate = {
   evaluationRiskPct: number;
   liveRiskPct: number;
   trailingDrawdown: boolean;
+  sourceUrl?: string;
+  lastUpdated?: string;
 };
 
 const PROP_RISK_TEMPLATES: RiskTemplate[] = [
   {
-    key: "topstep50k",
-    label: "Topstep 50K",
-    firm: "Topstep",
-    accountName: "50K Combine",
-    accountSize: 50000,
-    dailyLossLimit: 1000,
-    maxLossLimit: 2000,
-    evaluationContracts: 5,
-    liveContracts: 3,
-    evaluationRiskPct: 0.14,
-    liveRiskPct: 0.1,
-    trailingDrawdown: false,
-  },
-  {
-    key: "apex50k",
-    label: "Apex 50K",
-    firm: "Apex",
-    accountName: "50K Evaluation",
-    accountSize: 50000,
-    dailyLossLimit: 1250,
-    maxLossLimit: 2500,
-    evaluationContracts: 10,
-    liveContracts: 5,
+    key: "eval25k",
+    label: "Eval 25K",
+    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
+    accountName: "25K Evaluation",
+    accountSize: 25000,
+    evaluationTarget: 1500,
+    dailyLossLimit: 550,
+    maxLossLimit: 1500,
+    evaluationContracts: 3,
+    liveContracts: 2,
     evaluationRiskPct: 0.12,
     liveRiskPct: 0.08,
     trailingDrawdown: true,
+    sourceUrl: "https://www.topstep.com",
+    lastUpdated: "2026-05-29",
   },
   {
-    key: "tpt50k",
-    label: "Take Profit 50K",
-    firm: "Take Profit Trader",
-    accountName: "50K Pro",
+    key: "eval50k",
+    label: "Eval 50K",
+    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
+    accountName: "50K Evaluation",
     accountSize: 50000,
-    dailyLossLimit: 1100,
-    maxLossLimit: 2200,
-    evaluationContracts: 5,
-    liveContracts: 3,
-    evaluationRiskPct: 0.13,
-    liveRiskPct: 0.09,
-    trailingDrawdown: false,
-  },
-  {
-    key: "lucid100k",
-    label: "Lucid 100K",
-    firm: "Lucid",
-    accountName: "100K Evaluation",
-    accountSize: 100000,
-    dailyLossLimit: 2000,
-    maxLossLimit: 3000,
-    evaluationContracts: 10,
-    liveContracts: 6,
-    evaluationRiskPct: 0.11,
+    evaluationTarget: 3000,
+    dailyLossLimit: 1200,
+    maxLossLimit: 2500,
+    evaluationContracts: 6,
+    liveContracts: 4,
+    evaluationRiskPct: 0.12,
     liveRiskPct: 0.08,
     trailingDrawdown: true,
+    sourceUrl: "https://apextraderfunding.com",
+    lastUpdated: "2026-05-29",
+  },
+  {
+    key: "eval100k",
+    label: "Eval 100K",
+    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
+    accountName: "100K Evaluation",
+    accountSize: 100000,
+    evaluationTarget: 6000,
+    dailyLossLimit: 2000,
+    maxLossLimit: 3500,
+    evaluationContracts: 8,
+    liveContracts: 6,
+    evaluationRiskPct: 0.1,
+    liveRiskPct: 0.075,
+    trailingDrawdown: true,
+    sourceUrl: "https://lucidtrading.com",
+    lastUpdated: "2026-05-29",
+  },
+  {
+    key: "eval150k",
+    label: "Eval 150K",
+    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
+    accountName: "150K Evaluation",
+    accountSize: 150000,
+    evaluationTarget: 9000,
+    dailyLossLimit: 2500,
+    maxLossLimit: 4500,
+    evaluationContracts: 10,
+    liveContracts: 7,
+    evaluationRiskPct: 0.095,
+    liveRiskPct: 0.08,
+    trailingDrawdown: true,
+    sourceUrl: "https://takeprofittrader.com",
+    lastUpdated: "2026-05-29",
   },
 ];
+
+const FALLBACK_PROP_RULES = PROP_RISK_TEMPLATES;
+
+function normalizeRemoteTemplate(row: any): RiskTemplate | null {
+  if (!row) return null;
+  const key = String(row.slug || row.key || "").trim();
+  if (!key) return null;
+  const accountSize = Number(row.account_size ?? row.accountSize);
+  const dailyLossLimit = Number(row.daily_loss_limit ?? row.dailyLossLimit);
+  const maxLossLimit = Number(row.max_loss_limit ?? row.maxLossLimit);
+  const evaluationContracts = Number(row.evaluation_contracts ?? row.evaluationContracts);
+  const liveContracts = Number(row.live_contracts ?? row.liveContracts);
+  const evaluationTargetRaw = row.evaluation_target ?? row.evaluationTarget;
+  const evaluationTarget = Number(
+    evaluationTargetRaw != null ? evaluationTargetRaw : Math.round(accountSize * 0.06),
+  );
+  if (
+    !Number.isFinite(accountSize) ||
+    !Number.isFinite(dailyLossLimit) ||
+    !Number.isFinite(maxLossLimit) ||
+    !Number.isFinite(evaluationContracts) ||
+    !Number.isFinite(liveContracts)
+  ) {
+    return null;
+  }
+  const rules = typeof row.rules === "object" && row.rules ? row.rules : {};
+  const evaluationRiskPct = Number(rules.evaluationRiskPct ?? rules.evaluation_risk_pct ?? 0.1);
+  const liveRiskPct = Number(rules.liveRiskPct ?? rules.live_risk_pct ?? 0.08);
+  return {
+    key,
+    label: String(row.label || `${Math.round(accountSize / 1000)}K`),
+    firm: String(row.name || row.firm || "Unknown"),
+    accountName: String(row.account_name || row.accountName || "Evaluation"),
+    accountSize,
+    evaluationTarget,
+    dailyLossLimit,
+    maxLossLimit,
+    evaluationContracts,
+    liveContracts,
+    evaluationRiskPct: Number.isFinite(evaluationRiskPct) ? evaluationRiskPct : 0.1,
+    liveRiskPct: Number.isFinite(liveRiskPct) ? liveRiskPct : 0.08,
+    trailingDrawdown: Boolean(
+      row.trailing_drawdown ?? row.trailingDrawdown ?? rules.trailingDrawdown ?? false,
+    ),
+    sourceUrl: typeof rules.sourceUrl === "string" ? rules.sourceUrl : undefined,
+    lastUpdated:
+      typeof row.updated_at === "string"
+        ? row.updated_at.slice(0, 10)
+        : typeof row.created_at === "string"
+          ? row.created_at.slice(0, 10)
+          : undefined,
+  };
+}
 
 function groupPerformance(trades: Trade[], keyFn: (t: Trade) => string) {
   const map: Record<string, { pnl: number; count: number; wins: number }> = {};
@@ -1653,21 +2464,20 @@ function groupPerformance(trades: Trade[], keyFn: (t: Trade) => string) {
     .sort((a, b) => b.pnl - a.pnl);
 }
 function calcStats(trades: Trade[]) {
-  const pnl = trades.reduce((a, t) => a + t.pnl, 0);
+  const unified = buildUnifiedTradeAnalytics(trades);
+  const official = unified.metrics;
+  const pnl = official.netPnl;
   const wins = trades.filter((t) => t.pnl > 0);
   const losses = trades.filter((t) => t.pnl < 0);
-  const grossWin = wins.reduce((a, t) => a + t.pnl, 0);
-  const grossLossRaw = losses.reduce((a, t) => a + t.pnl, 0);
-  const grossLoss = Math.abs(grossLossRaw);
-  const wr = trades.length ? (wins.length / trades.length) * 100 : 0;
-  const exp = trades.length ? pnl / trades.length : 0;
-  const pf = grossLoss ? grossWin / grossLoss : grossWin ? 99 : 0;
-  const avgWin = wins.length ? grossWin / wins.length : 0;
-  const avgLoss = losses.length ? grossLoss / losses.length : 0;
-  const avgWinLoss = avgLoss ? avgWin / avgLoss : avgWin ? 99 : 0;
+  const wr = official.winRate || 0;
+  const exp = official.expectancy || 0;
+  const pf = infinitySafeMetric(official.profitFactor);
+  const avgWin = official.averageWin;
+  const avgLoss = official.averageLoss;
+  const avgWinLoss = infinitySafeMetric(official.averageWinLossRatio);
   const rrs = trades.map(rrForTrade).filter((x): x is number => x != null && Number.isFinite(x));
   const avgRR = rrs.length ? rrs.reduce((a, x) => a + x, 0) / rrs.length : 0;
-  const ordered = [...trades].sort((a, b) => (a.date + a.id).localeCompare(b.date + b.id));
+  const ordered = [...trades].sort((a, b) => getTradeTime(a).getTime() - getTradeTime(b).getTime());
   const winStreaks: number[] = [];
   const lossStreaks: number[] = [];
   let current: "win" | "loss" | null = null;
@@ -1687,15 +2497,10 @@ function calcStats(trades: Trade[]) {
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, x) => a + x, 0) / arr.length : 0;
   const daily = buildDailySeries(trades);
   const dayStreaks = dailyWinLossStreaks(daily);
-  const dd = maxDrawdownFromTrades(trades);
+  const dd = { maxDd: official.maxDrawdown, curve: unified.equityCurve.map((point) => point.cumulativePnl) };
   const weekday = groupPerformance(trades, (t) => safeDateFromISO(t.date).toLocaleDateString([], { weekday: "short", timeZone: "UTC" }));
-  const session = groupPerformance(trades, (t) => {
-    const h = getTradeTime(t).getHours();
-    if (h < 11) return "Morning";
-    if (h < 14) return "Midday";
-    return "Afternoon";
-  });
-  const bySetup = groupPerformance(trades, (t) => (t as any).setup || t.symbol || "Manual");
+  const session = groupPerformance(trades, sessionLabelForTrade);
+  const bySetup = groupPerformance(trades, primarySetupLabel);
   return {
     pnl,
     wr,
@@ -1720,25 +2525,480 @@ function calcStats(trades: Trade[]) {
   };
 }
 
+function tradingScoreForTrades(trades: Trade[]) {
+  const stats = calcStats(trades);
+  const consistency = consistencyScoreFromTrades(trades);
+  const absDrawdown = Math.abs(stats.maxDd);
+  const recoveryFactor = absDrawdown > 0 ? Math.max(0, stats.pnl / absDrawdown) : stats.pnl > 0 ? 99 : 0;
+  const riskControl =
+    stats.pnl > 0
+      ? Math.max(15, Math.min(100, 100 - (absDrawdown / Math.max(1, Math.abs(stats.pnl) + absDrawdown)) * 100))
+      : Math.max(10, 100 - absDrawdown / 10);
+  return calculateTradingScore({
+    winRate: stats.wr,
+    profitFactor: stats.pf,
+    expectancy: stats.exp,
+    consistency,
+    riskControl,
+    recoveryFactor,
+    maxDrawdown: stats.maxDd,
+    avgWinLossRatio: stats.avgWinLoss,
+    tradeCount: stats.count,
+  });
+}
+
+function lowToHighPerformance(rows: ReturnType<typeof groupPerformance>) {
+  return [...rows].sort((a, b) => a.pnl - b.pnl);
+}
+
+function buildMistakePatterns(stats: ReturnType<typeof calcStats>) {
+  const patterns: string[] = [];
+  if (stats.count >= 5 && stats.wr < 45) patterns.push("win_rate_below_45_percent");
+  if (stats.count >= 5 && stats.pf > 0 && stats.pf < 1) patterns.push("profit_factor_below_1");
+  if (stats.exp < 0) patterns.push("negative_expectancy");
+  if (stats.maxDd < 0) patterns.push("drawdown_detected");
+  if (stats.avgLossStreak >= 2) patterns.push("multi_loss_streaks");
+  return patterns.slice(0, 5);
+}
+
+function tradeOutcome(trade: Trade): "WIN" | "LOSS" | "BREAKEVEN" {
+  if (trade.pnl > 0) return "WIN";
+  if (trade.pnl < 0) return "LOSS";
+  return "BREAKEVEN";
+}
+
+function pnlBucket(value: number) {
+  const abs = Math.abs(value);
+  const prefix = value > 0 ? "profit" : value < 0 ? "loss" : "flat";
+  if (abs === 0) return "flat";
+  if (abs < 100) return `${prefix}_under_100`;
+  if (abs < 500) return `${prefix}_100_to_500`;
+  if (abs < 1000) return `${prefix}_500_to_1000`;
+  return `${prefix}_over_1000`;
+}
+
+function roundMetric(value: number, digits = 2) {
+  if (!Number.isFinite(value)) return 0;
+  const factor = Math.pow(10, digits);
+  return Math.round(value * factor) / factor;
+}
+
+function riskAmountForTrade(trade: Trade) {
+  const entry = Number(trade.entry ?? 0);
+  const stop = Number(trade.stopLoss ?? 0);
+  const contracts = Number(trade.contracts || 1);
+  if (!entry || !stop || !Number.isFinite(entry) || !Number.isFinite(stop)) return null;
+  const risk = Math.abs(entry - stop) * Math.max(1, contracts);
+  return Number.isFinite(risk) ? roundMetric(risk) : null;
+}
+
+function emptyBreakdown(key: string): TradePerformanceBreakdown {
+  return {
+    key,
+    trades: 0,
+    wins: 0,
+    losses: 0,
+    winRate: 0,
+    netPnl: 0,
+    avgPnl: 0,
+    profitFactor: 0,
+    expectancy: 0,
+    avgWin: 0,
+    avgLoss: 0,
+    maxWin: 0,
+    maxLoss: 0,
+  };
+}
+
+function summarizeTradesForAnalysis(key: string, trades: Trade[]): TradePerformanceBreakdown {
+  if (!trades.length) return emptyBreakdown(key);
+  const wins = trades.filter((trade) => trade.pnl > 0);
+  const losses = trades.filter((trade) => trade.pnl < 0);
+  const grossWin = wins.reduce((sum, trade) => sum + trade.pnl, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + trade.pnl, 0));
+  const netPnl = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+  return {
+    key,
+    trades: trades.length,
+    wins: wins.length,
+    losses: losses.length,
+    winRate: roundMetric((wins.length / trades.length) * 100),
+    netPnl: roundMetric(netPnl),
+    avgPnl: roundMetric(netPnl / trades.length),
+    profitFactor: roundMetric(grossLoss ? grossWin / grossLoss : grossWin > 0 ? 99 : 0),
+    expectancy: roundMetric(netPnl / trades.length),
+    avgWin: roundMetric(wins.length ? grossWin / wins.length : 0),
+    avgLoss: roundMetric(losses.length ? grossLoss / losses.length : 0),
+    maxWin: roundMetric(Math.max(0, ...trades.map((trade) => trade.pnl))),
+    maxLoss: roundMetric(Math.min(0, ...trades.map((trade) => trade.pnl))),
+  };
+}
+
+function buildAnalysisBreakdown(trades: Trade[], keyFn: (trade: Trade) => string) {
+  const groups = new Map<string, Trade[]>();
+  trades.forEach((trade) => {
+    const key = keyFn(trade) || "Unknown";
+    groups.set(key, [...(groups.get(key) || []), trade]);
+  });
+  return [...groups.entries()]
+    .map(([key, rows]) => summarizeTradesForAnalysis(key, rows))
+    .sort((a, b) => b.trades - a.trades || Math.abs(b.netPnl) - Math.abs(a.netPnl))
+    .slice(0, 12);
+}
+
+function dayKeyForTrade(trade: Trade) {
+  return safeDateFromISO(trade.date).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+}
+
+function hourKeyForTrade(trade: Trade) {
+  const hour = getTradeTime(trade).getHours();
+  return `${String(hour).padStart(2, "0")}:00`;
+}
+
+function currentTradeStreaks(ordered: Trade[]) {
+  let currentWinStreak = 0;
+  let currentLossStreak = 0;
+  let maxWinStreak = 0;
+  let maxLossStreak = 0;
+  let runningWin = 0;
+  let runningLoss = 0;
+  ordered.forEach((trade) => {
+    if (trade.pnl > 0) {
+      runningWin += 1;
+      runningLoss = 0;
+    } else if (trade.pnl < 0) {
+      runningLoss += 1;
+      runningWin = 0;
+    } else {
+      runningWin = 0;
+      runningLoss = 0;
+    }
+    maxWinStreak = Math.max(maxWinStreak, runningWin);
+    maxLossStreak = Math.max(maxLossStreak, runningLoss);
+  });
+  for (const trade of [...ordered].reverse()) {
+    if (trade.pnl > 0 && currentLossStreak === 0) currentWinStreak += 1;
+    else if (trade.pnl < 0 && currentWinStreak === 0) currentLossStreak += 1;
+    else if (trade.pnl !== 0) break;
+  }
+  return { currentWinStreak, currentLossStreak, maxWinStreak, maxLossStreak };
+}
+
+function buildStreakBehaviorForAnalysis(trades: Trade[]): TradeAnalysisPayload["streakBehavior"] {
+  const ordered = [...trades].sort((a, b) => getTradeTime(a).getTime() - getTradeTime(b).getTime());
+  const afterWinningTrades: Trade[] = [];
+  const afterLosingTrades: Trade[] = [];
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1];
+    if (previous.pnl > 0) afterWinningTrades.push(ordered[index]);
+    if (previous.pnl < 0) afterLosingTrades.push(ordered[index]);
+  }
+
+  const dailyMap = new Map<string, Trade[]>();
+  ordered.forEach((trade) => {
+    dailyMap.set(trade.date, [...(dailyMap.get(trade.date) || []), trade]);
+  });
+  const daily = [...dailyMap.entries()]
+    .map(([date, rows]) => ({ date, pnl: rows.reduce((sum, trade) => sum + trade.pnl, 0) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const afterGreenDayDates = new Set<string>();
+  const afterRedDayDates = new Set<string>();
+  for (let index = 1; index < daily.length; index += 1) {
+    if (daily[index - 1].pnl > 0) afterGreenDayDates.add(daily[index].date);
+    if (daily[index - 1].pnl < 0) afterRedDayDates.add(daily[index].date);
+  }
+
+  return {
+    ...currentTradeStreaks(ordered),
+    afterWinningTrades: summarizeTradesForAnalysis("after_winning_trades", afterWinningTrades),
+    afterLosingTrades: summarizeTradesForAnalysis("after_losing_trades", afterLosingTrades),
+    afterGreenDays: summarizeTradesForAnalysis(
+      "after_green_days",
+      ordered.filter((trade) => afterGreenDayDates.has(trade.date)),
+    ),
+    afterRedDays: summarizeTradesForAnalysis(
+      "after_red_days",
+      ordered.filter((trade) => afterRedDayDates.has(trade.date)),
+    ),
+  };
+}
+
+function sessionLabelForTrade(trade: Trade) {
+  const h = getTradeTime(trade).getHours();
+  if (h < 11) return "Morning";
+  if (h < 14) return "Midday";
+  return "Afternoon";
+}
+function primarySetupLabel(trade: Trade) {
+  const tags = extractStrategyTags(trade);
+  return tags[0] ? `#${tags[0]}` : trade.symbol || "Manual";
+}
+
+function buildTradeAnalysisPayload(
+  trades: Trade[],
+  stats: ReturnType<typeof calcStats>,
+  period: "day" | "week" | "month" | "year",
+  context?: {
+    passProbability?: ReturnType<typeof calculatePassProbability>;
+    propSnapshot?: ReturnType<typeof computePropRiskSnapshot>;
+  },
+): TradeAnalysisPayload {
+  const bySymbol = groupPerformance(trades, (trade) => trade.symbol || "Unknown");
+  const worstSymbols = lowToHighPerformance(bySymbol);
+  const worstSessions = lowToHighPerformance(stats.session);
+  const tradingScore = tradingScoreForTrades(trades);
+  const consistency = consistencyScoreFromTrades(trades);
+  const absDrawdown = Math.abs(stats.maxDd);
+  const recoveryFactor = absDrawdown > 0 ? Math.max(0, stats.pnl / absDrawdown) : stats.pnl > 0 ? 99 : 0;
+  const riskControl =
+    stats.pnl > 0
+      ? Math.max(15, Math.min(100, 100 - (absDrawdown / Math.max(1, Math.abs(stats.pnl) + absDrawdown)) * 100))
+      : Math.max(10, 100 - absDrawdown / 10);
+  const wins = trades.filter((trade) => trade.pnl > 0);
+  const losses = trades.filter((trade) => trade.pnl < 0);
+  return {
+    period,
+    totalTrades: stats.count,
+    totalPnl: roundMetric(stats.pnl),
+    winRate: Number(stats.wr.toFixed(2)),
+    profitFactor: Number(stats.pf.toFixed(2)),
+    expectancy: Number(stats.exp.toFixed(2)),
+    avgWin: roundMetric(stats.avgWin),
+    avgLoss: roundMetric(stats.avgLoss),
+    maxWin: roundMetric(Math.max(0, ...wins.map((trade) => trade.pnl))),
+    maxLoss: roundMetric(Math.min(0, ...losses.map((trade) => trade.pnl))),
+    maxDrawdown: roundMetric(stats.maxDd),
+    recoveryFactor: roundMetric(recoveryFactor),
+    riskControl: roundMetric(riskControl),
+    consistency: roundMetric(consistency),
+    tradingScore: tradingScore.score,
+    propFirmSurvivalScore: context?.passProbability?.probability,
+    bestSymbol: bySymbol[0]?.label || null,
+    worstSymbol: worstSymbols[0]?.label || null,
+    bestSession: stats.session[0]?.label || null,
+    worstSession: worstSessions[0]?.label || null,
+    biggestMistakePatterns: buildMistakePatterns(stats),
+    tradesByDayOfWeek: buildAnalysisBreakdown(trades, dayKeyForTrade),
+    tradesBySession: buildAnalysisBreakdown(trades, sessionLabelForTrade),
+    tradesByHour: buildAnalysisBreakdown(trades, hourKeyForTrade),
+    tradesByInstrument: buildAnalysisBreakdown(trades, (trade) => trade.symbol || "Unknown"),
+    tradesByDirection: buildAnalysisBreakdown(trades, (trade) => trade.direction),
+    tradesByMood: buildAnalysisBreakdown(trades, (trade) => trade.mood || "Unknown"),
+    streakBehavior: buildStreakBehaviorForAnalysis(trades),
+    propFirmRuleData: context?.propSnapshot
+      ? {
+          dailyBuffer: roundMetric(context.propSnapshot.dailyRemaining),
+          accountBuffer: roundMetric(context.propSnapshot.accountRemaining),
+          dailyLossLimit: roundMetric(context.propSnapshot.template.dailyLossLimit),
+          maxLossLimit: roundMetric(context.propSnapshot.template.maxLossLimit),
+          passProbability: context.passProbability?.probability,
+          riskLevel: context.propSnapshot.status,
+          status: context.passProbability?.status,
+        }
+      : undefined,
+    recentTrades: sortTrades(trades)
+      .slice(0, 30)
+      .map((trade) => ({
+        date: trade.date,
+        symbol: trade.symbol,
+        direction: trade.direction,
+        outcome: tradeOutcome(trade),
+        pnl: roundMetric(trade.pnl),
+        pnlBucket: pnlBucket(trade.pnl),
+        contracts: trade.contracts,
+        riskAmount: riskAmountForTrade(trade),
+        mood: trade.mood ? safeText(trade.mood, MAX_MOOD_LENGTH) : undefined,
+        session: sessionLabelForTrade(trade),
+        entryHour: getTradeTime(trade).getHours(),
+        tags: extractStrategyTags(trade).slice(0, 4),
+      })),
+  };
+}
+
+function buildLocalTradeAnalysisResult(
+  stats: ReturnType<typeof calcStats>,
+  patterns: ReturnType<typeof buildMistakePatterns>,
+): TradeAnalysisResult {
+  const weakestSession = lowToHighPerformance(stats.session)[0]?.label || "your weakest session";
+  const bestSession = stats.session[0]?.label || "your best session";
+  const weakestDay = lowToHighPerformance(stats.weekday)[0]?.label || "your weakest day";
+  const sampleConfidence = stats.count >= 20 ? "medium" : "low";
+  const detectiveScore = Math.max(20, Math.min(88, Math.round(50 + stats.wr * 0.18 + Math.min(stats.pf, 4) * 7 + (stats.exp > 0 ? 8 : -8))));
+  const agent = (finding: string, evidence: string, action: string): DetectiveAgentFinding => ({
+    finding,
+    evidence,
+    action,
+  });
+  return {
+    mistakes: [
+      {
+        title: stats.pf < 1 ? "Profit factor is below 1" : "Protect low-quality trades",
+        explanation:
+          stats.pf < 1
+            ? "Losses are currently larger than wins. Reduce size until the edge stabilizes."
+            : "Your data shows room to filter weaker setups before entry.",
+        evidence: `Profit factor is ${stats.pf.toFixed(2)} across ${stats.count} trades.`,
+        fix: "Only take setups that match your written checklist for the next 10 trades.",
+      },
+      {
+        title: stats.exp < 0 ? "Negative expectancy" : `Review ${weakestSession}`,
+        explanation:
+          stats.exp < 0
+            ? "Average result per trade is negative. Focus on risk per trade and stop discipline."
+            : `${weakestSession} has the weakest performance profile in this period.`,
+        evidence: `Expectancy is ${moneyCompact(stats.exp)} and weakest session is ${weakestSession}.`,
+        fix: `Reduce size during ${weakestSession} until the sample improves.`,
+      },
+      {
+        title: patterns.includes("multi_loss_streaks") ? "Loss streak pressure" : `Weak day: ${weakestDay}`,
+        explanation:
+          patterns.includes("multi_loss_streaks")
+            ? "Multiple loss streaks appear in this period. Add a hard pause rule after two losses."
+            : `${weakestDay} deserves reduced size or stricter setup selection.`,
+        evidence: `Average loss streak is ${stats.avgLossStreak.toFixed(1)} and weakest day is ${weakestDay}.`,
+        fix: "Add a hard pause after two losses or after one rule-breaking trade.",
+      },
+    ],
+    strengths: [
+      {
+        title: stats.wr >= 50 ? "Positive win-rate structure" : "Journal sample is building",
+        explanation:
+          stats.wr >= 50
+            ? `Win rate is ${stats.wr.toFixed(0)}%, which gives you a base to refine risk/reward.`
+            : "You have enough data to identify what needs improvement next.",
+        evidence: `${stats.wr.toFixed(0)}% win rate over ${stats.count} trades.`,
+        howToUse: "Keep the same entry quality and improve loss size control.",
+      },
+      {
+        title: stats.exp > 0 ? "Positive expectancy" : "Risk awareness",
+        explanation:
+          stats.exp > 0
+            ? `Average result is ${moneyCompact(stats.exp)} per trade in this period.`
+            : "The journal is already showing where risk needs to be tightened.",
+        evidence: `Expectancy is ${moneyCompact(stats.exp)} per trade.`,
+        howToUse: "Do not increase size until this stays stable across a larger sample.",
+      },
+      {
+        title: `Best session: ${bestSession}`,
+        explanation: `${bestSession} is currently your strongest session by net P&L.`,
+        evidence: `${bestSession} leads your session breakdown by net P&L.`,
+        howToUse: `Prioritize clean setups during ${bestSession}.`,
+      },
+    ],
+    recommendations: [
+      {
+        title: "Add a two-loss pause rule",
+        action: "After two consecutive losses, stop trading or switch to review-only mode.",
+        why: "Loss streaks are where many prop firm rule breaches start.",
+      },
+      {
+        title: "Trade your strongest window",
+        action: `Prioritize ${bestSession} and reduce size during weaker sessions.`,
+        why: `Your session data currently favors ${bestSession}.`,
+      },
+      {
+        title: "Review expectancy weekly",
+        action: "Track expectancy, profit factor, and drawdown every weekend before increasing size.",
+        why: "Scaling should follow stable execution, not one strong day.",
+      },
+    ],
+    summary: "Generated locally from your journal statistics because cloud AI analysis was unavailable.",
+    detectiveScore,
+    mainBlindSpot: {
+      title: stats.exp < 0 ? "Negative expectancy is the main leak" : `${weakestSession} needs stricter filtering`,
+      evidence: `Expectancy ${moneyCompact(stats.exp)} • Profit factor ${stats.pf.toFixed(2)} • ${stats.count} trades analyzed.`,
+      whyItMatters: "This pattern affects consistency and can pressure prop firm drawdown limits if repeated.",
+      action: stats.exp < 0 ? "Cut size and review every loss before the next live session." : `Use smaller size in ${weakestSession} until the data improves.`,
+    },
+    hiddenPatterns: [
+      {
+        title: `${weakestSession} is your weakest session`,
+        evidence: `${weakestSession} has the weakest net P&L in the current period.`,
+        confidence: sampleConfidence,
+        impact: "medium",
+        action: `Reduce activity in ${weakestSession} or require A+ setups only.`,
+      },
+      {
+        title: `${weakestDay} needs tighter rules`,
+        evidence: `${weakestDay} is the weakest day in your current breakdown.`,
+        confidence: sampleConfidence,
+        impact: "medium",
+        action: `Lower risk or stop earlier on ${weakestDay}.`,
+      },
+      {
+        title: stats.exp > 0 ? "Expectancy is supporting progress" : "Expectancy is not supporting progress",
+        evidence: `Average result is ${moneyCompact(stats.exp)} per trade.`,
+        confidence: sampleConfidence,
+        impact: stats.exp > 0 ? "medium" : "high",
+        action: stats.exp > 0 ? "Protect the current process and avoid size jumps." : "Do not scale risk until expectancy turns positive.",
+      },
+    ],
+    agentFindings: {
+      riskAgent: agent("Risk needs evidence-based sizing.", `Max drawdown is ${moneyCompact(stats.maxDd)}.`, "Keep size fixed until drawdown stabilizes."),
+      disciplineAgent: agent("Discipline sample is being measured.", `Average loss streak is ${stats.avgLossStreak.toFixed(1)}.`, "Pause after two losses."),
+      propFirmAgent: agent("Prop firm risk depends on buffer protection.", `Current period P&L is ${moneyCompact(stats.pnl)}.`, "Protect daily and account buffers before chasing targets."),
+      sessionAgent: agent(`${bestSession} is currently strongest.`, `${bestSession} leads session performance.`, `Prioritize ${bestSession} and reduce weak-session trades.`),
+      psychologyAgent: agent("Mood data can improve future analysis.", "Mood is included only when logged with trades.", "Log mood consistently for the next 20 trades."),
+      instrumentAgent: agent("Instrument edge is sample-dependent.", `Best symbol is ${stats.bySetup[0]?.label || "not clear yet"}.`, "Keep symbol tags consistent."),
+      streakAgent: agent("Streak behavior needs a hard rule.", `Average loss streak is ${stats.avgLossStreak.toFixed(1)}.`, "No size increase after a loss."),
+      executionAgent: agent("Execution quality improves with setup tags.", "Strategy tags are analyzed when present.", "Add setup tags like ORB, pullback, breakout, or reversal."),
+      consistencyAgent: agent("Consistency is the core improvement lever.", `Win rate ${stats.wr.toFixed(0)}%, profit factor ${stats.pf.toFixed(2)}.`, "Review the same metrics weekly before changing risk."),
+    },
+    nextTradingRule: "For the next session, take only checklist-perfect setups and stop after two losses.",
+    disclaimer: "Educational trading journal feedback only. This is not financial advice and does not predict market outcomes.",
+  };
+}
+
+function toDateStart(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function periodPnlFromTrades(
+  trades: Trade[],
+  selectedDateISO: string,
+  period: "week" | "month",
+) {
+  const selected = safeDateFromISO(selectedDateISO);
+  const start = toDateStart(
+    period === "week"
+      ? addDays(selected, -selected.getUTCDay())
+      : new Date(selected.getUTCFullYear(), selected.getUTCMonth(), 1),
+  );
+  return trades
+    .filter((trade) => toDateStart(safeDateFromISO(trade.date)) >= start)
+    .reduce((sum, trade) => sum + trade.pnl, 0);
+}
+
 function PerformanceBreakdown({
   title,
   data,
   maxItems,
   labelFormatter = (label: string) => label,
+  locked = false,
 }: {
   title: string;
   data: PerformanceGroup[];
   maxItems: number;
   labelFormatter?: (label: string) => string;
+  locked?: boolean;
 }) {
   const items = data.slice(0, maxItems);
   const max = Math.max(1, ...items.map((x) => Math.abs(x.pnl)));
 
   return (
     <View style={styles.breakdownSection}>
-      <View style={styles.breakdownHeader}>
+      <View style={[styles.breakdownHeader, locked && styles.breakdownHeaderLocked]}>
+        {locked ? (
+          <View style={styles.breakdownProBadge}>
+            <Text style={styles.breakdownProBadgeText}>PRO</Text>
+          </View>
+        ) : null}
         <Text style={styles.breakdownTitle}>{title}</Text>
-        <Text style={styles.breakdownHint}>Ranked by net P&L</Text>
+        {!locked ? (
+          <Text style={styles.breakdownHint} numberOfLines={1}>
+            Ranked by net P&L
+          </Text>
+        ) : null}
       </View>
       {items.length === 0 ? (
         <View style={styles.breakdownEmpty}>
@@ -1805,30 +3065,244 @@ function RiskBufferBar({
   );
 }
 
-function PropFirmRiskCoach({
+function extractStrategyTags(trade: Trade) {
+  const noteTags = (trade.notes.match(/#[a-z0-9_-]{2,24}/gi) || []).map((tag) =>
+    tag.replace(/^#/, "").toUpperCase(),
+  );
+  const explicitTags = (trade.tags || []).map((tag) => String(tag).replace(/^#/, "").toUpperCase());
+  return [...new Set([...explicitTags, ...noteTags])].filter(Boolean).slice(0, 6);
+}
+
+function bestStrategyTagFromTrades(trades: Trade[]) {
+  const groups = new Map<string, { pnl: number; count: number; wins: number }>();
+  trades.forEach((trade) => {
+    extractStrategyTags(trade).forEach((tag) => {
+      const current = groups.get(tag) || { pnl: 0, count: 0, wins: 0 };
+      current.pnl += trade.pnl;
+      current.count += 1;
+      if (trade.pnl > 0) current.wins += 1;
+      groups.set(tag, current);
+    });
+  });
+  return [...groups.entries()]
+    .map(([tag, data]) => ({
+      tag,
+      ...data,
+      winRate: data.count ? (data.wins / data.count) * 100 : 0,
+    }))
+    .filter((item) => item.count >= 3)
+    .sort((a, b) => b.pnl - a.pnl || b.winRate - a.winRate)[0] || null;
+}
+
+function computePropRiskSnapshot({
   trades,
   selectedDate,
+  templateKey,
+  mode,
+  templates,
 }: {
   trades: Trade[];
   selectedDate: string;
+  templateKey: string;
+  mode: FirmMode;
+  templates: RiskTemplate[];
 }) {
-  const [templateKey, setTemplateKey] = useState(PROP_RISK_TEMPLATES[0].key);
+  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
+  const template =
+    safeTemplates.find((item) => item.key === templateKey) || safeTemplates[0];
+  const dayTrades = trades.filter((trade) => trade.date === selectedDate);
+  const stats = calcStats(trades);
+  const dayPnl = dayTrades.reduce((total, trade) => total + trade.pnl, 0);
+  const totalPnl = trades.reduce((total, trade) => total + trade.pnl, 0);
+  const remainingToPass = Math.max(0, template.evaluationTarget - Math.max(0, totalPnl));
+  const dailyRemaining = Math.max(0, template.dailyLossLimit + Math.min(dayPnl, 0));
+  const accountRemaining = Math.max(0, template.maxLossLimit + Math.min(totalPnl, 0));
+  const recentTrades = [...trades]
+    .sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id))
+    .slice(0, 8);
+  let lossStreak = 0;
+  for (const trade of recentTrades) {
+    if (trade.pnl < 0) lossStreak += 1;
+    else break;
+  }
+  const expectancy = stats.exp;
+  const hardStop = dailyRemaining <= 0 || accountRemaining <= 0;
+  const caution =
+    !hardStop &&
+    (dailyRemaining <= template.dailyLossLimit * 0.35 ||
+      accountRemaining <= template.maxLossLimit * 0.35 ||
+      lossStreak >= 2 ||
+      expectancy <= 0 ||
+      dayPnl < 0);
+  const status: RiskStatus = hardStop ? "STOP" : caution ? "CAUTION" : "CLEAR";
+  const statusColor = hardStop ? C.red : caution ? C.yellow : C.green;
+  const statusSoft = hardStop ? C.redSoft : caution ? C.yellowSoft : C.greenSoft;
+  const bufferPct = Math.max(
+    0,
+    Math.min(100, (dailyRemaining / Math.max(1, template.dailyLossLimit)) * 100),
+  );
+  return {
+    template,
+    status,
+    statusColor,
+    statusSoft,
+    dayPnl,
+    totalPnl,
+    remainingToPass,
+    dailyRemaining,
+    accountRemaining,
+    bufferPct,
+    mode,
+    selectedDate,
+  };
+}
+
+function PropRiskEntryCard({
+  title = "Prop risk today",
+  trades,
+  selectedDate,
+  templates,
+  onPress,
+}: {
+  title?: string;
+  trades: Trade[];
+  selectedDate: string;
+  templates: RiskTemplate[];
+  onPress: () => void;
+}) {
+  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
+  const [templateKey, setTemplateKey] = useState(safeTemplates[0].key);
   const [mode, setMode] = useState<FirmMode>("evaluation");
-  const [alertsEnabled, setAlertsEnabled] = useState(false);
 
   useEffect(() => {
     Promise.all([
       AsyncStorage.getItem("prop-risk-template-v1"),
       AsyncStorage.getItem("prop-risk-mode-v1"),
-      AsyncStorage.getItem("prop-risk-alerts-v1"),
-    ]).then(([savedTemplate, savedMode, savedAlerts]) => {
-      if (savedTemplate && PROP_RISK_TEMPLATES.some((template) => template.key === savedTemplate)) {
+    ]).then(([savedTemplate, savedMode]) => {
+      if (savedTemplate && safeTemplates.some((template) => template.key === savedTemplate)) {
         setTemplateKey(savedTemplate);
       }
-      if (savedMode === "evaluation" || savedMode === "live") setMode(savedMode);
-      setAlertsEnabled(savedAlerts === "on");
+      if (savedMode === "evaluation" || savedMode === "funded") setMode(savedMode);
     });
-  }, []);
+  }, [safeTemplates]);
+
+  const snapshot = useMemo(
+    () => computePropRiskSnapshot({ trades, selectedDate, templateKey, mode, templates: safeTemplates }),
+    [trades, selectedDate, templateKey, mode, safeTemplates],
+  );
+
+  return (
+    <Pressable onPress={onPress}>
+      <GlassCard style={styles.propEntryCard} intensity={32}>
+        <View style={styles.rowBetween}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.propEntryTitle}>{title}</Text>
+            <Text style={styles.sub} numberOfLines={1}>
+              {snapshot.template.label} • {mode === "funded" ? "Funded" : "Evaluation"}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.riskStatusPill,
+              { borderColor: snapshot.statusColor, backgroundColor: snapshot.statusSoft },
+            ]}
+          >
+            <Text style={[styles.riskStatusText, { color: snapshot.statusColor }]}>
+              {snapshot.status}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.propEntryStatsRow}>
+          <View style={styles.propEntryStat}>
+            <Text style={styles.edgeMiniLabel}>Daily buffer</Text>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+              style={[styles.propEntryValue, { color: snapshot.statusColor }]}
+            >
+              {moneyCompact(snapshot.dailyRemaining)}
+            </Text>
+          </View>
+          <View style={styles.propEntryStat}>
+            <Text style={styles.edgeMiniLabel}>Day P&L</Text>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+              style={[styles.propEntryValue, { color: snapshot.dayPnl >= 0 ? C.green : C.red }]}
+            >
+              {moneyCompact(snapshot.dayPnl)}
+            </Text>
+          </View>
+          <View style={styles.propEntryStat}>
+            <Text style={styles.edgeMiniLabel}>To pass</Text>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.55}
+              style={[
+                styles.propEntryValue,
+                { color: snapshot.remainingToPass > 0 ? C.yellow : C.green },
+              ]}
+            >
+              {moneyCompact(snapshot.remainingToPass)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.riskTrack}>
+          <View
+            style={[
+              styles.riskFill,
+              { width: `${snapshot.bufferPct}%`, backgroundColor: snapshot.statusColor },
+            ]}
+          />
+        </View>
+        <Text style={styles.propEntryHint}>Tap for prop firm rules & daily buffer</Text>
+      </GlassCard>
+    </Pressable>
+  );
+}
+
+function PropFirmRiskCoach({
+  trades,
+  selectedDate,
+  templates,
+}: {
+  trades: Trade[];
+  selectedDate: string;
+  templates: RiskTemplate[];
+}) {
+  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
+  const [templateKey, setTemplateKey] = useState(safeTemplates[0].key);
+  const [mode, setMode] = useState<FirmMode>("evaluation");
+  const [evalStrategy, setEvalStrategy] = useState<EvalStrategy>("steady");
+  const [riskInstrument, setRiskInstrument] = useState<RiskInstrument>("MES");
+  const [stopTicksInput, setStopTicksInput] = useState("16");
+
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem("prop-risk-template-v1"),
+      AsyncStorage.getItem("prop-risk-mode-v1"),
+      AsyncStorage.getItem("prop-risk-eval-strategy-v1"),
+      AsyncStorage.getItem("prop-risk-instrument-v1"),
+      AsyncStorage.getItem("prop-risk-stop-ticks-v1"),
+    ]).then(([savedTemplate, savedMode, savedStrategy, savedInstrument, savedStopTicks]) => {
+      if (savedTemplate && safeTemplates.some((template) => template.key === savedTemplate)) {
+        setTemplateKey(savedTemplate);
+      }
+      if (savedMode === "evaluation" || savedMode === "funded") setMode(savedMode);
+      if (savedStrategy === "steady" || savedStrategy === "balanced" || savedStrategy === "allIn") {
+        setEvalStrategy(savedStrategy);
+      }
+      if (savedInstrument && INSTRUMENTS[savedInstrument]) {
+        setRiskInstrument(savedInstrument as RiskInstrument);
+      }
+      if (savedStopTicks && Number(savedStopTicks) > 0) {
+        setStopTicksInput(savedStopTicks);
+      }
+    });
+  }, [safeTemplates]);
 
   useEffect(() => {
     AsyncStorage.setItem("prop-risk-template-v1", templateKey);
@@ -1838,8 +3312,22 @@ function PropFirmRiskCoach({
     AsyncStorage.setItem("prop-risk-mode-v1", mode);
   }, [mode]);
 
+  useEffect(() => {
+    AsyncStorage.setItem("prop-risk-eval-strategy-v1", evalStrategy);
+  }, [evalStrategy]);
+
+  useEffect(() => {
+    AsyncStorage.setItem("prop-risk-instrument-v1", riskInstrument);
+  }, [riskInstrument]);
+
+  useEffect(() => {
+    AsyncStorage.setItem("prop-risk-stop-ticks-v1", stopTicksInput);
+  }, [stopTicksInput]);
+
   const template =
-    PROP_RISK_TEMPLATES.find((item) => item.key === templateKey) || PROP_RISK_TEMPLATES[0];
+    safeTemplates.find((item) => item.key === templateKey) || safeTemplates[0];
+  const hasJournalData = trades.length > 0;
+  const bestStrategy = useMemo(() => bestStrategyTagFromTrades(trades), [trades]);
   const dayTrades = trades.filter((trade) => trade.date === selectedDate);
   const stats = calcStats(trades);
   const dailySeries = buildDailySeries(trades);
@@ -1855,8 +3343,16 @@ function PropFirmRiskCoach({
     .reduce((sum, day) => sum + day.value, 0);
   const dayPnl = dayTrades.reduce((total, trade) => total + trade.pnl, 0);
   const totalPnl = trades.reduce((total, trade) => total + trade.pnl, 0);
+  const remainingToPass = Math.max(0, template.evaluationTarget - Math.max(0, totalPnl));
   const dailyRemaining = Math.max(0, template.dailyLossLimit + Math.min(dayPnl, 0));
   const accountRemaining = Math.max(0, template.maxLossLimit + Math.min(totalPnl, 0));
+  const nearDailyLimit = dailyRemaining <= template.dailyLossLimit * 0.35;
+  const nearAccountLimit = accountRemaining <= template.maxLossLimit * 0.35;
+  const nearPass =
+    mode === "evaluation" &&
+    hasJournalData &&
+    remainingToPass > 0 &&
+    remainingToPass <= Math.max(template.evaluationTarget * 0.18, template.dailyLossLimit * 0.6);
   const recentTrades = [...trades].sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).slice(0, 8);
   let lossStreak = 0;
   for (const trade of recentTrades) {
@@ -1867,9 +3363,9 @@ function PropFirmRiskCoach({
   const expectancy = stats.exp;
   const sharpe = stats.sharpeRatio;
   const avgLoss = Math.max(35, stats.avgLoss || Math.max(50, Math.abs(expectancy || 0) * 1.7));
-  const baseRiskPct = mode === "live" ? template.liveRiskPct : template.evaluationRiskPct;
+  const baseRiskPct = mode === "funded" ? template.liveRiskPct : template.evaluationRiskPct;
   const qualityMultiplier =
-    expectancy <= 0 || sharpe < 0
+    !hasJournalData || expectancy <= 0 || sharpe < 0
       ? 0.42
       : consistency >= 72 && sharpe >= 0.8
         ? 1
@@ -1877,79 +3373,183 @@ function PropFirmRiskCoach({
           ? 0.72
           : 0.55;
   const streakPenalty = lossStreak >= 3 ? 0.28 : lossStreak === 2 ? 0.48 : lossStreak === 1 ? 0.72 : 1;
-  const modeMultiplier = mode === "live" ? 0.72 : 1;
+  const modeMultiplier = mode === "funded" ? 0.72 : 1;
+  const redDay = dayPnl <= -template.dailyLossLimit * 0.55 || lossStreak >= 3 || nearDailyLimit || nearAccountLimit;
+  const yellowDay =
+    !redDay &&
+    (dayPnl < 0 || lossStreak >= 2 || expectancy <= 0 || accountRemaining <= template.maxLossLimit * 0.45 || nearPass);
+  const dayMode = redDay ? "RED" : yellowDay ? "YELLOW" : "GREEN";
+  const dayModeMultiplier = redDay ? 0.32 : yellowDay ? 0.62 : 1;
   const riskBudget = Math.floor(
-    Math.max(0, Math.min(dailyRemaining, accountRemaining) * baseRiskPct * qualityMultiplier * streakPenalty * modeMultiplier),
+    Math.max(
+      0,
+      Math.min(dailyRemaining, accountRemaining) *
+        baseRiskPct *
+        qualityMultiplier *
+        streakPenalty *
+        modeMultiplier *
+        dayModeMultiplier,
+    ),
   );
-  const maxFirmContracts = mode === "live" ? template.liveContracts : template.evaluationContracts;
-  const microRiskUnit = Math.max(18, avgLoss * 0.32);
-  const eminiRiskUnit = microRiskUnit * 10;
+  const maxFirmContracts = mode === "funded" ? template.liveContracts : template.evaluationContracts;
+  const selectedInstrument = INSTRUMENTS[riskInstrument] || INSTRUMENTS.MES;
+  const normalizedStopTicks = Math.max(4, Math.min(200, Number(stopTicksInput) || 16));
+  const selectedRiskPerContract = Math.max(
+    selectedInstrument.tickValue * 2,
+    normalizedStopTicks * selectedInstrument.tickValue,
+  );
+  const selectedContractCap =
+    MICRO_INSTRUMENTS.includes(riskInstrument)
+      ? maxFirmContracts * 10
+      : maxFirmContracts;
+  const microSymbol = MICRO_INSTRUMENTS.includes(riskInstrument)
+    ? riskInstrument
+    : MINI_TO_MICRO_MAP[riskInstrument] || "MES";
+  const microInstrument = INSTRUMENTS[microSymbol] || INSTRUMENTS.MES;
+  const microRiskUnit = Math.max(18, normalizedStopTicks * microInstrument.tickValue);
+  const eminiRiskUnit = Math.max(90, normalizedStopTicks * selectedInstrument.tickValue);
   const microContracts = Math.max(0, Math.min(maxFirmContracts * 10, Math.floor(riskBudget / microRiskUnit)));
   const eminiContracts = Math.max(0, Math.min(maxFirmContracts, Math.floor(riskBudget / eminiRiskUnit)));
   const family: ContractFamily =
-    mode === "live" || dailyRemaining < template.dailyLossLimit * 0.55 || accountRemaining < template.maxLossLimit * 0.5 || lossStreak >= 2 || expectancy <= 0
+    mode === "funded" || nearPass || dailyRemaining < template.dailyLossLimit * 0.55 || accountRemaining < template.maxLossLimit * 0.5 || lossStreak >= 2 || expectancy <= 0
       ? "micro"
       : eminiContracts >= 1
         ? "emini"
         : "micro";
-  const suggestedContracts = family === "emini" ? Math.max(1, eminiContracts) : Math.max(1, microContracts || Math.min(2, maxFirmContracts));
+  const fallbackContracts = family === "emini" ? Math.min(1, maxFirmContracts) : Math.min(1, maxFirmContracts * 10);
+  let suggestedContracts = family === "emini"
+    ? eminiContracts
+    : microContracts || fallbackContracts;
+  let suggestedRiskUsd = Math.max(0, riskBudget);
+
+  const strategyMeta: Record<EvalStrategy, { label: string; risk: number; targetDays: [number, number]; tone: "green" | "purple" | "red" }> = {
+    steady: { label: "Steady", risk: 200, targetDays: [10, 25], tone: "green" },
+    balanced: { label: "Balanced", risk: 500, targetDays: [5, 12], tone: "purple" },
+    allIn: { label: "Accelerated", risk: 650, targetDays: [4, 9], tone: "red" },
+  };
+
+  if (mode === "evaluation") {
+    const chosenRisk = strategyMeta[evalStrategy].risk;
+    suggestedRiskUsd = Math.min(riskBudget, chosenRisk, nearPass ? Math.max(50, remainingToPass * 0.25) : chosenRisk);
+    const riskUnit = family === "emini" ? eminiRiskUnit : microRiskUnit;
+    const cap = family === "emini" ? maxFirmContracts : maxFirmContracts * 10;
+    suggestedContracts = Math.min(cap, Math.floor(suggestedRiskUsd / Math.max(1, riskUnit)));
+  }
+  const protectivePause =
+    !hasJournalData ||
+    nearDailyLimit ||
+    nearAccountLimit ||
+    lossStreak >= 2 ||
+    expectancy <= 0;
+  if (protectivePause) {
+    suggestedRiskUsd = 0;
+    suggestedContracts = 0;
+  }
+  const instrumentContracts = Math.min(
+    selectedContractCap,
+    Math.floor(suggestedRiskUsd / Math.max(1, selectedRiskPerContract)),
+  );
+  suggestedContracts = Math.min(suggestedContracts, instrumentContracts);
+  const avgWinningDay = Math.max(50, weekPnl > 0 ? weekPnl / Math.max(1, dayIndex + 1) : stats.avgWin || 120);
+  const evalDailyCapture = Math.max(50, Math.min(suggestedRiskUsd * 1.3, avgWinningDay));
+  const projectedEvalDays = Math.max(1, Math.ceil(remainingToPass / Math.max(1, evalDailyCapture)));
   const hardStop = dailyRemaining <= 0 || accountRemaining <= 0;
   const caution =
     !hardStop &&
-    (dailyRemaining <= template.dailyLossLimit * 0.35 ||
-      accountRemaining <= template.maxLossLimit * 0.35 ||
+    (!hasJournalData ||
+      nearDailyLimit ||
+      nearAccountLimit ||
+      nearPass ||
       lossStreak >= 2 ||
       expectancy <= 0 ||
       dayPnl < 0);
   const status = hardStop ? "STOP" : caution ? "CAUTION" : "CLEAR";
   const statusColor = hardStop ? C.red : caution ? C.yellow : C.green;
-  const coachLine = hardStop
-    ? "Stop trading today. Protect the account and reset tomorrow."
-    : lossStreak >= 3
-      ? "3 losses in a row. Pause now or switch to review mode only."
-      : expectancy <= 0
-        ? `Trade only micros. Recommended ${suggestedContracts} Micro until expectancy turns positive.`
-        : caution
-          ? `Reduce size. Recommended ${suggestedContracts} ${family === "emini" ? "E-mini" : "Micro"} and wait for A+ setups.`
-          : `You can trade. Recommended ${suggestedContracts} ${family === "emini" ? "E-mini" : "Micro"} with strict stop discipline.`;
+  const sizeLabel = suggestedContracts > 0 ? `${suggestedContracts} ${family === "emini" ? "E-mini" : "Micro"}` : "review mode";
+  const coachLine = !hasJournalData
+    ? "Add journal data first. Use simulator or smallest-size practice until the coach has a real sample."
+    : hardStop
+      ? "Stop trading today. Protect the account and reset tomorrow."
+      : nearAccountLimit
+        ? "You are close to max loss / trailing drawdown. Stop live trading and protect the account."
+        : nearDailyLimit
+          ? "Daily loss buffer is thin. Stop for the day or switch to review-only mode."
+          : lossStreak >= 2
+            ? "Two losses in a row. Pause now; do not add size to win it back."
+            : nearPass
+              ? `You are close to passing. Protect the result; max plan is ${sizeLabel} only if the setup is A+.`
+              : expectancy <= 0
+                ? "Negative expectancy. Do not scale live risk; review setups until expectancy improves."
+                : caution
+                  ? `Reduce size. Max plan is ${sizeLabel} and only for A+ setups.`
+                  : `Conditions are clear. Keep size fixed at ${sizeLabel} with strict stop discipline.`;
+  const fundedRiskBand = accountRemaining <= template.maxLossLimit * 0.25
+    ? "Low"
+    : accountRemaining <= template.maxLossLimit * 0.55
+      ? "Medium"
+      : "High";
+  const evalDays = strategyMeta[evalStrategy].targetDays;
+  const estDays = mode === "evaluation"
+    ? `${Math.max(evalDays[0], projectedEvalDays)}-${Math.max(evalDays[1], projectedEvalDays + 3)}`
+    : fundedRiskBand === "High"
+      ? "15+"
+      : fundedRiskBand === "Medium"
+        ? "8-15"
+        : "5-10";
+  const currentRiskLabel =
+    hardStop
+      ? "STOP"
+      : mode === "evaluation"
+        ? evalStrategy === "steady"
+          ? "LOW"
+          : evalStrategy === "balanced"
+            ? "MEDIUM"
+            : "ELEVATED"
+        : fundedRiskBand.toUpperCase();
+  const strategyName = mode === "evaluation" ? strategyMeta[evalStrategy].label : "Funded";
+  const strategyRiskText =
+    mode === "evaluation"
+      ? `${strategyName} • ${moneyCompact(strategyMeta[evalStrategy].risk)} risk / trade • ${moneyCompact(remainingToPass)} to pass`
+      : `Funded safety mode • ${currentRiskLabel} risk`;
   const reviewReady = selected.getUTCDay() === 0;
+  const strategyReviewText = bestStrategy
+    ? `Best tagged strategy: #${bestStrategy.tag} (${bestStrategy.count} trades, ${moneyCompact(bestStrategy.pnl)}, ${bestStrategy.winRate.toFixed(0)}% WR).`
+    : "Add strategy tags like #ORB or #Pullback in notes to reveal your best-performing setup.";
   const reviewLine = reviewReady
     ? `Weekly Review ready: week ${moneyCompact(weekPnl)}, month ${moneyCompact(monthPnl)}, expectancy ${moneyCompact(expectancy)}, Sharpe ${sharpe ? sharpe.toFixed(2) : "0.00"}.`
     : `Next weekly review on Sunday. Current week: ${moneyCompact(weekPnl)}.`;
-
-  const enableAlerts = async () => {
-    const permission = await Notifications.requestPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Notifications", "Allow notifications to receive risk alerts.");
-      return;
-    }
-    await AsyncStorage.setItem("prop-risk-alerts-v1", "on");
-    setAlertsEnabled(true);
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "YouTrader Risk Coach",
-        body: reviewReady ? "Weekly Review is ready." : `Daily loss buffer: ${moneyCompact(dailyRemaining)}.`,
-      },
-      trigger: null,
-    });
-  };
+  const survival = calculatePropSurvival({
+    consistency,
+    drawdown: stats.maxDd,
+    dailyRemaining,
+    dailyLossLimit: template.dailyLossLimit,
+    accountRemaining,
+    maxLossLimit: template.maxLossLimit,
+    expectancy,
+    avgLoss,
+    lossStreak,
+    dayPnl,
+  });
 
   return (
-    <Card style={styles.riskCoachCard}>
-      <View style={styles.rowBetween}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.riskCoachTitle}>Prop Firm Risk Coach</Text>
-          <Text style={styles.sub} numberOfLines={1}>
-            {template.firm} • {template.accountName} • {mode === "live" ? "Live" : "Evaluation"}
+    <GlassCard style={styles.riskCoachCard} intensity={34}>
+      <View style={styles.survivalCard}>
+        <View style={styles.rowBetween}>
+          <View>
+            <Text style={styles.edgeMiniLabel}>Prop Firm Survival Score</Text>
+            <Text style={styles.survivalValue}>{survival.probability}%</Text>
+          </View>
+          <Text style={[styles.aiAnalysisSource, { color: survival.probability >= 75 ? C.green : survival.probability >= 50 ? C.yellow : C.red }]}>
+            {mode === "evaluation" ? "PASS PROBABILITY" : "SURVIVAL SCORE"}
           </Text>
         </View>
-        <View style={[styles.riskStatusPill, { borderColor: statusColor, backgroundColor: hardStop ? C.redSoft : caution ? C.yellowSoft : C.greenSoft }]}>
-          <Text style={[styles.riskStatusText, { color: statusColor }]}>{status}</Text>
-        </View>
+        <Text style={styles.weeklyReviewText}>Top Risk: {survival.topRisk}</Text>
+        <Text style={styles.weeklyReviewText}>Biggest Advantage: {survival.biggestAdvantage}</Text>
+        <Text style={styles.weeklyReviewText}>Recommended Action: {survival.recommendedAction}</Text>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.riskTemplateRail}>
-        {PROP_RISK_TEMPLATES.map((item) => {
+        {safeTemplates.map((item) => {
           const active = item.key === templateKey;
           return (
             <Pressable
@@ -1969,17 +3569,63 @@ function PropFirmRiskCoach({
       </ScrollView>
 
       <View style={styles.riskModeRow}>
-        {(["evaluation", "live"] as FirmMode[]).map((item) => (
+        {(["evaluation", "funded"] as FirmMode[]).map((item) => (
           <Pressable
             key={item}
             onPress={() => setMode(item)}
             style={[styles.riskModeBtn, mode === item && styles.riskModeActive]}
           >
             <Text style={[styles.riskModeText, mode === item && { color: C.bg }]}>
-              {item === "live" ? "LIVE MODE" : "EVALUATION"}
+              {item === "funded" ? "FUNDED" : "EVALUATION"}
             </Text>
           </Pressable>
         ))}
+      </View>
+
+      {mode === "evaluation" && (
+        <View style={styles.riskModeRow}>
+          {(["steady", "balanced", "allIn"] as EvalStrategy[]).map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => setEvalStrategy(item)}
+              style={[styles.riskModeBtn, evalStrategy === item && styles.riskModeActive]}
+            >
+              <Text style={[styles.riskModeText, evalStrategy === item && { color: C.bg }]}>
+                {item === "steady" ? "STEADY" : item === "balanced" ? "BALANCED" : "ACCEL"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.riskModeRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {(["MES", "MNQ", "MGC", "MCL", "ES", "NQ", "GC", "CL"] as RiskInstrument[]).map((item) => {
+            const active = riskInstrument === item;
+            return (
+              <Pressable
+                key={item}
+                onPress={() => setRiskInstrument(item as RiskInstrument)}
+                style={[styles.riskTemplateBtn, { width: 86, minHeight: 46, marginRight: 8 }, active && styles.riskTemplateActive]}
+              >
+                <Text style={[styles.riskTemplateLabel, styles.riskInstrumentSymbol, active && { color: C.orange }]}>{item}</Text>
+                <Text style={styles.riskTemplateSub}>{moneyCompact((INSTRUMENTS[item]?.tickValue || 0) * normalizedStopTicks)}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <View style={styles.rowBetween}>
+        <Text style={styles.riskBarLabel}>Stop (ticks)</Text>
+        <View style={styles.riskStopTicksInputWrap}>
+          <TextInput
+            value={stopTicksInput}
+            onChangeText={setStopTicksInput}
+            keyboardType="number-pad"
+            style={styles.riskStopTicksInput}
+          />
+        </View>
       </View>
 
       <View style={styles.coachCallout}>
@@ -2009,13 +3655,47 @@ function PropFirmRiskCoach({
         </View>
         <View style={styles.riskMetricBox}>
           <Text style={styles.edgeMiniLabel}>Risk budget</Text>
-          <Text style={styles.riskMetricValue}>{moneyCompact(riskBudget)}</Text>
+          <Text style={styles.riskMetricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {moneyCompact(suggestedRiskUsd)}
+          </Text>
+        </View>
+        <View style={styles.riskMetricBox}>
+          <Text style={styles.edgeMiniLabel}>{mode === "evaluation" ? "To pass eval" : "Safety buffer"}</Text>
+          <Text style={[styles.riskMetricValue, { color: mode === "evaluation" ? (remainingToPass > 0 ? C.yellow : C.green) : accountRemaining <= template.maxLossLimit * 0.35 ? C.red : C.green }]}>
+            {mode === "evaluation" ? moneyCompact(remainingToPass) : moneyCompact(accountRemaining)}
+          </Text>
         </View>
         <View style={styles.riskMetricBox}>
           <Text style={styles.edgeMiniLabel}>Smart size</Text>
-          <Text style={[styles.riskMetricValue, { color: C.green }]}>
-            {suggestedContracts} {family === "emini" ? "E-mini" : "Micro"}
+          <Text style={[styles.riskMetricValue, { color: suggestedContracts > 0 ? C.green : C.yellow }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {suggestedContracts > 0 ? `${suggestedContracts} ${family === "emini" ? "E-mini" : "Micro"}` : "Review"}
           </Text>
+        </View>
+        <View style={styles.riskMetricBox}>
+          <Text style={styles.edgeMiniLabel}>Contract plan</Text>
+          <Text style={styles.riskMetricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {suggestedContracts > 0 ? `${suggestedContracts}x ${riskInstrument}` : "Paused"}
+          </Text>
+        </View>
+        <View style={styles.riskMetricBox}>
+          <Text style={styles.edgeMiniLabel}>Risk / contract</Text>
+          <Text style={styles.riskMetricValue}>{moneyCompact(selectedRiskPerContract)}</Text>
+        </View>
+        <View style={styles.riskMetricBox}>
+          <Text style={styles.edgeMiniLabel}>Day mode</Text>
+          <Text style={[styles.riskMetricValue, { color: dayMode === "RED" ? C.red : dayMode === "YELLOW" ? C.yellow : C.green }]}>
+            {dayMode}
+          </Text>
+        </View>
+        <View style={styles.riskMetricBox}>
+          <Text style={styles.edgeMiniLabel}>Risk level</Text>
+          <Text style={[styles.riskMetricValue, { color: currentRiskLabel === "STOP" || currentRiskLabel === "ELEVATED" ? C.red : currentRiskLabel === "MEDIUM" ? C.yellow : C.green }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {currentRiskLabel}
+          </Text>
+        </View>
+        <View style={styles.riskMetricBox}>
+          <Text style={styles.edgeMiniLabel}>Estimated days</Text>
+          <Text style={styles.riskMetricValue}>{estDays}</Text>
         </View>
         <View style={styles.riskMetricBox}>
           <Text style={styles.edgeMiniLabel}>Loss streak</Text>
@@ -2031,39 +3711,42 @@ function PropFirmRiskCoach({
           <Text style={styles.edgeMiniLabel}>Sharpe</Text>
           <Text style={styles.riskMetricValue}>{sharpe ? sharpe.toFixed(2) : "0.00"}</Text>
         </View>
+        <View style={styles.riskMetricBox}>
+          <Text style={styles.edgeMiniLabel}>Best strategy</Text>
+          <Text style={[styles.riskMetricValue, { color: bestStrategy ? C.green : C.sub }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+            {bestStrategy ? `#${bestStrategy.tag}` : "Add tags"}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.weeklyReviewBox}>
         <Text style={styles.edgeMiniLabel}>Weekly / Monthly Review</Text>
         <Text style={styles.weeklyReviewText}>{reviewLine}</Text>
+        <Text style={[styles.weeklyReviewText, { marginTop: 8 }]}>
+          {strategyRiskText}
+        </Text>
+        <Text style={[styles.weeklyReviewText, { marginTop: 8 }]}>
+          {strategyReviewText}
+        </Text>
       </View>
 
-      <Pressable
-        onPress={alertsEnabled ? undefined : enableAlerts}
-        style={[styles.secondaryBig, styles.riskAlertsBtn, alertsEnabled && { opacity: 0.65 }]}
-      >
-        <Text style={styles.secondaryText}>
-          {alertsEnabled ? "Risk alerts enabled" : "Enable risk push alerts"}
-        </Text>
-      </Pressable>
-
       <Text style={[styles.sub, { marginTop: 10 }]}>
-        Confirm your firm's exact rules before trading. This coach uses conservative local calculations.
+        This coach uses calculations from Topstep rule source: https://www.topstep.com • (2026-05-29).
       </Text>
-    </Card>
+    </GlassCard>
   );
 }
 function MetricGauge({ label, value, helper, tone = "green" }: { label: string; value: string; helper?: string; tone?: "green" | "purple" | "red" | "white" }) {
   const color = tone === "purple" ? C.purple : tone === "red" ? C.red : tone === "white" ? C.text : C.green;
   return (
-    <View style={styles.dashboardMetric}>
+    <GlassCard compact style={styles.dashboardMetric}>
       <View style={styles.rowBetween}>
-        <Text style={styles.dashboardMetricLabel}>{label}</Text>
+        <SafeMetricLabel style={styles.dashboardMetricLabel}>{label}</SafeMetricLabel>
         <View style={[styles.metricDot, { backgroundColor: color }]} />
       </View>
-      <Text style={[styles.dashboardMetricValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-      {!!helper && <Text style={styles.dashboardMetricHelper} numberOfLines={1}>{helper}</Text>}
-    </View>
+      <SafeText style={[styles.dashboardMetricValue, { color }]}>{value}</SafeText>
+      {!!helper && <SafeText style={styles.dashboardMetricHelper}>{helper}</SafeText>}
+    </GlassCard>
   );
 }
 function DashboardBars({ data, cumulative = false }: { data: { label: string; value: number }[]; cumulative?: boolean }) {
@@ -2207,27 +3890,23 @@ function ScoreChip({
   const color =
     tone === "green" ? C.green : tone === "red" ? C.red : tone === "white" ? C.text : C.purple;
   return (
-    <View style={[styles.dashboardMetric, locked && { opacity: 0.52 }]}>
-      <Text style={[styles.dashboardMetricLabel, { color: C.sub, fontSize: 14 }]}>{label}</Text>
-      <View style={{ marginTop: 10, minHeight: 30, justifyContent: "center" }}>
+    <GlassCard compact style={[styles.dashboardMetric, locked && { opacity: 0.52 }]}>
+      <SafeMetricLabel style={[styles.dashboardMetricLabel, { color: C.sub, fontSize: 14 }]}>{label}</SafeMetricLabel>
+      <View style={[{ marginTop: 10, minHeight: 30, justifyContent: "center" }, locked && styles.lockedMetricPreview]}>
         {typeof value === "string" ? (
-          <Text style={[styles.dashboardMetricValue, { color: value.includes("-") ? C.red : (value.includes("$") || value.includes("+") ? C.green : C.text), fontSize: 25 }]} numberOfLines={1} adjustsFontSizeToFit>
-            {locked ? "••••" : value}
-          </Text>
-        ) : locked ? (
-          <Text style={[styles.dashboardMetricValue, { color: C.purple, fontSize: 25 }]} numberOfLines={1}>
-            ••••
-          </Text>
+          <SafeText style={[styles.dashboardMetricValue, { color: value.includes("-") ? C.red : (value.includes("$") || value.includes("+") ? C.green : C.text), fontSize: 25 }]}>
+            {value}
+          </SafeText>
         ) : (
           value
         )}
       </View>
       {locked && (
-        <View style={styles.lockOverlay}>
-          <Text style={styles.lockText}>PRO</Text>
+        <View style={styles.metricLockGlass}>
+          <Lock size={14} color={C.green} strokeWidth={2.6} />
         </View>
       )}
-    </View>
+    </GlassCard>
   );
 }
 
@@ -2241,10 +3920,10 @@ function SplitMoney({
   locked?: boolean;
 }) {
   if (locked) {
-    return <Text style={[styles.dashboardMetricValue, { color: C.purple, fontSize: 25 }]}>••••</Text>;
+    return <SafeText style={[styles.dashboardMetricValue, { color: C.purple, fontSize: 25 }]}>••••</SafeText>;
   }
   return (
-    <Text style={[styles.dashboardMetricValue, { fontSize: 22 }]} numberOfLines={1} adjustsFontSizeToFit>
+    <Text style={[styles.dashboardMetricValue, styles.safeText, { fontSize: 22 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
       <Text style={{ color: C.green }}>{moneyCompact(win || 0)}</Text>
       <Text style={{ color: C.sub }}> / </Text>
       <Text style={{ color: C.red }}>{moneyCompact(-(loss || 0))}</Text>
@@ -2262,10 +3941,10 @@ function SplitCount({
   locked?: boolean;
 }) {
   if (locked) {
-    return <Text style={[styles.dashboardMetricValue, { color: C.purple, fontSize: 25 }]}>••••</Text>;
+    return <SafeText style={[styles.dashboardMetricValue, { color: C.purple, fontSize: 25 }]}>••••</SafeText>;
   }
   return (
-    <Text style={[styles.dashboardMetricValue, { fontSize: 25 }]} numberOfLines={1}>
+    <Text style={[styles.dashboardMetricValue, styles.safeText, { fontSize: 25 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
       <Text style={{ color: C.green }}>{wins}</Text>
       <Text style={{ color: C.sub }}> / </Text>
       <Text style={{ color: C.red }}>{losses}</Text>
@@ -2275,66 +3954,795 @@ function SplitCount({
 
 function PaywallPreview({
   packages,
+  storeProducts,
   purchaseBusy,
-  revenueCatConfigured,
   paywallError,
   onPurchase,
   onRestore,
+  showRestorePurchases,
 }: {
   packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
-  revenueCatConfigured: boolean;
   paywallError: string;
-  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
+  showRestorePurchases: boolean;
 }) {
   const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
-  const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || packages[1] || null;
+  const monthlyProduct =
+    storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null;
+  useEffect(() => {
+    trackEvent("paywall_viewed", { screen: "paywall_preview" });
+  }, []);
   return (
-    <View style={styles.paywallPreview}>
+    <GlassCard style={styles.paywallPreview} intensity={42}>
       <Text style={styles.paywallTitle}>Unlock Full Edge Analysis</Text>
       <Text style={styles.paywallSub}>
-        Unlimited journal, full radar profile, recovery factor, consistency, session/symbol breakdowns and advanced performance metrics.
+        Your journal stays free. Pro unlocks AI coaching, prop firm protection, hidden leaks, advanced stats, media notes, import/export, full news, and the full economic calendar.
       </Text>
-      <View style={styles.planRow}>
-        <Pressable
-          disabled={purchaseBusy || !revenueCatConfigured}
-          onPress={() => onPurchase(monthly)}
-          style={[styles.monthlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
-        >
-          <Text style={styles.planName}>MONTHLY</Text>
-          <Text style={styles.planPrice}>{packagePrice(monthly)}</Text>
-        </Pressable>
-        <Pressable
-          disabled={purchaseBusy || !revenueCatConfigured}
-          onPress={() => onPurchase(yearly || monthly)}
-          style={[styles.yearlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
-        >
-          <View style={styles.bestValueBadge}>
-            <Text style={styles.bestValueText}>BEST VALUE</Text>
-          </View>
-          <Text style={styles.planName}>YEARLY</Text>
-          <Text style={styles.planPrice}>{yearly ? packagePrice(yearly) : "$79.99/year"}</Text>
-        </Pressable>
-      </View>
       <Pressable
-        disabled={purchaseBusy || !revenueCatConfigured}
-        onPress={onRestore}
-        style={[styles.secondaryBig, styles.restorePurchaseBtn, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+        disabled={purchaseBusy}
+        onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+        style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}
       >
-        <Text style={styles.secondaryText}>{purchaseBusy ? "Connecting..." : "Restore Purchases"}</Text>
+        <Text style={styles.primaryText}>{purchaseBusy ? "Connecting..." : "Unlock Pro"}</Text>
       </Pressable>
-      {!revenueCatConfigured ? (
-        <Text style={[styles.sub, { marginTop: 10 }]}>
-          RevenueCat key is missing. Add EXPO_PUBLIC_REVENUECAT_IOS_API_KEY before TestFlight.
-        </Text>
-      ) : paywallError ? (
+      <SubscriptionLegalDisclosure
+        monthlyPackage={monthly}
+        monthlyProduct={monthlyProduct}
+      />
+      {(showRestorePurchases || !!paywallError) ? (
+        <Pressable
+          disabled={purchaseBusy}
+          onPress={onRestore}
+          style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
+        >
+          <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+        </Pressable>
+      ) : null}
+      {paywallError ? (
         <Text style={[styles.sub, { color: C.red, marginTop: 10 }]}>{paywallError}</Text>
+      ) : null}
+    </GlassCard>
+  );
+}
+
+function TerminalGlassCard({
+  children,
+  style,
+  intensity = 46,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  intensity?: number;
+}) {
+  return (
+    <GlassCard style={[styles.terminalCard, style]} intensity={intensity}>
+      {children}
+    </GlassCard>
+  );
+}
+
+function SegmentedTimeFilter<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly T[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <View style={styles.terminalSegment}>
+      {options.map((option) => (
+        <Pressable key={option} onPress={() => onChange(option)} style={[styles.terminalSegmentBtn, value === option && styles.terminalSegmentActive]}>
+          <Text style={[styles.terminalSegmentText, value === option && styles.terminalSegmentTextActive]}>{option}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function MetricPillRow({ items }: { items: { label: string; value: string; tone?: "green" | "red" | "purple" | "grey" }[] }) {
+  return (
+    <View style={styles.metricPillRow}>
+      {items.map((item) => {
+        const color = item.tone === "red" ? C.red : item.tone === "purple" ? C.purple : item.tone === "green" ? C.green : C.sub;
+        return (
+          <View key={item.label} style={styles.metricPill}>
+            <Text style={styles.metricPillLabel}>{item.label}</Text>
+            <Text style={[styles.metricPillValue, { color }]}>{item.value}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function PropTemplateSelector({
+  templates,
+  value,
+  mode,
+  onChange,
+  onModeChange,
+}: {
+  templates: RiskTemplate[];
+  value: string;
+  mode?: FirmMode;
+  onChange: (key: string) => void;
+  onModeChange?: (mode: FirmMode) => void;
+}) {
+  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
+  return (
+    <View style={styles.propTemplateSelector}>
+      <View style={styles.propTemplateHeader}>
+        <Text style={styles.terminalSmallLabel}>Eval account</Text>
+        <Text style={styles.propTemplateHint}>Rules, buffers and contract plan update live</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRail}>
+        {safeTemplates.map((template) => {
+          const active = template.key === value;
+          return (
+            <Pressable
+              key={template.key}
+              onPress={() => onChange(template.key)}
+              style={[styles.propTemplateChip, active && styles.propTemplateChipActive]}
+            >
+              <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>
+                {template.label}
+              </Text>
+              <Text style={styles.propTemplateChipSub}>
+                {template.evaluationContracts} eval / {template.liveContracts} live
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      {onModeChange && mode ? (
+        <View style={styles.propModeRail}>
+          {(["evaluation", "funded"] as FirmMode[]).map((item) => {
+            const active = item === mode;
+            return (
+              <Pressable
+                key={item}
+                onPress={() => onModeChange(item)}
+                style={[styles.propModeChip, active && styles.propModeChipActive]}
+              >
+                <Text style={[styles.propModeChipText, active && styles.propModeChipTextActive]}>
+                  {item === "evaluation" ? "Evaluation" : "Funded"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       ) : null}
     </View>
   );
 }
 
+function StatsMetricDashboard({
+  stats,
+  trades,
+  weekPnl,
+  monthPnl,
+  consistency,
+  isPremium,
+}: {
+  stats: ReturnType<typeof calcStats>;
+  trades: Trade[];
+  weekPnl: number;
+  monthPnl: number;
+  consistency: number;
+  isPremium: boolean;
+}) {
+  const wins = trades.filter((trade) => trade.pnl > 0).length;
+  const losses = trades.filter((trade) => trade.pnl < 0).length;
+  const biggestWin = Math.max(0, ...trades.map((trade) => trade.pnl));
+  const biggestLoss = Math.min(0, ...trades.map((trade) => trade.pnl));
+  const rows: Array<{ label: string; value: string; tone: "green" | "red" | "purple" | "grey"; pro?: boolean }> = [
+    { label: "Win Rate", value: `${stats.wr.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
+    { label: "Trades", value: String(stats.count), tone: "grey" },
+    { label: "Win / Loss", value: `${wins} / ${losses}`, tone: wins >= losses ? "green" : "red" },
+    { label: "Month P&L", value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
+    { label: "Week P&L", value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
+    { label: "Biggest Win", value: moneyCompact(biggestWin), tone: "green" },
+    { label: "Biggest Loss", value: moneyCompact(biggestLoss), tone: biggestLoss < 0 ? "red" : "grey" },
+    { label: "Profit Factor", value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple", pro: true },
+    { label: "Expectancy", value: moneyCompact(stats.exp), tone: stats.exp >= 0 ? "green" : "red", pro: true },
+    { label: "Avg Win/Loss", value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", tone: stats.avgWinLoss >= 1.5 ? "green" : "purple", pro: true },
+    { label: "Consistency", value: `${consistency.toFixed(0)}%`, tone: consistency >= 65 ? "green" : "purple", pro: true },
+    { label: "Stability Score", value: stats.sharpeRatio ? stats.sharpeRatio.toFixed(2) : "0.00", tone: stats.sharpeRatio >= 0.8 ? "green" : "purple", pro: true },
+    { label: "Max Losing Day Streak", value: String(stats.maxLossDayStreak), tone: stats.maxLossDayStreak >= 2 ? "red" : "grey", pro: true },
+    { label: "Max Winning Day Streak", value: String(stats.maxWinDayStreak), tone: "green", pro: true },
+  ];
+  return (
+    <View style={styles.statsMetricDashboard}>
+      <View style={styles.statsMetricHeader}>
+        <Text style={styles.terminalHeroTitle}>Stats Dashboard</Text>
+        <Text style={styles.terminalSub}>Core numbers from the selected journal period</Text>
+      </View>
+      <View style={styles.statsMetricGrid}>
+        {rows.map((row) => {
+          const locked = row.pro && !isPremium;
+          const color =
+            row.tone === "red" ? C.red : row.tone === "purple" ? C.purple : row.tone === "green" ? C.green : C.sub;
+          return (
+            <View key={row.label} style={[styles.statsMetricTile, locked && styles.statsMetricTileLocked]}>
+              <Text style={styles.statsMetricLabel}>{row.label}</Text>
+              <Text style={[styles.statsMetricValue, { color: locked ? C.sub : color }]}>{locked ? "PRO" : row.value}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function AppleRing({
+  label,
+  value,
+  display,
+  color = C.green,
+  size = 86,
+  onPress,
+}: {
+  label: string;
+  value: number;
+  display: string;
+  color?: string;
+  size?: number;
+  onPress?: () => void;
+}) {
+  const radius = (size - 12) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, value));
+  return (
+    <Pressable onPress={onPress} style={[styles.appleRingWrap, { width: size + 18 }]}>
+      <Svg width={size} height={size}>
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(255,255,255,0.10)" strokeWidth={8} fill="none" />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={8}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={circumference - (circumference * clamped) / 100}
+          rotation="-90"
+          origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
+      <View style={styles.appleRingCenter}>
+        <Text style={styles.appleRingValue}>{display}</Text>
+      </View>
+      <Text style={styles.appleRingLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function BottomSheetPanel({
+  visible,
+  title,
+  onClose,
+  children,
+}: {
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.bottomSheetBackdrop} onPress={onClose}>
+        <Pressable style={styles.bottomSheetCard}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.bottomSheetTitle}>{title}</Text>
+            <Pressable onPress={onClose} style={styles.closeCircle}>
+              <Text style={styles.closeX}>×</Text>
+            </Pressable>
+          </View>
+          {children}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function CloudAIStatus({ status }: { status: AIProviderStatus | "idle" }) {
+  const label = status === "nvidia" ? "Cloud AI" : status === "idle" ? "Ready" : status === "quota_exceeded" ? "Limit" : "Local";
+  const color = status === "nvidia" ? C.green : status === "quota_exceeded" ? C.yellow : C.sub;
+  return (
+    <View style={styles.cloudStatus}>
+      <View style={[styles.cloudStatusDot, { backgroundColor: color }]} />
+      <Text style={[styles.cloudStatusText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+type EquityRange = "7D" | "30D" | "90D" | "YTD" | "ALL";
+const EQUITY_RANGES: EquityRange[] = ["7D", "30D", "90D", "YTD", "ALL"];
+
+function filteredByEquityRange(trades: Trade[], range: EquityRange) {
+  if (range === "ALL") return trades;
+  const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
+  const lastDate = sorted[sorted.length - 1]?.date;
+  if (!lastDate) return trades;
+  const end = safeDateFromISO(lastDate);
+  const start = new Date(end);
+  if (range === "YTD") start.setUTCMonth(0, 1);
+  else start.setUTCDate(start.getUTCDate() - Number(range.replace("D", "")));
+  return trades.filter((trade) => safeDateFromISO(trade.date) >= start);
+}
+
+function buildEquityPoints(trades: Trade[], width: number, height: number) {
+  const daily = buildDailySeries(trades);
+  let cumulative = 0;
+  const rows = daily.map((day, index) => ({ ...day, index, cumulative: (cumulative += day.value) }));
+  if (!rows.length) return [];
+  const values = rows.map((row) => row.cumulative);
+  const min = Math.min(0, ...values);
+  const max = Math.max(0, ...values);
+  const range = Math.max(1, max - min);
+  const padX = 18;
+  const padY = 16;
+  return rows.map((row, index) => ({
+    ...row,
+    x: padX + (rows.length === 1 ? (width - padX * 2) / 2 : (index / (rows.length - 1)) * (width - padX * 2)),
+    y: padY + (height - padY * 2) - ((row.cumulative - min) / range) * (height - padY * 2),
+    tradeCount: trades.filter((trade) => trade.date === row.label).length,
+  }));
+}
+
+function smoothPath(points: { x: number; y: number }[]) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M${points[0].x},${points[0].y}`;
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M${point.x},${point.y}`;
+    const prev = points[index - 1];
+    const midX = (prev.x + point.x) / 2;
+    return `${path} C${midX},${prev.y} ${midX},${point.y} ${point.x},${point.y}`;
+  }, "");
+}
+
+function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: Trade[]; stats: ReturnType<typeof calcStats>; weekPnl: number; monthPnl: number }) {
+  const { width } = useWindowDimensions();
+  const [range, setRange] = useState<EquityRange>("30D");
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const chartWidth = Math.max(300, Math.min(720, width - 56));
+  const chartHeight = 250;
+  const rangedTrades = useMemo(() => filteredByEquityRange(trades, range), [range, trades]);
+  const points = useMemo(() => buildEquityPoints(rangedTrades, chartWidth, chartHeight), [chartHeight, chartWidth, rangedTrades]);
+  const selected = selectedIndex != null ? points[selectedIndex] : points[points.length - 1];
+  const path = smoothPath(points);
+  const fillPath = points.length ? `${path} L${points[points.length - 1].x},${chartHeight - 12} L${points[0].x},${chartHeight - 12} Z` : "";
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (event) => {
+          const x = event.nativeEvent.locationX;
+          const nearest = points.reduce((best, point, index) => (Math.abs(point.x - x) < Math.abs(points[best]?.x - x || 9999) ? index : best), 0);
+          setSelectedIndex(nearest);
+        },
+        onPanResponderMove: (event) => {
+          const x = event.nativeEvent.locationX;
+          const nearest = points.reduce((best, point, index) => (Math.abs(point.x - x) < Math.abs(points[best]?.x - x || 9999) ? index : best), 0);
+          setSelectedIndex(nearest);
+        },
+      }),
+    [points],
+  );
+
+  return (
+    <TerminalGlassCard style={styles.terminalHeroCard}>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.terminalHeroTitle}>Equity Curve</Text>
+          <Text style={styles.terminalSub}>Live account story from your journal</Text>
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <Text style={[styles.terminalKpi, { color: stats.pnl >= 0 ? C.green : C.red }]}>{moneyCompact(stats.pnl)}</Text>
+          <Text style={styles.terminalSub}>Net P&L</Text>
+        </View>
+      </View>
+      <SegmentedTimeFilter options={EQUITY_RANGES} value={range} onChange={(value) => setRange(value as EquityRange)} />
+      <View style={styles.terminalChartWrap} {...panResponder.panHandlers}>
+        <Svg width={chartWidth} height={chartHeight}>
+          <Defs>
+            <LinearGradient id="terminalEquityLine" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={C.purple} stopOpacity="0.72" />
+              <Stop offset="1" stopColor={C.green} stopOpacity="1" />
+            </LinearGradient>
+            <LinearGradient id="terminalEquityFill" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={C.green} stopOpacity="0.18" />
+              <Stop offset="1" stopColor={C.purple} stopOpacity="0.015" />
+            </LinearGradient>
+          </Defs>
+          {[0.25, 0.5, 0.75].map((line) => (
+            <Line key={line} x1={18} x2={chartWidth - 18} y1={chartHeight * line} y2={chartHeight * line} stroke="rgba(255,255,255,0.055)" strokeWidth={1} />
+          ))}
+          {fillPath ? <Path d={fillPath} fill="url(#terminalEquityFill)" /> : null}
+          {path ? <Path d={path} stroke="url(#terminalEquityLine)" strokeWidth={4} strokeLinecap="round" fill="none" /> : null}
+          {points.map((point, index) => (
+            <Circle key={`${point.label}-${index}`} cx={point.x} cy={point.y} r={index === points.length - 1 ? 7 : 3.5} fill={point.value >= 0 ? C.green : C.red} stroke="rgba(0,0,0,0.85)" strokeWidth={2} />
+          ))}
+          {selected ? <Circle cx={selected.x} cy={selected.y} r={13} fill="none" stroke={C.green} strokeWidth={2} opacity={0.75} /> : null}
+        </Svg>
+        {selected ? (
+          <View style={[styles.terminalTooltip, { left: Math.min(chartWidth - 178, Math.max(10, selected.x - 82)), top: Math.max(8, selected.y - 86) }]}>
+            <Text style={styles.terminalTooltipDate}>{selected.label}</Text>
+            <Text style={[styles.terminalTooltipPnl, { color: selected.value >= 0 ? C.green : C.red }]}>{moneyCompact(selected.value)}</Text>
+            <Text style={styles.terminalTooltipMeta}>Trade #{selected.tradeCount || 1} • Equity {moneyCompact(selected.cumulative)}</Text>
+          </View>
+        ) : null}
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Today", value: moneyCompact(trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0)), tone: trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0) >= 0 ? "green" : "red" },
+          { label: "Weekly", value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
+          { label: "Monthly", value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
+          { label: "Max DD", value: moneyCompact(stats.maxDd), tone: stats.maxDd < 0 ? "red" : "grey" },
+          { label: "Avg Day", value: moneyCompact(buildDailySeries(trades).length ? stats.pnl / buildDailySeries(trades).length : 0), tone: "grey" },
+          { label: "PF", value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple" },
+        ]}
+      />
+    </TerminalGlassCard>
+  );
+}
+
+function TerminalTradingDna({
+  stats,
+  consistency,
+  recoveryFactor,
+  drawdownControl,
+}: {
+  stats: ReturnType<typeof calcStats>;
+  consistency: number;
+  recoveryFactor: number;
+  drawdownControl: number;
+}) {
+  const [selected, setSelected] = useState<{ title: string; current: string; target: string; explanation: string } | null>(null);
+  const rings = [
+    { label: "Win Rate", value: Math.min(100, stats.wr), display: `${stats.wr.toFixed(0)}%`, color: C.green, target: "55%+", explanation: "Percentage of closed trades that finished green." },
+    { label: "Risk", value: drawdownControl, display: `${drawdownControl.toFixed(0)}%`, color: drawdownControl >= 70 ? C.green : C.yellow, target: "70%+", explanation: "How well your drawdown is controlled relative to current profit and buffer." },
+    { label: "Consistency", value: consistency, display: `${consistency.toFixed(0)}%`, color: C.purple, target: "70%+", explanation: "Green day rate plus daily P&L stability." },
+    { label: "Recovery", value: Math.min(100, Math.max(0, recoveryFactor / 4) * 100), display: recoveryFactor ? recoveryFactor.toFixed(1) : "—", color: C.green, target: "3.0+", explanation: "Net P&L divided by max drawdown." },
+    { label: "Profit Factor", value: Math.min(100, (stats.pf / 2.5) * 100), display: stats.pf ? stats.pf.toFixed(2) : "—", color: C.green, target: "1.5+", explanation: "Gross wins divided by gross losses." },
+    { label: "Reward Risk", value: Math.min(100, (stats.avgWinLoss / 2.5) * 100), display: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", color: C.purple, target: "1.5+", explanation: "Average win size divided by average loss size." },
+  ];
+  const profileScore = Math.round(rings.reduce((sum, ring) => sum + Math.max(0, Math.min(100, ring.value)), 0) / rings.length);
+  const strengths = rings.filter((ring) => ring.value >= 65).slice(0, 3);
+  const weakest = [...rings].sort((a, b) => a.value - b.value)[0];
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalEyebrow}>Trading DNA</Text>
+      <View style={styles.dnaHero}>
+        <View style={styles.dnaScoreCircle}>
+          <Text style={styles.dnaScore}>{profileScore}</Text>
+          <Text style={styles.dnaScoreLabel}>DNA Score</Text>
+        </View>
+        <View style={styles.dnaRingGrid}>
+          {rings.map((ring) => (
+            <AppleRing
+              key={ring.label}
+              label={ring.label}
+              value={ring.value}
+              display={ring.display}
+              color={ring.color}
+              onPress={() => setSelected({ title: ring.label, current: ring.display, target: ring.target, explanation: ring.explanation })}
+            />
+          ))}
+        </View>
+      </View>
+      <View style={styles.dnaInsightRow}>
+        <View style={styles.dnaInsightBlock}>
+          <Text style={styles.terminalSmallLabel}>Strengths</Text>
+          <View style={styles.terminalChipRow}>
+            {(strengths.length ? strengths : rings.slice(0, 2)).map((ring) => (
+              <Text key={ring.label} style={styles.terminalChip}>● {ring.label}</Text>
+            ))}
+          </View>
+        </View>
+        <View style={styles.dnaWeakBlock}>
+          <Text style={styles.terminalSmallLabel}>Weakest Area</Text>
+          <Text style={styles.dnaWeakText}>{weakest.label}</Text>
+          <Text style={styles.terminalSub}>Target {weakest.target}</Text>
+        </View>
+      </View>
+      <BottomSheetPanel visible={!!selected} title={selected?.title || "Metric"} onClose={() => setSelected(null)}>
+        {selected ? (
+          <>
+            <Text style={styles.bottomSheetBig}>{selected.current}</Text>
+            <Text style={styles.bottomSheetText}>{selected.explanation}</Text>
+            <Text style={styles.bottomSheetText}>Target: {selected.target}</Text>
+          </>
+        ) : null}
+      </BottomSheetPanel>
+    </TerminalGlassCard>
+  );
+}
+
+function PremiumPerformanceRadar({
+  stats,
+  consistency,
+  recoveryFactor,
+  drawdownControl,
+}: {
+  stats: ReturnType<typeof calcStats>;
+  consistency: number;
+  recoveryFactor: number;
+  drawdownControl: number;
+}) {
+  const [selected, setSelected] = useState<{ label: string; value: string; target: string; explanation: string } | null>(null);
+  const size = 286;
+  const center = size / 2;
+  const maxR = 102;
+  const axes = [
+    { label: "Win Rate", value: `${stats.wr.toFixed(0)}%`, score: Math.min(100, stats.wr), target: "55%+", explanation: "Percent of trades closed green." },
+    { label: "Risk Ctrl", value: `${drawdownControl.toFixed(0)}%`, score: drawdownControl, target: "70%+", explanation: "Drawdown control relative to total performance and risk buffer." },
+    { label: "Consistency", value: `${consistency.toFixed(0)}%`, score: consistency, target: "70%+", explanation: "Green-day quality plus daily P&L stability." },
+    { label: "Recovery", value: recoveryFactor ? recoveryFactor.toFixed(1) : "—", score: Math.min(100, (recoveryFactor / 4) * 100), target: "3.0+", explanation: "Net P&L divided by max drawdown." },
+    { label: "Profit Factor", value: stats.pf ? stats.pf.toFixed(2) : "—", score: Math.min(100, (stats.pf / 2.5) * 100), target: "1.5+", explanation: "Gross wins divided by gross losses." },
+    { label: "Reward Risk", value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", score: Math.min(100, (stats.avgWinLoss / 2.5) * 100), target: "1.5+", explanation: "Average win size divided by average loss size." },
+  ];
+  const points = axes.map((axis, index) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / axes.length;
+    const r = Math.max(18, Math.min(100, axis.score)) / 100 * maxR;
+    return {
+      ...axis,
+      x: center + Math.cos(angle) * r,
+      y: center + Math.sin(angle) * r,
+      lx: center + Math.cos(angle) * (maxR + 34),
+      ly: center + Math.sin(angle) * (maxR + 34),
+    };
+  });
+  const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const profileScore = Math.round(axes.reduce((sum, axis) => sum + Math.max(0, Math.min(100, axis.score)), 0) / axes.length);
+  const strongest = [...axes].sort((a, b) => b.score - a.score).slice(0, 3);
+  const weakest = [...axes].sort((a, b) => a.score - b.score)[0];
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>Trading Radar</Text>
+      <View style={styles.premiumRadarWrap}>
+        <Svg width={size} height={size}>
+          <Defs>
+            <LinearGradient id="radarFill" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor={C.green} stopOpacity="0.22" />
+              <Stop offset="1" stopColor={C.purple} stopOpacity="0.12" />
+            </LinearGradient>
+          </Defs>
+          {[0.25, 0.5, 0.75, 1].map((ring) => (
+            <Circle key={ring} cx={center} cy={center} r={maxR * ring} stroke="rgba(255,255,255,0.08)" strokeWidth={1} fill="none" />
+          ))}
+          {points.map((point) => (
+            <Line key={`axis-${point.label}`} x1={center} y1={center} x2={point.lx} y2={point.ly} stroke="rgba(255,255,255,0.055)" strokeWidth={1} />
+          ))}
+          <Polygon points={polygon} fill="url(#radarFill)" stroke={C.green} strokeWidth={3} />
+          {points.map((point) => (
+            <Circle key={`dot-${point.label}`} cx={point.x} cy={point.y} r={5.5} fill={C.green} stroke="rgba(0,0,0,0.72)" strokeWidth={2} />
+          ))}
+        </Svg>
+        <View style={styles.premiumRadarCenter}>
+          <Text style={styles.premiumRadarScore}>{profileScore}</Text>
+          <Text style={styles.premiumRadarLabel}>PROFILE</Text>
+        </View>
+        {points.map((point) => (
+          <Pressable
+            key={`label-${point.label}`}
+            onPress={() => setSelected({ label: point.label, value: point.value, target: point.target, explanation: point.explanation })}
+            style={[styles.premiumRadarAxisLabel, { left: Math.max(0, Math.min(size - 86, point.lx - 43)), top: Math.max(0, Math.min(size - 38, point.ly - 18)) }]}
+          >
+            <Text style={styles.premiumRadarAxisText}>{point.label}</Text>
+            <Text style={styles.premiumRadarAxisValue}>{point.value}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.radarSummaryRow}>
+        <View style={styles.radarSummaryBlock}>
+          <Text style={styles.terminalSmallLabel}>Strengths</Text>
+          <View style={styles.terminalChipRow}>
+            {strongest.map((item) => <Text key={item.label} style={styles.terminalChip}>● {item.label}</Text>)}
+          </View>
+        </View>
+        <View style={styles.radarWeakBlock}>
+          <Text style={styles.terminalSmallLabel}>Weakest Area</Text>
+          <Text style={styles.dnaWeakText}>{weakest.label}</Text>
+          <Text style={styles.terminalSub}>Target {weakest.target}</Text>
+        </View>
+      </View>
+      <MetricPillRow items={axes.map((axis) => ({ label: axis.label, value: axis.value, tone: axis.score >= 65 ? "green" : "grey" }))} />
+      <BottomSheetPanel visible={!!selected} title={selected?.label || "Metric"} onClose={() => setSelected(null)}>
+        {selected ? (
+          <>
+            <Text style={styles.bottomSheetBig}>{selected.value}</Text>
+            <Text style={styles.bottomSheetText}>{selected.explanation}</Text>
+            <Text style={styles.bottomSheetText}>Target: {selected.target}</Text>
+          </>
+        ) : null}
+      </BottomSheetPanel>
+    </TerminalGlassCard>
+  );
+}
+
+type SessionMode = "Hours" | "Sessions" | "Days" | "Months";
+const SESSION_MODES: SessionMode[] = ["Hours", "Sessions", "Days", "Months"];
+
+function buildSessionCells(trades: Trade[], mode: SessionMode) {
+  const keyFn =
+    mode === "Hours"
+      ? hourKeyForTrade
+      : mode === "Sessions"
+        ? sessionLabelForTrade
+        : mode === "Days"
+          ? dayKeyForTrade
+          : (trade: Trade) => safeDateFromISO(trade.date).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+  const rows = buildAnalysisBreakdown(trades, keyFn);
+  const orderedKeys =
+    mode === "Hours"
+      ? Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`)
+      : mode === "Sessions"
+        ? ["Morning", "Midday", "Afternoon"]
+        : mode === "Days"
+          ? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+          : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  const expanded = orderedKeys.map((key) => byKey.get(key) || emptyBreakdown(key));
+  const maxAbs = Math.max(1, ...expanded.map((row) => Math.abs(row.netPnl)));
+  return expanded.map((item) => ({
+    ...item,
+    intensity: Math.min(1, Math.abs(item.netPnl) / maxAbs),
+  }));
+}
+
+function heatCellColor(pnl: number, intensity: number) {
+  if (pnl > 0) return intensity > 0.65 ? "rgba(163,255,18,0.78)" : "rgba(90,145,34,0.58)";
+  if (pnl < 0) return intensity > 0.65 ? "rgba(255,59,95,0.70)" : "rgba(255,149,0,0.46)";
+  return "rgba(255,255,255,0.065)";
+}
+
+function TerminalSessionIntelligence({ trades }: { trades: Trade[] }) {
+  const [mode, setMode] = useState<SessionMode>("Hours");
+  const [selected, setSelected] = useState<ReturnType<typeof buildSessionCells>[number] | null>(null);
+  const cells = useMemo(() => buildSessionCells(trades, mode), [mode, trades]);
+
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View>
+          <Text style={styles.terminalSectionTitle}>Heatmap</Text>
+        </View>
+      </View>
+      <SegmentedTimeFilter options={SESSION_MODES} value={mode} onChange={(value) => setMode(value as SessionMode)} />
+      <View style={styles.calendarHeatmapGrid}>
+        {cells.length ? cells.map((cell) => (
+          <Pressable key={cell.key} onPress={() => setSelected(cell)} style={[styles.calendarHeatmapCell, { backgroundColor: heatCellColor(cell.netPnl, cell.intensity) }]}>
+            <Text style={styles.calendarHeatmapKey} numberOfLines={1}>{cell.key}</Text>
+            <Text style={styles.calendarHeatmapValue} numberOfLines={1}>{cell.trades ? moneyCompact(cell.netPnl) : "—"}</Text>
+            <Text style={styles.calendarHeatmapMeta}>{cell.trades} trades</Text>
+          </Pressable>
+        )) : (
+          <Text style={styles.terminalSub}>Log trades to build session intelligence.</Text>
+        )}
+      </View>
+      <BottomSheetPanel visible={!!selected} title={selected?.key || "Session"} onClose={() => setSelected(null)}>
+        {selected ? (
+          <>
+            <MetricPillRow
+              items={[
+                { label: "Trades", value: `${selected.trades}`, tone: "grey" },
+                { label: "Win Rate", value: `${selected.winRate.toFixed(0)}%`, tone: selected.winRate >= 50 ? "green" : "red" },
+                { label: "Profit", value: moneyCompact(selected.netPnl), tone: selected.netPnl >= 0 ? "green" : "red" },
+                { label: "Avg", value: moneyCompact(selected.avgPnl), tone: "grey" },
+              ]}
+            />
+            <Text style={styles.bottomSheetText}>Best setup: {selected.netPnl >= 0 ? "Repeat this window with strict checklist quality." : "Wait for cleaner context before sizing up."}</Text>
+            <Text style={styles.bottomSheetText}>Mistakes: watch overtrading, weak notes and trades outside your best session.</Text>
+          </>
+        ) : null}
+      </BottomSheetPanel>
+    </TerminalGlassCard>
+  );
+}
+
+function TerminalTraderStatus({
+  achievements,
+  level,
+  trades,
+  selectedDate,
+  isPremium,
+  session,
+}: {
+  achievements: Achievement[];
+  level: TraderLevel;
+  trades: Trade[];
+  selectedDate: string;
+  isPremium: boolean;
+  session: Session | null;
+}) {
+  const [shareTarget, setShareTarget] = useState<Achievement | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const achievementShareRef = useRef<View>(null);
+  const shareStats = useMemo(() => {
+    const stats = calcStats(trades);
+    return {
+      tradesLogged: stats.count,
+      winRate: stats.wr,
+      totalPnl: stats.pnl,
+      dateLabel: achievementShareDateLabel(selectedDate),
+    };
+  }, [selectedDate, trades]);
+  const unlocked = achievements.filter((item) => item.unlocked).slice(0, 6);
+  const next = achievements.filter((item) => !item.unlocked).slice(0, 4);
+  const waitForCard = () =>
+    new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 220)));
+    });
+  const shareAchievement = async (item: Achievement) => {
+    if (!item.unlocked) return;
+    try {
+      setShareBusy(true);
+      await checkAndRecordAchievementShareUsage({ session, isPremium, achievement: item });
+      setShareTarget(item);
+      await waitForCard();
+      const { shareCapturedView } = await import("./src/components/insights/shareExport");
+      await shareCapturedView(achievementShareRef, "Share YouTrader achievement", { width: 1080, height: 1920 });
+      trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
+    } catch (error) {
+      alertExportError("Achievement share failed", error);
+      logger.error(error, { feature: "achievements", action: "terminal_share", userId: session?.user.id });
+    } finally {
+      setShareTarget(null);
+      setShareBusy(false);
+    }
+  };
+  return (
+    <TerminalGlassCard>
+      <View style={styles.traderStatusHero}>
+        <View>
+          <Text style={styles.traderRank}>{level.title}</Text>
+          <Text style={styles.terminalSub}>{level.phrase}</Text>
+        </View>
+      </View>
+      {shareBusy ? <ActivityIndicator color={C.green} style={{ marginVertical: 10 }} /> : null}
+      <Text style={styles.terminalSmallLabel}>Unlocked</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.achievementRail}>
+        {unlocked.map((item) => (
+          <Pressable key={item.id} onPress={() => shareAchievement(item)} style={styles.achievementRailCard}>
+            <Text style={styles.achievementRailStatus}>Unlocked</Text>
+            <Text style={styles.achievementRailTitle}>{item.title}</Text>
+            <Text style={styles.achievementRailMeta}>{item.progressLabel}</Text>
+            <Text style={styles.achievementRailTap}>Tap to share</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <Text style={styles.terminalSmallLabel}>Next Targets</Text>
+      <View style={styles.nextTargetList}>
+        {next.map((item) => (
+          <View key={item.id} style={styles.nextTargetRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.nextTargetTitle}>{item.title}</Text>
+              <Text style={styles.terminalSub}>{item.condition}</Text>
+            </View>
+            <Text style={styles.nextTargetProgress}>{item.progressLabel}</Text>
+          </View>
+        ))}
+      </View>
+      {shareTarget ? (
+        <View style={styles.offscreenShareCard} collapsable={false}>
+          <View ref={achievementShareRef} collapsable={false} style={styles.achievementShareCaptureFrame}>
+            <AchievementShareCard item={shareTarget} level={level} stats={shareStats} />
+          </View>
+        </View>
+      ) : null}
+    </TerminalGlassCard>
+  );
+}
 function RadarProfile({
   winRate,
   profitFactor,
@@ -2535,32 +4943,787 @@ function consistencyScoreFromTrades(trades: Trade[]) {
   return Math.max(0, Math.min(100, greenRate * 0.55 + stability * 0.45));
 }
 
+function TradeAnalysisCard({ result }: { result: TradeAnalysisResult }) {
+  const sections = [
+    { title: "Mistakes", tone: C.red, items: result.mistakes.map((item) => ({ title: item.title, body: item.evidence ? `${item.explanation} Evidence: ${item.evidence}` : item.explanation })) },
+    { title: "Strengths", tone: C.green, items: result.strengths.map((item) => ({ title: item.title, body: item.evidence ? `${item.explanation} Evidence: ${item.evidence}` : item.explanation })) },
+    { title: "Actions", tone: C.purple, items: result.recommendations.map((item) => ({ title: item.title, body: item.why ? `${item.action} Why: ${item.why}` : item.action })) },
+  ];
+  return (
+    <>
+      <GlassCard style={styles.aiAnalysisCard} intensity={42}>
+        <View style={styles.rowBetween}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.aiAnalysisTitle}>AI Journal Review</Text>
+            <Text style={styles.aiAnalysisSummary} numberOfLines={2}>{result.summary}</Text>
+          </View>
+          <Text style={styles.aiAnalysisSource}>SAVED</Text>
+        </View>
+        <View style={styles.aiInsightGrid}>
+          {sections.map((section) => (
+            <View key={section.title} style={styles.aiInsightSection}>
+              <View style={styles.aiInsightHeader}>
+                <View style={[styles.metricDot, { backgroundColor: section.tone }]} />
+                <Text style={[styles.aiAnalysisHeading, { color: section.tone }]}>{section.title}</Text>
+              </View>
+              {section.items.slice(0, 3).map((item, index) => (
+                <View key={`${section.title}-${index}`} style={styles.aiInsightRow}>
+                  <Text style={styles.aiInsightIndex}>{index + 1}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.aiInsightTitle} numberOfLines={1}>{item.title}</Text>
+                    <Text style={styles.aiInsightBody} numberOfLines={2}>{item.body}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+        <Text style={[styles.sub, { marginTop: 10 }]} numberOfLines={2}>{result.disclaimer}</Text>
+      </GlassCard>
+      <PatternDetectiveCard result={result} />
+    </>
+  );
+}
+
+function PatternDetectiveCard({ result }: { result: TradeAnalysisResult }) {
+  const [openAgents, setOpenAgents] = useState<Record<string, boolean>>({ riskAgent: true, propFirmAgent: true });
+  const agentRows: Array<{ key: keyof typeof result.agentFindings; title: string; tone: string }> = [
+    { key: "riskAgent", title: "Risk Agent", tone: C.red },
+    { key: "disciplineAgent", title: "Discipline Agent", tone: C.yellow },
+    { key: "propFirmAgent", title: "Prop Firm Agent", tone: C.green },
+    { key: "sessionAgent", title: "Session Agent", tone: C.purple },
+    { key: "psychologyAgent", title: "Psychology Agent", tone: C.yellow },
+    { key: "instrumentAgent", title: "Instrument Agent", tone: C.green },
+    { key: "streakAgent", title: "Streak Agent", tone: C.red },
+    { key: "executionAgent", title: "Execution Agent", tone: C.purple },
+    { key: "consistencyAgent", title: "Consistency Agent", tone: C.green },
+  ];
+  const toggleAgent = (key: string, title: string) => {
+    setOpenAgents((current) => ({ ...current, [key]: !current[key] }));
+    trackEvent("ai_pattern_card_opened", { agent: title });
+  };
+  return (
+    <GlassCard style={styles.detectiveCard} intensity={42}>
+      <View style={styles.detectiveHero}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.detectiveTitle}>Your journal is exposing hidden patterns.</Text>
+        </View>
+        <View style={styles.detectiveScoreBox}>
+          <Text style={styles.edgeMiniLabel}>Score</Text>
+          <Text style={styles.detectiveScore}>{result.detectiveScore}</Text>
+        </View>
+      </View>
+
+      <View style={styles.detectiveBlindSpot}>
+        <Text style={styles.detectiveSectionLabel}>Main Blind Spot</Text>
+        <Text style={styles.detectiveBlindTitle}>{result.mainBlindSpot.title}</Text>
+        <Text style={styles.detectiveEvidence}>{result.mainBlindSpot.evidence}</Text>
+        <Text style={styles.detectiveBody}>{result.mainBlindSpot.whyItMatters}</Text>
+        <Text style={styles.detectiveAction}>{result.mainBlindSpot.action}</Text>
+      </View>
+
+      <Text style={styles.detectiveSectionLabel}>Hidden Patterns</Text>
+      {result.hiddenPatterns.slice(0, 7).map((pattern, index) => {
+        const impactColor = pattern.impact === "high" ? C.red : pattern.impact === "medium" ? C.yellow : C.green;
+        return (
+          <View key={`${pattern.title}-${index}`} style={styles.detectivePatternCard}>
+            <View style={styles.rowBetween}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.detectivePatternTitle} numberOfLines={1}>{pattern.title}</Text>
+                <Text style={styles.detectiveEvidence} numberOfLines={2}>{pattern.evidence}</Text>
+              </View>
+              <View style={[styles.detectiveImpactPill, { borderColor: impactColor }]}>
+                <Text style={[styles.detectiveImpactText, { color: impactColor }]}>{pattern.impact}</Text>
+              </View>
+            </View>
+            <Text style={styles.detectiveBody} numberOfLines={2}>{pattern.action}</Text>
+            <Text style={styles.detectiveConfidence}>Confidence: {pattern.confidence.toUpperCase()}</Text>
+          </View>
+        );
+      })}
+
+      <Text style={styles.detectiveSectionLabel}>Agent Findings</Text>
+      {agentRows.map((agent) => {
+        const finding = result.agentFindings[agent.key];
+        const isOpen = Boolean(openAgents[agent.key]);
+        return (
+          <Pressable
+            key={agent.key}
+            onPress={() => toggleAgent(agent.key, agent.title)}
+            style={styles.detectiveAgentCard}
+          >
+            <View style={styles.rowBetween}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.detectiveAgentTitle, { color: agent.tone }]} numberOfLines={1}>{agent.title}</Text>
+                <Text style={styles.detectivePatternTitle} numberOfLines={1}>{finding.finding}</Text>
+              </View>
+              <Text style={styles.detectiveChevron}>{isOpen ? "-" : "+"}</Text>
+            </View>
+            {isOpen ? (
+              <View style={styles.detectiveAgentBody}>
+                <Text style={styles.detectiveEvidence}>{finding.evidence}</Text>
+                <Text style={styles.detectiveAction}>{finding.action}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      })}
+
+      <View style={styles.detectiveRuleCard}>
+        <Text style={styles.detectiveSectionLabel}>Next Trading Rule</Text>
+        <Text style={styles.detectiveRuleText}>{result.nextTradingRule}</Text>
+      </View>
+    </GlassCard>
+  );
+}
+
+function TradingScoreCard({ score }: { score: TradingScoreResult }) {
+  return (
+    <GlassCard style={styles.tradingScoreHeroCard} intensity={38}>
+      <View style={styles.rowBetween}>
+        <View>
+          <Text style={styles.scoreLabel}>Trading Score</Text>
+          <Text style={styles.scoreHeroNumber}>{score.score}</Text>
+        </View>
+        <View style={styles.scoreGradePill}>
+          <Text style={styles.scoreGradeText}>Grade {score.grade}</Text>
+          <Text style={styles.scorePercentile}>{score.percentileLabel}</Text>
+        </View>
+      </View>
+      <View style={styles.scoreInsightRow}>
+        <View style={styles.scoreInsightBox}>
+          <Text style={styles.edgeMiniLabel}>Strength</Text>
+          <Text style={styles.scoreInsightText}>{score.strengths[0] || "Keep building your sample."}</Text>
+        </View>
+        <View style={styles.scoreInsightBox}>
+          <Text style={styles.edgeMiniLabel}>Focus</Text>
+          <Text style={styles.scoreInsightText}>{score.weaknesses[0] || "Maintain consistency."}</Text>
+        </View>
+      </View>
+    </GlassCard>
+  );
+}
+
+function TradingScoreMini({ score, label = "Trading Score" }: { score: TradingScoreResult; label?: string }) {
+  return (
+    <View style={styles.tradingScoreMini}>
+      <Text style={styles.tradingScoreMiniLabel}>{label}</Text>
+      <Text style={styles.tradingScoreMiniValue}>{score.score}</Text>
+      <Text style={styles.tradingScoreMiniSub}>{score.grade}</Text>
+    </View>
+  );
+}
+
+function PatternDetectionCard({ result, locked }: { result: PatternDetectionResult; locked: boolean }) {
+  const renderInsight = (item: PatternDetectionResult["strengths"][number], index: number) => {
+    const color = item.tone === "green" ? C.green : item.tone === "red" ? C.red : C.purple;
+    return (
+      <View key={`${item.title}-${index}`} style={styles.patternInsightCard}>
+        <View style={[styles.metricDot, { backgroundColor: color }]} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.patternInsightTitle}>{locked && index > 0 ? "Pro Pattern" : item.title}</Text>
+          <Text style={styles.patternInsightText}>{locked && index > 0 ? "Unlock Pro to reveal deeper pattern detection." : item.detail}</Text>
+        </View>
+      </View>
+    );
+  };
+  return (
+    <GlassCard style={styles.patternCard} intensity={34}>
+      <View style={styles.rowBetween}>
+        <Text style={styles.myStatsTitle}>Pattern Prediction</Text>
+        {locked ? <Text style={styles.aiAnalysisSource}>PRO</Text> : <Text style={styles.aiAnalysisSource}>LIVE</Text>}
+      </View>
+      <Text style={styles.breakdownHint}>Top strength patterns</Text>
+      {result.strengths.map(renderInsight)}
+      <Text style={[styles.breakdownHint, { marginTop: 12 }]}>Top risk patterns</Text>
+      {result.risks.map(renderInsight)}
+      <View style={styles.patternOpportunity}>
+        <Text style={styles.edgeMiniLabel}>Top Opportunity</Text>
+        <Text style={styles.scoreInsightText}>{locked ? "Unlock Pro to see the highest-impact improvement." : result.opportunity.detail}</Text>
+      </View>
+    </GlassCard>
+  );
+}
+
+function formatCoachStatus(value: string) {
+  return value.replace(/_/g, " ");
+}
+
+function PassProbabilityCard({ result }: { result: PassProbabilityResult }) {
+  const statusColor =
+    result.status === "EXCELLENT" || result.status === "ON_TRACK"
+      ? C.green
+      : result.status === "AT_RISK"
+        ? C.yellow
+        : C.red;
+  return (
+    <GlassCard style={styles.aiCoachModuleCard} intensity={34}>
+      <View style={styles.rowBetween}>
+        <View>
+          <Text style={styles.edgeMiniLabel}>Pass Probability</Text>
+          <Text style={[styles.survivalValue, { color: statusColor }]}>{result.probability}%</Text>
+        </View>
+        <View style={[styles.riskStatusPill, { borderColor: statusColor, backgroundColor: result.status === "DANGER" ? C.redSoft : result.status === "AT_RISK" ? C.yellowSoft : C.greenSoft }]}>
+          <Text style={[styles.riskStatusText, { color: statusColor }]}>{formatCoachStatus(result.status)}</Text>
+        </View>
+      </View>
+      <View style={styles.aiMetricExplainBox}>
+        <Text style={styles.edgeMiniLabel}>What it means</Text>
+        <Text style={styles.aiCompactText} numberOfLines={2}>{result.explanation}</Text>
+      </View>
+      <Text style={[styles.breakdownHint, { marginTop: 8 }]}>Confidence: {result.confidence}</Text>
+    </GlassCard>
+  );
+}
+
+function RevengeTradingCard({ result }: { result: RevengeTradingResult }) {
+  const color = result.detected ? C.red : C.green;
+  return (
+    <GlassCard style={[styles.aiCoachModuleCard, result.detected && styles.revengeAlertCard]} intensity={34}>
+      <View style={styles.rowBetween}>
+        <Text style={[styles.aiModuleTitle, { color }]}>
+          {result.detected ? "Revenge Trading Alert" : "Revenge Trading Check"}
+        </Text>
+        <View style={[styles.riskStatusPill, { borderColor: color, backgroundColor: result.detected ? C.redSoft : C.greenSoft }]}>
+          <Text style={[styles.riskStatusText, { color }]}>{result.severity}</Text>
+        </View>
+      </View>
+      <Text style={styles.aiCompactText} numberOfLines={2}>{result.reason}</Text>
+      <View style={styles.patternOpportunity}>
+        <Text style={styles.edgeMiniLabel}>Recommendation</Text>
+        <Text style={styles.scoreInsightText} numberOfLines={2}>{result.recommendation}</Text>
+      </View>
+    </GlassCard>
+  );
+}
+
+function HiddenLeaksCard({ leaks }: { leaks: HiddenLeak[] }) {
+  return (
+    <GlassCard style={styles.aiCoachModuleCard} intensity={34}>
+      <View style={styles.rowBetween}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.aiModuleTitle}>Hidden Leaks</Text>
+          <Text style={styles.breakdownHint}>Highest-impact behavior patterns to fix first</Text>
+        </View>
+        <Text style={styles.aiAnalysisSource}>LIVE</Text>
+      </View>
+      {leaks.length === 0 ? (
+        <Text style={styles.aiCompactText}>More trade history is needed before patterns can be detected.</Text>
+      ) : (
+        leaks.map((leak, index) => (
+          <View key={`${leak.title}-${index}`} style={styles.patternInsightCard}>
+            <View style={[styles.metricDot, { backgroundColor: C.red }]} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.patternInsightTitle}>Leak #{index + 1}: {leak.title}</Text>
+              <Text style={styles.patternInsightText} numberOfLines={1}>{leak.impact}</Text>
+              <Text style={[styles.scoreInsightText, { marginTop: 6 }]} numberOfLines={2}>Action: {leak.recommendation}</Text>
+            </View>
+          </View>
+        ))
+      )}
+    </GlassCard>
+  );
+}
+
+type AchievementShareStats = {
+  tradesLogged: number;
+  winRate: number;
+  totalPnl: number;
+  dateLabel: string;
+};
+
+function achievementRarity(item: Achievement, level: TraderLevel): "COMMON" | "RARE" | "EPIC" | "LEGENDARY" {
+  const title = item.title.toLowerCase();
+  if (
+    title.includes("apex") ||
+    title.includes("five figure") ||
+    title.includes("$10k") ||
+    title.includes("funding hunter") ||
+    level.score >= 95
+  ) {
+    return "LEGENDARY";
+  }
+  if (
+    title.includes("elite") ||
+    title.includes("risk master") ||
+    title.includes("quant") ||
+    title.includes("funded") ||
+    level.score >= 90
+  ) {
+    return "EPIC";
+  }
+  if (title.includes("10 trades") || title.includes("$1k") || title.includes("sniper") || level.score >= 75) {
+    return "RARE";
+  }
+  return "COMMON";
+}
+
+function achievementShareDateLabel(selectedDate: string) {
+  const d = safeDateFromISO(selectedDate);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase();
+}
+
+function dayRangeIso(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const end = addDays(start, 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function achievementShareUsageStorageKey(userId: string | null, date = new Date()) {
+  const day = date.toISOString().slice(0, 10);
+  return `achievement-share-usage:${userId || "local"}:${day}`;
+}
+
+async function checkAndRecordLocalAchievementShareUsage(limit: number, userId: string | null) {
+  const key = achievementShareUsageStorageKey(userId);
+  const raw = await AsyncStorage.getItem(key);
+  const used = Number(raw || "0");
+  if (Number.isFinite(used) && used >= limit) {
+    throw new Error(limit > 2 ? "You have reached your 10 achievement shares for today." : "Free users can share 2 achievements per day. YouTrader Pro includes 10 daily shares.");
+  }
+  await AsyncStorage.setItem(key, String((Number.isFinite(used) ? used : 0) + 1));
+}
+
+async function checkAndRecordAchievementShareUsage({
+  session,
+  isPremium,
+  achievement,
+}: {
+  session: Session | null;
+  isPremium: boolean;
+  achievement: Achievement;
+}) {
+  const limit = isPremium ? 10 : 2;
+  if (!supabase || !session?.user.id) {
+    await checkAndRecordLocalAchievementShareUsage(limit, session?.user.id || null);
+    return;
+  }
+  const { start, end } = dayRangeIso();
+  const { count, error: countError } = await supabase
+    .from("achievement_share_usage")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", session.user.id)
+    .gte("shared_at", start)
+    .lt("shared_at", end);
+  if (countError) {
+    logger.warn("Falling back to local achievement share limits", { feature: "achievements", action: "share_limit_count", userId: session.user.id });
+    await checkAndRecordLocalAchievementShareUsage(limit, session.user.id);
+    return;
+  }
+  if ((count || 0) >= limit) {
+    throw new Error(isPremium ? "You have reached your 10 achievement shares for today." : "Free users can share 2 achievements per day. YouTrader Pro includes 10 daily shares.");
+  }
+  const { error: insertError } = await supabase.from("achievement_share_usage").insert({
+    user_id: session.user.id,
+    achievement_id: achievement.id,
+    achievement_title: achievement.title,
+    is_pro_snapshot: isPremium,
+  });
+  if (insertError) {
+    logger.warn("Falling back to local achievement share limits", { feature: "achievements", action: "share_limit_insert", userId: session.user.id });
+    await checkAndRecordLocalAchievementShareUsage(limit, session.user.id);
+  }
+}
+
+function rarityColor(rarity: ReturnType<typeof achievementRarity>) {
+  if (rarity === "LEGENDARY") return "#FFD447";
+  if (rarity === "EPIC") return "#B84DFF";
+  if (rarity === "RARE") return "#5AD7FF";
+  return "#B8FF00";
+}
+
+function prestigeStatement(item: Achievement) {
+  const title = item.title.toLowerCase();
+  if (title.includes("risk") || title.includes("discipline") || title.includes("rule")) return "Discipline over emotion.";
+  if (title.includes("fund") || title.includes("evaluation")) return "Protect the account. Earn the next level.";
+  if (title.includes("month") || title.includes("figure")) return "Consistency compounds when it is tracked.";
+  return "Discipline creates consistency.";
+}
+
+function AchievementShareCard({
+  item,
+  level,
+  stats,
+}: {
+  item: Achievement;
+  level: TraderLevel;
+  stats: AchievementShareStats;
+}) {
+  const rarity = achievementRarity(item, level);
+  const rarityAccent = rarityColor(rarity);
+  const title = item.title.toUpperCase();
+  const isFundingBadge = item.title.toLowerCase().includes("fund");
+  const particles = Array.from({ length: 34 }, (_, index) => ({
+    left: 52 + ((index * 89) % 980),
+    top: 190 + ((index * 137) % 1450),
+    size: 3 + (index % 4),
+    opacity: 0.16 + (index % 5) * 0.07,
+  }));
+  return (
+    <View style={styles.achievementShareCard}>
+      <View style={styles.shareGlowGreen} />
+      <View style={styles.shareGlowPurple} />
+      <View style={styles.shareGlowTopLine} />
+      {particles.map((particle, index) => (
+        <View
+          key={`particle-${index}`}
+          style={[
+            styles.shareParticle,
+            {
+              left: particle.left,
+              top: particle.top,
+              width: particle.size,
+              height: particle.size,
+              borderRadius: particle.size / 2,
+              opacity: particle.opacity,
+            },
+          ]}
+        />
+      ))}
+      <Svg width={1080} height={1920} style={styles.shareSvgBackdrop}>
+        <Defs>
+          <LinearGradient id="candleGlow" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor="#B8FF00" stopOpacity="0.38" />
+            <Stop offset="1" stopColor="#B84DFF" stopOpacity="0.18" />
+          </LinearGradient>
+        </Defs>
+        {Array.from({ length: 28 }, (_, index) => {
+          const x = 40 + index * 38;
+          const h = 42 + ((index * 31) % 160);
+          const y = 1640 - h / 2 + ((index % 3) * 26);
+          return (
+            <React.Fragment key={`candle-bg-${index}`}>
+              <Line x1={x + 8} y1={y - 30} x2={x + 8} y2={y + h + 30} stroke="url(#candleGlow)" strokeWidth="3" opacity="0.26" />
+              <Rect x={x} y={y} width="16" height={h} rx="5" fill="url(#candleGlow)" opacity="0.22" />
+            </React.Fragment>
+          );
+        })}
+      </Svg>
+      <View style={styles.shareCardFrame}>
+        <View style={styles.shareBrandRow}>
+          <View style={styles.shareCandleMark}>
+            <View style={[styles.shareCandle, { height: 46, backgroundColor: C.green }]} />
+            <View style={[styles.shareCandle, { height: 64, backgroundColor: C.purple }]} />
+            <View style={[styles.shareCandle, { height: 54, backgroundColor: C.green }]} />
+          </View>
+          <View>
+            <Text style={styles.shareBrandText}>YouTrader</Text>
+            <Text style={styles.shareBrandSub}>TRADE. ANALYZE. IMPROVE.</Text>
+          </View>
+        </View>
+        <Text style={styles.shareUnlockedText}>ACHIEVEMENT UNLOCKED</Text>
+        <View style={[styles.shareBadgeStage, isFundingBadge && styles.shareBadgeStageShield]}>
+          <View style={styles.shareBadgeHalo} />
+          <View style={styles.shareBadgeOrbitOne} />
+          <View style={styles.shareBadgeOrbitTwo} />
+          <Svg width={560} height={560} style={styles.shareBadgeSvg}>
+            <Defs>
+              <LinearGradient id="hexMain" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor="#9CFF00" stopOpacity="0.96" />
+                <Stop offset="0.52" stopColor="#101418" stopOpacity="0.98" />
+                <Stop offset="1" stopColor="#8A2BE2" stopOpacity="0.94" />
+              </LinearGradient>
+              <LinearGradient id="hexGlass" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0.42" />
+                <Stop offset="0.42" stopColor="#9CFF00" stopOpacity="0.2" />
+                <Stop offset="1" stopColor="#8A2BE2" stopOpacity="0.42" />
+              </LinearGradient>
+            </Defs>
+            {isFundingBadge ? (
+              <>
+                <Polygon points="280,18 490,102 458,346 280,536 102,346 70,102" fill="url(#hexMain)" opacity="0.94" />
+                <Polygon points="280,54 456,126 430,326 280,492 130,326 104,126" fill="#05070A" opacity="0.78" />
+                <Polygon points="280,84 426,144 404,308 280,452 156,308 134,144" fill="url(#hexGlass)" opacity="0.34" />
+              </>
+            ) : (
+              <>
+                <Polygon points="280,24 502,150 502,410 280,536 58,410 58,150" fill="url(#hexMain)" opacity="0.94" />
+                <Polygon points="280,54 474,166 474,394 280,506 86,394 86,166" fill="#05070A" opacity="0.78" />
+                <Polygon points="280,78 452,178 452,382 280,482 108,382 108,178" fill="url(#hexGlass)" opacity="0.34" />
+              </>
+            )}
+            <Circle cx="280" cy="280" r="184" fill="#000000" opacity="0.26" />
+            <Circle cx="280" cy="280" r="222" fill="none" stroke="#9CFF00" strokeWidth="3" opacity="0.3" />
+            <Circle cx="280" cy="280" r="250" fill="none" stroke="#8A2BE2" strokeWidth="3" opacity="0.24" />
+            <Line x1="88" y1="164" x2="472" y2="396" stroke="#9CFF00" strokeWidth="3" opacity="0.28" />
+            <Line x1="472" y1="164" x2="88" y2="396" stroke="#8A2BE2" strokeWidth="3" opacity="0.28" />
+            <Line x1="158" y1="280" x2="402" y2="280" stroke="#FFFFFF" strokeWidth="2" opacity="0.16" />
+            <Line x1="280" y1="126" x2="280" y2="434" stroke="#FFFFFF" strokeWidth="2" opacity="0.14" />
+          </Svg>
+          <View style={[styles.shareLogoOrb, isFundingBadge && styles.shareLogoOrbShield]}>
+            <Image source={YOU_TRADER_BULL_LOGO} style={styles.shareLogoImage} resizeMode="cover" />
+            <View style={styles.shareLogoShine} />
+          </View>
+          <View style={styles.shareHudRail}>
+            <View style={styles.shareHudTick} />
+            <View style={[styles.shareHudTick, styles.shareHudTickPurple]} />
+            <View style={styles.shareHudTick} />
+          </View>
+        </View>
+        <Text style={styles.shareBadgeTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.62}>{title}</Text>
+        <Text style={styles.sharePrestigeText}>{prestigeStatement(item)}</Text>
+        <View style={styles.shareMetricPanel}>
+          <View style={styles.shareStatsGrid}>
+            <View style={styles.shareStatGlass}>
+              <Text style={styles.shareMetricLabel}>TRADES LOGGED</Text>
+              <Text style={styles.shareMetricValue}>{stats.tradesLogged} / {Math.max(10, stats.tradesLogged)}</Text>
+            </View>
+            <View style={styles.shareStatGlass}>
+              <Text style={styles.shareMetricLabel}>WIN RATE</Text>
+              <Text style={styles.shareMetricValue}>{stats.winRate.toFixed(0)}%</Text>
+            </View>
+            <View style={styles.shareStatGlass}>
+              <Text style={styles.shareMetricLabel}>P/L</Text>
+              <Text style={[styles.shareMetricValue, { color: stats.totalPnl >= 0 ? "#9CFF00" : "#FF3B5F" }]}>{money(stats.totalPnl)}</Text>
+            </View>
+            <View style={styles.shareStatGlass}>
+              <Text style={styles.shareMetricLabel}>DATE</Text>
+              <Text style={styles.shareMetricValue}>{stats.dateLabel}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={[styles.shareRarityTag, { borderColor: rarityAccent, backgroundColor: `${rarityAccent}22` }]}>
+          <Text style={[styles.shareRarityText, { color: rarityAccent }]}>{rarity}</Text>
+        </View>
+        <Text style={styles.shareMadeBy}>MADE BY A TRADER, FOR TRADERS</Text>
+      </View>
+    </View>
+  );
+}
+
+function AchievementBadgeCard({ item, onShare }: { item: Achievement; onShare: (item: Achievement) => void }) {
+  const pct = Math.max(0, Math.min(100, (item.progress / Math.max(1, item.target)) * 100));
+  const unlocked = item.status === "unlocked";
+  const next = item.status === "next_target";
+  return (
+    <Pressable
+      disabled={!unlocked}
+      onPress={() => onShare(item)}
+      style={({ pressed }) => [styles.achievementStatusPressable, pressed && styles.achievementStatusPressed]}
+    >
+      <GlassCard
+        compact
+        style={[
+          styles.achievementStatusItem,
+          unlocked && styles.achievementStatusUnlocked,
+          next && styles.achievementStatusNext,
+        ]}
+      >
+      <View style={styles.safeRowBetween}>
+        <SafeText style={[styles.achievementStatusTag, unlocked ? { color: C.green } : next ? { color: C.purple } : null]}>
+          {unlocked ? "UNLOCKED" : next ? "NEXT TARGET" : "LOCKED"}
+        </SafeText>
+        <SafeText style={styles.achievementCategory}>{item.category.replace("_", " ").toUpperCase()}</SafeText>
+      </View>
+      <SafeText style={styles.achievementStatusTitle} lines={2}>{item.title}</SafeText>
+      <SafeText style={styles.achievementCondition} lines={2}>{item.condition}</SafeText>
+      <View style={styles.insightTrack}>
+        <View style={[styles.insightFill, { width: `${pct}%`, backgroundColor: unlocked ? C.green : next ? C.purple : "rgba(165,173,186,0.42)" }]} />
+      </View>
+      <View style={styles.achievementFooterRow}>
+        <SafeText style={styles.achievementProgress}>{item.progressLabel}</SafeText>
+        <SafeMetricLabel style={styles.achievementShareHint}>{unlocked ? "Tap to share" : item.metricLabel}</SafeMetricLabel>
+      </View>
+      </GlassCard>
+    </Pressable>
+  );
+}
+
+function AchievementSection({
+  achievements,
+  level,
+  trades,
+  selectedDate,
+  isPremium,
+  session,
+}: {
+  achievements: Achievement[];
+  level: TraderLevel;
+  trades: Trade[];
+  selectedDate: string;
+  isPremium: boolean;
+  session: Session | null;
+}) {
+  const [shareTarget, setShareTarget] = useState<Achievement | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const achievementShareRef = useRef<View>(null);
+  const shareStats = useMemo(() => {
+    const stats = calcStats(trades);
+    return {
+      tradesLogged: stats.count,
+      winRate: stats.wr,
+      totalPnl: stats.pnl,
+      dateLabel: achievementShareDateLabel(selectedDate),
+    };
+  }, [selectedDate, trades]);
+  const unlocked = achievements.filter((item) => item.unlocked).slice(0, 6);
+  const nextTargets = achievements.filter((item) => !item.unlocked && item.status === "next_target").slice(0, 4);
+  const locked = achievements.filter((item) => !item.unlocked && item.status === "locked").slice(0, Math.max(0, 4 - nextTargets.length));
+  const waitForCard = () =>
+    new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 220)));
+    });
+  const shareAchievement = async (item: Achievement) => {
+    try {
+      setShareBusy(true);
+      await checkAndRecordAchievementShareUsage({ session, isPremium, achievement: item });
+      setShareTarget(item);
+      await waitForCard();
+      const { shareCapturedView } = await import("./src/components/insights/shareExport");
+      await shareCapturedView(achievementShareRef, "Share YouTrader achievement", { width: 1080, height: 1920 });
+      trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
+    } catch (error) {
+      alertExportError("Achievement share failed", error);
+      logger.error(error, { feature: "achievements", action: "share", userId: session?.user.id });
+    } finally {
+      setShareTarget(null);
+      setShareBusy(false);
+    }
+  };
+  return (
+    <GlassCard style={styles.achievementCard} intensity={34}>
+      <View style={styles.safeRowBetween}>
+        <View style={styles.flexShrink}>
+          <SafeText style={styles.myStatsTitle}>Trader Status</SafeText>
+          <SafeText style={styles.breakdownHint}>Share-worthy badges from real journal data</SafeText>
+        </View>
+      </View>
+      <View style={styles.traderLevelHero}>
+        <View style={styles.flexShrink}>
+          <SafeText style={styles.traderLevelLabel}>Current Trader Level</SafeText>
+          <SafeText style={styles.traderLevelTitle}>{level.title}</SafeText>
+          <SafeText style={styles.traderLevelPhrase} lines={2}>{level.phrase}</SafeText>
+        </View>
+        <View style={styles.traderLevelScoreBox}>
+          <SafeMetricLabel style={styles.traderLevelScoreLabel}>Score</SafeMetricLabel>
+          <SafeText style={styles.traderLevelScore}>{level.score}</SafeText>
+          <SafeText style={styles.traderLevelTop}>{level.topLabel}</SafeText>
+        </View>
+      </View>
+      {shareBusy ? <ActivityIndicator color={C.green} style={{ marginVertical: 10 }} /> : null}
+      {unlocked.length ? (
+        <>
+          <Text style={styles.achievementSectionLabel}>Unlocked Status Badges</Text>
+          <View style={styles.achievementGrid}>
+            {unlocked.map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={shareAchievement} />)}
+          </View>
+        </>
+      ) : (
+        <Text style={styles.breakdownEmptyText}>Keep logging trades to unlock your first trader-status badge.</Text>
+      )}
+      <Text style={styles.achievementSectionLabel}>Next Targets</Text>
+      <View style={styles.achievementGrid}>
+        {[...nextTargets, ...locked].map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={shareAchievement} />)}
+      </View>
+      {shareTarget ? (
+        <View style={styles.offscreenShareCard} collapsable={false}>
+          <View ref={achievementShareRef} collapsable={false} style={styles.achievementShareCaptureFrame}>
+            <AchievementShareCard item={shareTarget} level={level} stats={shareStats} />
+          </View>
+        </View>
+      ) : null}
+    </GlassCard>
+  );
+}
+
+function heatmapColor(cell: HourHeatmapCell) {
+  if (!cell.tradeCount) return "rgba(255,255,255,0.032)";
+  if (cell.pnl <= -500) return "rgba(255,59,95,0.72)";
+  if (cell.pnl < 0) return "rgba(255,59,95,0.34)";
+  if (cell.winRate < 50) return "rgba(255,159,10,0.34)";
+  if (cell.pnl < 1000) return "rgba(150,255,0,0.24)";
+  return "rgba(91,176,0,0.56)";
+}
+
+function SessionHeatmapCard({ cells }: { cells: HourHeatmapCell[] }) {
+  const tradedCells = cells.filter((cell) => cell.tradeCount > 0);
+  const best = [...tradedCells].sort((a, b) => b.pnl - a.pnl)[0];
+  const losingCells = tradedCells.filter((cell) => cell.pnl < 0);
+  const worst = [...(losingCells.length ? losingCells : tradedCells)].sort((a, b) => a.pnl - b.pnl)[0];
+  const active = [...tradedCells].sort((a, b) => b.tradeCount - a.tradeCount)[0];
+  return (
+    <Card style={styles.heatmapCard}>
+      <View style={styles.rowBetween}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.myStatsTitle}>Session Heatmap</Text>
+          <Text style={styles.breakdownHint}>P&L, win rate, and trade volume by hour</Text>
+        </View>
+        <Text style={styles.heatmapTimeBadge}>6AM-8PM</Text>
+      </View>
+      <View style={styles.heatmapSummaryRow}>
+        <View style={styles.heatmapSummaryBox}>
+          <Text style={styles.edgeMiniLabel}>Best</Text>
+          <Text style={styles.heatmapSummaryValue} numberOfLines={1}>{best ? `${best.label} ${moneyCompact(best.pnl)}` : "Need trades"}</Text>
+        </View>
+        <View style={styles.heatmapSummaryBox}>
+          <Text style={styles.edgeMiniLabel}>Risk</Text>
+          <Text style={[styles.heatmapSummaryValue, { color: worst && worst.pnl < 0 ? C.red : C.sub }]} numberOfLines={1}>
+            {worst ? `${worst.label} ${moneyCompact(worst.pnl)}` : "Need trades"}
+          </Text>
+        </View>
+        <View style={styles.heatmapSummaryBox}>
+          <Text style={styles.edgeMiniLabel}>Volume</Text>
+          <Text style={styles.heatmapSummaryValue} numberOfLines={1}>{active ? `${active.label} ${active.tradeCount}` : "Need trades"}</Text>
+        </View>
+      </View>
+      <View style={styles.heatmapLegend}>
+        <Text style={styles.heatmapLegendItem}>Loss leak</Text>
+        <Text style={styles.heatmapLegendItem}>Weak win rate</Text>
+        <Text style={styles.heatmapLegendItem}>Strong edge</Text>
+      </View>
+      <View style={styles.heatmapGrid}>
+        {cells.map((cell) => (
+          <View key={cell.hour} style={[styles.heatmapCell, { backgroundColor: heatmapColor(cell) }]}>
+            <Text style={styles.heatmapLabel}>{cell.label}</Text>
+            <Text style={styles.heatmapValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
+              {cell.tradeCount ? moneyCompact(cell.pnl) : "—"}
+            </Text>
+            {cell.tradeCount ? (
+              <View style={styles.heatmapMetaRow}>
+                <SafeText style={styles.heatmapMeta}>{cell.tradeCount} trades</SafeText>
+                <SafeText style={styles.heatmapMetaPercent}>{cell.winRate.toFixed(0)}%</SafeText>
+              </View>
+            ) : (
+              <SafeText style={styles.heatmapMeta}>0 trades</SafeText>
+            )}
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
 function Stats({
   trades,
   lang,
+  selectedDate,
   isPremium,
+  propSnapshot,
   packages,
+  storeProducts,
   purchaseBusy,
-  revenueCatConfigured,
   paywallError,
+  showRestorePurchases,
   onPurchase,
   onRestore,
+  session,
 }: {
   trades: Trade[];
   lang: Lang;
+  selectedDate: string;
   isPremium: boolean;
+  propSnapshot: ReturnType<typeof computePropRiskSnapshot>;
   packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
-  revenueCatConfigured: boolean;
   paywallError: string;
-  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  showRestorePurchases: boolean;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
+  session: Session | null;
 }) {
-  const freeDays = 10;
-  const sortedUniqueDays = [...new Set(trades.map((t) => t.date))].sort();
-  const allowedDays = sortedUniqueDays.slice(0, freeDays);
-  const visibleTrades = isPremium ? trades : trades.filter((t) => allowedDays.includes(t.date));
-  const lockedByFreeLimit = !isPremium && sortedUniqueDays.length > freeDays;
+  const proLocked = !isPremium;
+  const visibleTrades = trades;
   const s = useMemo(() => calcStats(visibleTrades), [visibleTrades]);
 
   const daily = buildDailySeries(visibleTrades);
@@ -2578,175 +5741,345 @@ function Stats({
     ? Math.max(15, Math.min(100, 100 - (absDrawdown / Math.max(1, Math.abs(s.pnl) + absDrawdown)) * 100))
     : Math.max(10, 100 - absDrawdown / 10);
 
-  const quality = Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        s.wr * 0.26 +
-          (Math.min(s.pf || 0, 3) / 3) * 20 +
-          (Math.min(s.avgWinLoss || 0, 3) / 3) * 16 +
-          Math.min(recoveryFactor, 4) / 4 * 14 +
-          drawdownControl * 0.12 +
-          consistency * 0.12
-      )
-    )
+  const heatmap = useMemo(() => buildSessionHeatmap(visibleTrades), [visibleTrades]);
+  const monthPnl = periodPnlFromTrades(visibleTrades, selectedDate, "month");
+  const weekPnl = periodPnlFromTrades(visibleTrades, selectedDate, "week");
+  const tradingScore = useMemo(() => tradingScoreForTrades(visibleTrades), [visibleTrades]);
+  const survival = useMemo(
+    () =>
+      calculatePropSurvival({
+        consistency,
+        drawdown: s.maxDd,
+        dailyRemaining: propSnapshot.dailyRemaining,
+        dailyLossLimit: propSnapshot.template.dailyLossLimit,
+        accountRemaining: propSnapshot.accountRemaining,
+        maxLossLimit: propSnapshot.template.maxLossLimit,
+        expectancy: s.exp,
+        avgLoss: Math.abs(s.avgLoss),
+        lossStreak: Math.round(s.avgLossStreak),
+        dayPnl: propSnapshot.dayPnl,
+      }),
+    [consistency, propSnapshot, s.avgLoss, s.avgLossStreak, s.exp, s.maxDd],
   );
-
-  const bestDay = s.weekday[0];
-  const worstDay = [...s.weekday].sort((a, b) => a.pnl - b.pnl)[0];
-  const bestSession = s.session[0];
-
-  const fullLocked = !isPremium;
-  const advancedLocked = !isPremium;
+  const bestMonthPnl = useMemo(() => {
+    const months: Record<string, number> = {};
+    visibleTrades.forEach((trade) => {
+      const key = trade.date.slice(0, 7);
+      months[key] = (months[key] || 0) + trade.pnl;
+    });
+    return Math.max(0, ...Object.values(months));
+  }, [visibleTrades]);
+  const achievements = useMemo(
+    () => {
+      const targetRemainingPct =
+        propSnapshot.template.evaluationTarget > 0
+          ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
+          : 100;
+      return calculateAchievements({
+        trades: visibleTrades,
+        selectedDate,
+        tradingScore: tradingScore.score,
+        winRate: s.wr,
+        profitFactor: s.pf,
+        riskControl: drawdownControl,
+        propSurvivalScore: survival.probability,
+        propTargetRemainingPct: targetRemainingPct,
+        monthlyPnl: monthPnl,
+        bestMonthPnl,
+        dailyLossLimit: propSnapshot.template.dailyLossLimit,
+      });
+    },
+    [bestMonthPnl, drawdownControl, monthPnl, propSnapshot, s.pf, s.wr, selectedDate, survival.probability, tradingScore.score, visibleTrades],
+  );
+  const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
 
   return (
-    <Card style={styles.myStatsDashboard}>
-      <View style={styles.dashboardHeader}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.h2, { fontSize: 42, letterSpacing: -1.4 }]}>My Stats</Text>
-          <Text style={[styles.sub, { fontSize: 15, color: C.sub }]} numberOfLines={1}>
-            Track your performance.
-          </Text>
-          <Text style={[styles.sub, { fontSize: 15, color: C.sub, marginTop: 2 }]} numberOfLines={1}>
-            Find your edge.
-          </Text>
-        </View>
-        <View style={styles.tradingScoreCard}>
-          <Text style={[styles.scoreLabel, { color: C.purple }]}>Trading Score</Text>
-          <Text style={styles.scoreBig}>{quality}</Text>
-        </View>
-      </View>
-
-      {!isPremium && (
-        <View style={styles.freeNotice}>
-          <Text style={styles.freeNoticeTitle}>Free plan: 10 trading days</Text>
-          <Text style={styles.freeNoticeText}>
-            You can keep journaling, but full analytics unlock with Pro.
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.dashboardMetricGrid}>
-        <ScoreChip label="PROFIT FACTOR" value={s.pf ? s.pf.toFixed(2) : "—"} tone="purple" locked={advancedLocked} />
-        <ScoreChip label="WIN RATE" value={`${s.wr.toFixed(0)}%`} tone="green" />
-        <ScoreChip label="EXPECTANCY" value={moneyCompact(s.exp)} tone={s.exp >= 0 ? "green" : "red"} locked={advancedLocked} />
-        <ScoreChip label="AVG WIN/LOSS" value={<SplitMoney win={s.avgWin} loss={s.avgLoss} />} tone="purple" />
-        <ScoreChip label="TRADES" value={`${s.count}`} tone="purple" />
-        <ScoreChip label="WIN / LOSS" value={<SplitCount wins={wins} losses={losses} />} tone="purple" />
-        <ScoreChip label="CONSISTENCY" value={`${consistency.toFixed(0)}%`} tone="purple" locked={advancedLocked} />
-        <ScoreChip label="SHARPE RATIO" value={s.sharpeRatio ? s.sharpeRatio.toFixed(2) : "—"} tone="purple" locked={advancedLocked} />
-        <ScoreChip label="MAX LOSING DAY STREAK" value={`${s.maxLossDayStreak}`} tone="red" locked={advancedLocked} />
-        <ScoreChip label="MAX WINNING DAY STREAK" value={`${s.maxWinDayStreak}`} tone="green" locked={advancedLocked} />
-        <ScoreChip label="BIGGEST WIN" value={moneyCompact(biggestWin)} tone="green" locked={advancedLocked} />
-        <ScoreChip label="BIGGEST LOSS" value={moneyCompact(biggestLoss)} tone="red" locked={advancedLocked} />
-      </View>
-
-      <View style={styles.chartCard}>
-        <View style={styles.rowBetween}>
-          <Text style={[styles.myStatsTitle, { fontSize: 22 }]}>Equity Curve</Text>
-          <Text style={[styles.insightValue, { color: s.pnl >= 0 ? C.green : C.red, fontSize: 20 }]}>{moneyCompact(s.pnl)}</Text>
-        </View>
-        <EquityCurve data={cumulative} />
-      </View>
-
-      <View style={styles.performanceCard}>
-        <Text style={[styles.profileTitle, { fontSize: 24 }]}>Performance Profile</Text>
-        <Text style={styles.sub}>Live profile from your journal: win rate, profit factor, recovery, risk control and consistency.</Text>
-        <RadarProfile
-          winRate={s.wr}
-          profitFactor={s.pf}
-          avgWinLoss={s.avgWinLoss}
-          recoveryFactor={recoveryFactor}
-          drawdownControl={drawdownControl}
-          consistency={consistency}
-          locked={fullLocked}
-        />
-      </View>
-
-      <View style={styles.insightGrid}>
-        <View style={styles.insightCard}>
-          <Text style={[styles.edgeMiniLabel, { color: C.sub }]}>Best day</Text>
-          <Text style={styles.insightBig}>{bestDay ? fullWeekdayName(bestDay.label) : "—"}</Text>
-        </View>
-        <View style={styles.insightCard}>
-          <Text style={[styles.edgeMiniLabel, { color: C.sub }]}>Worst day</Text>
-          <Text style={[styles.insightBig, { color: C.red }]}>{worstDay ? fullWeekdayName(worstDay.label) : "—"}</Text>
-        </View>
-        <View style={styles.insightCard}>
-          <Text style={[styles.edgeMiniLabel, { color: C.sub }]}>Best session</Text>
-          <Text style={styles.insightBig}>{bestSession ? bestSession.label : "—"}</Text>
-        </View>
-      </View>
-
-      {advancedLocked ? (
-        <View style={styles.blurPreview}><Text style={styles.blurPreviewText}>Unlock Full Edge Analysis</Text></View>
-      ) : (
-        <PerformanceBreakdown
-          title="Performance by day of week"
-          data={s.weekday}
-          maxItems={7}
-          labelFormatter={fullWeekdayName}
-        />
-      )}
-
-      {advancedLocked ? (
-        <View style={styles.blurPreview}><Text style={styles.blurPreviewText}>Session edge is available in Pro</Text></View>
-      ) : (
-        <PerformanceBreakdown title="Performance by session" data={s.session} maxItems={3} />
-      )}
-
-      {advancedLocked ? (
-        <View style={styles.blurPreview}><Text style={styles.blurPreviewText}>Symbol performance unlocks with Pro</Text></View>
-      ) : (
-        <PerformanceBreakdown title="Performance by symbol" data={s.bySetup} maxItems={5} />
-      )}
+    <View style={styles.terminalScreenStack}>
+      <StatsMetricDashboard
+        stats={s}
+        trades={visibleTrades}
+        weekPnl={weekPnl}
+        monthPnl={monthPnl}
+        consistency={consistency}
+        isPremium={isPremium}
+      />
+      <TerminalEquitySection trades={visibleTrades} stats={s} weekPnl={weekPnl} monthPnl={monthPnl} />
+      <PremiumPerformanceRadar
+        stats={s}
+        consistency={consistency}
+        recoveryFactor={recoveryFactor}
+        drawdownControl={drawdownControl}
+      />
+      <TerminalSessionIntelligence trades={visibleTrades} />
+      <TerminalTraderStatus
+        achievements={achievements}
+        level={traderLevel}
+        trades={visibleTrades}
+        selectedDate={selectedDate}
+        isPremium={isPremium}
+        session={session}
+      />
 
       {!isPremium && (
         <PaywallPreview
           packages={packages}
+          storeProducts={storeProducts}
           purchaseBusy={purchaseBusy}
-          revenueCatConfigured={revenueCatConfigured}
           paywallError={paywallError}
           onPurchase={onPurchase}
           onRestore={onRestore}
+          showRestorePurchases={showRestorePurchases}
         />
       )}
-    </Card>
+    </View>
   );
 }
 
 function StatsScreen({
   trades,
   lang,
+  propTemplates,
   isPremium,
   packages,
+  storeProducts,
   purchaseBusy,
-  revenueCatConfigured,
   paywallError,
+  showRestorePurchases,
   onPurchase,
   onRestore,
+  session,
 }: {
   trades: Trade[];
   lang: Lang;
+  propTemplates: RiskTemplate[];
   isPremium: boolean;
   packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
-  revenueCatConfigured: boolean;
   paywallError: string;
-  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  showRestorePurchases: boolean;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
+  session: Session | null;
 }) {
   const [period, setPeriod] = useState<"day" | "week" | "month" | "year">("month");
   const [selectedDate] = useState(todayISO());
+  const [exportBusy, setExportBusy] = useState(false);
+  const [shareCardMounted, setShareCardMounted] = useState(false);
+  const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
+  const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
+  const [tradeAnalysisError, setTradeAnalysisError] = useState("");
+  const shareCardRef = useRef<View>(null);
   const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
+  const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
+  const weekPnl = periodPnlFromTrades(trades, selectedDate, "week");
+  const safePropTemplates = propTemplates.length ? propTemplates : FALLBACK_PROP_RULES;
+  const [propTemplateKey, setPropTemplateKey] = useState(FALLBACK_PROP_RULES[0].key);
+  const [propMode, setPropMode] = useState<FirmMode>("evaluation");
+  useEffect(() => {
+    Promise.all([
+      AsyncStorage.getItem("prop-risk-template-v1"),
+      AsyncStorage.getItem("prop-risk-mode-v1"),
+    ]).then(([savedTemplate, savedMode]) => {
+      if (savedTemplate && safePropTemplates.some((template) => template.key === savedTemplate)) {
+        setPropTemplateKey(savedTemplate);
+      }
+      if (savedMode === "evaluation" || savedMode === "funded") setPropMode(savedMode);
+    });
+  }, [safePropTemplates]);
+  const changePropTemplate = useCallback((key: string) => {
+    setPropTemplateKey(key);
+    AsyncStorage.setItem("prop-risk-template-v1", key).catch(() => {});
+  }, []);
+  const changePropMode = useCallback((mode: FirmMode) => {
+    setPropMode(mode);
+    AsyncStorage.setItem("prop-risk-mode-v1", mode).catch(() => {});
+  }, []);
+  const propSnapshot = useMemo(
+    () =>
+      computePropRiskSnapshot({
+        trades,
+        selectedDate,
+        templateKey: propTemplateKey,
+        mode: propMode,
+        templates: safePropTemplates,
+      }),
+    [trades, selectedDate, propTemplateKey, propMode, safePropTemplates],
+  );
+
+  const shareCardData = useMemo(
+    () => ({
+      periodLabel: `${period.toUpperCase()} • ${selectedDate}`,
+      netPnl: periodStats.pnl,
+      winRate: periodStats.wr,
+      profitFactor: periodStats.pf,
+      weekPnl,
+      trades: periodStats.count,
+      dailyBuffer: moneyCompact(propSnapshot.dailyRemaining),
+      propStatus: `${propSnapshot.template.label} • ${propSnapshot.status}`,
+    }),
+    [period, selectedDate, periodStats, weekPnl, propSnapshot],
+  );
+
+  const waitForShareCardLayout = () =>
+    new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+
+  const runExport = async (action: "share" | "save" | "pdf") => {
+    try {
+      setExportBusy(true);
+      const { shareCapturedView, saveCapturedViewToPhotos, shareMonthlyPdfReport } = await import(
+        "./src/components/insights/shareExport"
+      );
+      if (action === "share" || action === "save") {
+        setShareCardMounted(true);
+        await waitForShareCardLayout();
+      }
+      if (action === "share") {
+        await shareCapturedView(shareCardRef);
+        return;
+      }
+      if (action === "save") {
+        await saveCapturedViewToPhotos(shareCardRef);
+        Alert.alert("Saved", "P&L card saved to Photos.");
+        return;
+      }
+      const monthTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "month"));
+      const monthStats = calcStats(monthTrades);
+      const best = monthStats.weekday[0];
+      const worst = [...monthStats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
+      const bestSession = monthStats.session[0];
+      const worstSession = [...monthStats.session].sort((a, b) => a.pnl - b.pnl)[0];
+      const monthScore = tradingScoreForTrades(monthTrades);
+      const monthPatterns = detectTradingPatterns(monthTrades);
+      const monthConsistency = consistencyScoreFromTrades(monthTrades);
+      const monthAbsDrawdown = Math.abs(monthStats.maxDd);
+      const monthRiskControl =
+        monthStats.pnl > 0
+          ? Math.max(15, Math.min(100, 100 - (monthAbsDrawdown / Math.max(1, Math.abs(monthStats.pnl) + monthAbsDrawdown)) * 100))
+          : Math.max(10, 100 - monthAbsDrawdown / 10);
+      const monthSurvival = calculatePropSurvival({
+        consistency: monthConsistency,
+        drawdown: monthStats.maxDd,
+        dailyRemaining: propSnapshot.dailyRemaining,
+        dailyLossLimit: propSnapshot.template.dailyLossLimit,
+        accountRemaining: propSnapshot.accountRemaining,
+        maxLossLimit: propSnapshot.template.maxLossLimit,
+        expectancy: monthStats.exp,
+        avgLoss: Math.abs(monthStats.avgLoss),
+        lossStreak: Math.round(monthStats.avgLossStreak),
+        dayPnl: propSnapshot.dayPnl,
+      });
+      const monthAchievements = calculateAchievements({
+        trades: monthTrades,
+        selectedDate,
+        tradingScore: monthScore.score,
+        winRate: monthStats.wr,
+        profitFactor: monthStats.pf,
+        riskControl: monthRiskControl,
+        propSurvivalScore: monthSurvival.probability,
+        propTargetRemainingPct:
+          propSnapshot.template.evaluationTarget > 0
+            ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
+            : 100,
+        monthlyPnl: monthStats.pnl,
+        bestMonthPnl: Math.max(0, monthStats.pnl),
+        dailyLossLimit: propSnapshot.template.dailyLossLimit,
+      }).filter((item) => item.unlocked).map((item) => item.title);
+      const start = periodStart(safeDateFromISO(selectedDate), "month");
+      const end = addDays(addMonths(start, 1), -1);
+      await shareMonthlyPdfReport({
+        title: "YouTrader Monthly Report",
+        rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
+        netPnl: monthStats.pnl,
+        winRate: monthStats.wr,
+        profitFactor: monthStats.pf,
+        trades: monthStats.count,
+        expectancy: monthStats.exp,
+        bestDay: best ? fullWeekdayName(best.label) : "—",
+        worstDay: worst ? fullWeekdayName(worst.label) : "—",
+        tradingScore: monthScore.score,
+        grade: monthScore.grade,
+        bestSession: bestSession?.label || "—",
+        worstSession: worstSession?.label || "—",
+        patternOpportunity: monthPatterns.opportunity.detail,
+        achievementsEarned: monthAchievements,
+        aiSummary: tradeAnalysis?.summary,
+        nextFocus: monthScore.weaknesses[0] || monthPatterns.opportunity.detail,
+      });
+    } catch (error) {
+      alertExportError("Export failed", error);
+    } finally {
+      setShareCardMounted(false);
+      setExportBusy(false);
+    }
+  };
+
+  const runTradeAnalysis = async () => {
+    if (!isPremium) {
+      Alert.alert("YouTrader Pro", "AI Trade Analysis is included in YouTrader Pro.", [
+        { text: "OK" },
+        { text: "Unlock Pro", onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
+      ]);
+      return;
+    }
+    if (!periodTrades.length) {
+      Alert.alert("AI Trade Analysis", "Add trades first, then run analysis.");
+      return;
+    }
+    try {
+      setTradeAnalysisBusy(true);
+      setTradeAnalysisError("");
+      trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
+      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { propSnapshot });
+      const result = await analyzeTrades(payload);
+      setTradeAnalysis(result);
+      trackEvent("ai_trade_analysis_generated", { period, source: "edge_function", trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_generated", {
+        period,
+        trade_count: periodTrades.length,
+        detective_score: result.detectiveScore,
+      });
+      recordMetric("ai_trade_analysis_completed", 1, { source: "edge_function" });
+    } catch (error) {
+      trackEvent("ai_trade_analysis_failed", { period, trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_failed", { period, trade_count: periodTrades.length });
+      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
+      const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
+      setTradeAnalysis(fallback);
+      setTradeAnalysisError("Cloud AI is unavailable right now. Generated a local journal analysis instead.");
+    } finally {
+      setTradeAnalysisBusy(false);
+    }
+  };
+
+  const aiAnalysisBlock = (
+    <>
+      <Card>
+        <Text style={styles.h2}>AI Trade Analysis</Text>
+        <Text style={styles.sub}>Generate mistakes, strengths, and recommendations from the selected period.</Text>
+        <Pressable
+          disabled={tradeAnalysisBusy || !isPremium}
+          onPress={runTradeAnalysis}
+          style={[styles.secondaryBig, styles.purpleAction, (tradeAnalysisBusy || !isPremium) && styles.disabledBtn]}
+        >
+          <Text style={styles.secondaryText}>{tradeAnalysisBusy ? "Analyzing..." : "Analyze My Trades"}</Text>
+        </Pressable>
+        {tradeAnalysisError ? (
+          <Text style={[styles.sub, { color: C.yellow, marginTop: 10 }]}>{tradeAnalysisError}</Text>
+        ) : null}
+        {tradeAnalysis ? (
+          <Text style={[styles.sub, { color: C.green, marginTop: 10 }]}>Analysis ready below.</Text>
+        ) : null}
+      </Card>
+      {tradeAnalysis ? <TradeAnalysisCard result={tradeAnalysis} /> : null}
+    </>
+  );
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingBottom: 46 }]}>
-      <View style={styles.journalHeader}>
-        <Text style={styles.h1NoMargin}>Stats</Text>
-      </View>
-      <View style={styles.segment}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
+      <View style={[styles.segment, { marginTop: 0 }]}>
         {(["day", "week", "month", "year"] as const).map((item) => (
           <Pressable
             key={item}
@@ -2759,17 +6092,851 @@ function StatsScreen({
           </Pressable>
         ))}
       </View>
+      {isPremium ? (
+        <View style={styles.statsActionsRow}>
+          <Pressable
+            disabled={exportBusy}
+            onPress={() => runExport("share")}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.statsActionText}>Share P&L card</Text>
+          </Pressable>
+          <Pressable
+            disabled={exportBusy}
+            onPress={() => runExport("save")}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.statsActionText}>Save image</Text>
+          </Pressable>
+          <Pressable
+            disabled={exportBusy}
+            onPress={() => runExport("pdf")}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.statsActionText}>Monthly PDF</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {exportBusy ? <ActivityIndicator color={C.green} style={{ marginBottom: 10 }} /> : null}
+      {shareCardMounted ? (
+        <View style={styles.offscreenShareCard} collapsable={false}>
+          <View ref={shareCardRef} collapsable={false}>
+            <SharePnLCard data={shareCardData} />
+          </View>
+        </View>
+      ) : null}
+      <PropTemplateSelector
+        templates={safePropTemplates}
+        value={propTemplateKey}
+        mode={propMode}
+        onChange={changePropTemplate}
+        onModeChange={changePropMode}
+      />
       <Stats
         trades={periodTrades}
         lang={lang}
+        selectedDate={selectedDate}
         isPremium={isPremium}
+        propSnapshot={propSnapshot}
         packages={packages}
+        storeProducts={storeProducts}
         purchaseBusy={purchaseBusy}
-        revenueCatConfigured={revenueCatConfigured}
         paywallError={paywallError}
+        showRestorePurchases={showRestorePurchases}
         onPurchase={onPurchase}
         onRestore={onRestore}
+        session={session}
       />
+    </ScrollView>
+  );
+}
+
+function buildAiCommandCenter({
+  trades,
+  propSnapshot,
+  passProbability,
+  revengeTrading,
+  hiddenLeaks,
+}: {
+  trades: Trade[];
+  propSnapshot: ReturnType<typeof computePropRiskSnapshot>;
+  passProbability: PassProbabilityResult;
+  revengeTrading: RevengeTradingResult;
+  hiddenLeaks: HiddenLeak[];
+}) {
+  if (!trades.length) {
+    return {
+      title: "Build a clean trading sample",
+      status: "SETUP",
+      color: C.purple,
+      softColor: C.purpleSoft,
+      action: "Log each trade with entry time, exit time, symbol, result, and tags. The coach becomes useful once your journal has enough clean data.",
+    };
+  }
+
+  const dailyRiskRatio = propSnapshot.dailyRemaining / Math.max(1, propSnapshot.template.dailyLossLimit);
+  const accountRiskRatio = propSnapshot.accountRemaining / Math.max(1, propSnapshot.template.maxLossLimit);
+
+  if (propSnapshot.status === "STOP" || (revengeTrading.detected && revengeTrading.severity === "HIGH")) {
+    return {
+      title: "Protect the account first",
+      status: "STOP",
+      color: C.red,
+      softColor: C.redSoft,
+      action: `${revengeTrading.detected ? revengeTrading.recommendation : "Stop trading today and switch to review-only mode."} Do not increase size while the account is under pressure.`,
+    };
+  }
+
+  if (passProbability.status === "DANGER" || dailyRiskRatio <= 0.25 || accountRiskRatio <= 0.25) {
+    return {
+      title: "Evaluation is in danger mode",
+      status: "DANGER",
+      color: C.red,
+      softColor: C.redSoft,
+      action: "Cut risk, protect remaining buffer, and take only checklist-perfect setups. The goal is survival before progress.",
+    };
+  }
+
+  if (propSnapshot.status === "CAUTION" || passProbability.status === "AT_RISK" || revengeTrading.detected) {
+    return {
+      title: "Trade smaller and slower",
+      status: "CAUTION",
+      color: C.yellow,
+      softColor: C.yellowSoft,
+      action: revengeTrading.detected
+        ? revengeTrading.recommendation
+        : "Keep size fixed, avoid chasing the pass target, and stop immediately if another loss reduces your daily buffer.",
+    };
+  }
+
+  if (hiddenLeaks[0]) {
+    return {
+      title: "Clear conditions, one leak to watch",
+      status: "CLEAR",
+      color: C.green,
+      softColor: C.greenSoft,
+      action: hiddenLeaks[0].recommendation,
+    };
+  }
+
+  if (passProbability.status === "EXCELLENT") {
+    return {
+      title: "Protect a strong pass path",
+      status: "EXCELLENT",
+      color: C.green,
+      softColor: C.greenSoft,
+      action: "Your pass path is strong. Keep size stable, avoid overtrading after green days, and protect the account buffer.",
+    };
+  }
+
+  return {
+    title: "Conditions are clear",
+    status: "ON TRACK",
+    color: C.green,
+    softColor: C.greenSoft,
+    action: "Trade only your best setups with fixed risk. The current plan is to preserve discipline and let expectancy work.",
+  };
+}
+
+function FloatingPanel({
+  enabled,
+  children,
+  delay = 0,
+}: {
+  enabled: boolean;
+  children: React.ReactNode;
+  delay?: number;
+}) {
+  const drift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!enabled) {
+      drift.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(drift, { toValue: 1, duration: 3200, useNativeDriver: true }),
+        Animated.timing(drift, { toValue: 0, duration: 3200, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [delay, drift, enabled]);
+
+  const translateY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -2] });
+  return <Animated.View style={enabled ? { transform: [{ translateY }] } : undefined}>{children}</Animated.View>;
+}
+
+function DailyCoachCard({
+  trades,
+  selectedDate,
+  width,
+}: {
+  trades: Trade[];
+  selectedDate: string;
+  width?: number;
+}) {
+  const message = useMemo(() => {
+    const selectedTrades = trades.filter((trade) => trade.date === selectedDate);
+    const recent = [...trades].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12);
+    const selectedPnl = selectedTrades.reduce((sum, trade) => sum + trade.pnl, 0);
+    const recentLosses = recent.filter((trade) => trade.pnl < 0).length;
+    const recentWins = recent.filter((trade) => trade.pnl > 0).length;
+    const latestMistake = recent.find((trade) => /revenge|tilt|fomo|overtrade/i.test(`${trade.tags} ${trade.notes}`));
+
+    if (!trades.length) {
+      return {
+        tone: "green" as const,
+        title: "Daily Coach",
+        body: "Log your first trade today. The coach will start reading your edge from real journal data.",
+        action: "Start with one clean setup.",
+      };
+    }
+    if (latestMistake) {
+      return {
+        tone: "red" as const,
+        title: "Risk Coach",
+        body: "Your recent journal mentions tilt, FOMO, overtrading or revenge risk.",
+        action: "Cut size and wait for only A+ setups.",
+      };
+    }
+    if (selectedTrades.length >= 3 && selectedPnl < 0) {
+      return {
+        tone: "red" as const,
+        title: "Protect Today",
+        body: "Today is red after multiple trades. The premium move is to stop digging.",
+        action: "Review screenshots before adding another trade.",
+      };
+    }
+    if (recentWins >= recentLosses && recentWins >= 4) {
+      return {
+        tone: "green" as const,
+        title: "Edge Is Showing",
+        body: "Recent trades are leaning green. Keep execution boring and avoid adding random size.",
+        action: "Repeat your best setup, not every setup.",
+      };
+    }
+    return {
+      tone: "purple" as const,
+      title: "Daily Coach",
+      body: "Your journal has enough signal to keep the next trade simple.",
+      action: "Define entry, invalidation and target before tapping save.",
+    };
+  }, [selectedDate, trades]);
+
+  const glow = message.tone === "red" ? "red" : message.tone === "green" ? "green" : "purple";
+
+  return (
+    <PremiumGlassCard glow={glow} style={[styles.dailyCoachCard, width ? { width } : null]}>
+      <View style={styles.rowBetween}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.dailyCoachTitle, { color: message.tone === "red" ? C.red : message.tone === "green" ? C.green : C.purple }]}>
+            {message.title}
+          </Text>
+          <Text style={styles.dailyCoachBody}>{message.body}</Text>
+        </View>
+      </View>
+      <Text style={styles.dailyCoachAction}>{message.action}</Text>
+    </PremiumGlassCard>
+  );
+}
+
+type AIResultMap = {
+  dailyPlan: AIResponse<AIDailyPlan> | null;
+  riskPredictor: AIResponse<AIRiskPredictor> | null;
+  weeklyCoach: AIResponse<AIWeeklyCoach> | null;
+  journalSummary: AIResponse<AIJournalSummary> | null;
+  dailyChallenge: AIResponse<AIDailyChallenge> | null;
+};
+
+function ProviderBadge({ status }: { status: AIProviderStatus }) {
+  const label =
+    status === "nvidia"
+      ? "NVIDIA"
+      : status === "quota_exceeded"
+        ? "LIMIT"
+        : status === "free_preview"
+          ? "PREVIEW"
+          : "LOCAL";
+  const color = status === "nvidia" ? C.green : status === "quota_exceeded" ? C.yellow : C.purple;
+  return (
+    <View style={[styles.aiProviderBadge, { borderColor: color, backgroundColor: `${color}18` }]}>
+      <Text style={[styles.aiProviderBadgeText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+function AIResultCard({
+  title,
+  subtitle,
+  response,
+  loading,
+  onRefresh,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  response: AIResponse<any> | null;
+  loading: boolean;
+  onRefresh: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <PremiumGlassCard glow={response?.providerStatus === "nvidia" ? "green" : "purple"} style={styles.aiCoachFeatureCard}>
+      <View style={styles.rowBetween}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.aiModuleTitle}>{title}</Text>
+          <Text style={styles.sub}>{subtitle}</Text>
+        </View>
+        {response ? <ProviderBadge status={response.providerStatus} /> : null}
+      </View>
+      <View style={styles.aiCoachResultBody}>{children}</View>
+      {response?.message ? <Text style={styles.aiFallbackMessage}>{response.message}</Text> : null}
+      {response?.generatedAt ? (
+        <Text style={styles.aiGeneratedAt}>Generated {new Date(response.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text>
+      ) : null}
+      <Pressable disabled={loading} onPress={onRefresh} style={[styles.secondaryBig, styles.aiRefreshButton, loading && styles.disabledBtn]}>
+        <Text style={styles.secondaryText}>{loading ? "Generating..." : response ? "Refresh" : "Generate"}</Text>
+      </Pressable>
+    </PremiumGlassCard>
+  );
+}
+
+function BulletList({ items }: { items?: string[] }) {
+  const visible = (items || []).slice(0, 4);
+  return (
+    <View style={styles.aiBulletList}>
+      {visible.map((item, index) => (
+        <Text key={`${item}-${index}`} style={styles.aiBulletText}>
+          • {item}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+function TerminalAICommandCenter({
+  confidence,
+  focus,
+  chips,
+  status,
+  loading,
+  onRefresh,
+  lastUpdated,
+}: {
+  confidence: number;
+  focus: string;
+  chips: string[];
+  status: AIProviderStatus | "idle";
+  loading: boolean;
+  onRefresh: () => void;
+  lastUpdated?: string;
+}) {
+  return (
+    <TerminalGlassCard style={styles.aiTerminalHero}>
+      <View style={styles.terminalHeaderRow}>
+        <View>
+          <Text style={styles.terminalHeroTitle}>AI Confidence</Text>
+        </View>
+        <CloudAIStatus status={status} />
+      </View>
+      <View style={styles.aiCommandHeroRow}>
+        <View style={styles.aiConfidenceRing}>
+          <AppleRing label="" value={confidence} display={`${confidence}`} size={132} color={confidence >= 70 ? C.green : confidence >= 45 ? C.yellow : C.red} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.terminalSmallLabel}>Today's Focus</Text>
+          <Text style={styles.aiFocusText}>{focus}</Text>
+          <View style={styles.terminalChipRow}>
+            {chips.slice(0, 3).map((chip) => (
+              <Text key={chip} style={styles.aiActionChip}>{chip}</Text>
+            ))}
+          </View>
+        </View>
+      </View>
+      <Pressable disabled={loading} onPress={onRefresh} style={[styles.aiUnifiedRefresh, loading && styles.disabledBtn]}>
+        <Text style={styles.aiUnifiedRefreshText}>{loading ? "Refreshing..." : "Refresh Analysis"}</Text>
+      </Pressable>
+      {lastUpdated ? <Text style={styles.aiRefreshTimestamp}>Updated {new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text> : null}
+    </TerminalGlassCard>
+  );
+}
+
+function TerminalPatternDetective({
+  patterns,
+  hiddenLeaks,
+  stats,
+}: {
+  patterns: PatternDetectionResult;
+  hiddenLeaks: HiddenLeak[];
+  stats: ReturnType<typeof calcStats>;
+}) {
+  const rows = [
+    { label: "Morning", data: stats.session.find((item) => item.label === "Morning") },
+    { label: "Lunch", data: stats.session.find((item) => item.label === "Midday") },
+    { label: "Power Hour", data: stats.session.find((item) => item.label === "Afternoon") },
+    { label: "News", data: stats.weekday[0] },
+  ];
+  const edge = patterns.strengths[0];
+  const leak = hiddenLeaks[0] || patterns.risks[0];
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>Signal Timeline</Text>
+      <View style={styles.patternTimeline}>
+        {rows.map((row) => {
+          const pnl = row.data?.pnl || 0;
+          const winRate = row.data?.wr || 0;
+          const confidence = Math.min(96, Math.max(42, Math.round((row.data?.count || 0) * 12 + Math.abs(winRate - 50))));
+          return (
+            <View key={row.label} style={styles.patternTimelineRow}>
+              <Text style={styles.patternTimelineLabel}>{row.label}</Text>
+              <View style={styles.patternTimelineTrack}>
+                <View style={[styles.patternTimelineFill, { width: `${Math.min(100, Math.max(8, Math.abs(pnl) / Math.max(1, Math.abs(stats.pnl)) * 100))}%`, backgroundColor: pnl >= 0 ? C.green : C.red }]} />
+              </View>
+              <Text style={[styles.patternTimelineValue, { color: pnl >= 0 ? C.green : C.red }]}>{confidence}%</Text>
+            </View>
+          );
+        })}
+      </View>
+      <View style={styles.aiTwoColumn}>
+        <View style={styles.aiInsightTile}>
+          <Text style={styles.terminalSmallLabel}>Hidden Edge</Text>
+          <Text style={styles.terminalInsightTitle}>{edge?.title || "Best clean context"}</Text>
+          <Text style={styles.terminalSub}>{edge?.detail || "Keep collecting trade samples."}</Text>
+        </View>
+        <View style={styles.aiInsightTile}>
+          <Text style={styles.terminalSmallLabel}>Hidden Leak</Text>
+          <Text style={styles.terminalInsightTitle}>{("title" in (leak || {}) ? (leak as any).title : (leak as any)?.finding) || "Weak context"}</Text>
+          <Text style={styles.terminalSub}>{("evidence" in (leak || {}) ? (leak as any).evidence : (leak as any)?.detail) || "No major leak detected yet."}</Text>
+        </View>
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+function TerminalTradingCoach({
+  aiResults,
+  stats,
+}: {
+  aiResults: AIResultMap;
+  stats: ReturnType<typeof calcStats>;
+}) {
+  const daily = aiResults.dailyPlan?.data;
+  const weekly = aiResults.weeklyCoach?.data;
+  const challenge = aiResults.dailyChallenge?.data;
+  const focusScore = Math.max(35, Math.min(95, Math.round(stats.wr * 0.45 + Math.min(stats.pf, 3) * 16 + (stats.exp > 0 ? 12 : 0))));
+  return (
+    <TerminalGlassCard>
+      <View style={styles.aiCoachUnifiedRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.terminalSectionTitle}>Today's Coaching</Text>
+          <Text style={styles.aiCoachVoice}>{weekly?.coachMessage || daily?.coachMessage || "Protect clean execution. Trade less, but with better rules."}</Text>
+          <Text style={styles.terminalSmallLabel}>Next improvement</Text>
+          <Text style={styles.aiCoachNext}>{challenge?.challengeTitle || "Reduce size after emotional trades."}</Text>
+        </View>
+        <AppleRing label="Focus" value={focusScore} display={`${focusScore}`} size={112} color={C.green} />
+      </View>
+      <Text style={styles.terminalSmallLabel}>Action Plan</Text>
+      <BulletList items={daily?.tradeRules || weekly?.nextWeekFocus || ["Trade only best session", "Stop after rule breaks", "Journal every trade with reason"]} />
+    </TerminalGlassCard>
+  );
+}
+
+function TerminalPropFirmMission({
+  propSnapshot,
+  passProbability,
+}: {
+  propSnapshot: ReturnType<typeof computePropRiskSnapshot>;
+  passProbability: PassProbabilityResult;
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const maxContracts = propSnapshot.mode === "funded" ? propSnapshot.template.liveContracts : propSnapshot.template.evaluationContracts;
+  const bufferRatio = propSnapshot.accountRemaining / Math.max(1, propSnapshot.template.maxLossLimit);
+  const contractPlan =
+    bufferRatio < 0.5 || propSnapshot.status !== "CLEAR"
+      ? `Use micro contracts or 1-${Math.max(1, Math.ceil(maxContracts / 3))} contracts until buffer recovers.`
+      : `Firm cap is ${maxContracts}. Keep size stable; do not jump contracts after green trades.`;
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View>
+          <Text style={styles.terminalSectionTitle}>{propSnapshot.template.label}</Text>
+        </View>
+        <AppleRing label="PASS" value={passProbability.probability} display={`${passProbability.probability}%`} size={118} color={passProbability.probability >= 70 ? C.green : C.yellow} />
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Daily Buffer", value: moneyCompact(propSnapshot.dailyRemaining), tone: propSnapshot.dailyRemaining > 0 ? "green" : "red" },
+          { label: "Account Buffer", value: moneyCompact(propSnapshot.accountRemaining), tone: propSnapshot.accountRemaining > 0 ? "green" : "red" },
+          { label: "To Pass", value: moneyCompact(propSnapshot.remainingToPass), tone: propSnapshot.remainingToPass > 0 ? "purple" : "green" },
+          { label: "Daily Limit", value: moneyCompact(propSnapshot.template.dailyLossLimit), tone: "grey" },
+          { label: "Max Loss", value: moneyCompact(propSnapshot.template.maxLossLimit), tone: "grey" },
+          { label: "Contracts", value: `${maxContracts} max`, tone: "purple" },
+        ]}
+      />
+      <Pressable onPress={() => setDetailsOpen(true)} style={styles.missionCta}>
+        <Text style={styles.missionCtaText}>Protect Pass Path</Text>
+      </Pressable>
+      <BottomSheetPanel visible={detailsOpen} title="Protect Pass Path" onClose={() => setDetailsOpen(false)}>
+        <MetricPillRow
+          items={[
+            { label: "Pass", value: `${passProbability.probability}%`, tone: passProbability.probability >= 70 ? "green" : "purple" },
+            { label: "Daily Buffer", value: moneyCompact(propSnapshot.dailyRemaining), tone: propSnapshot.dailyRemaining > 0 ? "green" : "red" },
+            { label: "Account Buffer", value: moneyCompact(propSnapshot.accountRemaining), tone: propSnapshot.accountRemaining > 0 ? "green" : "red" },
+          ]}
+        />
+        <Text style={styles.bottomSheetText}>1. Keep size stable while pass probability is strong.</Text>
+        <Text style={styles.bottomSheetText}>2. Stop trading if daily buffer drops below 25%.</Text>
+        <Text style={styles.bottomSheetText}>3. Protect the account buffer before chasing the remaining target.</Text>
+        <Text style={styles.bottomSheetText}>Contract plan: {contractPlan}</Text>
+      </BottomSheetPanel>
+    </TerminalGlassCard>
+  );
+}
+
+function TerminalMonthlyIntelligence({
+  tradeAnalysis,
+  patterns,
+  stats,
+}: {
+  tradeAnalysis: TradeAnalysisResult | null;
+  patterns: PatternDetectionResult;
+  stats: ReturnType<typeof calcStats>;
+}) {
+  const bestDay = stats.weekday[0];
+  const worstDay = [...stats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
+  const bestSession = stats.session[0];
+  const worstSession = [...stats.session].sort((a, b) => a.pnl - b.pnl)[0];
+  const rows = [
+    { label: "Strength", value: tradeAnalysis?.strengths[0]?.title || patterns.strengths[0]?.title || "Best setup forming" },
+    { label: "Mistake", value: tradeAnalysis?.mistakes[0]?.title || patterns.risks[0]?.title || "No major mistake detected" },
+    { label: "Best Setup", value: stats.bySetup[0]?.label || "Add tags" },
+    { label: "Worst Setup", value: [...stats.bySetup].sort((a, b) => a.pnl - b.pnl)[0]?.label || "—" },
+    { label: "Best Day", value: bestDay ? fullWeekdayName(bestDay.label) : "—" },
+    { label: "Worst Day", value: worstDay ? fullWeekdayName(worstDay.label) : "—" },
+    { label: "Best Session", value: bestSession?.label || "—" },
+    { label: "Weak Session", value: worstSession?.label || "—" },
+  ];
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>Expandable Report</Text>
+      <View style={styles.monthlyTimeline}>
+        {rows.map((row, index) => (
+          <View key={`${row.label}-${index}`} style={styles.monthlyTimelineRow}>
+            <View style={styles.monthlyTimelineDot} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.terminalSmallLabel}>{row.label}</Text>
+              <Text style={styles.monthlyTimelineValue}>{row.value}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+function AiAnalysisScreen({
+  trades,
+  propTemplates,
+  isPremium,
+  packages,
+  storeProducts,
+  purchaseBusy,
+  paywallError,
+  showRestorePurchases,
+  onPurchase,
+  onRestore,
+}: {
+  trades: Trade[];
+  propTemplates: RiskTemplate[];
+  isPremium: boolean;
+  packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
+  purchaseBusy: boolean;
+  paywallError: string;
+  showRestorePurchases: boolean;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
+  onRestore: () => void;
+}) {
+  const period: "month" = "month";
+  const [selectedDate] = useState(todayISO());
+  const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
+  const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
+  const [tradeAnalysisError, setTradeAnalysisError] = useState("");
+  const [aiResults, setAiResults] = useState<AIResultMap>({
+    dailyPlan: null,
+    riskPredictor: null,
+    weeklyCoach: null,
+    journalSummary: null,
+    dailyChallenge: null,
+  });
+  const [aiBusy, setAiBusy] = useState<Record<keyof AIResultMap, boolean>>({
+    dailyPlan: false,
+    riskPredictor: false,
+    weeklyCoach: false,
+    journalSummary: false,
+    dailyChallenge: false,
+  });
+  const safeAnalysisTemplates = propTemplates.length ? propTemplates : FALLBACK_PROP_RULES;
+  const [analysisTemplateKey, setAnalysisTemplateKey] = useState(FALLBACK_PROP_RULES[0].key);
+
+  useEffect(() => {
+    AsyncStorage.getItem("prop-risk-template-v1").then((savedTemplate) => {
+      if (savedTemplate && safeAnalysisTemplates.some((template) => template.key === savedTemplate)) {
+        setAnalysisTemplateKey(savedTemplate);
+      }
+    });
+  }, [safeAnalysisTemplates]);
+  const changeAnalysisTemplate = useCallback((key: string) => {
+    setAnalysisTemplateKey(key);
+    AsyncStorage.setItem("prop-risk-template-v1", key).catch(() => {});
+  }, []);
+
+  const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
+  const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
+  const patterns = useMemo(() => detectTradingPatterns(periodTrades), [periodTrades]);
+  const activeTemplate =
+    safeAnalysisTemplates.find((template) => template.key === analysisTemplateKey) ||
+    safeAnalysisTemplates[0] ||
+    FALLBACK_PROP_RULES[0];
+  const propSnapshot = useMemo(
+    () =>
+      computePropRiskSnapshot({
+        trades,
+        selectedDate,
+        templateKey: activeTemplate.key,
+        mode: "evaluation",
+        templates: safeAnalysisTemplates,
+      }),
+    [trades, selectedDate, activeTemplate.key, safeAnalysisTemplates],
+  );
+  const passProbability = useMemo(
+    () => calculatePassProbability({ trades, selectedDate, template: activeTemplate }),
+    [trades, selectedDate, activeTemplate],
+  );
+  const revengeTrading = useMemo(
+    () => detectRevengeTrading({ trades, selectedDate, dangerMode: passProbability.status === "DANGER" }),
+    [trades, selectedDate, passProbability.status],
+  );
+  const hiddenLeaks = useMemo(() => detectHiddenLeaks(trades), [trades]);
+  const aiCommand = useMemo(
+    () => buildAiCommandCenter({ trades, propSnapshot, passProbability, revengeTrading, hiddenLeaks }),
+    [trades, propSnapshot, passProbability, revengeTrading, hiddenLeaks],
+  );
+  const aiCoachPayload = useMemo(
+    () => ({
+      period,
+      selectedDate,
+      stats: periodStats,
+      analyticsContext: buildAIAnalyticsContext(periodTrades),
+      tradeAnalysisPayload: buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot }),
+      propSnapshot,
+      passProbability,
+      revengeTrading,
+      hiddenLeaks,
+      recentTrades: trades
+        .slice(0, 30)
+        .map((trade) => ({
+          date: trade.date,
+          symbol: trade.symbol,
+          direction: trade.direction,
+          pnl: trade.pnl,
+          mood: trade.mood,
+          tags: trade.tags,
+          notes: trade.notes ? trade.notes.slice(0, 220) : "",
+        })),
+    }),
+    [hiddenLeaks, passProbability, periodStats, periodTrades, propSnapshot, revengeTrading, selectedDate, trades],
+  );
+
+  const runCoachFeature = async (key: keyof AIResultMap) => {
+    if (!isPremium) {
+      warningHaptic();
+      Alert.alert("YouTrader Pro", "NVIDIA AI coaching is included in YouTrader Pro.");
+      return;
+    }
+    lightHaptic();
+    setAiBusy((prev) => ({ ...prev, [key]: true }));
+    try {
+      const response =
+        key === "dailyPlan"
+          ? await fetchAIDailyPlan(aiCoachPayload)
+          : key === "riskPredictor"
+            ? await fetchAIRiskPredictor(aiCoachPayload)
+            : key === "weeklyCoach"
+              ? await fetchAIWeeklyCoach(aiCoachPayload)
+              : key === "journalSummary"
+                ? await fetchAIJournalSummary(aiCoachPayload)
+                : await fetchAIDailyChallenge(aiCoachPayload);
+      setAiResults((prev) => ({ ...prev, [key]: response }));
+      trackEvent("ai_coach_feature_generated", {
+        feature: key,
+        provider_status: response.providerStatus,
+        used_fallback: response.usedFallback,
+      });
+    } finally {
+      setAiBusy((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const aiUnifiedBusy = Object.values(aiBusy).some(Boolean) || tradeAnalysisBusy;
+  const aiProviderStatus: AIProviderStatus | "idle" =
+    aiResults.dailyPlan?.providerStatus ||
+    aiResults.riskPredictor?.providerStatus ||
+    aiResults.weeklyCoach?.providerStatus ||
+    aiResults.journalSummary?.providerStatus ||
+    aiResults.dailyChallenge?.providerStatus ||
+    (tradeAnalysis ? "local_fallback" : "idle");
+  const aiLastUpdated = [
+    aiResults.dailyPlan?.generatedAt,
+    aiResults.riskPredictor?.generatedAt,
+    aiResults.weeklyCoach?.generatedAt,
+    aiResults.journalSummary?.generatedAt,
+    aiResults.dailyChallenge?.generatedAt,
+  ].filter(Boolean).sort().pop();
+
+  const refreshUnifiedAnalysis = async () => {
+    if (!isPremium) {
+      warningHaptic();
+      Alert.alert("YouTrader Pro", "AI Analytics is included in YouTrader Pro.");
+      return;
+    }
+    setAiBusy({
+      dailyPlan: true,
+      riskPredictor: true,
+      weeklyCoach: true,
+      journalSummary: true,
+      dailyChallenge: true,
+    });
+    setTradeAnalysisBusy(true);
+    setTradeAnalysisError("");
+    try {
+      const [dailyPlan, riskPredictor, weeklyCoach, journalSummary, dailyChallenge] = await Promise.all([
+        fetchAIDailyPlan(aiCoachPayload),
+        fetchAIRiskPredictor(aiCoachPayload),
+        fetchAIWeeklyCoach(aiCoachPayload),
+        fetchAIJournalSummary(aiCoachPayload),
+        fetchAIDailyChallenge(aiCoachPayload),
+      ]);
+      setAiResults({ dailyPlan, riskPredictor, weeklyCoach, journalSummary, dailyChallenge });
+      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot });
+      setTradeAnalysis(await analyzeTrades(payload));
+      trackEvent("ai_terminal_analysis_refreshed", {
+        provider_status: dailyPlan.providerStatus,
+        trade_count: periodTrades.length,
+      });
+    } catch (error) {
+      logger.error(error, { feature: "ai_terminal", action: "refresh_failed" });
+      setTradeAnalysis(buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats)));
+      setTradeAnalysisError("Cloud AI is unavailable. Showing local YouTrader intelligence.");
+    } finally {
+      setAiBusy({
+        dailyPlan: false,
+        riskPredictor: false,
+        weeklyCoach: false,
+        journalSummary: false,
+        dailyChallenge: false,
+      });
+      setTradeAnalysisBusy(false);
+    }
+  };
+
+  const runTradeAnalysis = async () => {
+    if (!isPremium) {
+      Alert.alert("YouTrader Pro", "AI Trade Analysis is included in YouTrader Pro.", [
+        { text: "OK" },
+        { text: "Unlock Pro", onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
+      ]);
+      return;
+    }
+    if (!periodTrades.length) {
+      Alert.alert("AI Trade Analysis", "Add trades first, then run analysis.");
+      return;
+    }
+    try {
+      setTradeAnalysisBusy(true);
+      setTradeAnalysisError("");
+      trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
+      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot });
+      const result = await analyzeTrades(payload);
+      setTradeAnalysis(result);
+      trackEvent("ai_trade_analysis_generated", { period, source: "edge_function", trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_generated", {
+        period,
+        trade_count: periodTrades.length,
+        detective_score: result.detectiveScore,
+      });
+      recordMetric("ai_trade_analysis_completed", 1, { source: "edge_function" });
+    } catch (error) {
+      trackEvent("ai_trade_analysis_failed", { period, trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_failed", { period, trade_count: periodTrades.length });
+      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
+      const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
+      setTradeAnalysis(fallback);
+      setTradeAnalysisError("Cloud AI is unavailable right now. Generated a local journal analysis instead.");
+    } finally {
+      setTradeAnalysisBusy(false);
+    }
+  };
+
+  return (
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
+      <PropTemplateSelector
+        templates={safeAnalysisTemplates}
+        value={activeTemplate.key}
+        onChange={changeAnalysisTemplate}
+      />
+      <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
+        <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
+          <View style={styles.terminalScreenStack}>
+            <TerminalAICommandCenter
+              confidence={Math.max(30, Math.min(98, Math.round((passProbability.probability + tradingScoreForTrades(periodTrades).score) / 2)))}
+              focus={aiResults.dailyPlan?.data.dailyFocus || aiCommand.action}
+              chips={aiResults.dailyPlan?.data.tradeRules || ["Protect pass path", "Trade best session", "Reduce size after red"]}
+              status={aiProviderStatus}
+              loading={aiUnifiedBusy}
+              onRefresh={refreshUnifiedAnalysis}
+              lastUpdated={aiLastUpdated}
+            />
+            <TerminalPatternDetective patterns={patterns} hiddenLeaks={hiddenLeaks} stats={periodStats} />
+            <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
+            <TerminalPropFirmMission propSnapshot={propSnapshot} passProbability={passProbability} />
+            <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
+            {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
+          </View>
+        </View>
+        {!isPremium ? (
+          <View style={styles.analysisLockPinned}>
+            <PremiumLockOverlay
+              title="Unlock AI Analytics"
+              subtitle="Reveal AI Coach, pass probability, hidden leaks, revenge trading alerts, prop firm insights and risk coaching."
+              cta="Upgrade to Pro"
+              secondary="See all features"
+              onUpgrade={() => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+              onSecondary={() =>
+                Alert.alert(
+                  "YouTrader Pro features",
+                  "AI Coach, Pass Probability, Hidden Leaks, Revenge Trading Alerts, Prop Firm Insights, Risk Coach, Advanced Stats, Performance Profile, premium exports and full calendar access.",
+                )
+              }
+            />
+          </View>
+        ) : null}
+      </View>
+
+      {!isPremium && (
+        <PaywallPreview
+          packages={packages}
+          storeProducts={storeProducts}
+          purchaseBusy={purchaseBusy}
+          paywallError={paywallError}
+          onPurchase={onPurchase}
+          onRestore={onRestore}
+          showRestorePurchases={showRestorePurchases}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -2829,31 +6996,41 @@ function InstrumentButton({
 function JournalScreen({
   lang,
   trades,
+  propTemplates,
   setTrades,
   isPremium,
+  onOpenPropRisk,
   onUpgrade,
   onTradeDeleted,
 }: {
   lang: Lang;
   trades: Trade[];
+  propTemplates: RiskTemplate[];
   setTrades: React.Dispatch<React.SetStateAction<Trade[]>>;
   isPremium: boolean;
+  onOpenPropRisk: (date: string) => void;
   onUpgrade: () => void;
   onTradeDeleted: (tradeId: string) => void;
 }) {
   const t = (k: string) => tText(lang, k);
+  const { width } = useWindowDimensions();
+  const isTabletLayout = width >= 768;
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
   const [audioReady, setAudioReady] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [viewMonth, setViewMonth] = useState(new Date());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [modal, setModal] = useState(false);
   const [photoView, setPhotoView] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [pnlSide, setPnlSide] = useState<"plus" | "minus">("plus");
+  const lastSaveAtRef = useRef(0);
   const emptyForm = {
     symbol: "MES",
     direction: "LONG" as Direction,
+    entryTime: "",
+    exitTime: "",
     entry: "",
     exit: "",
     contracts: "1",
@@ -2862,11 +7039,17 @@ function JournalScreen({
     pnl: "",
     mood: "Focused",
     notes: "",
+    tags: "",
     photoUri: "",
     voiceUri: "",
     voiceName: "",
   };
   const [form, setForm] = useState(emptyForm);
+  const calendarGap = isTabletLayout ? 10 : 5;
+  const calendarWidth = Math.min(width - 8, isTabletLayout ? 760 : 520);
+  const dayCellWidth = Math.floor((calendarWidth - calendarGap * 6) / 7);
+  const dayCellHeight = Math.max(92, Math.min(isTabletLayout ? 132 : 124, Math.round(dayCellWidth * 1.82)));
+  const years = Array.from({ length: 9 }, (_, index) => viewMonth.getFullYear() - 4 + index);
   useEffect(() => {
     (async () => {
       try {
@@ -2879,20 +7062,15 @@ function JournalScreen({
     })();
   }, []);
   const filtered = trades.filter((x) => x.date === selectedDate);
-  const uniqueTradingDays = useMemo(() => [...new Set(trades.map((trade) => trade.date))], [trades]);
-  const canAddTradeOnDate = useCallback((date: string) => {
-    return isPremium || uniqueTradingDays.includes(date) || uniqueTradingDays.length < FREE_JOURNAL_DAYS;
-  }, [isPremium, uniqueTradingDays]);
-  const showJournalLimit = useCallback(() => {
-    Alert.alert(
-      "YouTrader Pro",
-      `Free plan includes ${FREE_JOURNAL_DAYS} trading days. Upgrade to unlock unlimited journal, cloud sync and full analytics.`,
-      [
+  const showProGate = useCallback(
+    (feature: string) => {
+      Alert.alert("YouTrader Pro", `${feature} is included in YouTrader Pro.`, [
         { text: t("close"), style: "cancel" },
-        { text: "Upgrade", onPress: onUpgrade },
-      ],
-    );
-  }, [onUpgrade, t]);
+        { text: "Unlock Pro", onPress: onUpgrade },
+      ]);
+    },
+    [onUpgrade, t],
+  );
   const monthDays = useMemo(() => {
     const y = viewMonth.getFullYear();
     const m = viewMonth.getMonth();
@@ -2911,14 +7089,10 @@ function JournalScreen({
     return rows;
   }, [monthDays]);
   const openNew = (date = selectedDate) => {
-    if (!canAddTradeOnDate(date)) {
-      showJournalLimit();
-      return;
-    }
     setSelectedDate(date);
     setEditId(null);
     setPnlSide("plus");
-    setForm(emptyForm);
+    setForm({ ...emptyForm, entryTime: formatClockFromDate() });
     setModal(true);
   };
   const openEdit = (tr: Trade) => {
@@ -2927,6 +7101,8 @@ function JournalScreen({
     setForm({
       symbol: tr.symbol,
       direction: tr.direction,
+      entryTime: tr.entryTime || "",
+      exitTime: tr.exitTime || "",
       entry: tr.entry != null ? String(tr.entry) : "",
       exit: tr.exit != null ? String(tr.exit) : "",
       contracts: String(tr.contracts || 1),
@@ -2935,6 +7111,7 @@ function JournalScreen({
       pnl: String(Math.abs(tr.pnl)),
       mood: tr.mood,
       notes: tr.notes || "",
+      tags: tagsToInput(tr.tags),
       photoUri: tr.photoUri || "",
       voiceUri: tr.voiceUri || "",
       voiceName: tr.voiceName || "",
@@ -2943,10 +7120,10 @@ function JournalScreen({
   };
   const calcPnl = () => {
     if (form.pnl.trim()) {
-      const amount = Math.abs(toNum(form.pnl));
+      const amount = Math.min(MAX_ABS_PNL, Math.abs(toNum(form.pnl)));
       return Number((pnlSide === "minus" ? -amount : amount).toFixed(2));
     }
-    const i = INSTRUMENTS[form.symbol];
+    const i = INSTRUMENTS[normalizeSymbolInput(form.symbol)];
     if (!i || !form.entry || !form.exit) return 0;
     const diff =
       form.direction === "LONG"
@@ -2959,31 +7136,39 @@ function JournalScreen({
     );
   };
   const save = () => {
-    if (!editId && !canAddTradeOnDate(selectedDate)) {
-      showJournalLimit();
+    const now = Date.now();
+    if (now - lastSaveAtRef.current < TRADE_SAVE_DEBOUNCE_MS) return;
+    lastSaveAtRef.current = now;
+    const validated = validateTradeForm(form, pnlSide);
+    if ("error" in validated) {
+      Alert.alert("Could not save trade", validated.error || "Check the trade details and try again.");
       return;
     }
-    const pnl = calcPnl();
-    if (!form.pnl.trim() && (!form.entry || !form.exit))
-      return Alert.alert(t("addPnl"));
-    const now = Date.now();
+    const safe = validated.value;
+    if (!safe) {
+      Alert.alert("Could not save trade", "Check the trade details and try again.");
+      return;
+    }
     const previousTrade = editId ? trades.find((x) => x.id === editId) : null;
     const item: Trade = {
       id: editId || uid(),
       date: selectedDate,
-      symbol: form.symbol.trim().toUpperCase() || "MES",
+      symbol: safe.symbol,
       direction: form.direction,
-      entry: form.entry ? toNum(form.entry) : null,
-      exit: form.exit ? toNum(form.exit) : null,
-      contracts: Math.max(1, Number(form.contracts || 1)),
-      stopLoss: form.stopLoss ? toNum(form.stopLoss) : null,
-      takeProfit: form.takeProfit ? toNum(form.takeProfit) : null,
-      pnl,
-      mood: form.mood,
-      notes: form.notes,
-      photoUri: form.photoUri || null,
-      voiceUri: form.voiceUri || null,
-      voiceName: form.voiceName || null,
+      entryTime: safe.entryTime || null,
+      exitTime: safe.exitTime || null,
+      entry: safe.entry,
+      exit: safe.exit,
+      contracts: safe.contracts,
+      stopLoss: safe.stopLoss,
+      takeProfit: safe.takeProfit,
+      pnl: safe.pnl,
+      mood: safe.mood,
+      notes: safe.notes,
+      tags: safe.tags,
+      photoUri: isPremium ? safe.photoUri || null : null,
+      voiceUri: isPremium ? safe.voiceUri || null : null,
+      voiceName: isPremium && safe.voiceUri ? safeText(form.voiceName || "Voice note", 128) : null,
       createdAt: editId ? (previousTrade?.createdAt || now) : now,
       updatedAt: now,
     };
@@ -3009,6 +7194,10 @@ function JournalScreen({
   };
   const pnlPreview = calcPnl();
   const pickImage = async (camera: boolean) => {
+    if (!isPremium) {
+      showProGate("Trade screenshots and photo uploads");
+      return;
+    }
     try {
       if (camera) {
         const p = await ImagePicker.requestCameraPermissionsAsync();
@@ -3017,7 +7206,13 @@ function JournalScreen({
           quality: 0.75,
           allowsEditing: false,
         });
-        if (!r.canceled) setForm({ ...form, photoUri: r.assets[0].uri });
+        if (!r.canceled) {
+          const asset = r.assets[0];
+          const fileSize = typeof (asset as any).fileSize === "number" ? (asset as any).fileSize : 0;
+          const ok = fileSize > 0 ? fileSize <= MAX_SCREENSHOT_BYTES : await fileSizeWithinLimit(asset.uri, MAX_SCREENSHOT_BYTES);
+          if (!ok) return Alert.alert("Photo too large", "Choose a screenshot under 6 MB.");
+          setForm({ ...form, photoUri: asset.uri });
+        }
       } else {
         const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!p.granted) return Alert.alert("Photo permission needed");
@@ -3025,18 +7220,31 @@ function JournalScreen({
           quality: 0.8,
           allowsEditing: false,
         });
-        if (!r.canceled) setForm({ ...form, photoUri: r.assets[0].uri });
+        if (!r.canceled) {
+          const asset = r.assets[0];
+          const fileSize = typeof (asset as any).fileSize === "number" ? (asset as any).fileSize : 0;
+          const ok = fileSize > 0 ? fileSize <= MAX_SCREENSHOT_BYTES : await fileSizeWithinLimit(asset.uri, MAX_SCREENSHOT_BYTES);
+          if (!ok) return Alert.alert("Photo too large", "Choose a screenshot under 6 MB.");
+          setForm({ ...form, photoUri: asset.uri });
+        }
       }
     } catch {
       Alert.alert("Photo upload failed");
     }
   };
   const pickAudio = async () => {
+    if (!isPremium) {
+      showProGate("Voice notes");
+      return;
+    }
     try {
       if (recorderState.isRecording) {
         await audioRecorder.stop();
         const uri = audioRecorder.uri;
         if (!uri) return Alert.alert("Recording failed");
+        if (!(await fileSizeWithinLimit(uri, MAX_VOICE_NOTE_BYTES))) {
+          return Alert.alert("Voice note too large", "Record a shorter voice note under 12 MB.");
+        }
         const safeName = `${Date.now()}-voice-note.m4a`;
         // expo-audio already saves the file in app storage. Keep its native URI directly.
         setForm({ ...form, voiceUri: uri, voiceName: safeName });
@@ -3055,35 +7263,15 @@ function JournalScreen({
     }
   };
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { flexGrow: 1, justifyContent: "flex-end", paddingBottom: 46 }]}>
-      <View style={styles.journalHeader}>
-        <Text style={styles.h1NoMargin}>{t("myJournal")}</Text>
-      </View>
-      <Pressable
-        onPress={() => openNew(selectedDate)}
-        style={[styles.primaryBig, { marginTop: 0, marginBottom: 14 }]}
-      >
-        <Text style={styles.primaryText}>{t("addTrade")}</Text>
-      </Pressable>
-      {!isPremium && (
-        <View style={[styles.freeNotice, { marginBottom: 12 }]}>
-          <Text style={styles.freeNoticeTitle}>
-            Free journal: {Math.min(uniqueTradingDays.length, FREE_JOURNAL_DAYS)}/{FREE_JOURNAL_DAYS} trading days
-          </Text>
-          <Text style={styles.freeNoticeText}>
-            Calculator, calendar and basic news are free. Pro unlocks unlimited journal, cloud sync and full analytics.
-          </Text>
-        </View>
-      )}
-      <Card style={styles.calendarCard}>
-        <View style={{ alignItems: "center", marginBottom: 12 }}>
-          <Text style={styles.h2}>
-            {safeDateFromISO(selectedDate).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-          </Text>
-          <Text style={styles.sub}>
-            Tap day to add trade
-          </Text>
-        </View>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        styles.journalContent,
+        isTabletLayout && styles.journalTabletContent,
+      ]}
+    >
+      <View style={[styles.calendarCard, { width: calendarWidth }]}>
         <View style={styles.monthControlRow}>
           <Pressable
             accessibilityLabel="Previous month"
@@ -3094,9 +7282,18 @@ function JournalScreen({
           >
             <Text style={styles.monthNavText}>‹</Text>
           </Pressable>
-          <Text style={styles.monthTitleText} numberOfLines={1} adjustsFontSizeToFit>
-            {monthTitle(viewMonth)}
-          </Text>
+          <Pressable
+            accessibilityLabel="Select month"
+            accessibilityRole="button"
+            onPress={() => setMonthPickerOpen(true)}
+            style={styles.monthTitlePill}
+          >
+            <CalendarDays size={24} color={C.sub} strokeWidth={2.8} />
+            <Text style={styles.monthTitleText} numberOfLines={1} adjustsFontSizeToFit>
+              {monthTitle(viewMonth)}
+            </Text>
+            <Text style={styles.monthChevron}>⌄</Text>
+          </Pressable>
           <Pressable
             accessibilityLabel="Next month"
             accessibilityRole="button"
@@ -3107,16 +7304,16 @@ function JournalScreen({
             <Text style={styles.monthNavText}>›</Text>
           </Pressable>
         </View>
-        <View style={styles.weekdayHeader}>
+        <View style={[styles.weekdayHeader, { gap: calendarGap }]}>
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-            <Text key={d} style={styles.weekdayHeaderText}>{d}</Text>
+            <SafeText key={d} style={[styles.weekdayHeaderText, { width: dayCellWidth }]}>{d}</SafeText>
           ))}
         </View>
-        <View style={styles.calendarGrid}>
+        <View style={[styles.calendarGrid, { gap: calendarGap }]}>
           {monthRows.map((row, rowIndex) => (
-            <View key={`row-${rowIndex}`} style={styles.calendarRow}>
+            <View key={`row-${rowIndex}`} style={[styles.calendarRow, { gap: calendarGap }]}>
               {row.map((d, cellIndex) => {
-                if (!d) return <View key={`empty-${rowIndex}-${cellIndex}`} style={styles.daySpacer} />;
+                if (!d) return <View key={`empty-${rowIndex}-${cellIndex}`} style={[styles.daySpacer, { width: dayCellWidth, height: dayCellHeight }]} />;
                 const dayTrades = trades.filter((x) => x.date === d);
                 const pnl = dayTrades.reduce((a, x) => a + x.pnl, 0);
                 const active = d === selectedDate;
@@ -3132,38 +7329,87 @@ function JournalScreen({
                         setSelectedDate(d);
                       }
                     }}
-                    style={[styles.day, dayTrades.length > 0 && (pnl >= 0 ? styles.dayProfit : styles.dayLoss), active && styles.dayActive]}
+                    style={[
+                      styles.day,
+                      { width: dayCellWidth, height: dayCellHeight },
+                      dayTrades.length > 0 && (pnl >= 0 ? styles.dayProfit : styles.dayLoss),
+                      active && styles.dayActive,
+                    ]}
                   >
-                    <Text style={[styles.dayNum, active && { color: C.white }]}>
+                    <SafeText style={[styles.dayNum, active && { color: C.white }]} minScale={0.72}>
                       {Number(d.slice(8, 10))}
-                    </Text>
-                    {dayTrades.length > 0 && (
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: "900",
-                          color: active ? C.white : pnl >= 0 ? C.green : C.red,
-                        }}
-                      >
-                        {dayMoney(pnl)}
-                      </Text>
-                    )}
+                    </SafeText>
+                    <SafeText
+                      style={[
+                        styles.dayPnlText,
+                        {
+                          color: active ? C.white : dayTrades.length ? (pnl >= 0 ? C.green : C.red) : C.sub,
+                        },
+                      ]}
+                      minScale={0.6}
+                    >
+                      {dayTrades.length > 0 ? dayMoney(pnl) : ""}
+                    </SafeText>
+                    {d === todayISO() ? (
+                      <View style={styles.todayMiniBadge}>
+                        <SafeText style={styles.todayMiniBadgeText} minScale={0.7}>TODAY</SafeText>
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
             </View>
           ))}
         </View>
-      </Card>
-      <PropFirmRiskCoach trades={trades} selectedDate={selectedDate} />
-      <Text style={[styles.tradesTodayTitle]}>
+      </View>
+      {!isTabletLayout ? (
+        <View style={styles.journalScrollHint}>
+          <Text style={styles.journalScrollHintArrow}>⌄</Text>
+          <Text style={styles.journalScrollHintText}>Scroll to view trades</Text>
+        </View>
+      ) : null}
+      <Modal visible={monthPickerOpen} transparent animationType="fade">
+        <Pressable style={styles.monthPickerBackdrop} onPress={() => setMonthPickerOpen(false)}>
+          <Pressable style={styles.monthPickerCard}>
+            <Text style={styles.monthPickerTitle}>Select Month</Text>
+            <View style={styles.monthPickerYears}>
+              {years.map((year) => (
+                <Pressable
+                  key={year}
+                  onPress={() => setViewMonth(new Date(year, viewMonth.getMonth(), 1))}
+                  style={[styles.monthPickerYear, year === viewMonth.getFullYear() && styles.monthPickerYearActive]}
+                >
+                  <Text style={[styles.monthPickerYearText, year === viewMonth.getFullYear() && styles.monthPickerYearTextActive]}>{year}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.monthPickerMonths}>
+              {Array.from({ length: 12 }, (_, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => {
+                    setViewMonth(new Date(viewMonth.getFullYear(), index, 1));
+                    setMonthPickerOpen(false);
+                  }}
+                  style={[styles.monthPickerMonth, index === viewMonth.getMonth() && styles.monthPickerMonthActive]}
+                >
+                  <Text style={[styles.monthPickerMonthText, index === viewMonth.getMonth() && styles.monthPickerMonthTextActive]}>
+                    {new Date(2026, index, 1).toLocaleDateString([], { month: "short" })}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+      <Text style={styles.tradesTodayTitle}>
         TRADES TODAY • {eventDateLabel(selectedDate)}
       </Text>
       {filtered.map((tr) => (
         <Pressable key={tr.id} onPress={() => openEdit(tr)}>
           <Card>
             <View style={styles.rowBetween}>
-              <Text style={styles.newsTitle}>{tr.symbol}</Text>
+              <Text style={styles.tradeSymbolTitle}>{tr.symbol}</Text>
               <Pill
                 text={tr.direction}
                 tone={tr.direction === "LONG" ? "long" : "short"}
@@ -3174,6 +7420,15 @@ function JournalScreen({
                 {tr.entry} → {tr.exit}
               </Text>
             )}
+            {(tr.entryTime || tr.exitTime || (tr.tags || []).length > 0) ? (
+              <View style={styles.tradeMetaWrap}>
+                {tr.entryTime ? <Text style={styles.tradeMetaChip}>IN {tr.entryTime}</Text> : null}
+                {tr.exitTime ? <Text style={styles.tradeMetaChip}>OUT {tr.exitTime}</Text> : null}
+                {(tr.tags || []).slice(0, 4).map((tag) => (
+                  <Text key={`${tr.id}-${tag}`} style={styles.tradeTagChip}>#{tag}</Text>
+                ))}
+              </View>
+            ) : null}
             <View style={styles.rowBetween}>
               <Text style={styles.sub}>P&L</Text>
               <Value color={tr.pnl >= 0 ? C.green : C.red}>
@@ -3244,7 +7499,7 @@ function JournalScreen({
                 label={t("customSymbol")}
                 value={form.symbol}
                 onChangeText={(v: string) =>
-                  setForm({ ...form, symbol: v.toUpperCase() })
+                  setForm({ ...form, symbol: normalizeSymbolInput(v) })
                 }
               />
               <Text style={styles.label}>{t("direction")}</Text>
@@ -3262,7 +7517,53 @@ function JournalScreen({
                   </Pressable>
                 ))}
               </View>
-              <View style={{ height: 12 }} />
+              <View style={styles.formTwoCol}>
+                <View style={styles.formTwoColItem}>
+                  <Input
+                    label="Entry time"
+                    value={form.entryTime}
+                    onChangeText={(v: string) => setForm({ ...form, entryTime: v })}
+                    placeholder="09:30"
+                    style={styles.compactInput}
+                  />
+                </View>
+                <View style={styles.formTwoColItem}>
+                  <Input
+                    label="Exit time"
+                    value={form.exitTime}
+                    onChangeText={(v: string) => setForm({ ...form, exitTime: v })}
+                    placeholder="10:15"
+                    style={styles.compactInput}
+                  />
+                </View>
+              </View>
+              <Text style={styles.label}>Tags</Text>
+              <View style={styles.tagChipGrid}>
+                {COMMON_TRADE_TAGS.map((tag) => {
+                  const currentTags = parseTagsInput(form.tags);
+                  const active = currentTags.includes(tag.toUpperCase());
+                  return (
+                    <Pressable
+                      key={tag}
+                      onPress={() => {
+                        const next = active
+                          ? currentTags.filter((item) => item !== tag.toUpperCase())
+                          : [...currentTags, tag.toUpperCase()].slice(0, 8);
+                        setForm({ ...form, tags: tagsToInput(next) });
+                      }}
+                      style={[styles.tradeTagButton, active && styles.tradeTagButtonActive]}
+                    >
+                      <Text style={[styles.tradeTagButtonText, active && styles.tradeTagButtonTextActive]}>#{tag}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Input
+                label="Custom tags"
+                value={form.tags}
+                onChangeText={(v: string) => setForm({ ...form, tags: v })}
+                placeholder="#ORB #APlus #NYOpen"
+              />
               <Input
                 label={t("entry")}
                 keyboardType="decimal-pad"
@@ -3314,7 +7615,7 @@ function JournalScreen({
               <Input
                 label={t("notes")}
                 value={form.notes}
-                onChangeText={(v: string) => setForm({ ...form, notes: v })}
+                onChangeText={(v: string) => setForm({ ...form, notes: v.slice(0, MAX_NOTES_LENGTH) })}
                 multiline
               />
               <Text style={styles.label}>{t("voiceNote")}</Text>
@@ -3450,8 +7751,15 @@ function JournalScreen({
   );
 }
 
-function NewsScreen({ lang, isPremium }: { lang: Lang; isPremium: boolean }) {
-  const t = (k: string) => tText(lang, k);
+function NewsScreen({
+  lang,
+  isPremium,
+  onUpgrade,
+}: {
+  lang: Lang;
+  isPremium: boolean;
+  onUpgrade: () => void;
+}) {
   const [items, setItems] = useState<MarketNews[]>([]);
   const [loading, setLoading] = useState(true);
   const refresh = async () => {
@@ -3465,19 +7773,9 @@ function NewsScreen({ lang, isPremium }: { lang: Lang; isPremium: boolean }) {
     const id = setInterval(refresh, 60000);
     return () => clearInterval(id);
   }, []);
+  const visibleItems = items;
   return (
     <View style={styles.screen}>
-      <View style={styles.content}>
-        <View style={styles.rowBetween}>
-          <View>
-            <Text style={styles.h1}>{t("liveNews")}</Text>
-            <Text style={styles.sub}>{t("autoRefresh")}</Text>
-          </View>
-          <Pressable onPress={refresh} style={styles.refresh}>
-            <Text style={styles.refreshText}>{t("refresh")}</Text>
-          </Pressable>
-        </View>
-      </View>
       {loading && !items.length ? (
         <ActivityIndicator
           color={C.green}
@@ -3486,9 +7784,9 @@ function NewsScreen({ lang, isPremium }: { lang: Lang; isPremium: boolean }) {
         />
       ) : (
         <FlatList
-          data={items}
+          data={visibleItems}
           keyExtractor={(i) => i.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}
           initialNumToRender={8}
           maxToRenderPerBatch={8}
           windowSize={7}
@@ -3496,7 +7794,7 @@ function NewsScreen({ lang, isPremium }: { lang: Lang; isPremium: boolean }) {
             <Pressable
               onPress={() => (item.url ? Linking.openURL(item.url) : undefined)}
             >
-              <Card style={styles.purpleNewsCard}>
+              <GlassCard style={styles.purpleNewsCard} intensity={28}>
                 <View style={styles.rowBetween}>
                   <Pill
                     text={item.impact}
@@ -3518,37 +7816,31 @@ function NewsScreen({ lang, isPremium }: { lang: Lang; isPremium: boolean }) {
                     {item.summary.slice(0, 240)}
                   </Text>
                 )}
-                {isPremium ? (
-                  <View style={styles.assetGrid}>
-                    {ASSETS.map((a) => (
-                      <View key={a} style={styles.assetCell}>
-                        <Text style={styles.asset}>{a}</Text>
-                        <Text
-                          style={{
-                            color:
-                              item.bias[a] === "LONG"
-                                ? C.green
-                                : item.bias[a] === "SHORT"
-                                  ? C.red
-                                  : C.sub,
-                            fontWeight: "900",
-                            fontSize: 11,
-                          }}
-                        >
-                          {item.bias[a] === "LONG" ? "LONG ↑" : item.bias[a] === "SHORT" ? "SHORT ↓" : "NEUTRAL -"}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <View style={styles.lockedNewsIntel}>
-                    <Text style={styles.lockedNewsTitle}>Advanced sentiment is Pro</Text>
-                    <Text style={styles.lockedNewsText}>Basic headlines stay free. Upgrade for ES/NQ/GOLD/OIL/BTC directional bias.</Text>
-                  </View>
-                )}
-              </Card>
+                <View style={styles.assetGrid}>
+                  {ASSETS.map((a) => (
+                    <View key={a} style={styles.assetCell}>
+                      <Text style={styles.asset}>{a}</Text>
+                      <Text
+                        style={{
+                          color:
+                            item.bias[a] === "LONG"
+                              ? C.green
+                              : item.bias[a] === "SHORT"
+                                ? C.red
+                                : C.sub,
+                          fontWeight: "900",
+                          fontSize: 11,
+                        }}
+                      >
+                        {item.bias[a] === "LONG" ? "LONG ↑" : item.bias[a] === "SHORT" ? "SHORT ↓" : "NEUTRAL -"}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </GlassCard>
             </Pressable>
           )}
+          ListFooterComponent={null}
         />
       )}
     </View>
@@ -3562,8 +7854,20 @@ function SmallMetric({ l, v }: any) {
     </View>
   );
 }
-function CalendarScreen({ lang }: { lang: Lang }) {
+function CalendarScreen({
+  lang,
+  trades,
+  isPremium,
+  onUpgrade,
+}: {
+  lang: Lang;
+  trades: Trade[];
+  isPremium: boolean;
+  onUpgrade: () => void;
+}) {
   const t = (k: string) => tText(lang, k);
+  const { width } = useWindowDimensions();
+  const isTabletLayout = width >= 768;
   const [events, setEvents] = useState<EconEvent[]>([]);
   const [selected, setSelected] = useState(todayISO());
   const [loading, setLoading] = useState(true);
@@ -3578,38 +7882,65 @@ function CalendarScreen({ lang }: { lang: Lang }) {
     const id = setInterval(refresh, 60000);
     return () => clearInterval(id);
   }, []);
-  const week = Array.from({ length: 7 }, (_, i) =>
-    isoFromDate(addDays(new Date(), i)),
+  const today = todayISO();
+  const dayStrip = Array.from({ length: 31 }, (_, i) => isoFromDate(addDays(new Date(), i)));
+  const agendaDate = selected;
+  const shown = events.filter((e) => e.date === agendaDate);
+  const dayAgenda = shown;
+  const orderedAgenda = [...dayAgenda].sort(
+    (a, b) => calendarTimeMinutes(a.time) - calendarTimeMinutes(b.time) || a.name.localeCompare(b.name),
   );
-  const shown = events.filter((e) => e.date === selected);
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.rowBetween}>
-        <View>
-          <Text style={styles.h1}>{t("economicCalendar")}</Text>
-          <Text style={styles.sub}>{t("calendarSub")}</Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        isTabletLayout && styles.calendarTabletContent,
+      ]}
+    >
+      <View style={styles.calendarLiveHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.terminalSmallLabel}>Live economic calendar</Text>
+          <Text style={styles.terminalSub}>31-day agenda • {orderedAgenda.length} events for {eventDateLabel(agendaDate)}</Text>
         </View>
+        <Pressable disabled={loading} onPress={refresh} style={[styles.calendarRefreshBtn, loading && styles.disabledBtn]}>
+          <Text style={styles.calendarRefreshText}>{loading ? "Updating" : "Refresh"}</Text>
+        </Pressable>
       </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ marginBottom: 12 }}
+        style={[{ marginBottom: 12 }, isTabletLayout && { marginBottom: 16 }]}
       >
-        {week.map((d) => (
+        {dayStrip.map((d) => (
           <Pressable
             key={d}
-            onPress={() => setSelected(d)}
-            style={[styles.weekChip, selected === d && styles.weekChipActive]}
+            onPress={() => {
+              setSelected(d);
+            }}
+            style={[
+              styles.weekChip,
+              isTabletLayout && styles.weekChipTablet,
+              selected === d && styles.weekChipActive,
+            ]}
           >
             <Text
-              style={[styles.weekChipDay, selected === d && { color: C.bg }]}
+              style={[
+                styles.weekChipDay,
+                isTabletLayout && styles.weekChipDayTablet,
+                selected === d && { color: C.bg },
+              ]}
             >
               {safeDateFromISO(d).toLocaleDateString([], {
                 weekday: "short",
               })}
             </Text>
             <Text
-              style={[styles.weekChipDate, selected === d && { color: C.bg }]}
+              style={[
+                styles.weekChipDate,
+                isTabletLayout && styles.weekChipDateTablet,
+                selected === d && { color: C.bg },
+              ]}
             >
               {safeDateFromISO(d).toLocaleDateString([], {
                 month: "short",
@@ -3626,18 +7957,35 @@ function CalendarScreen({ lang }: { lang: Lang }) {
           style={{ marginTop: 50 }}
         />
       ) : (
-        (shown.length
-          ? shown
-          : events.filter((e) => e.date === todayISO())
-        ).map((e) => (
-          <Card key={e.id} style={styles.purpleNewsCard}>
-            <View style={styles.rowBetween}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bigTime}>{e.time}</Text>
-                <Text style={styles.dateText}>
-                  {eventDateLabel(e.date)} • ET
+        orderedAgenda.length ? orderedAgenda.map((e) => {
+          const timeParts = splitTimeLabel(e.time);
+          return (
+          <Card key={e.id} style={[styles.calendarEventCard, isTabletLayout && styles.calendarEventCardTablet]}>
+            <View style={styles.calendarEventTop}>
+              <View style={[styles.calendarTimeBox, isTabletLayout && styles.calendarTimeBoxTablet]}>
+                <Text
+                  style={[styles.calendarEventTime, isTabletLayout && styles.calendarEventTimeTablet]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.74}
+                  ellipsizeMode="clip"
+                >
+                  {timeParts.clock}
+                  {!!timeParts.meridiem && (
+                    <Text style={[styles.calendarEventMeridiem, isTabletLayout && styles.calendarEventMeridiemTablet]}>
+                      {" "}{timeParts.meridiem}
+                    </Text>
+                  )}
                 </Text>
-                <Text style={styles.newsTitle}>{e.name}</Text>
+                <Text style={[styles.calendarEventDate, isTabletLayout && styles.calendarEventDateTablet]} numberOfLines={1}>Eastern Time</Text>
+              </View>
+              <View style={styles.calendarEventBody}>
+                <Text style={[styles.calendarEventTitle, isTabletLayout && styles.calendarEventTitleTablet]} numberOfLines={2}>{e.name}</Text>
+                <View style={[styles.calendarMetricRow, isTabletLayout && styles.calendarMetricRowTablet]}>
+                  <Text style={[styles.calendarMetricText, isTabletLayout && styles.calendarMetricTextTablet, { color: calendarMetricColor(e, "actual") }]}>Act {e.actual}</Text>
+                  <Text style={[styles.calendarMetricText, isTabletLayout && styles.calendarMetricTextTablet, { color: calendarMetricColor(e, "forecast") }]}>Fcst {e.forecast}</Text>
+                  <Text style={[styles.calendarMetricText, isTabletLayout && styles.calendarMetricTextTablet, { color: calendarMetricColor(e, "previous") }]}>Prev {e.previous}</Text>
+                </View>
               </View>
               <Pill
                 text={e.impact}
@@ -3650,34 +7998,37 @@ function CalendarScreen({ lang }: { lang: Lang }) {
                 }
               />
             </View>
-            <View style={styles.row}>
-              <SmallMetric l={t("act")} v={e.actual} />
-              <SmallMetric l={t("fcst")} v={e.forecast} />
-              <SmallMetric l={t("prev")} v={e.previous} />
-            </View>
-            <View style={styles.assetGrid}>
+            <View style={[styles.calendarBiasGrid, isTabletLayout && styles.calendarBiasGridTablet]}>
               {ASSETS.map((a) => (
-                <View key={a} style={styles.assetCell}>
-                  <Text style={styles.asset}>{a}</Text>
+                <View key={a} style={[styles.calendarBiasCell, isTabletLayout && styles.calendarBiasCellTablet]}>
+                  <Text style={[styles.asset, styles.calendarAssetLabel, isTabletLayout && styles.calendarAssetLabelTablet]}>{a}</Text>
                   <Text
-                    style={{
-                      color:
-                        e.bias[a] === "LONG"
-                          ? C.green
-                          : e.bias[a] === "SHORT"
-                            ? C.red
-                            : C.sub,
-                      fontWeight: "900",
-                      fontSize: 11,
-                    }}
+                    style={[
+                      styles.calendarBiasValue,
+                      isTabletLayout && styles.calendarBiasValueTablet,
+                      {
+                        color:
+                          e.bias[a] === "LONG"
+                            ? C.green
+                            : e.bias[a] === "SHORT"
+                              ? C.red
+                              : C.sub,
+                      },
+                    ]}
                   >
-                    {e.bias[a] === "LONG" ? "LONG ↑" : e.bias[a] === "SHORT" ? "SHORT ↓" : "NEUTRAL -"}
+                    {e.bias[a] === "LONG" ? "LONG ↑" : e.bias[a] === "SHORT" ? "SHORT ↓" : "NEUTRAL"}
                   </Text>
                 </View>
               ))}
             </View>
           </Card>
-        ))
+          );
+        }) : (
+          <Card style={styles.calendarEventCard}>
+            <Text style={styles.calendarEventTitle}>No scheduled events for this day yet.</Text>
+            <Text style={[styles.sub, { marginTop: 6 }]}>Tap Refresh to pull the latest live calendar data. If the provider has not published events for this date, YouTrader will leave the day empty instead of showing demo events.</Text>
+          </Card>
+        )
       )}
     </ScrollView>
   );
@@ -3701,7 +8052,6 @@ function CalcScreen({ lang }: { lang: Lang }) {
   const maxRiskDollars = (Number(balance || 0) * Number(riskPct || 0)) / 100;
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.h1}>{t("calc")}</Text>
       <Card>
         <Text style={styles.label}>{t("miniContracts")}</Text>
         <View style={styles.instrumentGrid}>
@@ -3735,7 +8085,7 @@ function CalcScreen({ lang }: { lang: Lang }) {
         </View>
       </Card>
       <Card>
-        <Text style={styles.h2}>{t("rrCalculator")}</Text>
+        <Text style={[styles.h2, styles.purpleSectionTitle]}>{t("rrCalculator")}</Text>
         <View style={styles.row}>
           <View style={{ flex: 1 }}><Input label={t("slAmount")} keyboardType="decimal-pad" value={sl} onChangeText={setSl} /></View>
           <View style={{ flex: 1 }}><Input label={t("tpAmount")} keyboardType="decimal-pad" value={tp} onChangeText={setTp} /></View>
@@ -3747,7 +8097,7 @@ function CalcScreen({ lang }: { lang: Lang }) {
         </View>
       </Card>
       <Card>
-        <Text style={styles.h2}>{t("percentRiskCalculator")}</Text>
+        <Text style={[styles.h2, styles.purpleSectionTitle]}>{t("percentRiskCalculator")}</Text>
         <View style={styles.row}>
           <View style={{ flex: 1 }}><Input label={t("accountBalance")} keyboardType="decimal-pad" value={balance} onChangeText={setBalance} /></View>
           <View style={{ flex: 1 }}><Input label={t("riskPercent")} keyboardType="decimal-pad" value={riskPct} onChangeText={setRiskPct} /></View>
@@ -3767,24 +8117,36 @@ function PremiumScreen({
   lang,
   onClose,
   packages,
+  storeProducts,
   purchaseBusy,
-  revenueCatConfigured,
   paywallError,
+  showRestorePurchases,
   onPurchase,
   onRestore,
 }: {
   lang: Lang;
   onClose: () => void;
   packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
-  revenueCatConfigured: boolean;
   paywallError: string;
-  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  showRestorePurchases: boolean;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
 }) {
   const t = (k: string) => tText(lang, k);
   const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
-  const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || packages[1] || null;
+  const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null;
+  const monthlyProduct =
+    storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null;
+  const yearlyProduct =
+    storeProducts.find((product) => product.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) || null;
+  const yearlyPriceLabel = yearly
+    ? packagePrice(yearly)
+    : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
+  useEffect(() => {
+    trackEvent("paywall_viewed", { screen: "premium_screen" });
+  }, []);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.modalHeader}>
@@ -3801,6 +8163,7 @@ function PremiumScreen({
           "premiumBenefit2",
           "premiumBenefit3",
           "premiumBenefit4",
+          "premiumBenefit5",
           "premiumBenefit6",
           "premiumBenefit7",
           "premiumBenefit8",
@@ -3811,46 +8174,50 @@ function PremiumScreen({
         ))}
         <View style={styles.planRow}>
           <Pressable
-            disabled={purchaseBusy || !revenueCatConfigured}
-            onPress={() => onPurchase(monthly)}
-            style={[styles.monthlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+            disabled={purchaseBusy}
+            onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+            style={[styles.monthlyPlan, purchaseBusy && styles.disabledBtn]}
           >
             <Text style={styles.planName}>MONTHLY</Text>
             <Text style={styles.planPrice}>{packagePrice(monthly)}</Text>
           </Pressable>
           <Pressable
-            disabled={purchaseBusy || !revenueCatConfigured}
-            onPress={() => onPurchase(yearly || monthly)}
-            style={[styles.yearlyPlan, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+            disabled={purchaseBusy}
+            onPress={() => onPurchase(yearly, YOU_TRADER_YEARLY_PRODUCT_ID)}
+            style={[styles.yearlyPlan, purchaseBusy && styles.disabledBtn]}
           >
             <View style={styles.bestValueBadge}>
               <Text style={styles.bestValueText}>BEST VALUE</Text>
             </View>
             <Text style={styles.planName}>YEARLY</Text>
-            <Text style={styles.planPrice}>{yearly ? packagePrice(yearly) : "$79.99/year"}</Text>
+            <Text style={styles.planPrice}>{yearlyPriceLabel}</Text>
           </Pressable>
         </View>
         <Pressable
-          disabled={purchaseBusy || !revenueCatConfigured}
-          onPress={() => onPurchase(monthly)}
-          style={[styles.primaryBig, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
+          disabled={purchaseBusy}
+          onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+          style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}
         >
           <Text style={styles.primaryText}>
-            {purchaseBusy ? "Connecting..." : `Start Pro • ${packagePrice(monthly)}`}
+            {purchaseBusy ? "Connecting..." : `Unlock Pro • ${packagePrice(monthly)}`}
           </Text>
         </Pressable>
-        <Pressable
-          disabled={purchaseBusy || !revenueCatConfigured}
-          onPress={onRestore}
-          style={[styles.secondaryBig, (!revenueCatConfigured || purchaseBusy) && styles.disabledBtn]}
-        >
-          <Text style={styles.secondaryText}>{t("restore")}</Text>
-        </Pressable>
-        {!revenueCatConfigured ? (
-          <Text style={[styles.sub, { marginTop: 10 }]}>
-            Add EXPO_PUBLIC_REVENUECAT_IOS_API_KEY and configure the pro entitlement in RevenueCat.
-          </Text>
-        ) : paywallError ? (
+        <SubscriptionLegalDisclosure
+          monthlyPackage={monthly}
+          monthlyProduct={monthlyProduct}
+          yearlyPackage={yearly}
+          yearlyProduct={yearlyProduct}
+        />
+        {(showRestorePurchases || !!paywallError) ? (
+          <Pressable
+            disabled={purchaseBusy}
+            onPress={onRestore}
+            style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+          </Pressable>
+        ) : null}
+        {paywallError ? (
           <Text style={[styles.sub, { color: C.red, marginTop: 10 }]}>{paywallError}</Text>
         ) : null}
       </Card>
@@ -3858,86 +8225,12 @@ function PremiumScreen({
   );
 }
 
-
-
-function AccountPanel({
-  session,
-  authBusy,
-  authConfigured,
-  faceLockEnabled,
-  onOAuth,
-  onSignOut,
-  onEnableFaceId,
-  onDisableFaceId,
-}: {
-  session: Session | null;
-  authBusy: boolean;
-  authConfigured: boolean;
-  faceLockEnabled: boolean;
-  onOAuth: (provider: AuthProvider) => void;
-  onSignOut: () => void;
-  onEnableFaceId: () => void;
-  onDisableFaceId: () => void;
-}) {
-  const userLabel = session?.user.email || session?.user.user_metadata?.email || session?.user.id;
-
+function SettingsBenefitLine({ children }: { children: React.ReactNode }) {
   return (
-    <Card>
-      <Text style={styles.h2}>Account</Text>
-      <Text style={styles.sub}>{userLabel ? `Signed in as ${userLabel}` : "Sign in quickly and keep your journal connected."}</Text>
-      {userLabel ? (
-        <Pressable onPress={onSignOut} style={[styles.secondaryBig, { marginTop: 14 }]}>
-          <Text style={styles.secondaryText}>Sign out</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.authButtonStack}>
-          <Pressable
-            disabled={authBusy}
-            onPress={() => onOAuth("google")}
-            style={[styles.authProviderBtn, authBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.authProviderIcon}>G</Text>
-            <Text style={styles.authProviderText}>{authBusy ? "Connecting..." : "Continue with Google"}</Text>
-          </Pressable>
-          <Pressable
-            disabled={authBusy}
-            onPress={() => onOAuth("apple")}
-            style={[styles.authProviderBtn, styles.authAppleBtn, authBusy && styles.disabledBtn]}
-          >
-            <Text style={[styles.authProviderIcon, { color: C.white }]}></Text>
-            <Text style={[styles.authProviderText, { color: C.white }]}>Continue with Apple</Text>
-          </Pressable>
-          {!authConfigured && (
-            <Text style={[styles.sub, { marginTop: 2 }]}>Account sign-in needs Supabase URL and publishable key in the release build.</Text>
-          )}
-        </View>
-      )}
-      <Pressable
-        onPress={faceLockEnabled ? onDisableFaceId : onEnableFaceId}
-        style={[styles.secondaryBig, styles.faceIdButton]}
-      >
-        <Text style={styles.secondaryText}>{faceLockEnabled ? "Face ID quick unlock: On" : "Enable Face ID quick unlock"}</Text>
-      </Pressable>
-    </Card>
-  );
-}
-
-function BiometricLockScreen({ onUnlock }: { onUnlock: () => void }) {
-  return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
-        <View style={styles.lockScreen}>
-          <Card style={styles.lockCard}>
-            <Text style={styles.h1}>YouTrader</Text>
-            <Text style={styles.sub}>Unlock your journal.</Text>
-            <Pressable onPress={onUnlock} style={styles.primaryBig}>
-              <Text style={styles.primaryText}>Unlock with Face ID</Text>
-            </Pressable>
-          </Card>
-        </View>
-      </SafeAreaView>
-    </SafeAreaProvider>
+    <Text style={styles.settingsBenefit}>
+      <Text style={styles.settingsBenefitCheck}>✓ </Text>
+      <Text style={styles.settingsBenefitText}>{children}</Text>
+    </Text>
   );
 }
 
@@ -3949,21 +8242,23 @@ function SettingsScreen({
   authConfigured,
   isPremium,
   packages,
+  storeProducts,
   purchaseBusy,
   revenueCatConfigured,
   paywallError,
+  showRestorePurchases,
   cloudSyncEnabled,
   cloudSyncStatus,
   cloudSyncMessage,
   lastCloudSyncAt,
-  faceLockEnabled,
-  onOAuth,
-  onSignOut,
+  lockScreenBufferEnabled,
   onPurchase,
   onRestore,
   onSyncNow,
-  onEnableFaceId,
-  onDisableFaceId,
+  onToggleLockScreenBuffer,
+  onImportTradesCsv,
+  onSignIn,
+  onSignOut,
 }: {
   lang: Lang;
   setLang: (x: Lang) => void;
@@ -3972,26 +8267,112 @@ function SettingsScreen({
   authConfigured: boolean;
   isPremium: boolean;
   packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
   revenueCatConfigured: boolean;
   paywallError: string;
+  showRestorePurchases: boolean;
   cloudSyncEnabled: boolean;
   cloudSyncStatus: "off" | "syncing" | "synced" | "error";
   cloudSyncMessage: string;
   lastCloudSyncAt: string | null;
-  faceLockEnabled: boolean;
-  onOAuth: (provider: AuthProvider) => void;
-  onSignOut: () => void;
-  onPurchase: (pkg?: PurchasesPackage | null) => void;
+  lockScreenBufferEnabled: boolean;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
   onSyncNow: () => void;
-  onEnableFaceId: () => void;
-  onDisableFaceId: () => void;
+  onToggleLockScreenBuffer: (enabled: boolean) => void;
+  onImportTradesCsv: () => void;
+  onSignIn: (provider: AuthProvider) => void;
+  onSignOut: () => void;
 }) {
   const t = (k: string) => tText(lang, k);
   const choose = (l: Lang) => {
     setLang(l);
-    AsyncStorage.setItem("lang-v1", l);
+    AsyncStorage.setItem(LANG_STORAGE_KEY, l);
+  };
+  const [calendarAlertsEnabled, setCalendarAlertsEnabled] = useState(false);
+  const [propRiskAlertsEnabled, setPropRiskAlertsEnabled] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("calendar-alerts-v1").then((v) => setCalendarAlertsEnabled(v === "on"));
+    AsyncStorage.getItem("prop-risk-alerts-v1").then((v) => setPropRiskAlertsEnabled(v === "on"));
+  }, []);
+
+  const togglePropRiskAlerts = async () => {
+    if (propRiskAlertsEnabled) {
+      const existingId = await AsyncStorage.getItem(PROP_RISK_ALERT_ID_KEY);
+      if (existingId) {
+        await Notifications.cancelScheduledNotificationAsync(existingId);
+        await AsyncStorage.removeItem(PROP_RISK_ALERT_ID_KEY);
+      }
+      await AsyncStorage.setItem("prop-risk-alerts-v1", "off");
+      setPropRiskAlertsEnabled(false);
+      return;
+    }
+    const permission = await Notifications.requestPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Notifications", "Allow notifications to receive risk alerts.");
+      return;
+    }
+    const existingId = await AsyncStorage.getItem(PROP_RISK_ALERT_ID_KEY);
+    if (existingId) await Notifications.cancelScheduledNotificationAsync(existingId);
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "YouTrader Risk Coach",
+        body: "Review your prop firm risk status before trading.",
+        sound: false,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 8,
+        minute: 15,
+      },
+    });
+    await AsyncStorage.setItem(PROP_RISK_ALERT_ID_KEY, id);
+    await AsyncStorage.setItem("prop-risk-alerts-v1", "on");
+    setPropRiskAlertsEnabled(true);
+  };
+
+  const toggleCalendarAlerts = async (enabled: boolean) => {
+    setCalendarAlertsEnabled(enabled);
+    try {
+      if (!enabled) {
+        const existingId = await AsyncStorage.getItem(CALENDAR_ALERT_ID_KEY);
+        if (existingId) {
+          await Notifications.cancelScheduledNotificationAsync(existingId);
+          await AsyncStorage.removeItem(CALENDAR_ALERT_ID_KEY);
+        }
+        await AsyncStorage.setItem("calendar-alerts-v1", "off");
+        return;
+      }
+
+      const permission = await Notifications.requestPermissionsAsync();
+      if (!permission.granted) {
+        setCalendarAlertsEnabled(false);
+        Alert.alert("Notifications", "Allow notifications to receive economic calendar alerts.");
+        return;
+      }
+      const existingId = await AsyncStorage.getItem(CALENDAR_ALERT_ID_KEY);
+      if (existingId) await Notifications.cancelScheduledNotificationAsync(existingId);
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "YouTrader Economic Calendar",
+          body: "Check today's high-impact events before trading.",
+          sound: false,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: 7,
+          minute: 45,
+        },
+      });
+      await AsyncStorage.setItem(CALENDAR_ALERT_ID_KEY, id);
+      await AsyncStorage.setItem("calendar-alerts-v1", "on");
+    } catch (error) {
+      setCalendarAlertsEnabled(!enabled);
+      Alert.alert("Calendar alerts", "Could not update economic calendar alerts. Please try again.");
+      captureAppError(error, { feature: "settings", action: "toggle_calendar_alerts" });
+    }
   };
 
   const legalInfo = `YouTrader: Terms of Service, Risk Disclosure & Privacy Policy
@@ -4016,7 +8397,7 @@ PART II: PRIVACY POLICY
 1. Information We Collect
 To provide performance analytics, YouTrader collects the following information:
 
-Account Data: When you register or authenticate via third-party providers, including Google Authentication, we collect your name, email address, and profile picture.
+Account Data: If account features are enabled in a future version, YouTrader may collect your name and email address for account access.
 
 User-Generated Data: We securely store the trading logs, dates, times, contract types, execution prices, screenshots, and custom tags that you manually input or import via file uploads (CSV/Excel).
 
@@ -4025,7 +8406,7 @@ Usage & Device Data: We may automatically collect anonymized technical data, inc
 Note: YouTrader does not collect, request, or store your live brokerage passwords, API secret keys, or live execution credentials.
 
 2. Data Use, Security, and Protection
-Your trading data is encrypted and used strictly to generate your personal statistics, charts, and performance analytics. We value your privacy: we do not sell, rent, trade, or share your personal identity or specific trading data with third-party advertisers, hedge funds, or institutional entities.
+Your trading data is used strictly to generate your personal statistics, charts, and subscription status. We do not sell, rent, trade, or share your personal identity or specific trading data with third-party advertisers.
 
 3. Data Ownership and Deletion Rights (GDPR & CCPA Compliance)
 You retain full ownership of your data. In compliance with data privacy regulations, including GDPR and CCPA, you have the right to access, export, or permanently delete your account and all associated trading logs at any time. This action can be executed directly via the Application Settings. Once initiated, all account records are physically and permanently purged from our active databases.
@@ -4036,77 +8417,151 @@ YouTrader does not knowingly collect data from or market to individuals under th
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { flexGrow: 1, justifyContent: "space-between", paddingBottom: 36 }]}>
       <View>
-        <Text style={styles.h1}>{t("settings")}</Text>
-
-        <AccountPanel
-          session={session}
-          authBusy={authBusy}
-          authConfigured={authConfigured}
-          faceLockEnabled={faceLockEnabled}
-          onOAuth={onOAuth}
-          onSignOut={onSignOut}
-          onEnableFaceId={onEnableFaceId}
-          onDisableFaceId={onDisableFaceId}
-        />
-
         <Card>
-          <Text style={styles.h2}>Subscription</Text>
-          <Text style={styles.sub}>
-            {isPremium
-              ? "YouTrader Pro is active."
-              : revenueCatConfigured
-                ? "Unlock full analytics, market context and Pro tools."
-                : "RevenueCat is ready in code. Add the public API key before TestFlight."}
-          </Text>
-          <View style={styles.row}>
-            <Pressable
-              disabled={isPremium || purchaseBusy || !revenueCatConfigured}
-              onPress={() => onPurchase(packages[0] || null)}
-              style={[styles.secondaryPhoto, styles.purpleAction, (isPremium || purchaseBusy || !revenueCatConfigured) && styles.disabledBtn]}
-            >
-              <Text style={styles.secondaryText}>{isPremium ? "Pro Active" : "Upgrade"}</Text>
-            </Pressable>
-            <Pressable
-              disabled={purchaseBusy || !revenueCatConfigured}
-              onPress={onRestore}
-              style={[styles.secondaryPhoto, styles.purpleAction, (purchaseBusy || !revenueCatConfigured) && styles.disabledBtn]}
-            >
-              <Text style={styles.secondaryText}>Restore</Text>
-            </Pressable>
+          <Text style={styles.h2}>Notifications</Text>
+          <View style={styles.settingsSwitchRow}>
+            <View style={styles.settingsSwitchCopy}>
+              <Text style={styles.settingsSwitchTitle}>Daily prop firm reminder</Text>
+              <Text style={styles.sub}>Morning notification with your daily buffer and risk status.</Text>
+            </View>
+            <Switch
+              value={lockScreenBufferEnabled}
+              onValueChange={(enabled) => onToggleLockScreenBuffer(enabled)}
+              trackColor={{ false: "#222936", true: "rgba(150,255,0,0.45)" }}
+              thumbColor={lockScreenBufferEnabled ? "#96FF00" : "#7D8795"}
+            />
           </View>
-          {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
+          <View style={styles.settingsSwitchDivider} />
+          <View style={styles.settingsSwitchRow}>
+            <View style={styles.settingsSwitchCopy}>
+              <Text style={styles.settingsSwitchTitle}>Risk alerts</Text>
+              <Text style={styles.sub}>Daily risk coach reminder before trading.</Text>
+            </View>
+            <Switch
+              value={propRiskAlertsEnabled}
+              onValueChange={togglePropRiskAlerts}
+              trackColor={{ false: "#222936", true: "rgba(150,255,0,0.45)" }}
+              thumbColor={propRiskAlertsEnabled ? "#96FF00" : "#7D8795"}
+            />
+          </View>
+          <View style={styles.settingsSwitchDivider} />
+          <View style={styles.settingsSwitchRow}>
+            <View style={styles.settingsSwitchCopy}>
+              <Text style={styles.settingsSwitchTitle}>Economic calendar alerts</Text>
+              <Text style={styles.sub}>Morning reminder to check high-impact events.</Text>
+            </View>
+            <Switch
+              value={calendarAlertsEnabled}
+              onValueChange={toggleCalendarAlerts}
+              trackColor={{ false: "#222936", true: "rgba(150,255,0,0.45)" }}
+              thumbColor={calendarAlertsEnabled ? "#96FF00" : "#7D8795"}
+            />
+          </View>
         </Card>
 
         <Card>
-          <View style={styles.rowBetween}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.h2}>Cloud Sync</Text>
-              <Text style={styles.sub}>{cloudSyncMessage}</Text>
-              {lastCloudSyncAt ? (
-                <Text style={[styles.sub, { marginTop: 4 }]}>
-                  Last sync: {new Date(lastCloudSyncAt).toLocaleString()}
-                </Text>
-              ) : null}
-            </View>
-            <View
-              style={[
-                styles.syncStatusDot,
-                cloudSyncStatus === "synced" && { backgroundColor: C.green },
-                cloudSyncStatus === "syncing" && { backgroundColor: C.yellow },
-                cloudSyncStatus === "error" && { backgroundColor: C.red },
-              ]}
-            />
-          </View>
+          <Text style={styles.h2}>Import trades</Text>
+          <Text style={styles.sub}>
+            Import a CSV journal from another platform. Pro feature.
+          </Text>
           <Pressable
-            disabled={!cloudSyncEnabled || cloudSyncStatus === "syncing"}
-            onPress={onSyncNow}
-            style={[styles.secondaryBig, styles.restorePurchaseBtn, (!cloudSyncEnabled || cloudSyncStatus === "syncing") && styles.disabledBtn]}
+            onPress={() =>
+              isPremium
+                ? onImportTradesCsv()
+                : Alert.alert("YouTrader Pro", "CSV import is available in YouTrader Pro.")
+            }
+            style={[styles.secondaryBig, { marginTop: 14 }, !isPremium && styles.disabledBtn]}
           >
             <Text style={styles.secondaryText}>
-              {cloudSyncStatus === "syncing" ? "Syncing..." : "Sync Now"}
+              {isPremium ? "Import trades (CSV)" : "Import trades (CSV) — Pro"}
             </Text>
           </Pressable>
         </Card>
+
+        <GlassCard style={styles.proSubscriptionCard} intensity={42}>
+          <Text style={[styles.h2, styles.proSubscriptionTitle]}>YouTrader Pro</Text>
+          <View style={[styles.proStatusBox, isPremium ? styles.proStatusActive : styles.proStatusLocked]}>
+            <View style={[styles.proStatusIcon, isPremium ? styles.proStatusIconActive : styles.proStatusIconLocked]}>
+              {isPremium ? <Unlock size={26} color={C.green} strokeWidth={2.8} /> : <Lock size={26} color={C.purple} strokeWidth={2.8} />}
+            </View>
+            <View style={styles.proStatusCopy}>
+              <Text style={[styles.proStatusTitle, isPremium ? styles.proStatusTitleActive : styles.proStatusTitleLocked]}>
+                {isPremium ? "Your Pro subscription is active" : "YouTrader Pro is locked"}
+              </Text>
+              <Text style={styles.proStatusText}>
+                {isPremium ? "All premium analytics, AI tools, news, calendar, import, and export features are unlocked." : "Unlock AI analysis, full analytics, Market Pulse news, CSV import, and premium journal tools."}
+              </Text>
+            </View>
+          </View>
+          {!isPremium && (
+            <>
+              <SettingsBenefitLine>AI Trade Analysis with educational feedback</SettingsBenefitLine>
+              <SettingsBenefitLine>AI Pattern Detective — surface hidden blind spots and recurring patterns</SettingsBenefitLine>
+              <SettingsBenefitLine>Prop Firm Coach: survival score, pass probability, and daily buffer</SettingsBenefitLine>
+              <SettingsBenefitLine>Rule-violation risk alerts and revenge-trading detection</SettingsBenefitLine>
+              <SettingsBenefitLine>Hidden leak detection to protect your edge</SettingsBenefitLine>
+              <SettingsBenefitLine>Unlimited trade journaling</SettingsBenefitLine>
+              <SettingsBenefitLine>Save screenshots, photos, and voice notes for every setup</SettingsBenefitLine>
+              <SettingsBenefitLine>Cloud sync and backup across all your devices</SettingsBenefitLine>
+              <SettingsBenefitLine>Import your trading history with CSV</SettingsBenefitLine>
+              <SettingsBenefitLine>Export and share journal reports</SettingsBenefitLine>
+              <SettingsBenefitLine>Track Profit Factor, Expectancy, Sharpe Ratio, Consistency, and Drawdown</SettingsBenefitLine>
+              <SettingsBenefitLine>Discover your most profitable symbols, sessions, and trading hours</SettingsBenefitLine>
+              <SettingsBenefitLine>Session heatmap and trading-hour edge analysis</SettingsBenefitLine>
+              <SettingsBenefitLine>Trading Score, achievements, and trader status progression</SettingsBenefitLine>
+              <SettingsBenefitLine>Advanced performance analytics and edge tracking</SettingsBenefitLine>
+              <SettingsBenefitLine>Full trader performance profile and radar analysis</SettingsBenefitLine>
+              <SettingsBenefitLine>Daily prop firm risk reminders and notifications</SettingsBenefitLine>
+              <SettingsBenefitLine>Real-time Market Pulse news and financial updates</SettingsBenefitLine>
+              <SettingsBenefitLine>Multi-day economic calendar with CPI, PPI, FOMC, NFP, GDP, and more</SettingsBenefitLine>
+              <SubscriptionLegalDisclosure
+                monthlyPackage={packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null}
+                monthlyProduct={storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null}
+                yearlyPackage={packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null}
+                yearlyProduct={storeProducts.find((product) => product.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) || null}
+                compact
+              />
+            </>
+          )}
+          {!isPremium ? (
+            <View style={styles.subscriptionPlanGrid}>
+              <Pressable
+                disabled={purchaseBusy}
+                onPress={() =>
+                  onPurchase(
+                    packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null,
+                    YOU_TRADER_MONTHLY_PRODUCT_ID,
+                  )
+                }
+                style={[styles.secondaryBig, styles.purpleAction, { flex: 1 }, purchaseBusy && styles.disabledBtn]}
+              >
+                <Text style={styles.secondaryText}>Monthly • $12.99</Text>
+              </Pressable>
+              <Pressable
+                disabled={purchaseBusy}
+                onPress={() =>
+                  onPurchase(
+                    packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null,
+                    YOU_TRADER_YEARLY_PRODUCT_ID,
+                  )
+                }
+                style={[styles.secondaryBig, styles.greenProAction, { flex: 1 }, purchaseBusy && styles.disabledBtn]}
+              >
+                <Text style={[styles.secondaryText, styles.greenActionText]}>Yearly • $99.99</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {!isPremium && (showRestorePurchases || !!paywallError) ? (
+            <Pressable
+              disabled={purchaseBusy}
+              onPress={onRestore}
+              style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
+            >
+              <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+            </Pressable>
+          ) : null}
+          {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
+        </GlassCard>
 
         <Card>
           <Text style={styles.h2}>{t("language")}</Text>
@@ -4124,92 +8579,154 @@ YouTrader does not knowingly collect data from or market to individuals under th
         </Card>
 
         <Card>
-          <Text style={styles.h2}>Support</Text>
-          <Text style={styles.sub}>
-            Contact us or report bugs and app issues.
-          </Text>
-          <Pressable
-            onPress={() => Linking.openURL("mailto:youtrader.support@gmail.com?subject=YouTrader Support")}
-            style={[styles.secondaryBig, { marginTop: 14 }]}
-          >
-            <Text style={styles.secondaryText}>youtrader.support@gmail.com</Text>
-          </Pressable>
-        </Card>
-
-        <Card>
           <Text style={styles.h2}>Legal</Text>
           <Pressable onPress={() => Alert.alert("Terms, Risk Disclosure & Privacy", legalInfo)} style={styles.legalRow}>
             <Text style={styles.legalText}>Terms, Risk Disclosure & Privacy</Text>
             <Text style={styles.legalArrow}>›</Text>
           </Pressable>
+          <Pressable onPress={() => openLegalUrl(TERMS_OF_USE_EULA_URL, "Terms of Use (EULA)")} style={[styles.legalRow, { borderBottomWidth: 0 }]}>
+            <Text style={styles.legalText}>Terms of Use (EULA)</Text>
+            <Text style={styles.legalArrow}>›</Text>
+          </Pressable>
         </Card>
+
+        <Card>
+          <Text style={styles.h2}>Support</Text>
+          <Text style={styles.sub}>
+            Contact us or report bugs and app issues.
+          </Text>
+          <Pressable
+            onPress={() => Linking.openURL("mailto:support@borovikgroup.com?subject=YouTrader Support")}
+            style={[styles.secondaryBig, { marginTop: 14 }]}
+          >
+            <Text style={styles.secondaryText}>support@borovikgroup.com</Text>
+          </Pressable>
+        </Card>
+
       </View>
 
       <View>
-        <Text style={styles.versionText}>v1.3.1</Text>
-        <Text style={styles.madeByText}>Made by a trader, for traders</Text>
+        <Text style={styles.versionText}>v1.5.4 (51) • Review</Text>
+        <Text style={styles.madeByText}>MADE BY A TRADER, FOR TRADERS</Text>
       </View>
     </ScrollView>
   );
 }
 
 function TabGlyph({ id, active }: { id: Tab; active: boolean }) {
-  const color = C.green;
-  const border = active ? color : `${color}99`;
-  const bg = active ? C.greenSoft : "transparent";
-  if (id === "journal")
-    return (
-      <View style={[styles.iconTile, { borderColor: border, backgroundColor: bg }]}> 
-        <View style={[styles.noteTop, { borderColor: color }]} />
-        <View style={[styles.noteLine, { backgroundColor: color, width: 17 }]} />
-        <View style={[styles.noteLine, { backgroundColor: color, width: 13 }]} />
-        <View style={[styles.notePen, { backgroundColor: color }]} />
-      </View>
-    );
-  if (id === "stats")
-    return (
-      <View style={[styles.iconTile, { borderColor: border, backgroundColor: bg }]}>
-        <View style={styles.statsGlyphBars}>
-          <View style={[styles.statsGlyphBar, { height: 10, backgroundColor: color }]} />
-          <View style={[styles.statsGlyphBar, { height: 18, backgroundColor: color }]} />
-          <View style={[styles.statsGlyphBar, { height: 24, backgroundColor: color }]} />
-        </View>
-      </View>
-    );
-  if (id === "calc")
-    return (
-      <View style={[styles.iconTile, { borderColor: border, backgroundColor: bg }]}> 
-        <Text style={[styles.calcGlyphText, { color }]}>+−</Text>
-        <Text style={[styles.calcGlyphText, { color }]}>×÷</Text>
-      </View>
-    );
-  if (id === "calendar")
-    return (
-      <View style={[styles.iconTile, { borderColor: border, backgroundColor: bg }]}> 
-        <View style={[styles.calendarTopBar, { backgroundColor: color }]} />
-        <View style={styles.calendarMiniGrid}>
-          {[0,1,2,3,4,5].map((n) => <View key={n} style={[styles.calendarDotMini, { backgroundColor: color }]} />)}
-        </View>
-      </View>
-    );
-  if (id === "news")
-    return (
-      <View style={[styles.iconTile, { borderColor: border, backgroundColor: bg }]}>
-        <Text style={[styles.newsBolt, { color }]}>ϟ</Text>
-      </View>
-    );
+  const color = active ? "#96FF00" : "#7D8795";
+  const iconProps = { size: 27.8, color, strokeWidth: 2.35 };
+  if (id === "journal") return <BookOpen {...iconProps} />;
+  if (id === "stats") return <ChartColumnIncreasing {...iconProps} />;
+  if (id === "ai") return <BrainCircuit {...iconProps} />;
+  if (id === "calc") return <CalculatorIcon {...iconProps} />;
+  if (id === "news") return <Newspaper {...iconProps} />;
+  if (id === "calendar") return <CalendarDays {...iconProps} />;
+  if (id === "settings") return <SettingsIcon {...iconProps} />;
+  return null;
+}
+
+function TabButton({
+  id,
+  label,
+  active,
+  onPress,
+}: {
+  id: Tab;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const activeAnim = useRef(new Animated.Value(active ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(activeAnim, {
+      toValue: active ? 1 : 0,
+      duration: 200,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [active, activeAnim]);
+
+  const scale = activeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1] });
+  const indicatorScale = activeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] });
+
   return (
-    <View style={[styles.iconTile, { borderColor: border, backgroundColor: bg }]}> 
-      {[0,45,90,135,180,225,270,315].map((r) => (
-        <View key={r} style={[styles.gearTooth, { backgroundColor: color, transform: [{ rotate: `${r}deg` }, { translateX: 11 }] }]} />
-      ))}
-      <View style={[styles.gearRing, { borderColor: color }]} />
-      <View style={[styles.gearCenter, { borderColor: color }]} />
-    </View>
+    <Pressable
+      onPress={onPress}
+      style={styles.tab}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Animated.View
+        style={[
+          styles.tabIconWrap,
+          active && styles.tabIconGlow,
+          { transform: [{ scale }] },
+        ]}
+      >
+        <TabGlyph id={id} active={active} />
+      </Animated.View>
+      <Text
+        style={[styles.tabText, active && styles.tabTextActive]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.56}
+      >
+        {label}
+      </Text>
+      <Animated.View
+        style={[
+          styles.tabActiveUnderline,
+          {
+            opacity: activeAnim,
+            transform: [{ scaleX: indicatorScale }],
+          },
+        ]}
+      />
+    </Pressable>
   );
 }
 
-export default function App() {
+type AppErrorBoundaryState = { error: Error | null };
+
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  AppErrorBoundaryState
+> {
+  state: AppErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    captureAppError(error, { componentStack: errorInfo.componentStack });
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <SafeAreaProvider>
+          <SafeAreaView style={styles.app}>
+            <View style={[styles.lockScreen, { padding: 24 }]}>
+              <Text style={styles.h1}>YouTrader</Text>
+              <Text style={[styles.sub, { marginTop: 10 }]}>
+                The app could not start after the update. Please reinstall from the App Store once a new build is available.
+              </Text>
+              <Text style={[styles.sub, { color: C.red, marginTop: 12 }]}>
+                Something went wrong. Please try again after restarting the app.
+              </Text>
+            </View>
+          </SafeAreaView>
+        </SafeAreaProvider>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function App() {
   const [tab, setTab] = useState<Tab>("journal");
   const [lang, setLang] = useState<Lang>("en");
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -4219,46 +8736,92 @@ export default function App() {
   const [revenueCatReady, setRevenueCatReady] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [proAccess, setProAccess] = useState<ProAccessState>(() => emptyProAccessState());
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [storeProducts, setStoreProducts] = useState<PurchasesStoreProduct[]>([]);
   const [paywallError, setPaywallError] = useState("");
+  const [showRestorePurchases, setShowRestorePurchases] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<"off" | "syncing" | "synced" | "error">("off");
   const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in and upgrade to Pro to sync your journal.");
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
-  const [faceLockEnabled, setFaceLockEnabled] = useState(false);
-  const [biometricUnlocked, setBiometricUnlocked] = useState(true);
-  const [biometricChecking, setBiometricChecking] = useState(true);
+  const [propRiskOpen, setPropRiskOpen] = useState(false);
+  const [propRiskDate, setPropRiskDate] = useState(todayISO());
+  const [propTemplates, setPropTemplates] = useState<RiskTemplate[]>(FALLBACK_PROP_RULES);
+  const [propRulesMeta, setPropRulesMeta] = useState<{ source: "remote" | "cache" | "fallback"; updatedAt?: string }>({
+    source: "fallback",
+  });
+  const [lockScreenBufferEnabled, setLockScreenBufferEnabled] = useState(false);
   const purchasesConfigured = useRef(false);
   const cloudSyncInFlight = useRef(false);
+  const customerInfoRef = useRef<CustomerInfo | null>(null);
+  const serverEntitlementActiveRef = useRef(false);
 
-  const authConfigured = !!supabase;
-  const revenueCatConfigured = !!REVENUECAT_API_KEY && Platform.OS !== "web";
-  const isPremium = OWNER_FULL_ACCESS || customerHasPro(customerInfo);
-  const cloudSyncEnabled = !!supabase && !!session?.user.id && isPremium;
+  const authConfigured = false;
+  const revenueCatConfigured = isRevenueCatConfigured;
+  const isPremium = proAccess.isPro;
+  const cloudSyncEnabled = false;
   const currentTradeSignature = useMemo(() => tradesSignature(trades), [trades]);
-  const promptBiometricUnlock = useCallback(async () => {
-    try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const enrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!hasHardware || !enrolled) {
-        Alert.alert("Face ID", "Face ID is not set up on this device.");
-        setBiometricUnlocked(true);
-        return false;
-      }
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Unlock YouTrader",
-        cancelLabel: "Cancel",
-        disableDeviceFallback: false,
-      });
-      setBiometricUnlocked(result.success);
-      return result.success;
-    } catch {
-      setBiometricUnlocked(true);
-      return false;
-    }
+
+  useEffect(() => {
+    trackEvent("app_opened");
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem("lang-v1").then((v) => {
+    trackScreen(tab);
+    logCrashlyticsBreadcrumb("screen_view", { tab });
+  }, [tab]);
+
+  useEffect(() => {
+    if (tradesHydrated) recordMetric("journal_trade_count", trades.length);
+  }, [trades.length, tradesHydrated]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const cached = await AsyncStorage.getItem(PROP_RULES_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached) as { templates?: unknown[]; updatedAt?: string };
+          const normalized = Array.isArray(parsed.templates)
+            ? parsed.templates
+                .map((row) => normalizeRemoteTemplate(row))
+                .filter((x): x is RiskTemplate => Boolean(x))
+            : [];
+          if (normalized.length) {
+            setPropTemplates(normalized);
+            setPropRulesMeta({ source: "cache", updatedAt: parsed.updatedAt });
+          }
+        }
+      } catch {
+        // ignore cache parsing issues
+      }
+      if (!supabase) return;
+      try {
+        const { data, error } = await supabase
+          .from("prop_firms")
+          .select("slug,name,account_name,account_size,daily_loss_limit,max_loss_limit,evaluation_contracts,live_contracts,trailing_drawdown,rules,created_at")
+          .order("account_size", { ascending: true });
+        if (error) throw error;
+        const normalized = (data || [])
+          .map((row) => normalizeRemoteTemplate(row))
+          .filter((x): x is RiskTemplate => Boolean(x));
+        if (normalized.length) {
+          const updatedAt = new Date().toISOString();
+          setPropTemplates(normalized);
+          setPropRulesMeta({ source: "remote", updatedAt });
+          await AsyncStorage.setItem(
+            PROP_RULES_CACHE_KEY,
+            JSON.stringify({ templates: data, updatedAt }),
+          );
+        }
+      } catch (error) {
+        logger.error(error, { feature: "supabase", action: "load_prop_firms", table: "prop_firms" });
+        // keep cache/fallback if remote request fails
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(LANG_STORAGE_KEY).then((v) => {
       if (v && ["en", "ru", "es", "fr", "it", "uk", "de"].includes(v))
         setLang(v as Lang);
     });
@@ -4267,9 +8830,16 @@ export default function App() {
   useEffect(() => {
     AsyncStorage.getItem(TRADES_STORAGE_KEY)
       .then((value) => {
-        if (value) setTrades(normalizeTrades(JSON.parse(value)));
+        if (!value) return;
+        try {
+          setTrades(normalizeTrades(JSON.parse(value)));
+        } catch {
+          AsyncStorage.removeItem(TRADES_STORAGE_KEY);
+        }
       })
       .finally(() => setTradesHydrated(true));
+    const safety = setTimeout(() => setTradesHydrated(true), 4000);
+    return () => clearTimeout(safety);
   }, []);
 
   useEffect(() => {
@@ -4277,20 +8847,84 @@ export default function App() {
     AsyncStorage.setItem(TRADES_STORAGE_KEY, JSON.stringify(normalizeTrades(trades)));
   }, [trades, tradesHydrated]);
 
+  const applyCustomerInfo = useCallback((info: CustomerInfo, reason: string) => {
+    customerInfoRef.current = info;
+    setCustomerInfo(info);
+    const nextAccess = buildProAccessState(info, serverEntitlementActiveRef.current);
+    setProAccess(nextAccess);
+    if (nextAccess.isPro) {
+      setPaywallError("");
+      setShowRestorePurchases(false);
+    }
+    billingDebugLog("customer info updated", {
+      reason,
+      ...summarizeCustomerInfo(info),
+      finalIsPro: nextAccess.isPro,
+      source: nextAccess.source,
+    });
+    return nextAccess.isPro;
+  }, []);
+
+  const applyServerEntitlement = useCallback((active: boolean, reason: string) => {
+    serverEntitlementActiveRef.current = active;
+    const nextAccess = buildProAccessState(customerInfoRef.current, active);
+    setProAccess(nextAccess);
+    billingDebugLog("server entitlement updated", {
+      reason,
+      serverEntitlementActive: active,
+      finalIsPro: nextAccess.isPro,
+      source: nextAccess.source,
+    });
+    return nextAccess.isPro;
+  }, []);
+
   const refreshRevenueCat = useCallback(async () => {
-    if (!purchasesConfigured.current) return;
+    if (!purchasesConfigured.current) {
+      return { packages: [] as PurchasesPackage[], storeProducts: [] as PurchasesStoreProduct[] };
+    }
     try {
       const [nextCustomerInfo, offerings] = await Promise.all([
         Purchases.getCustomerInfo(),
         Purchases.getOfferings(),
       ]);
-      setCustomerInfo(nextCustomerInfo);
-      setPackages(offerings.current?.availablePackages || []);
-      setPaywallError("");
+      const availablePackages = offerings.current?.availablePackages || [];
+      // Safe diagnostics (no user PII) — confirm the default offering exposes both
+      // monthly + yearly packages and the shared entitlement is wired correctly.
+      billingDebugLog("offerings received", {
+        currentOfferingId: offerings.current?.identifier || null,
+        allOfferingIds: Object.keys(offerings.all || {}),
+        availablePackageIds: availablePackages.map((pkg) => pkg.identifier),
+        availableProductIds: availablePackages.map((pkg) => pkg.product.identifier),
+        expectedProductIds: YOU_TRADER_PRO_PRODUCT_IDS,
+        entitlement: summarizeCustomerInfo(nextCustomerInfo),
+      });
+      applyCustomerInfo(nextCustomerInfo, "refreshRevenueCat");
+      setPackages(availablePackages);
+      if (availablePackages.length) {
+        setStoreProducts([]);
+        setPaywallError("");
+        return { packages: availablePackages, storeProducts: [] as PurchasesStoreProduct[] };
+      }
+      // Fallback when no offering is configured: load both products directly.
+      const products = await Purchases.getProducts(YOU_TRADER_PRO_PRODUCT_IDS);
+      billingDebugLog("products fallback loaded", {
+        requestedProductIds: YOU_TRADER_PRO_PRODUCT_IDS,
+        loadedProductIds: products.map((product) => product.identifier),
+      });
+      setStoreProducts(products);
+      setPaywallError(
+        products.length
+          ? ""
+          : "Subscription is being prepared. Please try again in a moment.",
+      );
+      return { packages: [] as PurchasesPackage[], storeProducts: products };
     } catch (error: any) {
-      setPaywallError(error?.message || "RevenueCat connection failed.");
+      logger.error(error, { feature: "revenuecat", action: "refresh_catalog" });
+      const message = userFacingBillingError(error?.message || "RevenueCat connection failed.");
+      setPaywallError(message);
+      return { packages: [] as PurchasesPackage[], storeProducts: [] as PurchasesStoreProduct[] };
     }
-  }, []);
+  }, [applyCustomerInfo]);
 
   useEffect(() => {
     if (!revenueCatConfigured || purchasesConfigured.current) return;
@@ -4300,47 +8934,161 @@ export default function App() {
       purchasesConfigured.current = true;
       setRevenueCatReady(true);
       refreshRevenueCat();
-      const listener = (info: CustomerInfo) => setCustomerInfo(info);
+      const listener = (info: CustomerInfo) => {
+        applyCustomerInfo(info, "customerInfoUpdateListener");
+      };
       Purchases.addCustomerInfoUpdateListener(listener);
       return () => {
         Purchases.removeCustomerInfoUpdateListener(listener);
       };
     } catch (error: any) {
-      setPaywallError(error?.message || "RevenueCat setup failed.");
+      logger.error(error, { feature: "revenuecat", action: "configure" });
+      setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
     }
   }, [refreshRevenueCat, revenueCatConfigured]);
 
   useEffect(() => {
     if (!purchasesConfigured.current || !session?.user.id) return;
     Purchases.logIn(session.user.id)
-      .then(({ customerInfo: nextCustomerInfo }) => setCustomerInfo(nextCustomerInfo))
+      .then(({ customerInfo: nextCustomerInfo }) => applyCustomerInfo(nextCustomerInfo, "logIn"))
       .then(refreshRevenueCat)
-      .catch(() => {});
-  }, [refreshRevenueCat, session?.user.id]);
+      .catch((error) => {
+        logger.error(error, { feature: "revenuecat", action: "log_in" });
+      });
+  }, [applyCustomerInfo, refreshRevenueCat, session?.user.id]);
+
+  const refreshLockScreenBufferReminder = useCallback(async () => {
+    const [enabledRaw, templateKeyRaw, modeRaw] = await Promise.all([
+      AsyncStorage.getItem(LOCK_SCREEN_BUFFER_KEY),
+      AsyncStorage.getItem("prop-risk-template-v1"),
+      AsyncStorage.getItem("prop-risk-mode-v1"),
+    ]);
+    const enabled = enabledRaw === "on";
+    setLockScreenBufferEnabled(enabled);
+    if (!enabled) {
+      await scheduleDailyPropRiskNotification({ enabled: false, title: "", body: "" });
+      return;
+    }
+    const templateKey = templateKeyRaw || propTemplates[0]?.key || FALLBACK_PROP_RULES[0].key;
+    const mode: FirmMode = modeRaw === "funded" ? "funded" : "evaluation";
+    const snapshot = computePropRiskSnapshot({
+      trades,
+      selectedDate: todayISO(),
+      templateKey,
+      mode,
+      templates: propTemplates,
+    });
+    await scheduleDailyPropRiskNotification({
+      enabled: true,
+      title: `YouTrader • ${snapshot.template.label}`,
+      body: `Daily buffer ${moneyCompact(snapshot.dailyRemaining)} • ${snapshot.status} • Day P&L ${moneyCompact(snapshot.dayPnl)}`,
+    });
+  }, [trades, propTemplates]);
 
   useEffect(() => {
-    AsyncStorage.getItem("face-lock-v1").then(async (value) => {
-      const enabled = value === "on";
-      setFaceLockEnabled(enabled);
-      if (enabled) {
-        setBiometricUnlocked(false);
-        setBiometricChecking(false);
-        await promptBiometricUnlock();
-      } else {
-        setBiometricUnlocked(true);
-        setBiometricChecking(false);
-      }
+    AsyncStorage.getItem(LOCK_SCREEN_BUFFER_KEY).then((value) => {
+      setLockScreenBufferEnabled(value === "on");
     });
-  }, [promptBiometricUnlock]);
+  }, []);
+
+  useEffect(() => {
+    if (!tradesHydrated) return;
+    refreshLockScreenBufferReminder().catch(() => {});
+  }, [tradesHydrated, refreshLockScreenBufferReminder]);
+
+  const importTradesFromCsv = useCallback(async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: [
+          "text/csv",
+          "text/comma-separated-values",
+          "text/plain",
+          "application/vnd.ms-excel",
+          "public.comma-separated-values-text",
+          "*/*",
+        ],
+        copyToCacheDirectory: true,
+      });
+      if (picked.canceled || !picked.assets?.[0]?.uri) return;
+      const text = await readCsvFileAsText(picked.assets[0].uri);
+      const rows = parseTradesCsvText(text);
+      if (!rows.length) {
+        Alert.alert(
+          "Import trades",
+          "No trades found. Use header row: date, symbol, direction, pnl (optional: entry, exit, contracts, notes).",
+        );
+        return;
+      }
+      const imported: Trade[] = rows.map((row) => ({
+        id: uid(),
+        date: row.date,
+        symbol: row.symbol,
+        direction: row.direction,
+        entry: row.entry,
+        exit: row.exit,
+        contracts: row.contracts,
+        pnl: row.pnl,
+        mood: row.mood,
+        notes: row.notes || "Imported from CSV",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }));
+      setTrades((prev) => [...imported, ...prev]);
+      Alert.alert("Import complete", `${imported.length} trades added to your journal.`);
+    } catch (error) {
+      alertExportError("CSV import failed", error);
+    }
+  }, []);
+
+  const toggleLockScreenBuffer = useCallback(
+    async (enabled: boolean) => {
+      setLockScreenBufferEnabled(enabled);
+      await AsyncStorage.setItem(LOCK_SCREEN_BUFFER_KEY, enabled ? "on" : "off");
+      await refreshLockScreenBufferReminder();
+    },
+    [refreshLockScreenBufferReminder],
+  );
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch((error) => {
+        logger.error(error, { feature: "supabase", action: "get_session" });
+      });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshServerEntitlement = async () => {
+      if (!supabase || !session?.user.id) {
+        if (!cancelled) applyServerEntitlement(false, "no-session");
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("user_subscriptions")
+          .select("status,expires_at")
+          .eq("user_id", session.user.id)
+          .eq("entitlement_id", REVENUECAT_ENTITLEMENT_ID)
+          .maybeSingle();
+        if (error) throw error;
+        if (!cancelled) applyServerEntitlement(serverSubscriptionHasPro(data as ServerSubscriptionRow | null), "supabase");
+      } catch (error) {
+        logger.error(error, { feature: "supabase", action: "refresh_server_entitlement", table: "user_subscriptions" });
+        if (!cancelled) applyServerEntitlement(false, "supabase-error");
+      }
+    };
+    refreshServerEntitlement();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyServerEntitlement, session?.user.id]);
 
   useEffect(() => {
     if (!supabase || Platform.OS === "web") return;
@@ -4354,9 +9102,10 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return;
     const handleUrl = (url: string) => {
-      createSessionFromAuthUrl(url).catch((error) =>
-        Alert.alert("Sign in failed", error?.message || "Please try again."),
-      );
+      createSessionFromAuthUrl(url).catch((error) => {
+        logger.error(error, { feature: "supabase", action: "create_session_from_url" });
+        Alert.alert("Sign in failed", "Please try again.");
+      });
     };
     Linking.getInitialURL().then((url) => {
       if (url) handleUrl(url);
@@ -4372,8 +9121,8 @@ export default function App() {
         !session?.user.id
           ? "Sign in to sync your journal across devices."
           : !isPremium
-            ? "Cloud Sync is included in YouTrader Pro."
-            : "Cloud Sync is waiting for the journal to load.",
+            ? "Pro journal tools are active."
+            : "Journal is waiting for local data to load.",
       );
       return;
     }
@@ -4412,8 +9161,9 @@ export default function App() {
       setCloudSyncStatus("synced");
       setCloudSyncMessage(`Synced ${merged.length} trades across devices.`);
     } catch (error: any) {
+      logger.error(error, { feature: "supabase", action: "sync_trades", table: "trade_journal", userId: session?.user.id });
       setCloudSyncStatus("error");
-      setCloudSyncMessage(error?.message || "Cloud Sync failed. Check Supabase setup.");
+      setCloudSyncMessage("Journal update failed. Please try again.");
     } finally {
       cloudSyncInFlight.current = false;
     }
@@ -4428,7 +9178,9 @@ export default function App() {
         .update({ deleted_at: now, updated_at: now })
         .eq("user_id", session.user.id)
         .eq("client_id", tradeId);
-    } catch {}
+    } catch (error) {
+      logger.error(error, { feature: "supabase", action: "mark_trade_deleted", table: "trade_journal", userId: session?.user.id });
+    }
   }, [isPremium, session?.user.id]);
 
   useEffect(() => {
@@ -4438,8 +9190,8 @@ export default function App() {
         !session?.user.id
           ? "Sign in to sync your journal across devices."
           : !isPremium
-            ? "Cloud Sync is included in YouTrader Pro."
-            : "Cloud Sync is waiting for the journal to load.",
+            ? "Pro journal tools are active."
+            : "Journal is waiting for local data to load.",
       );
       return;
     }
@@ -4469,19 +9221,28 @@ export default function App() {
     };
   }, [cloudSyncEnabled, session?.user.id, syncTradesWithCloud]);
 
+  useEffect(() => {
+    if (!cloudSyncEnabled) return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") syncTradesWithCloud();
+    });
+    return () => subscription.remove();
+  }, [cloudSyncEnabled, syncTradesWithCloud]);
+
   const signInWithProvider = useCallback(async (provider: AuthProvider) => {
-    if (!supabase) {
+    if (!supabase || !authConfigured) {
       Alert.alert(
-        "Account sign-in",
-        "Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY before the App Store build.",
+        "Sign-in unavailable",
+        "Cloud sign-in is not available in this build. You can still use the journal on this device.",
       );
       return;
     }
 
     setAuthBusy(true);
     try {
+      trackEvent("signup_started", { provider });
       if (
-        ENABLE_NATIVE_APPLE_SIGN_IN &&
+        enableNativeAppleSignIn &&
         provider === "apple" &&
         Platform.OS === "ios" &&
         await AppleAuthentication.isAvailableAsync()
@@ -4508,6 +9269,7 @@ export default function App() {
             },
           });
         }
+        trackEvent("signup_completed", { provider });
         return;
       }
 
@@ -4520,129 +9282,253 @@ export default function App() {
       });
       if (error) throw error;
       const result = await WebBrowser.openAuthSessionAsync(data.url || "", AUTH_REDIRECT_TO);
-      if (result.type === "success") await createSessionFromAuthUrl(result.url);
+      if (result.type === "success") {
+        await createSessionFromAuthUrl(result.url);
+        trackEvent("signup_completed", { provider });
+      }
     } catch (error: any) {
       if (error?.code !== "ERR_REQUEST_CANCELED") {
-        Alert.alert("Sign in failed", error?.message || "Please try again.");
+        logger.error(error, { feature: "supabase", action: "sign_in", provider });
+        Alert.alert("Sign in failed", "Please try again.");
       }
     } finally {
       setAuthBusy(false);
     }
-  }, []);
+  }, [authConfigured]);
 
   const signOut = useCallback(async () => {
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert("Sign out failed", error.message);
+    if (error) {
+      logger.error(error, { feature: "supabase", action: "sign_out" });
+      Alert.alert("Sign out failed", "Please try again.");
+    }
   }, []);
 
-  const purchasePackage = useCallback(async (pkg?: PurchasesPackage | null) => {
+  const refreshCurrentEntitlements = useCallback(async (reason: string, retryDelays = ENTITLEMENT_RETRY_DELAYS_MS) => {
+    if (!purchasesConfigured.current) return null;
+    let latestInfo: CustomerInfo | null = null;
+    for (const [attempt, delay] of retryDelays.entries()) {
+      if (delay > 0) await sleep(delay);
+      try {
+        await Purchases.invalidateCustomerInfoCache();
+      } catch (error: any) {
+        logger.error(error, { feature: "revenuecat", action: "invalidate_customer_info_cache", attempt: attempt + 1 });
+        billingDebugLog("customer info cache invalidation failed", {
+          reason,
+          attempt: attempt + 1,
+          message: error?.message,
+        });
+      }
+      latestInfo = await Purchases.getCustomerInfo();
+      const hasPro = applyCustomerInfo(latestInfo, `${reason}:attempt-${attempt + 1}`);
+      billingDebugLog("entitlement refresh result", {
+        reason,
+        attempt: attempt + 1,
+        ...summarizeCustomerInfo(latestInfo),
+        finalIsPro: hasPro,
+      });
+      if (hasPro) return latestInfo;
+    }
+    return latestInfo;
+  }, [applyCustomerInfo]);
+
+  const finishPurchaseFlow = useCallback(async (result: MakePurchaseResult, reason: string) => {
+    const resultProductId = result.productIdentifier || result.transaction?.productIdentifier || "";
+    billingDebugLog("purchase result", {
+      reason,
+      productId: resultProductId,
+      transactionId: result.transaction?.transactionIdentifier,
+      transactionProductId: result.transaction?.productIdentifier,
+      transactionDate: result.transaction?.purchaseDate,
+      ...summarizeCustomerInfo(result.customerInfo),
+    });
+
+    if (resultProductId !== YOU_TRADER_MONTHLY_PRODUCT_ID) {
+      const message = "Purchase completed for a different product. Please contact support.";
+      setPaywallError(message);
+      setShowRestorePurchases(true);
+      trackEvent("purchase_failed", { reason: "wrong_product" });
+      Alert.alert("Purchase issue", message);
+      return;
+    }
+
+    if (applyCustomerInfo(result.customerInfo, `${reason}:purchase-result`)) {
+      logger.info("RevenueCat purchase unlocked Pro", { feature: "revenuecat", action: "purchase_success", reason });
+      trackEvent("purchase_success", { reason });
+      Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
+      return;
+    }
+
+    const refreshedInfo = await refreshCurrentEntitlements(reason);
+    if (customerHasPro(refreshedInfo)) {
+      logger.info("RevenueCat entitlement refresh unlocked Pro", { feature: "revenuecat", action: "purchase_success_after_refresh", reason });
+      trackEvent("purchase_success", { reason });
+      Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
+      return;
+    }
+
+    setShowRestorePurchases(true);
+    setPaywallError("Purchase completed, but the subscription is not readable yet. Tap Restore Purchases.");
+    logger.warn("RevenueCat purchase completed without readable entitlement", { feature: "revenuecat", action: "entitlement_unreadable" });
+    trackEvent("purchase_failed", { reason: "entitlement_unreadable" });
+    Alert.alert(
+      "Purchase complete",
+      "The purchase completed, but the subscription is not readable yet. Tap Restore Purchases.",
+    );
+  }, [applyCustomerInfo, refreshCurrentEntitlements]);
+
+  const purchasePackage = useCallback(async (pkg?: PurchasesPackage | null, productId = YOU_TRADER_MONTHLY_PRODUCT_ID) => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
       Alert.alert(
         "YouTrader Pro",
-        "RevenueCat is ready in code. Add the public RevenueCat API key before testing subscriptions.",
+        "Subscriptions are not available in this build. Please update the app from the App Store.",
       );
       return;
     }
-
-    const selectedPackage = pkg || packages[0] || null;
-    if (!selectedPackage) {
-      Alert.alert(
-        "YouTrader Pro",
-        "No subscription packages found. Create an offering in RevenueCat and attach monthly/yearly products to the pro entitlement.",
-      );
+    // Accept any known Pro product id (monthly OR yearly). Both unlock the same entitlement.
+    if (!YOU_TRADER_PRO_PRODUCT_IDS.includes(productId)) {
+      const message = "Subscription product is not configured correctly for this build.";
+      setPaywallError(message);
+      trackEvent("purchase_failed", { reason: "product_config_mismatch" });
+      billingDebugLog("product id mismatch", {
+        expectedProductIds: YOU_TRADER_PRO_PRODUCT_IDS,
+        requestedProductId: productId,
+      });
+      Alert.alert("YouTrader Pro", message);
       return;
     }
+    const isYearly = productId === YOU_TRADER_YEARLY_PRODUCT_ID;
 
     setPurchaseBusy(true);
+    setShowRestorePurchases(false);
     try {
-      const result = await Purchases.purchasePackage(selectedPackage);
-      setCustomerInfo(result.customerInfo);
-      setPaywallError("");
-      if (customerHasPro(result.customerInfo)) {
-        Alert.alert("YouTrader Pro", "Pro access unlocked.");
-      } else {
-        Alert.alert(
-          "Purchase complete",
-          "The purchase finished, but the pro entitlement is not active yet. Check the RevenueCat entitlement setup.",
-        );
+      logger.info("RevenueCat purchase started", { feature: "revenuecat", action: "purchase_started" });
+      trackEvent("subscribe_pressed");
+      billingDebugLog("purchase started", { productId });
+      let catalogPackages = packages;
+      let catalogProducts = storeProducts;
+      const needsCatalog =
+        !catalogPackages.length &&
+        !catalogProducts.some((product) => product.identifier === productId);
+      if (needsCatalog) {
+        const refreshed = await refreshRevenueCat();
+        catalogPackages = refreshed.packages;
+        catalogProducts = refreshed.storeProducts;
       }
+
+      const requestedPackage = pkg?.product.identifier === productId ? pkg : null;
+      const selectedPackage =
+        requestedPackage ||
+        findProPackage(catalogPackages, productId);
+
+      if (selectedPackage) {
+        const result = await Purchases.purchasePackage(selectedPackage);
+        await finishPurchaseFlow(result, "purchasePackage");
+        return;
+      }
+
+      // Only fall back to the SAME product id (never silently buy monthly when yearly
+      // was requested). For yearly, if it isn't in the offering yet, surface a friendly
+      // message instead of a developer-style error or wrong-product purchase.
+      const selectedProduct =
+        catalogProducts.find((product) => product.identifier === productId) || null;
+      if (selectedProduct) {
+        const result = await Purchases.purchaseStoreProduct(selectedProduct);
+        await finishPurchaseFlow(result, "purchaseStoreProduct");
+        return;
+      }
+
+      if (isYearly) {
+        const message = "Yearly plan temporarily unavailable. Please try again later.";
+        setPaywallError(message);
+        trackEvent("purchase_failed", { reason: "yearly_product_unavailable" });
+        billingDebugLog("yearly product unavailable", {
+          requestedProductId: productId,
+          catalogPackageIds: catalogPackages.map((item) => item.product.identifier),
+          catalogProductIds: catalogProducts.map((product) => product.identifier),
+        });
+        Alert.alert("YouTrader Pro", message);
+        return;
+      }
+
+      const result = await Purchases.purchaseProduct(productId);
+      await finishPurchaseFlow(result, "purchaseProduct");
     } catch (error: any) {
       if (!error?.userCancelled) {
-        const message = error?.message || "Purchase failed. Please try again.";
+        logger.error(error, { feature: "revenuecat", action: "purchase" });
+        const message = userFacingBillingError(error?.message || "Purchase failed. Please try again.");
         setPaywallError(message);
+        trackEvent("purchase_failed", { reason: "purchase_error" });
         Alert.alert("Purchase failed", message);
       }
+      await refreshRevenueCat();
     } finally {
       setPurchaseBusy(false);
     }
-  }, [packages, revenueCatConfigured]);
+  }, [finishPurchaseFlow, packages, refreshRevenueCat, revenueCatConfigured, storeProducts]);
 
   const restorePurchases = useCallback(async () => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
       Alert.alert(
         "Restore Purchases",
-        "RevenueCat is ready in code. Add the public RevenueCat API key before testing restore.",
+        "Subscriptions are not available in this build. Please update the app from the App Store.",
       );
       return;
     }
 
     setPurchaseBusy(true);
     try {
+      billingDebugLog("restore started", { productId: YOU_TRADER_MONTHLY_PRODUCT_ID });
       const info = await Purchases.restorePurchases();
-      setCustomerInfo(info);
-      setPaywallError("");
-      if (customerHasPro(info)) {
-        Alert.alert("Restored", "YouTrader Pro is active.");
+      billingDebugLog("restore result", summarizeCustomerInfo(info));
+      const hasPro = applyCustomerInfo(info, "restorePurchases");
+      const refreshedInfo = hasPro ? info : await refreshCurrentEntitlements("restorePurchases", [0, 1200, 2400]);
+      if (customerHasPro(refreshedInfo)) {
+        logger.info("RevenueCat restore unlocked Pro", { feature: "revenuecat", action: "restore_success" });
+        setPaywallError("");
+        setShowRestorePurchases(false);
+        Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
       } else {
-        Alert.alert("No active subscription", "No active YouTrader Pro subscription was found for this store account.");
+        logger.warn("RevenueCat restore found no active subscription", { feature: "revenuecat", action: "restore_no_active_subscription" });
+        setShowRestorePurchases(true);
+        Alert.alert("Restore Purchases", "No active subscription found.");
       }
     } catch (error: any) {
-      const message = error?.message || "Restore failed. Please try again.";
+      logger.error(error, { feature: "revenuecat", action: "restore" });
+      billingDebugLog("restore failed", { message: error?.message });
+      const message = "Could not restore purchases. Please try again.";
       setPaywallError(message);
-      Alert.alert("Restore failed", message);
+      Alert.alert("Restore Purchases", message);
     } finally {
       setPurchaseBusy(false);
     }
-  }, [revenueCatConfigured]);
+  }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured]);
 
-  const enableFaceId = useCallback(async () => {
-    const ok = await promptBiometricUnlock();
-    if (!ok) return;
-    await AsyncStorage.setItem("face-lock-v1", "on");
-    setFaceLockEnabled(true);
-    setBiometricUnlocked(true);
-  }, [promptBiometricUnlock]);
+  const appReady = tradesHydrated;
 
-  const disableFaceId = useCallback(async () => {
-    await AsyncStorage.removeItem("face-lock-v1");
-    setFaceLockEnabled(false);
-    setBiometricUnlocked(true);
-  }, []);
-
-  if (biometricChecking) {
+  if (!appReady) {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={styles.app}>
           <StatusBar style="light" backgroundColor="#000000" />
           <View style={styles.lockScreen}>
-            <ActivityIndicator color={C.green} />
+            <Text style={styles.h1}>YouTrader</Text>
+            <ActivityIndicator color={C.green} style={{ marginTop: 18 }} />
+            <Text style={[styles.sub, { marginTop: 12 }]}>Loading your journal…</Text>
           </View>
         </SafeAreaView>
       </SafeAreaProvider>
     );
   }
 
-  if (faceLockEnabled && !biometricUnlocked) {
-    return <BiometricLockScreen onUnlock={promptBiometricUnlock} />;
-  }
-
   const tabs: { id: Tab; label: string }[] = [
     { id: "journal", label: tText(lang, "journal") },
     { id: "stats", label: tText(lang, "stats") },
     { id: "calc", label: tText(lang, "calc") },
-    { id: "calendar", label: tText(lang, "calendar") },
+    { id: "ai", label: "AI Analytics" },
     { id: "news", label: tText(lang, "news") },
+    { id: "calendar", label: tText(lang, "calendar") },
     { id: "settings", label: tText(lang, "settings") },
   ];
   const premiumTabs: Tab[] = [];
@@ -4657,9 +9543,10 @@ export default function App() {
               lang={lang}
               onClose={() => setTab("calc")}
               packages={packages}
+              storeProducts={storeProducts}
               purchaseBusy={purchaseBusy}
-              revenueCatConfigured={revenueCatConfigured}
               paywallError={paywallError}
+              showRestorePurchases={showRestorePurchases}
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
             />
@@ -4667,27 +9554,52 @@ export default function App() {
             <JournalScreen
               lang={lang}
               trades={trades}
+              propTemplates={propTemplates}
               setTrades={setTrades}
               isPremium={isPremium}
-              onUpgrade={() => setTab("stats")}
+              onOpenPropRisk={(date) => {
+                setPropRiskDate(date);
+                setPropRiskOpen(true);
+              }}
+              onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)}
               onTradeDeleted={markCloudTradeDeleted}
             />
           ) : tab === "stats" ? (
             <StatsScreen
               lang={lang}
               trades={trades}
+              propTemplates={propTemplates}
               isPremium={isPremium}
               packages={packages}
+              storeProducts={storeProducts}
               purchaseBusy={purchaseBusy}
-              revenueCatConfigured={revenueCatConfigured}
               paywallError={paywallError}
+              showRestorePurchases={showRestorePurchases}
+              onPurchase={purchasePackage}
+              onRestore={restorePurchases}
+              session={session}
+            />
+          ) : tab === "ai" ? (
+            <AiAnalysisScreen
+              trades={trades}
+              propTemplates={propTemplates}
+              isPremium={isPremium}
+              packages={packages}
+              storeProducts={storeProducts}
+              purchaseBusy={purchaseBusy}
+              paywallError={paywallError}
+              showRestorePurchases={showRestorePurchases}
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
             />
           ) : tab === "news" ? (
-            <NewsScreen lang={lang} isPremium={isPremium} />
+            <NewsScreen
+              lang={lang}
+              isPremium={isPremium}
+              onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+            />
           ) : tab === "calendar" ? (
-            <CalendarScreen lang={lang} />
+            <CalendarScreen lang={lang} trades={trades} isPremium={isPremium} onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)} />
           ) : tab === "calc" ? (
             <CalcScreen lang={lang} />
           ) : (
@@ -4699,38 +9611,47 @@ export default function App() {
               authConfigured={authConfigured}
               isPremium={isPremium}
               packages={packages}
+              storeProducts={storeProducts}
               purchaseBusy={purchaseBusy}
               revenueCatConfigured={revenueCatConfigured}
               paywallError={paywallError}
+              showRestorePurchases={showRestorePurchases}
               cloudSyncEnabled={cloudSyncEnabled}
               cloudSyncStatus={cloudSyncStatus}
               cloudSyncMessage={cloudSyncMessage}
               lastCloudSyncAt={lastCloudSyncAt}
-              faceLockEnabled={faceLockEnabled}
-              onOAuth={signInWithProvider}
-              onSignOut={signOut}
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
               onSyncNow={syncTradesWithCloud}
-              onEnableFaceId={enableFaceId}
-              onDisableFaceId={disableFaceId}
+              lockScreenBufferEnabled={lockScreenBufferEnabled}
+              onToggleLockScreenBuffer={toggleLockScreenBuffer}
+              onImportTradesCsv={importTradesFromCsv}
+              onSignIn={signInWithProvider}
+              onSignOut={signOut}
             />
           )}
         </View>
+        <Modal visible={propRiskOpen} animationType="slide">
+          <SafeAreaView style={styles.modal}>
+            <View style={styles.propModalTopBar}>
+              <Pressable onPress={() => setPropRiskOpen(false)} style={styles.closeCircleProp}>
+                <Text style={styles.closeX}>×</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={[styles.content, styles.propModalScroll]}>
+              <PropFirmRiskCoach trades={trades} selectedDate={propRiskDate} templates={propTemplates} />
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
         <View style={styles.tabbar}>
           {tabs.map((x) => (
-            <Pressable
+            <TabButton
               key={x.id}
+              id={x.id}
+              label={x.label}
+              active={tab === x.id}
               onPress={() => setTab(x.id)}
-              style={[styles.tab, tab === x.id && styles.tabActive]}
-            >
-              <TabGlyph id={x.id} active={tab === x.id} />
-              <Text
-                style={[styles.tabText, tab === x.id && styles.tabTextActive]}
-              >
-                {x.label}
-              </Text>
-            </Pressable>
+            />
           ))}
         </View>
       </SafeAreaView>
@@ -4738,22 +9659,71 @@ export default function App() {
   );
 }
 
+function AppRoot() {
+  const app = (
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
+  );
+  if (!posthogClient) return app;
+  return (
+    <PostHogProvider client={posthogClient} autocapture={false}>
+      {app}
+    </PostHogProvider>
+  );
+}
+
+export default wrapAppWithSentry(AppRoot);
+
 const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: C.bg },
   body: { flex: 1, backgroundColor: C.bg },
   screen: { flex: 1, backgroundColor: C.bg, width: "100%" },
   content: { padding: 16, paddingBottom: 24, width: "100%", maxWidth: 980, alignSelf: "center" },
+  journalContent: { flexGrow: 1, paddingTop: 8, paddingBottom: 46 },
+  journalTabletContent: { paddingTop: 0, maxWidth: 1280 },
+  calendarTabletContent: { maxWidth: 1280, paddingHorizontal: 24, paddingTop: 22 },
+  calendarLiveHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(12,13,18,0.88)",
+    padding: 14,
+    marginBottom: 12,
+  },
+  calendarRefreshBtn: {
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.44)",
+    backgroundColor: C.greenSoft,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  calendarRefreshText: {
+    color: C.green,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
   list: { padding: 16, paddingBottom: 24, width: "100%", maxWidth: 980, alignSelf: "center" },
+  newsList: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 24, width: "100%", maxWidth: 980, alignSelf: "center" },
+  newsListNoTitle: { paddingTop: 14 },
   h1: {
     color: C.text,
     fontSize: 31,
     fontWeight: "900",
     letterSpacing: -1,
-    marginBottom: 16,
+    marginBottom: 12,
   },
+  newsTitleHeader: { marginBottom: 0 },
+  calendarTabletTitle: { fontSize: 38, lineHeight: 46, marginBottom: 22 },
   h1NoMargin: {
     color: C.text,
-    fontSize: 29,
+    fontSize: 34,
     fontWeight: "900",
     letterSpacing: -1,
     flex: 1,
@@ -4766,6 +9736,22 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 16,
     marginBottom: 12,
+  },
+  safeCard: {
+    overflow: "hidden",
+    maxWidth: "100%",
+    minWidth: 0,
+  },
+  safeText: {
+    minWidth: 0,
+    maxWidth: "100%",
+    flexShrink: 1,
+  },
+  safeMetricLabel: {
+    minWidth: 0,
+    maxWidth: "100%",
+    flexShrink: 1,
+    textTransform: "uppercase",
   },
   label: {
     color: C.sub,
@@ -4790,6 +9776,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
+  safeRowBetween: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+  flexShrink: { flex: 1, minWidth: 0, maxWidth: "100%" },
   wrap: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4799,7 +9795,7 @@ const styles = StyleSheet.create({
   },
   pill: {
     borderWidth: 1,
-    borderRadius: 999,
+    borderRadius: 18,
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
@@ -4807,6 +9803,35 @@ const styles = StyleSheet.create({
   sub: { color: C.sub, fontSize: 12, lineHeight: 18 },
   notes: { color: C.text, fontSize: 14, lineHeight: 21, marginTop: 8 },
   tapHint: { color: C.green, fontSize: 11, fontWeight: "800", marginTop: 10 },
+  tradeMetaWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  tradeMetaChip: {
+    color: C.green,
+    fontSize: 10,
+    fontWeight: "900",
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.34)",
+    backgroundColor: C.greenSoft,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  tradeTagChip: {
+    color: C.purple,
+    fontSize: 10,
+    fontWeight: "900",
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.36)",
+    backgroundColor: C.purpleSoft,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   benefit: {
     color: C.text,
     fontSize: 14,
@@ -4833,6 +9858,11 @@ const styles = StyleSheet.create({
   restorePurchaseBtn: {
     borderColor: "rgba(163,255,18,0.42)",
     backgroundColor: C.greenSoft,
+  },
+  subscriptionPlanGrid: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
   },
   syncStatusDot: {
     width: 14,
@@ -4951,12 +9981,40 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 10,
   },
-  journalHeader: {
+  journalHeader: { display: "none" },
+  statsActionsRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 8,
     marginBottom: 12,
+  },
+  statsActionBtn: {
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  statsActionText: {
+    color: C.text,
+    fontWeight: "800",
+    fontSize: 12,
+  },
+  offscreenShareCard: {
+    position: "absolute",
+    left: -1400,
+    top: 0,
+    width: 1080,
+    height: 1920,
+    opacity: 1,
+    zIndex: -1,
+    pointerEvents: "none",
+  },
+  achievementShareCaptureFrame: {
+    width: 1080,
+    height: 1920,
+    backgroundColor: "#000000",
   },
   todayTop: { alignItems: "flex-end", maxWidth: 190, paddingTop: 6 },
   todayTopTitle: { color: C.text, fontSize: 16, fontWeight: "900" },
@@ -4967,36 +10025,140 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: "right",
   },
-  calendarCard: { paddingHorizontal: 14 },
-  calendarGrid: {
-    gap: 4,
+  calendarCard: {
+    paddingHorizontal: 2,
+    paddingTop: 14,
+    paddingBottom: 8,
+    marginBottom: 24,
+    alignSelf: "center",
   },
+  journalDateCorner: {
+    position: "absolute",
+    right: 18,
+    top: 14,
+    maxWidth: "58%",
+    alignItems: "flex-end",
+  },
+  journalDateCornerText: {
+    color: C.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  calendarGrid: { marginTop: 10 },
   calendarRow: {
     flexDirection: "row",
-    gap: 4,
     justifyContent: "flex-start",
   },
   daySpacer: {
-    width: "13.6%",
-    height: 70,
-    marginBottom: 4,
+    marginBottom: 5,
   },
   day: {
-    width: "13.6%",
-    height: 70,
-    borderRadius: 16,
-    backgroundColor: C.card2,
+    borderRadius: 18,
+    backgroundColor: "rgba(18,20,27,0.72)",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: C.border,
-    marginBottom: 4,
+    borderColor: "rgba(255,255,255,0.09)",
+    marginBottom: 7,
+    overflow: "hidden",
+    paddingHorizontal: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
   },
-  dayProfit: { backgroundColor: "rgba(163,255,18,0.10)", borderColor: "rgba(163,255,18,0.55)" },
-  dayLoss: { backgroundColor: "rgba(255,59,95,0.10)", borderColor: "rgba(255,59,95,0.55)" },
-  dayActive: { backgroundColor: C.purple, borderColor: C.purple },
+  dayProfit: { backgroundColor: "rgba(94,132,36,0.28)", borderColor: "rgba(163,255,18,0.44)" },
+  dayLoss: { backgroundColor: "rgba(110,22,40,0.34)", borderColor: "rgba(255,59,95,0.42)" },
+  dayActive: {
+    backgroundColor: "rgba(255,255,255,0.11)",
+    borderColor: "rgba(255,255,255,0.72)",
+    borderWidth: 2,
+  },
+  dayPnlText: {
+    fontSize: 17,
+    lineHeight: 20,
+    fontWeight: "900",
+    marginTop: 5,
+    maxWidth: "100%",
+    minWidth: 0,
+    textAlign: "center",
+  },
+  todayMiniBadge: {
+    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.24)",
+    maxWidth: "92%",
+    overflow: "hidden",
+  },
+  todayMiniBadgeText: {
+    color: C.white,
+    fontSize: 6.5,
+    lineHeight: 9,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  journalScrollHint: {
+    alignSelf: "flex-end",
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 8,
+    marginRight: 4,
+    opacity: 0.82,
+  },
+  journalScrollHintArrow: {
+    color: C.green,
+    fontSize: 16,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  journalScrollHintText: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+  },
   dayMuted: { opacity: 0.48 },
-  dayNum: { color: C.text, fontWeight: "900", fontSize: 20 },
+  dayNum: {
+    color: "#B7BDC8",
+    fontWeight: "900",
+    fontSize: 16,
+    lineHeight: 19,
+    textAlign: "center",
+    maxWidth: "100%",
+  },
+  journalAddTradeButton: {
+    minHeight: 58,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.82)",
+    backgroundColor: "rgba(0,0,0,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 20,
+    marginBottom: 18,
+  },
+  journalAddTradePlus: {
+    color: C.green,
+    fontSize: 35,
+    lineHeight: 38,
+    fontWeight: "400",
+  },
+  journalAddTradeText: {
+    color: C.green,
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: "900",
+  },
   modal: { flex: 1, backgroundColor: C.bg },
   modalHeader: {
     flexDirection: "row",
@@ -5004,6 +10166,28 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 18,
     paddingTop: 34,
+  },
+  propModalTopBar: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "flex-start",
+    paddingTop: 8,
+    paddingRight: 16,
+    paddingBottom: 0,
+  },
+  propModalScroll: {
+    paddingTop: 4,
+  },
+  closeCircleProp: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.card2,
+    borderColor: C.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
   },
   closeCircle: {
     width: 52,
@@ -5025,6 +10209,44 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 16,
   },
+  compactInput: {
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  formTwoCol: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  formTwoColItem: {
+    flex: 1,
+  },
+  tagChipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  tradeTagButton: {
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card2,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  tradeTagButtonActive: {
+    borderColor: C.purple,
+    backgroundColor: C.purpleSoft,
+  },
+  tradeTagButtonText: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  tradeTagButtonTextActive: {
+    color: C.purple,
+  },
   option: {
     flex: 1,
     borderColor: C.border,
@@ -5041,6 +10263,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: C.card2,
+    minWidth: 76,
+    alignItems: "center",
   },
   optionActive: { backgroundColor: C.greenSoft, borderColor: C.green },
   optionShortActive: { backgroundColor: C.redSoft, borderColor: C.red },
@@ -5067,10 +10291,17 @@ const styles = StyleSheet.create({
   moodText: { color: C.text, fontWeight: "800", fontSize: 10 },
   newsTitle: {
     color: C.text,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "900",
-    lineHeight: 23,
+    lineHeight: 25,
     marginTop: 10,
+  },
+  tradeSymbolTitle: {
+    color: C.text,
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 28,
+    marginTop: 2,
   },
   newsSummary: { color: C.sub, fontSize: 13, lineHeight: 20, marginTop: 8 },
   refresh: {
@@ -5087,13 +10318,13 @@ const styles = StyleSheet.create({
     backgroundColor: C.card2,
     borderColor: C.border,
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 10,
+    borderRadius: 12,
+    padding: 7,
   },
   asset: { color: C.sub, fontSize: 10, fontWeight: "900", marginBottom: 4 },
   bigTime: {
     color: C.text,
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: "900",
     letterSpacing: -1,
   },
@@ -5102,8 +10333,8 @@ const styles = StyleSheet.create({
   smallMetric: {
     flex: 1,
     backgroundColor: C.card2,
-    borderRadius: 14,
-    padding: 10,
+    borderRadius: 12,
+    padding: 7,
     borderWidth: 1,
     borderColor: C.border,
   },
@@ -5118,9 +10349,40 @@ const styles = StyleSheet.create({
     marginRight: 8,
     alignItems: "center",
   },
+  weekChipTablet: { width: 118, minHeight: 84, paddingVertical: 16, marginRight: 12, borderRadius: 22 },
   weekChipActive: { backgroundColor: C.green, borderColor: C.green },
   weekChipDay: { color: C.text, fontWeight: "900", fontSize: 12 },
+  weekChipDayTablet: { fontSize: 15 },
   weekChipDate: { color: C.sub, fontWeight: "800", fontSize: 11, marginTop: 3 },
+  weekChipDateTablet: { fontSize: 14, marginTop: 5 },
+  weekChipLocked: { opacity: 0.62, borderColor: "rgba(176,38,255,0.45)" },
+  weekChipLock: { marginTop: 4, color: C.purple, fontSize: 9, fontWeight: "900", textTransform: "uppercase" },
+  weekChipLockTablet: { fontSize: 11, marginTop: 6 },
+  dayAgendaCard: {
+    borderColor: "rgba(163,255,18,0.24)",
+    backgroundColor: "rgba(163,255,18,0.035)",
+  },
+  dayAgendaList: { marginTop: 12, gap: 8 },
+  dayAgendaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: C.card2,
+    padding: 10,
+  },
+  dayAgendaTime: {
+    width: 72,
+    color: C.green,
+    fontSize: 12,
+    fontWeight: "900",
+    fontVariant: ["tabular-nums"],
+  },
+  dayAgendaBody: { flex: 1, minWidth: 0 },
+  dayAgendaTitle: { color: C.text, fontSize: 13, fontWeight: "900" },
+  dayAgendaMeta: { color: C.sub, fontSize: 11, lineHeight: 16, marginTop: 2 },
   resultBox: {
     backgroundColor: C.greenSoft,
     borderColor: C.green,
@@ -5243,13 +10505,45 @@ const styles = StyleSheet.create({
   fullPhoto: { width: "100%", height: "82%" },
 
   iconTile: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderWidth: 2,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
+  },
+  iconTileLarge: {
+    width: 42,
+    height: 42,
+    borderWidth: 3,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  iconTileFrameless: {
+    width: 48,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  journalBookmark: {
+    position: "absolute",
+    left: 7,
+    top: -2,
+    width: 10,
+    height: 15,
+    borderWidth: 3,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+  },
+  journalLine: {
+    height: 3,
+    borderRadius: 3,
+    marginLeft: 7,
+    marginVertical: 2,
   },
   iconLine: {
     width: 16,
@@ -5268,9 +10562,10 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   statsGlyphBars: {
-    height: 24,
+    height: 42,
     flexDirection: "row",
     alignItems: "flex-end",
+    gap: 4,
   },
   glyphBox: {
     width: 24,
@@ -5292,6 +10587,23 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   calcDot: { width: 5, height: 5, borderRadius: 1.5 },
+  calcDisplay: {
+    position: "absolute",
+    top: 6,
+    left: 8,
+    right: 8,
+    height: 8,
+    borderWidth: 2.5,
+    borderRadius: 3,
+  },
+  calcGridLarge: {
+    width: 27,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 13,
+  },
+  calcDotLarge: { width: 5, height: 5, borderRadius: 2 },
   calGlyph: {
     width: 24,
     height: 24,
@@ -5313,6 +10625,30 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   calDot: { width: 5, height: 5, borderRadius: 1.5 },
+  calendarRingLeft: {
+    position: "absolute",
+    top: -6,
+    left: 10,
+    width: 4,
+    height: 12,
+    borderRadius: 3,
+  },
+  calendarRingRight: {
+    position: "absolute",
+    top: -6,
+    right: 10,
+    width: 4,
+    height: 12,
+    borderRadius: 3,
+  },
+  calendarMiniGridLarge: {
+    width: 25,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
+  },
+  calendarDotMiniLarge: { width: 5, height: 5, borderRadius: 2 },
   newsGlyph: {
     width: 24,
     height: 24,
@@ -5320,6 +10656,60 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+  brainGlyph: {
+    width: 48,
+    height: 42,
+    position: "relative",
+  },
+  brainHalf: {
+    position: "absolute",
+    top: 3,
+    width: 23,
+    height: 31,
+    borderWidth: 3,
+    borderRadius: 14,
+  },
+  brainStem: {
+    position: "absolute",
+    left: 23,
+    top: 5,
+    width: 3,
+    height: 31,
+    borderRadius: 3,
+  },
+  brainDot: {
+    position: "absolute",
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  newsPaperGlyph: {
+    width: 48,
+    height: 42,
+    position: "relative",
+  },
+  newsPaperBack: {
+    position: "absolute",
+    left: 5,
+    top: 8,
+    width: 28,
+    height: 30,
+    borderWidth: 3,
+    borderRadius: 6,
+  },
+  newsPaperFront: {
+    position: "absolute",
+    right: 4,
+    top: 4,
+    width: 31,
+    height: 34,
+    borderWidth: 3,
+    borderRadius: 6,
+    padding: 6,
+    gap: 4,
+  },
+  newsPaperSquare: { width: 9, height: 9, borderRadius: 2 },
+  newsPaperLine: { height: 3, borderRadius: 2 },
   newsWave: {
     width: 22,
     height: 10,
@@ -5358,9 +10748,34 @@ const styles = StyleSheet.create({
   globeCircle: { width: 22, height: 22, borderWidth: 2, borderRadius: 11, position: "absolute" },
   globeVertical: { width: 2, height: 20, borderRadius: 2, position: "absolute" },
   globeHorizontal: { width: 20, height: 2, borderRadius: 2, position: "absolute" },
-  gearRing: { width: 18, height: 18, borderWidth: 2.4, borderRadius: 9, position: "absolute" },
-  gearCenter: { width: 7, height: 7, borderWidth: 2.2, borderRadius: 4, position: "absolute" },
-  gearTooth: { width: 8, height: 3.5, borderRadius: 2, position: "absolute" },
+  settingsCogBox: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settingsCogTooth: {
+    position: "absolute",
+    width: 5,
+    height: 10,
+    borderRadius: 1.5,
+  },
+  settingsCogRing: {
+    position: "absolute",
+    width: 27,
+    height: 27,
+    borderRadius: 14,
+    borderWidth: 3,
+    backgroundColor: "transparent",
+  },
+  settingsCogHub: {
+    position: "absolute",
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 3,
+    backgroundColor: "transparent",
+  },
   calendarTopBar: { position: "absolute", top: 5, left: 6, right: 6, height: 2, borderRadius: 3 },
   bullHead: { width: 17, height: 13, borderWidth: 2, borderRadius: 7, position: "absolute", top: 9 },
   bullHornLeft: { width: 10, height: 10, borderLeftWidth: 2, borderTopWidth: 2, borderRadius: 8, position: "absolute", left: 7, top: 5, transform: [{ rotate: "-25deg" }] },
@@ -5392,13 +10807,103 @@ const styles = StyleSheet.create({
   },
   langRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 6,
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    gap: 10,
     marginTop: 10,
+  },
+  settingsSwitchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+    paddingVertical: 12,
+  },
+  settingsSwitchCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  settingsSwitchTitle: {
+    color: C.text,
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 21,
+    marginBottom: 4,
+  },
+  settingsSwitchDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.07)",
   },
   purpleAction: {
     borderColor: C.purple,
     backgroundColor: C.purpleSoft,
+  },
+  proSubscriptionCard: {
+    borderColor: "rgba(176,38,255,0.55)",
+    backgroundColor: "rgba(176,38,255,0.055)",
+  },
+  proSubscriptionTitle: {
+    color: C.purple,
+  },
+  proStatusBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  proStatusActive: {
+    borderColor: "rgba(150,255,0,0.62)",
+    backgroundColor: "rgba(150,255,0,0.10)",
+  },
+  proStatusLocked: {
+    borderColor: "rgba(178,44,255,0.45)",
+    backgroundColor: "rgba(178,44,255,0.09)",
+  },
+  proStatusIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  proStatusIconActive: {
+    borderColor: "rgba(150,255,0,0.58)",
+    backgroundColor: "rgba(150,255,0,0.12)",
+  },
+  proStatusIconLocked: {
+    borderColor: "rgba(178,44,255,0.50)",
+    backgroundColor: "rgba(178,44,255,0.12)",
+  },
+  proStatusCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  proStatusTitle: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  proStatusTitleActive: {
+    color: C.green,
+  },
+  proStatusTitleLocked: {
+    color: C.purple,
+  },
+  proStatusText: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  greenProAction: {
+    borderColor: "rgba(163,255,18,0.72)",
+    backgroundColor: C.greenSoft,
   },
   calendarMiniGrid: {
     width: 18,
@@ -5416,15 +10921,587 @@ const styles = StyleSheet.create({
   tradingScoreCard: { width: 118, borderRadius: 22, backgroundColor: C.card2, borderWidth: 1, borderColor: "rgba(176,38,255,0.4)", alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 8 },
   scoreLabel: { color: C.sub, fontSize: 10, fontWeight: "900", textTransform: "uppercase", textAlign: "center" },
   scoreBig: { color: C.purple, fontWeight: "900", fontSize: 34, letterSpacing: -1, marginTop: 2 },
-  dashboardMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12 },
-  dashboardMetric: { width: "48%", minWidth: 145, flexGrow: 1, borderRadius: 18, backgroundColor: C.card2, borderWidth: 1, borderColor: C.border, padding: 12 },
-  dashboardMetricLabel: { color: C.sub, fontSize: 14, fontWeight: "900", textTransform: "uppercase" },
-  dashboardMetricValue: { fontSize: 25, fontWeight: "900", marginTop: 8, letterSpacing: -0.8 },
-  dashboardMetricHelper: { color: C.sub, fontSize: 11, marginTop: 4, fontWeight: "700" },
+  tradingScoreMini: {
+    minWidth: 72,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.45)",
+    backgroundColor: C.greenSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    alignItems: "center",
+  },
+  tradingScoreMiniLabel: { color: C.sub, fontSize: 9, fontWeight: "900", textTransform: "uppercase" },
+  tradingScoreMiniValue: { color: C.green, fontSize: 22, fontWeight: "900", lineHeight: 25 },
+  tradingScoreMiniSub: { color: C.text, fontSize: 10, fontWeight: "900" },
+  tradingScoreHeroCard: {
+    borderColor: "rgba(163,255,18,0.38)",
+    backgroundColor: "rgba(163,255,18,0.055)",
+    marginBottom: 12,
+  },
+  scoreHeroNumber: { color: C.green, fontSize: 56, fontWeight: "900", lineHeight: 62, letterSpacing: -2 },
+  scoreGradePill: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.green,
+    backgroundColor: C.greenSoft,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  scoreGradeText: { color: C.green, fontSize: 16, fontWeight: "900" },
+  scorePercentile: { color: C.text, fontSize: 12, fontWeight: "800", marginTop: 3 },
+  scoreInsightRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  scoreInsightBox: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card2,
+    padding: 11,
+  },
+  scoreInsightText: { color: C.text, fontSize: 13, lineHeight: 18, fontWeight: "800", marginTop: 5 },
+  patternCard: { borderColor: "rgba(176,38,255,0.34)", backgroundColor: "rgba(176,38,255,0.055)", marginTop: 12 },
+  patternInsightCard: {
+    flexDirection: "row",
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card2,
+    padding: 11,
+    marginTop: 8,
+  },
+  patternInsightTitle: { color: C.text, fontSize: 14, fontWeight: "900" },
+  patternInsightText: { color: C.sub, fontSize: 12, lineHeight: 17, fontWeight: "800", marginTop: 3 },
+  patternOpportunity: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.28)",
+    backgroundColor: C.purpleSoft,
+    padding: 12,
+  },
+  achievementCard: { borderColor: "rgba(163,255,18,0.26)", backgroundColor: "rgba(255,255,255,0.035)", marginTop: 12, overflow: "hidden" },
+  achievementGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8, minWidth: 0, maxWidth: "100%" },
+  traderLevelHero: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.42)",
+    backgroundColor: "rgba(176,38,255,0.09)",
+    borderRadius: 22,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    overflow: "hidden",
+    maxWidth: "100%",
+  },
+  traderLevelLabel: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  traderLevelTitle: {
+    color: C.text,
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  traderLevelPhrase: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+    marginTop: 5,
+    maxWidth: 230,
+  },
+  traderLevelScoreBox: {
+    width: 78,
+    minHeight: 78,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.56)",
+    backgroundColor: C.greenSoft,
+    borderRadius: 18,
+    padding: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    overflow: "hidden",
+  },
+  traderLevelScoreLabel: { color: C.sub, fontSize: 9, fontWeight: "900", textTransform: "uppercase" },
+  traderLevelScore: { color: C.green, fontSize: 34, lineHeight: 39, fontWeight: "900" },
+  traderLevelTop: { color: C.text, fontSize: 11, fontWeight: "900" },
+  achievementSectionLabel: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: 16,
+  },
+  achievementStatusPressable: {
+    width: "47%",
+    flexBasis: "47%",
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: "100%",
+  },
+  achievementStatusPressed: {
+    opacity: 0.86,
+  },
+  achievementStatusItem: {
+    width: "100%",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+    overflow: "hidden",
+  },
+  achievementStatusUnlocked: { borderColor: "rgba(150,255,0,0.72)", backgroundColor: "rgba(150,255,0,0.11)" },
+  achievementStatusNext: { borderColor: "rgba(176,38,255,0.60)", backgroundColor: "rgba(176,38,255,0.10)" },
+  achievementStatusTag: {
+    color: C.sub,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  achievementCategory: {
+    color: C.muted,
+    fontSize: 8,
+    lineHeight: 12,
+    fontWeight: "900",
+  },
+  achievementStatusTitle: {
+    color: C.text,
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  achievementCondition: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    marginTop: 5,
+    minHeight: 30,
+  },
+  achievementFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  achievementItem: {
+    flex: 1,
+    minWidth: 145,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+  },
+  achievementUnlocked: { borderColor: C.green, backgroundColor: C.greenSoft },
+  achievementIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.45)",
+    backgroundColor: C.greenSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  achievementIconText: { color: C.green, fontSize: 18, fontWeight: "900" },
+  achievementTitle: { color: C.green, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  achievementSub: { color: C.text, fontSize: 15, lineHeight: 19, fontWeight: "900", marginTop: 5 },
+  achievementProgress: { color: C.sub, fontSize: 11, fontWeight: "800", marginTop: 6, flex: 1, minWidth: 0 },
+  achievementShareHint: { color: C.purple, fontSize: 10, fontWeight: "900", marginTop: 6, textAlign: "right", flex: 1, minWidth: 0 },
+  achievementShareCard: {
+    width: 1080,
+    height: 1920,
+    backgroundColor: "#000000",
+    padding: 42,
+    overflow: "hidden",
+  },
+  shareGlowGreen: {
+    position: "absolute",
+    width: 760,
+    height: 760,
+    borderRadius: 380,
+    backgroundColor: "rgba(156,255,0,0.26)",
+    left: -220,
+    top: -170,
+  },
+  shareGlowPurple: {
+    position: "absolute",
+    width: 820,
+    height: 820,
+    borderRadius: 410,
+    backgroundColor: "rgba(138,43,226,0.34)",
+    right: -260,
+    bottom: -190,
+  },
+  shareGlowTopLine: {
+    position: "absolute",
+    left: 70,
+    right: 70,
+    top: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.72)",
+    shadowColor: "#B84DFF",
+    shadowOpacity: 0.9,
+    shadowRadius: 30,
+  },
+  shareParticle: {
+    position: "absolute",
+    backgroundColor: "#9CFF00",
+    shadowColor: "#9CFF00",
+    shadowOpacity: 0.95,
+    shadowRadius: 18,
+  },
+  shareSvgBackdrop: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
+  shareCardFrame: {
+    flex: 1,
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.34)",
+    borderRadius: 54,
+    backgroundColor: "rgba(8,6,15,0.84)",
+    paddingHorizontal: 58,
+    paddingTop: 70,
+    paddingBottom: 54,
+    alignItems: "center",
+    shadowColor: "#B84DFF",
+    shadowOpacity: 0.48,
+    shadowRadius: 44,
+  },
+  shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: 6 },
+  shareCandleMark: { width: 82, height: 96, flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 8 },
+  shareCandle: { width: 14, borderRadius: 8 },
+  shareBrandText: { color: C.text, fontSize: 58, lineHeight: 64, fontWeight: "900" },
+  shareBrandSub: { color: C.sub, fontSize: 14, lineHeight: 20, fontWeight: "900", letterSpacing: 4 },
+  shareUnlockedText: {
+    color: "#9CFF00",
+    fontSize: 24,
+    lineHeight: 32,
+    fontWeight: "900",
+    letterSpacing: 9,
+    marginTop: 74,
+    textShadowColor: "rgba(156,255,0,0.78)",
+    textShadowRadius: 18,
+  },
+  shareBadgeStage: {
+    width: 610,
+    height: 610,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 42,
+    shadowColor: "#B84DFF",
+    shadowOpacity: 0.8,
+    shadowRadius: 58,
+  },
+  shareBadgeStageShield: {
+    shadowColor: "#9CFF00",
+  },
+  shareBadgeHalo: {
+    position: "absolute",
+    width: 500,
+    height: 500,
+    borderRadius: 250,
+    backgroundColor: "rgba(138,43,226,0.26)",
+    shadowColor: "#8A2BE2",
+    shadowOpacity: 0.95,
+    shadowRadius: 70,
+  },
+  shareBadgeOrbitOne: {
+    position: "absolute",
+    width: 530,
+    height: 530,
+    borderRadius: 265,
+    borderWidth: 2,
+    borderColor: "rgba(156,255,0,0.26)",
+    transform: [{ rotate: "-12deg" }],
+  },
+  shareBadgeOrbitTwo: {
+    position: "absolute",
+    width: 470,
+    height: 470,
+    borderRadius: 235,
+    borderWidth: 2,
+    borderColor: "rgba(138,43,226,0.32)",
+    transform: [{ rotate: "17deg" }],
+  },
+  shareBadgeSvg: {
+    position: "absolute",
+    left: 25,
+    top: 25,
+  },
+  shareLogoOrb: {
+    width: 318,
+    height: 318,
+    borderRadius: 159,
+    borderWidth: 3,
+    borderColor: "rgba(156,255,0,0.76)",
+    backgroundColor: "#000000",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: "#9CFF00",
+    shadowOpacity: 0.95,
+    shadowRadius: 40,
+  },
+  shareLogoOrbShield: {
+    borderColor: "rgba(138,43,226,0.82)",
+    shadowColor: "#8A2BE2",
+  },
+  shareLogoImage: {
+    width: 330,
+    height: 330,
+  },
+  shareLogoShine: {
+    position: "absolute",
+    left: -46,
+    top: -20,
+    width: 120,
+    height: 380,
+    borderRadius: 80,
+    backgroundColor: "rgba(255,255,255,0.13)",
+    transform: [{ rotate: "24deg" }],
+  },
+  shareHudRail: {
+    position: "absolute",
+    bottom: 86,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+  },
+  shareHudTick: {
+    width: 72,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#9CFF00",
+    shadowColor: "#9CFF00",
+    shadowOpacity: 0.9,
+    shadowRadius: 18,
+  },
+  shareHudTickPurple: {
+    width: 96,
+    backgroundColor: "#8A2BE2",
+    shadowColor: "#8A2BE2",
+  },
+  shareMarkerStack: {
+    width: 310,
+    height: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareTradeMarker: {
+    position: "absolute",
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    borderWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#B8FF00",
+    shadowOpacity: 0.64,
+    shadowRadius: 18,
+  },
+  shareTradeMarkerText: {
+    fontSize: 44,
+    lineHeight: 52,
+    fontWeight: "900",
+    textShadowColor: "rgba(184,255,0,0.72)",
+    textShadowRadius: 16,
+  },
+  shareBadgeTitle: {
+    color: C.text,
+    fontSize: 112,
+    lineHeight: 122,
+    fontWeight: "900",
+    textAlign: "center",
+    marginTop: 24,
+    minHeight: 244,
+    textShadowColor: "rgba(184,77,255,0.72)",
+    textShadowRadius: 24,
+  },
+  sharePrestigeText: {
+    color: "rgba(245,247,250,0.88)",
+    fontSize: 28,
+    lineHeight: 38,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 2,
+  },
+  shareMetricPanel: {
+    width: "100%",
+    marginTop: 34,
+  },
+  shareStatsGrid: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 18,
+  },
+  shareStatGlass: {
+    width: "48%",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 22,
+    minHeight: 138,
+    justifyContent: "center",
+  },
+  shareMetricLabel: { color: C.sub, fontSize: 17, lineHeight: 22, fontWeight: "900", letterSpacing: 3 },
+  shareMetricValue: { color: "#B8FF00", fontSize: 42, lineHeight: 50, fontWeight: "900", marginTop: 10 },
+  shareMetricSub: { color: C.text, fontSize: 17, fontWeight: "900", letterSpacing: 2 },
+  shareMiniGrid: { width: "100%", flexDirection: "row", gap: 12, marginTop: 16 },
+  shareMiniMetric: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.32)",
+    backgroundColor: "rgba(150,255,0,0.075)",
+    borderRadius: 16,
+    padding: 13,
+    alignItems: "center",
+  },
+  shareMiniLabel: { color: C.sub, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
+  shareMiniValue: { color: C.text, fontSize: 14, lineHeight: 19, fontWeight: "900", marginTop: 4, textAlign: "center" },
+  shareRarityTag: {
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    marginTop: 34,
+  },
+  shareRarityText: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    letterSpacing: 6,
+  },
+  sharePhrase: { color: C.text, fontSize: 17, lineHeight: 24, fontWeight: "800", textAlign: "center", marginTop: 24 },
+  shareMadeBy: { color: "#B8FF00", fontSize: 17, lineHeight: 24, fontWeight: "900", letterSpacing: 4, marginTop: "auto" },
+  youTraderBadge: {
+    color: C.green,
+    fontSize: 11,
+    fontWeight: "900",
+    maxWidth: 96,
+    flexShrink: 0,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.38)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    overflow: "hidden",
+  },
+  heatmapCard: {
+    borderColor: "rgba(176,38,255,0.3)",
+    backgroundColor: "rgba(176,38,255,0.04)",
+    marginTop: 12,
+  },
+  heatmapTimeBadge: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+  },
+  heatmapLegend: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12, marginBottom: 8 },
+  heatmapLegendItem: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "900",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    overflow: "hidden",
+  },
+  heatmapGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 6 },
+  heatmapCell: {
+    flexGrow: 1,
+    width: "31%",
+    minWidth: 0,
+    minHeight: 74,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    padding: 9,
+    justifyContent: "space-between",
+    overflow: "hidden",
+  },
+  heatmapLabel: { color: C.text, fontSize: 12, fontWeight: "900" },
+  heatmapValue: { color: C.text, fontSize: 17, lineHeight: 21, fontWeight: "900", marginTop: 8 },
+  heatmapMeta: { color: C.sub, fontSize: 10, fontWeight: "900", marginTop: 5, flexShrink: 1 },
+  heatmapMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5, minWidth: 0, overflow: "hidden" },
+  heatmapMetaPercent: { color: C.purple, fontSize: 10, fontWeight: "900", flexShrink: 0 },
+  heatmapSummaryRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  heatmapSummaryBox: {
+    flex: 1,
+    minWidth: 0,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card2,
+    borderRadius: 14,
+    padding: 10,
+  },
+  heatmapSummaryValue: { color: C.text, fontSize: 12, lineHeight: 16, fontWeight: "900", marginTop: 4 },
+  dashboardMetricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12, minWidth: 0, maxWidth: "100%" },
+  dashboardMetric: { width: "47%", flexBasis: "47%", minWidth: 0, maxWidth: "100%", flexGrow: 1, flexShrink: 1, borderRadius: 18, backgroundColor: C.card2, borderWidth: 1, borderColor: C.border, padding: 12, overflow: "hidden" },
+  dashboardMetricLabel: { color: C.sub, fontSize: 14, fontWeight: "900", textTransform: "uppercase", minWidth: 0, flexShrink: 1 },
+  dashboardMetricValue: { fontSize: 25, fontWeight: "900", marginTop: 8, letterSpacing: -0.8, minWidth: 0, flexShrink: 1 },
+  dashboardMetricHelper: { color: C.sub, fontSize: 11, marginTop: 4, fontWeight: "700", minWidth: 0, flexShrink: 1 },
+  lockedMetricPreview: {
+    opacity: 0.18,
+    transform: [{ scale: 0.98 }],
+  },
+  metricLockGlass: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.30)",
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
   metricDot: { width: 8, height: 8, borderRadius: 4 },
   chartGrid: { gap: 10 },
   chartCard: { borderWidth: 1, borderColor: "rgba(176,38,255,0.22)", backgroundColor: "rgba(255,255,255,0.035)", borderRadius: 20, padding: 12, marginTop: 8 },
   performanceCard: { borderWidth: 1, borderColor: "rgba(176,38,255,0.22)", backgroundColor: "rgba(176,38,255,0.045)", borderRadius: 20, padding: 12, marginTop: 8 },
+  lockedPreviewShell: {
+    minHeight: 360,
+    overflow: "hidden",
+    opacity: 0.95,
+  },
   profileTitle: { color: C.text, fontWeight: "900", fontSize: 18, marginTop: 4, marginBottom: 8 },
   myStatsTitle: { color: C.text, fontWeight: "900", fontSize: 14, marginTop: 4, marginBottom: 8 },
   dashboardChartBox: { height: 118, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.18)", padding: 10, flexDirection: "row", alignItems: "flex-end", gap: 5, overflow: "hidden" },
@@ -5481,6 +11558,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
+  breakdownHeaderLocked: { paddingRight: 8 },
+  breakdownProBadge: {
+    position: "absolute",
+    right: 0,
+    top: -8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.purple,
+    backgroundColor: C.purpleSoft,
+  },
+  breakdownProBadgeText: { color: C.purple, fontSize: 9, fontWeight: "900" },
   breakdownTitle: { color: C.text, fontSize: 19, fontWeight: "900" },
   breakdownHint: { color: C.sub, fontSize: 11, fontWeight: "800" },
   breakdownCard: {
@@ -5529,6 +11619,45 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   breakdownEmptyText: { color: C.sub, fontSize: 13, fontWeight: "800", textAlign: "center" },
+  propEntryCard: {
+    borderColor: "rgba(176,38,255,0.48)",
+    backgroundColor: "rgba(176,38,255,0.055)",
+  },
+  propEntryTitle: { color: C.purple, fontSize: 18, fontWeight: "900", marginBottom: 4 },
+  propEntryStatsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  propEntryStat: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: C.card2,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+  },
+  propEntryValue: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    marginTop: 5,
+    includeFontPadding: false,
+  },
+  propEntryHint: {
+    color: C.purple,
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 8,
+    textAlign: "right",
+  },
+  propRulesMetaRow: {
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
   riskCoachCard: {
     borderColor: "rgba(163,255,18,0.34)",
     backgroundColor: "rgba(163,255,18,0.04)",
@@ -5538,6 +11667,22 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "900",
     marginBottom: 5,
+  },
+  survivalCard: {
+    marginTop: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.34)",
+    backgroundColor: C.purpleSoft,
+    borderRadius: 18,
+    padding: 13,
+  },
+  survivalValue: {
+    color: C.green,
+    fontSize: 38,
+    fontWeight: "900",
+    lineHeight: 42,
+    marginTop: 4,
   },
   riskStatusPill: {
     borderWidth: 1,
@@ -5584,6 +11729,23 @@ const styles = StyleSheet.create({
   },
   riskModeActive: { backgroundColor: C.green, borderColor: C.green },
   riskModeText: { color: C.text, fontSize: 11, fontWeight: "900" },
+  riskStopTicksInputWrap: {
+    width: 142,
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.34)",
+    borderRadius: 18,
+    backgroundColor: C.card2,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  riskStopTicksInput: {
+    color: C.text,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "900",
+    textAlign: "center",
+  },
   coachCallout: {
     borderWidth: 1,
     borderColor: "rgba(163,255,18,0.36)",
@@ -5635,6 +11797,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "900",
     marginTop: 5,
+    lineHeight: 22,
   },
   weeklyReviewBox: {
     marginTop: 12,
@@ -5658,6 +11821,1309 @@ const styles = StyleSheet.create({
   },
   proNote: { marginTop: 12, borderRadius: 16, padding: 12, backgroundColor: C.purpleSoft, borderWidth: 1, borderColor: "rgba(176,38,255,0.25)" },
   proNoteText: { color: C.text, fontWeight: "800", lineHeight: 19, fontSize: 12 },
+  aiCommandCard: {
+    borderColor: "rgba(150,255,0,0.34)",
+    backgroundColor: "rgba(150,255,0,0.045)",
+    marginBottom: 12,
+  },
+  aiCommandTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  aiCommandEyebrow: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  aiCommandTitle: {
+    color: C.text,
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: "900",
+    marginTop: 5,
+  },
+  aiCommandStatus: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  aiCommandStatusText: {
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  aiCommandScoreRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    gap: 14,
+    marginTop: 18,
+  },
+  aiCommandScoreLabel: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  aiCommandScore: {
+    fontSize: 52,
+    lineHeight: 58,
+    fontWeight: "900",
+    letterSpacing: -1.4,
+  },
+  aiCommandMiniStack: {
+    minWidth: 126,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 18,
+    backgroundColor: C.card2,
+    padding: 12,
+  },
+  aiCommandMiniLabel: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  aiCommandMiniValue: {
+    color: C.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+    marginTop: 3,
+    marginBottom: 8,
+  },
+  aiCommandActionBox: {
+    marginTop: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.28)",
+    backgroundColor: C.purpleSoft,
+    padding: 13,
+  },
+  aiCommandActionLabel: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  aiCommandActionText: {
+    color: C.text,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  aiAnalysisCard: {
+    borderColor: "rgba(176,38,255,0.42)",
+    backgroundColor: "rgba(176,38,255,0.08)",
+  },
+  aiAnalysisTitle: {
+    color: C.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  aiAnalysisSummary: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+    marginTop: 4,
+  },
+  aiAnalysisSource: {
+    color: C.green,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  aiAnalysisSection: {
+    marginTop: 12,
+  },
+  aiAnalysisHeading: {
+    color: C.purple,
+    fontSize: 13,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  aiAnalysisItem: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "800",
+    marginTop: 5,
+  },
+  aiGenerateCard: {
+    borderColor: "rgba(176,38,255,0.28)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  aiModuleTitle: {
+    color: C.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  aiCompactText: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "800",
+    marginTop: 8,
+  },
+  aiMetricExplainBox: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: C.card2,
+    borderRadius: 14,
+    padding: 10,
+  },
+  aiInsightGrid: { gap: 10, marginTop: 14 },
+  aiInsightSection: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(7,10,15,0.72)",
+    borderRadius: 16,
+    padding: 11,
+  },
+  aiInsightHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  aiInsightRow: {
+    flexDirection: "row",
+    gap: 9,
+    alignItems: "flex-start",
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.055)",
+  },
+  aiInsightIndex: {
+    color: C.bg,
+    backgroundColor: C.green,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    textAlign: "center",
+    lineHeight: 20,
+    overflow: "hidden",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  aiInsightTitle: { color: C.text, fontSize: 13, lineHeight: 17, fontWeight: "900" },
+  aiInsightBody: { color: C.sub, fontSize: 12, lineHeight: 16, fontWeight: "800", marginTop: 2 },
+  detectiveCard: {
+    borderColor: "rgba(176,38,255,0.5)",
+    backgroundColor: "rgba(18,0,28,0.72)",
+    gap: 14,
+  },
+  detectiveHero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.26)",
+    backgroundColor: "rgba(150,255,0,0.055)",
+    borderRadius: 18,
+    padding: 14,
+    overflow: "hidden",
+  },
+  detectiveTitle: {
+    color: C.text,
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: "900",
+    marginTop: 5,
+  },
+  detectiveScoreBox: {
+    width: 82,
+    minHeight: 82,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.5)",
+    backgroundColor: "rgba(150,255,0,0.09)",
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  detectiveScore: {
+    color: C.green,
+    fontSize: 34,
+    lineHeight: 38,
+    fontWeight: "900",
+  },
+  detectiveBlindSpot: {
+    borderWidth: 1,
+    borderColor: "rgba(255,59,95,0.42)",
+    backgroundColor: "rgba(255,59,95,0.08)",
+    borderRadius: 18,
+    padding: 14,
+    overflow: "hidden",
+  },
+  detectiveSectionLabel: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1.3,
+  },
+  detectiveBlindTitle: {
+    color: C.text,
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  detectiveEvidence: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  detectiveBody: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "800",
+    marginTop: 8,
+  },
+  detectiveAction: {
+    color: C.green,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  detectivePatternCard: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(7,10,15,0.82)",
+    borderRadius: 16,
+    padding: 12,
+    overflow: "hidden",
+  },
+  detectivePatternTitle: {
+    color: C.text,
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: "900",
+  },
+  detectiveImpactPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginLeft: 8,
+  },
+  detectiveImpactText: {
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  detectiveConfidence: {
+    color: C.purple,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+    marginTop: 7,
+    textTransform: "uppercase",
+  },
+  detectiveAgentCard: {
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.26)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderRadius: 16,
+    padding: 12,
+    overflow: "hidden",
+  },
+  detectiveAgentTitle: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  detectiveChevron: {
+    color: C.green,
+    fontSize: 24,
+    lineHeight: 26,
+    fontWeight: "900",
+    marginLeft: 10,
+  },
+  detectiveAgentBody: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+  },
+  detectiveRuleCard: {
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.32)",
+    backgroundColor: "rgba(150,255,0,0.06)",
+    borderRadius: 18,
+    padding: 14,
+    overflow: "hidden",
+  },
+  detectiveRuleText: {
+    color: C.text,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  aiCoachModuleCard: {
+    borderColor: "rgba(176,38,255,0.32)",
+    backgroundColor: "rgba(176,38,255,0.045)",
+    marginTop: 12,
+  },
+  terminalScreenStack: {
+    gap: 12,
+    position: "relative",
+  },
+  terminalCard: {
+    borderRadius: 32,
+    padding: 18,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(12,13,18,0.88)",
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 34,
+    shadowOffset: { width: 0, height: 20 },
+  },
+  terminalCardGlow: {
+    position: "absolute",
+    left: 1,
+    right: 1,
+    top: 1,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.34)",
+  },
+  terminalCardTopSheen: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    top: 10,
+    height: 42,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  terminalCardBottomShade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 120,
+    backgroundColor: "rgba(0,0,0,0.16)",
+  },
+  terminalHeaderRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  terminalEyebrow: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1.4,
+  },
+  terminalHeroTitle: {
+    color: C.text,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: "900",
+    letterSpacing: -1.2,
+    marginTop: 6,
+  },
+  terminalSectionTitle: {
+    color: C.text,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+    marginTop: 6,
+  },
+  propTemplateSelector: {
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(12,13,18,0.86)",
+    padding: 14,
+    marginBottom: 12,
+    gap: 10,
+  },
+  propTemplateHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  propTemplateHint: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "800",
+    flex: 1,
+    textAlign: "right",
+  },
+  propTemplateRail: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  propTemplateChip: {
+    minWidth: 112,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  propTemplateChipActive: {
+    borderColor: "rgba(163,255,18,0.62)",
+    backgroundColor: "rgba(163,255,18,0.12)",
+  },
+  propTemplateChipText: {
+    color: C.text,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  propTemplateChipTextActive: {
+    color: C.green,
+  },
+  propTemplateChipSub: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  propModeRail: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  propModeChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    borderRadius: 16,
+    paddingVertical: 9,
+    alignItems: "center",
+  },
+  propModeChipActive: {
+    borderColor: "rgba(176,38,255,0.58)",
+    backgroundColor: C.purpleSoft,
+  },
+  propModeChipText: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  propModeChipTextActive: {
+    color: C.white,
+  },
+  statsMetricDashboard: {
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(12,13,18,0.90)",
+    padding: 16,
+    gap: 14,
+  },
+  statsMetricHeader: {
+    gap: 2,
+  },
+  statsMetricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statsMetricTile: {
+    width: "48.6%",
+    minHeight: 68,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    justifyContent: "space-between",
+  },
+  statsMetricTileLocked: {
+    opacity: 0.72,
+  },
+  statsMetricLabel: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  statsMetricValue: {
+    color: C.text,
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  terminalSub: {
+    color: C.sub,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "800",
+  },
+  terminalSmallLabel: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
+  },
+  terminalKpi: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: "900",
+    letterSpacing: -1,
+  },
+  terminalSegment: {
+    flexDirection: "row",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    padding: 4,
+    marginTop: 16,
+    gap: 4,
+  },
+  terminalSegmentBtn: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: 999,
+    paddingVertical: 8,
+  },
+  terminalSegmentActive: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.22)",
+  },
+  terminalSegmentText: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  terminalSegmentTextActive: {
+    color: C.green,
+  },
+  terminalHeroCard: {
+    paddingBottom: 20,
+  },
+  terminalChartWrap: {
+    marginTop: 18,
+    alignItems: "center",
+    minHeight: 250,
+  },
+  terminalTooltip: {
+    position: "absolute",
+    width: 168,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(8,9,13,0.88)",
+    padding: 11,
+  },
+  terminalTooltipDate: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  terminalTooltipPnl: {
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  terminalTooltipMeta: {
+    color: C.text,
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  metricPillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
+  metricPill: {
+    flexGrow: 1,
+    minWidth: 96,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 11,
+  },
+  metricPillLabel: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  metricPillValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: 5,
+  },
+  appleRingWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 4,
+  },
+  appleRingCenter: {
+    position: "absolute",
+    top: 26,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  appleRingValue: {
+    color: C.text,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  appleRingLabel: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "center",
+    marginTop: 2,
+  },
+  bottomSheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.68)",
+    padding: 14,
+  },
+  bottomSheetCard: {
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(13,14,20,0.96)",
+    padding: 18,
+  },
+  bottomSheetTitle: {
+    color: C.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  bottomSheetBig: {
+    color: C.green,
+    fontSize: 34,
+    fontWeight: "900",
+    marginTop: 12,
+  },
+  bottomSheetText: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "800",
+    marginTop: 10,
+  },
+  cloudStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "rgba(255,255,255,0.055)",
+  },
+  cloudStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  cloudStatusText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  dnaHero: {
+    marginTop: 16,
+    gap: 18,
+  },
+  dnaScoreCircle: {
+    alignSelf: "center",
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.26)",
+    backgroundColor: "rgba(163,255,18,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dnaScore: {
+    color: C.green,
+    fontSize: 48,
+    fontWeight: "900",
+  },
+  dnaScoreLabel: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  dnaRingGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+  },
+  dnaInsightRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  dnaInsightBlock: {
+    flex: 1,
+  },
+  dnaWeakBlock: {
+    flex: 1,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12,
+  },
+  terminalChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 8,
+  },
+  terminalChip: {
+    color: C.green,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  dnaWeakText: {
+    color: C.text,
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  premiumRadarWrap: {
+    width: 286,
+    height: 286,
+    alignSelf: "center",
+    marginTop: 16,
+    borderRadius: 143,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.025)",
+  },
+  premiumRadarCenter: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(0,0,0,0.36)",
+  },
+  premiumRadarScore: {
+    color: C.green,
+    fontSize: 34,
+    fontWeight: "900",
+  },
+  premiumRadarLabel: {
+    color: C.sub,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  premiumRadarAxisLabel: {
+    position: "absolute",
+    width: 86,
+    minHeight: 36,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 5,
+  },
+  premiumRadarAxisText: {
+    color: C.text,
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  premiumRadarAxisValue: {
+    color: C.green,
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 1,
+  },
+  radarSummaryRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  radarSummaryBlock: {
+    flex: 1,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+  },
+  radarWeakBlock: {
+    flex: 1,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  calendarHeatmapGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 16,
+  },
+  calendarHeatmapCell: {
+    width: "22.7%",
+    minHeight: 72,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    padding: 9,
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  calendarHeatmapKey: {
+    color: C.text,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  calendarHeatmapValue: {
+    color: C.white,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  calendarHeatmapMeta: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  traderStatusHero: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 14,
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  traderRank: {
+    color: C.text,
+    fontSize: 34,
+    fontWeight: "900",
+    letterSpacing: -1,
+  },
+  traderScorePill: {
+    minWidth: 92,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.28)",
+    backgroundColor: "rgba(163,255,18,0.07)",
+    alignItems: "center",
+    padding: 12,
+  },
+  traderScoreNumber: {
+    color: C.green,
+    fontSize: 36,
+    fontWeight: "900",
+  },
+  traderScoreLabel: {
+    color: C.text,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  achievementRail: {
+    gap: 10,
+    paddingVertical: 12,
+  },
+  achievementRailCard: {
+    width: 150,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.18)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+  },
+  achievementRailStatus: {
+    color: C.green,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  achievementRailTitle: {
+    color: C.text,
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  achievementRailMeta: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  achievementRailTap: {
+    color: C.purple,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginTop: 10,
+  },
+  nextTargetList: {
+    gap: 8,
+    marginTop: 10,
+  },
+  nextTargetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 12,
+  },
+  nextTargetTitle: {
+    color: C.text,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  nextTargetProgress: {
+    color: C.purple,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  aiTerminalHero: {
+    borderColor: "rgba(163,255,18,0.18)",
+  },
+  aiCommandHeroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    marginTop: 18,
+  },
+  aiConfidenceRing: {
+    width: 142,
+    alignItems: "center",
+  },
+  aiFocusText: {
+    color: C.text,
+    fontSize: 18,
+    lineHeight: 25,
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  aiActionChip: {
+    color: C.text,
+    fontSize: 11,
+    fontWeight: "900",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  aiUnifiedRefresh: {
+    marginTop: 18,
+    borderRadius: 999,
+    backgroundColor: C.green,
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  aiUnifiedRefreshText: {
+    color: C.bg,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  aiRefreshTimestamp: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 8,
+  },
+  patternTimeline: {
+    gap: 10,
+    marginTop: 14,
+  },
+  patternTimelineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  patternTimelineLabel: {
+    color: C.text,
+    width: 86,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  patternTimelineTrack: {
+    flex: 1,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    overflow: "hidden",
+  },
+  patternTimelineFill: {
+    height: 10,
+    borderRadius: 999,
+  },
+  patternTimelineValue: {
+    width: 42,
+    textAlign: "right",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  aiTwoColumn: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  aiInsightTile: {
+    flex: 1,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 12,
+  },
+  terminalInsightTitle: {
+    color: C.text,
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  aiCoachUnifiedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginTop: 10,
+  },
+  aiCoachVoice: {
+    color: C.text,
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: "900",
+    marginTop: 8,
+    marginBottom: 14,
+  },
+  aiCoachNext: {
+    color: C.green,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  missionCta: {
+    marginTop: 14,
+    borderRadius: 22,
+    backgroundColor: "rgba(163,255,18,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.24)",
+    padding: 14,
+    alignItems: "center",
+  },
+  missionCtaText: {
+    color: C.green,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  monthlyTimeline: {
+    gap: 12,
+    marginTop: 16,
+  },
+  monthlyTimelineRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+    paddingBottom: 4,
+  },
+  monthlyTimelineDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: C.green,
+    marginTop: 6,
+  },
+  monthlyTimelineValue: {
+    color: C.text,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  aiSingleStatusNote: {
+    color: C.yellow,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  aiCoachFeatureCard: {
+    borderColor: "rgba(163,255,18,0.20)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    marginTop: 12,
+    borderRadius: 22,
+  },
+  aiProviderBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  aiProviderBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+  },
+  aiCoachResultBody: {
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: "rgba(0,0,0,0.20)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  aiResultHeadline: {
+    color: C.text,
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 21,
+  },
+  aiResultText: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+    fontWeight: "800",
+  },
+  aiRiskScore: {
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+  aiBulletList: {
+    marginTop: 8,
+    gap: 5,
+  },
+  aiBulletText: {
+    color: C.text,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "800",
+  },
+  aiFallbackMessage: {
+    color: C.yellow,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 10,
+    fontWeight: "800",
+  },
+  aiGeneratedAt: {
+    color: C.sub,
+    fontSize: 10,
+    marginTop: 8,
+    fontWeight: "800",
+  },
+  aiRefreshButton: {
+    marginTop: 12,
+  },
+  dailyCoachCard: {
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 22,
+    padding: 14,
+    overflow: "hidden",
+  },
+  dailyCoachTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  dailyCoachBody: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 7,
+    fontWeight: "800",
+  },
+  dailyCoachAction: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 10,
+    fontWeight: "800",
+  },
+  analysisLockedWrap: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 24,
+  },
+  analysisLockedContent: {
+    // Strong obfuscation for free users: content is recognizable in shape but not
+    // readable. Lower opacity + slight downscale approximates a frosted/blurred look
+    // without requiring a native blur dependency.
+    opacity: 0.12,
+    transform: [{ scale: 0.985 }],
+  },
+  analysisLockOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+    backgroundColor: "rgba(2,0,8,0.74)",
+  },
+  analysisLockPinned: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 430,
+    zIndex: 4,
+  },
+  analysisLockTitle: {
+    color: "#96FF00",
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  analysisLockText: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 8,
+    maxWidth: 320,
+  },
+  revengeAlertCard: {
+    borderColor: "rgba(255,59,48,0.55)",
+    backgroundColor: "rgba(255,59,48,0.08)",
+  },
   edgeProfileBox: {
     marginTop: 14,
     borderWidth: 1,
@@ -5689,16 +13155,36 @@ const styles = StyleSheet.create({
   newsBolt: { fontSize: 28, lineHeight: 30, fontWeight: "900" },
   tabbar: {
     flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingTop: 8,
+    height: 92,
+    paddingHorizontal: 4,
+    paddingTop: 9,
     paddingBottom: 8,
-    backgroundColor: C.bg,
-    borderTopColor: C.border,
+    backgroundColor: "#05070A",
+    borderTopColor: "#111827",
     borderTopWidth: 1,
   },
-  tab: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 18 },
-  tabActive: { backgroundColor: C.greenSoft },
+  tab: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingTop: 4,
+    paddingHorizontal: 1,
+    minWidth: 0,
+    overflow: "hidden",
+  },
+  tabActive: { backgroundColor: "transparent" },
+  tabIconWrap: {
+    width: 31,
+    height: 31,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabIconGlow: {
+    shadowColor: "#96FF00",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
   tabIcon: {
     fontSize: 22,
     lineHeight: 24,
@@ -5706,9 +13192,31 @@ const styles = StyleSheet.create({
     color: C.green,
     fontWeight: "900",
   },
-  tabIconActive: { color: C.green },
-  tabText: { color: C.sub, fontSize: 10, fontWeight: "800" },
-  tabTextActive: { color: C.green },
+  tabIconActive: { color: C.purple },
+  tabText: {
+    color: "#7D8795",
+    fontSize: 8.4,
+    lineHeight: 10,
+    fontWeight: "600",
+    marginTop: 6,
+    textAlign: "center",
+    width: "100%",
+    flexShrink: 1,
+    includeFontPadding: false,
+  },
+  tabTextActive: {
+    color: "#96FF00",
+    textShadowColor: "rgba(150,255,0,0.25)",
+    textShadowRadius: 7,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  tabActiveUnderline: {
+    width: 36,
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: "#96FF00",
+    marginTop: 8,
+  },
 
   lockOverlay: {
     position: "absolute",
@@ -5721,6 +13229,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.purple,
   },
+  lockOverlayProfile: { top: 12, right: 12, maxWidth: 120 },
+  profileProBadgeRow: { alignItems: "flex-end", marginBottom: 6 },
+  profileProBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.purple,
+    backgroundColor: C.purpleSoft,
+  },
+  profileProBadgeText: { color: C.purple, fontSize: 9, fontWeight: "900" },
   lockText: { color: C.purple, fontSize: 10, fontWeight: "900" },
   freeNotice: {
     marginTop: 12,
@@ -5782,6 +13301,58 @@ const styles = StyleSheet.create({
   },
   lockedNewsTitle: { color: C.green, fontSize: 13, fontWeight: "900" },
   lockedNewsText: { color: C.sub, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  lockedNewsList: {
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+    gap: 10,
+  },
+  lockedNewsPreview: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.28)",
+    backgroundColor: "rgba(176,38,255,0.05)",
+    padding: 14,
+    overflow: "hidden",
+  },
+  lockedNewsPreviewDim: {
+    opacity: 1,
+    transform: [{ scale: 1.014 }],
+  },
+  lockedNewsFuzzyTitle: {
+    color: "rgba(245,245,250,0.13)",
+    textShadowColor: "rgba(245,245,250,0.42)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
+  },
+  lockedNewsFuzzyText: {
+    color: "rgba(170,170,185,0.12)",
+    textShadowColor: "rgba(170,170,185,0.36)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+  lockedNewsBlurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(4,0,8,0.46)",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.18)",
+  },
+  lockedNewsProBadge: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.65)",
+    backgroundColor: "rgba(5,16,0,0.74)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  lockedNewsProBadgeText: {
+    color: C.green,
+    fontSize: 10,
+    fontWeight: "900",
+  },
   radarOuter: { alignItems: "center", justifyContent: "center", marginTop: 16 },
   radarLabel: { color: C.text, fontSize: 11, fontWeight: "900", textAlign: "center" },
   radarValue: { fontSize: 11, fontWeight: "900", marginTop: 2, textAlign: "center" },
@@ -5854,12 +13425,12 @@ const styles = StyleSheet.create({
   blurPreviewText: { color: C.purple, fontSize: 15, fontWeight: "900" },
 
   tradesTodayTitle: {
-    color: C.text,
+    color: C.purple,
     fontSize: 22,
     fontWeight: "900",
     letterSpacing: 0.8,
     textTransform: "uppercase",
-    marginTop: 10,
+    marginTop: 140,
     marginBottom: 12,
   },
   legalRow: {
@@ -5898,55 +13469,273 @@ const styles = StyleSheet.create({
   },
   monthControlRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 14,
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 30,
   },
   monthNavBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: C.greenSoft,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(165,173,186,0.07)",
     borderWidth: 1,
-    borderColor: "rgba(163,255,18,0.28)",
+    borderColor: "rgba(165,173,186,0.32)",
     alignItems: "center",
     justifyContent: "center",
   },
   monthNavText: {
-    color: C.green,
-    fontSize: 31,
+    color: C.sub,
+    fontSize: 40,
     fontWeight: "800",
-    lineHeight: 33,
+    lineHeight: 42,
+  },
+  monthTitlePill: {
+    flex: 1,
+    minHeight: 50,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: "rgba(165,173,186,0.28)",
+    backgroundColor: "rgba(165,173,186,0.055)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  monthPillCalendar: {
+    width: 23,
+    height: 23,
+    borderWidth: 2,
+    borderColor: C.sub,
+    borderRadius: 5,
+    paddingHorizontal: 4,
+    paddingTop: 8,
+  },
+  monthPillCalendarTop: {
+    position: "absolute",
+    top: 4,
+    left: 4,
+    right: 4,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: C.sub,
+  },
+  monthPillCalendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 3,
+  },
+  monthPillCalendarDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.sub,
   },
   monthTitleText: {
-    flex: 1,
-    color: C.green,
+    color: C.white,
     fontSize: 18,
     fontWeight: "900",
     textAlign: "center",
+    minWidth: 0,
+  },
+  monthChevron: {
+    color: C.sub,
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: "900",
   },
   weekdayHeader: {
     flexDirection: "row",
-    gap: 4,
     justifyContent: "flex-start",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   weekdayHeaderText: {
-    width: "13.6%",
-    color: C.sub,
+    color: C.white,
     textAlign: "center",
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",
   },
+  monthPickerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.68)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  monthPickerCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card,
+    padding: 18,
+  },
+  monthPickerTitle: { color: C.text, fontSize: 20, fontWeight: "900", marginBottom: 14 },
+  monthPickerYears: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
+  monthPickerYear: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  monthPickerYearActive: { borderColor: C.green, backgroundColor: C.greenSoft },
+  monthPickerYearText: { color: C.sub, fontWeight: "800" },
+  monthPickerYearTextActive: { color: C.green, fontWeight: "900" },
+  monthPickerMonths: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  monthPickerMonth: {
+    width: "30.5%",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: C.card2,
+  },
+  monthPickerMonthActive: { borderColor: C.purple, backgroundColor: C.purpleSoft },
+  monthPickerMonthText: { color: C.text, fontWeight: "800" },
+  monthPickerMonthTextActive: { color: C.purple, fontWeight: "900" },
   instrumentBtnActive: {
     backgroundColor: C.purpleSoft,
     borderColor: C.purple,
   },
+  calendarEventCard: {
+    borderColor: "rgba(176,38,255,0.4)",
+    backgroundColor: "rgba(176,38,255,0.08)",
+    padding: 8,
+    borderRadius: 16,
+    marginBottom: 7,
+  },
+  calendarEventCardTablet: { padding: 14, borderRadius: 20, marginBottom: 11 },
+  calendarEventTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  calendarTimeBox: { width: 104, alignItems: "flex-start" },
+  calendarTimeBoxTablet: { width: 138 },
+  calendarEventTime: { color: C.text, fontSize: 20, lineHeight: 24, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  calendarEventTimeTablet: { fontSize: 30, lineHeight: 34 },
+  calendarEventMeridiem: { color: C.text, fontSize: 13, lineHeight: 18, fontWeight: "900" },
+  calendarEventMeridiemTablet: { fontSize: 18, lineHeight: 24 },
+  calendarEventDate: { color: C.sub, fontSize: 8, fontWeight: "900", marginTop: 1 },
+  calendarEventDateTablet: { fontSize: 11, marginTop: 3 },
+  calendarEventBody: { flex: 1, minWidth: 0 },
+  calendarEventTitle: { color: C.text, fontSize: 13, lineHeight: 17, fontWeight: "900" },
+  calendarEventTitleTablet: { fontSize: 17, lineHeight: 23 },
+  calendarMetricRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  calendarMetricRowTablet: { gap: 10, marginTop: 7 },
+  calendarMetricText: { color: C.sub, fontSize: 12, lineHeight: 16, fontWeight: "900" },
+  calendarMetricTextTablet: { fontSize: 15, lineHeight: 21 },
+  calendarBiasGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+    marginTop: 7,
+  },
+  calendarBiasGridTablet: { gap: 8, marginTop: 12 },
+  calendarBiasCell: {
+    minWidth: 64,
+    flexGrow: 1,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(0,0,0,0.22)",
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+  },
+  calendarBiasCellTablet: { minWidth: 118, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14 },
+  calendarAssetLabel: { color: C.text },
+  calendarAssetLabelTablet: { fontSize: 12, marginBottom: 6 },
+  calendarBiasValue: { fontWeight: "900", fontSize: 10 },
+  calendarBiasValueTablet: { fontSize: 13, lineHeight: 17 },
+  riskInstrumentSymbol: { color: C.orange },
   purpleNewsCard: {
     backgroundColor: C.purpleSoft,
     borderColor: "rgba(176,38,255,0.42)",
   },
-
+  newsExplainButton: {
+    marginTop: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.35)",
+    backgroundColor: "rgba(163,255,18,0.08)",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  newsExplainButtonText: {
+    color: C.green,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  newsExplainerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "flex-end",
+    padding: 14,
+  },
+  newsExplainerModal: {
+    borderRadius: 28,
+    borderColor: "rgba(163,255,18,0.24)",
+    maxHeight: "86%",
+  },
+  newsExplainerTitle: {
+    color: C.text,
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  newsExplainerHeadline: {
+    color: C.text,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "900",
+    flex: 1,
+    marginRight: 10,
+  },
+  newsExplainerLabel: {
+    color: C.green,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginTop: 14,
+  },
+  newsExplainerText: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 6,
+    fontWeight: "800",
+  },
+  newsRiskReminder: {
+    color: C.yellow,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 14,
+    fontWeight: "900",
+  },
+  newsDisclaimer: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 10,
+    fontWeight: "800",
+  },
+  purpleSectionTitle: { color: C.purple },
+  greenActionBtn: {
+    borderColor: "rgba(163,255,18,0.72)",
+    backgroundColor: "rgba(163,255,18,0.14)",
+  },
+  redActionBtn: {
+    borderColor: "rgba(255,59,95,0.72)",
+    backgroundColor: "rgba(255,59,95,0.14)",
+  },
+  greenActionText: { color: C.green },
+  redActionText: { color: C.red },
+  settingsBenefit: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  settingsBenefitCheck: { color: C.purple, fontWeight: "900" },
+  settingsBenefitText: { color: C.green, fontWeight: "800" },
 });

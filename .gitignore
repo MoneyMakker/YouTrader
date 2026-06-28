@@ -1,20 +1,38 @@
-.DS_Store
-*.swp
-*.log
-.env
-.env.local
+# Dependencies
 node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Expo and build output
 .expo/
+.expo-shared/
+dist/
 ios/build/
 android/build/
 android/app/build/
 DerivedData/
+
+# Build artifacts
+*.ipa
+build-*.ipa
+builds/
+bundle-check/
+
+# Backups and temporary generated files
+*.before-*
+recovery-backups/
+review-fix-backups/
+supabase/.temp/
+
+# Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-dist/
-bundle-check/
-
-dist/
-bundle-check/
+# Editor and OS files
+*.swp
+.DS_Store

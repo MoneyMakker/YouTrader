@@ -1,0 +1,35 @@
+import { Alert, Linking } from "react-native";
+
+export const APPLE_STANDARD_EULA_URL =
+  "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+
+function resolveUrl(envName: string, fallback: string) {
+  const value = (process.env[envName] || "").trim();
+  if (!value || /your|example|placeholder|changeme/i.test(value)) return fallback;
+  try {
+    new URL(value);
+    return value;
+  } catch {
+    return fallback;
+  }
+}
+
+export const PRIVACY_POLICY_URL = resolveUrl(
+  "EXPO_PUBLIC_PRIVACY_POLICY_URL",
+  "https://youtrader.pro/privacy",
+);
+
+export const TERMS_OF_USE_EULA_URL = resolveUrl(
+  "EXPO_PUBLIC_TERMS_OF_USE_URL",
+  APPLE_STANDARD_EULA_URL,
+);
+
+export async function openLegalUrl(url: string, label: string) {
+  try {
+    const supported = await Linking.canOpenURL(url);
+    if (!supported) throw new Error("unsupported");
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert(label, `Unable to open ${url}. Please try again later.`);
+  }
+}
