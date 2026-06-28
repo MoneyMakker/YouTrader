@@ -719,10 +719,9 @@ UI usage:
 
 ### 6.15 Recovery Factor
 
-Source:
+Source of truth:
 
-- `tradeMetrics.ts` for `OfficialTradeMetrics.recoveryFactor`.
-- Current UI also computes recovery inside `Stats` and `buildTradeAnalysisPayload`.
+- `tradeMetrics.ts` via `buildUnifiedTradeAnalytics`, surfaced through `calcStats().recoveryFactor` with `infinitySafeMetric`.
 
 Formula:
 
@@ -738,24 +737,24 @@ else:
 Output:
 
 - `OfficialTradeMetrics.recoveryFactor`
-- UI local `recoveryFactor`
+- `calcStats().recoveryFactor`
 
 UI usage:
 
 - Performance Profile radar Recovery axis.
 - Trading Score input.
 - AI payload.
+- Stats screen.
 
 Current debt:
 
-- Recovery factor should be read from `buildUnifiedTradeAnalytics` everywhere instead of recalculated in screen code.
+- All primary Stats/AI paths now read recovery from `calcStats`; avoid recalculating in screen code.
 
 ### 6.16 Consistency Score
 
-Sources:
+Source of truth:
 
-- Official-like implementation in `tradeMetrics.ts`.
-- Current UI uses `App.tsx` `consistencyScoreFromTrades`.
+- `tradeMetrics.ts` `consistencyScore`, surfaced through `calcStats().consistency`.
 
 Formula in `tradeMetrics.ts`:
 
@@ -782,8 +781,8 @@ consistency = greenRate * 0.55 + stability * 0.45
 
 Current rule:
 
-- Do not create new consistency formulas.
-- Future cleanup should make `tradeMetrics.ts` the only consistency source.
+- `calcStats().consistency` is the only consistency source for Stats, Trading Score, AI payloads, prop risk, and exports.
+- Do not recreate screen-local consistency helpers.
 
 UI usage:
 
@@ -824,10 +823,10 @@ Current debt:
 
 Sources:
 
-- `tradeMetrics.ts` `riskControlScore`.
-- `App.tsx` screen-local `drawdownControl`/`riskControl` calculations.
+- Official engine score: `tradeMetrics.ts` `riskControlScore`, surfaced as `calcStats().riskControl`.
+- UI drawdown-control score: `tradeMetrics.ts` `drawdownControlFromMetrics`, surfaced as `calcStats().drawdownControl`.
 
-Formula in `tradeMetrics.ts`:
+Formula in `tradeMetrics.ts` for official `riskControl`:
 
 ```text
 lossStreakPenalty = min(24, currentLossStreak * 8)
@@ -837,7 +836,7 @@ missingRiskPenalty = 14 if more than 50% of trades lack riskAmount
 riskControl = clamp(100 - penalties, 0, 100)
 ```
 
-Formula in current Stats UI:
+Formula for UI `drawdownControl`:
 
 ```text
 if netPnl > 0:
@@ -848,15 +847,14 @@ else:
 
 UI usage:
 
-- Performance Profile radar Risk Ctrl axis.
-- Trading Score input.
-- Prop Survival input.
-- Achievements.
-- AI payload.
+- Performance Profile radar Risk Ctrl axis uses `calcStats().drawdownControl`.
+- Trading Score input uses `calcStats().drawdownControl` as its risk-control input.
+- Prop Survival and achievements use the same drawdown-control adapter.
+- `calcStats().riskControl` remains available for future unified radar work.
 
 Current debt:
 
-- Consolidate screen-local drawdown control into the shared analytics engine.
+- Radar/Trading Score still intentionally use drawdown-control semantics, not the official risk-control engine score.
 
 ### 6.19 Trading Score
 
@@ -1912,7 +1910,8 @@ Architecture debt:
 
 Analytics debt:
 
-- `tradeMetrics.ts` is the emerging official engine, but `App.tsx` still contains screen-local versions of consistency, recovery, drawdown control, session grouping, breakdowns, and heatmap logic.
+- `tradeMetrics.ts` is the official engine; `calcStats()` now surfaces `consistency`, `recoveryFactor`, `drawdownControl`, and `riskControl` from it.
+- `App.tsx` still contains session grouping, breakdowns, and heatmap logic that should eventually move into shared analytics.
 - Session definitions differ between `tradeNormalizer.ts` and `App.tsx`.
 - Expectancy definition differs between older product docs and current official implementation.
 - Heatmap exists in both `src/analytics/sessionHeatmap.ts` and terminal-specific `App.tsx`.
@@ -1978,7 +1977,7 @@ Current scan issue:
 - RevenueCat dashboard/App Store/TestFlight verification.
 - Supabase migration deployment/verification.
 - Aikido authentication repair for successful scans.
-- Consolidating source-of-truth analytics.
+- Consolidating source-of-truth analytics (`calcStats` now exposes consistency/recovery/drawdown metrics from `tradeMetrics.ts`).
 - Reducing `App.tsx` technical debt safely.
 
 ### Planned

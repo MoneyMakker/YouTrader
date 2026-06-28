@@ -202,3 +202,11 @@ export function infinitySafeMetric(value: number | null, fallback = 0) {
   if (value === Number.POSITIVE_INFINITY) return 99;
   return value;
 }
+
+/** UI drawdown-control score used by Stats radar, Trading Score, and AI payloads. */
+export function drawdownControlFromMetrics(netPnl: number, maxDrawdown: number) {
+  const absDrawdown = Math.abs(maxDrawdown);
+  return netPnl > 0
+    ? Math.max(15, Math.min(100, 100 - (absDrawdown / Math.max(1, Math.abs(netPnl) + absDrawdown)) * 100))
+    : Math.max(10, 100 - absDrawdown / 10);
+}

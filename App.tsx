@@ -126,7 +126,7 @@ import { calculatePropSurvival } from "./src/analytics/propSurvival";
 import { buildSessionHeatmap, type HourHeatmapCell } from "./src/analytics/sessionHeatmap";
 import { calculateTradingScore, type TradingScoreResult } from "./src/analytics/tradingScore";
 import { buildAIAnalyticsContext } from "./src/analytics/aiContextBuilder";
-import { buildUnifiedTradeAnalytics, infinitySafeMetric } from "./src/analytics/tradeMetrics";
+import { buildUnifiedTradeAnalytics, drawdownControlFromMetrics, infinitySafeMetric } from "./src/analytics/tradeMetrics";
 import { calculatePassProbability, type PassProbabilityResult } from "./src/ai/passProbabilityEngine";
 import { detectRevengeTrading, type RevengeTradingResult } from "./src/ai/revengeTradingDetector";
 import { detectHiddenLeaks, type HiddenLeak } from "./src/ai/hiddenLeakDetector";
@@ -2501,6 +2501,9 @@ function calcStats(trades: Trade[]) {
   const weekday = groupPerformance(trades, (t) => safeDateFromISO(t.date).toLocaleDateString([], { weekday: "short", timeZone: "UTC" }));
   const session = groupPerformance(trades, sessionLabelForTrade);
   const bySetup = groupPerformance(trades, primarySetupLabel);
+  const consistency = official.consistency;
+  const recoveryFactor = infinitySafeMetric(official.recoveryFactor);
+  const drawdownControl = drawdownControlFromMetrics(pnl, official.maxDrawdown);
   return {
     pnl,
     wr,
@@ -2519,6 +2522,10 @@ function calcStats(trades: Trade[]) {
     maxLossDayStreak: dayStreaks.maxLossDayStreak,
     maxDd: dd.maxDd,
     curve: dd.curve,
+    consistency,
+    recoveryFactor,
+    drawdownControl,
+    riskControl: official.riskControl,
     weekday,
     session,
     bySetup,
@@ -2527,20 +2534,13 @@ function calcStats(trades: Trade[]) {
 
 function tradingScoreForTrades(trades: Trade[]) {
   const stats = calcStats(trades);
-  const consistency = consistencyScoreFromTrades(trades);
-  const absDrawdown = Math.abs(stats.maxDd);
-  const recoveryFactor = absDrawdown > 0 ? Math.max(0, stats.pnl / absDrawdown) : stats.pnl > 0 ? 99 : 0;
-  const riskControl =
-    stats.pnl > 0
-      ? Math.max(15, Math.min(100, 100 - (absDrawdown / Math.max(1, Math.abs(stats.pnl) + absDrawdown)) * 100))
-      : Math.max(10, 100 - absDrawdown / 10);
   return calculateTradingScore({
     winRate: stats.wr,
     profitFactor: stats.pf,
     expectancy: stats.exp,
-    consistency,
-    riskControl,
-    recoveryFactor,
+    consistency: stats.consistency,
+    riskControl: stats.drawdownControl,
+    recoveryFactor: stats.recoveryFactor,
     maxDrawdown: stats.maxDd,
     avgWinLossRatio: stats.avgWinLoss,
     tradeCount: stats.count,
@@ -2747,13 +2747,6 @@ function buildTradeAnalysisPayload(
   const worstSymbols = lowToHighPerformance(bySymbol);
   const worstSessions = lowToHighPerformance(stats.session);
   const tradingScore = tradingScoreForTrades(trades);
-  const consistency = consistencyScoreFromTrades(trades);
-  const absDrawdown = Math.abs(stats.maxDd);
-  const recoveryFactor = absDrawdown > 0 ? Math.max(0, stats.pnl / absDrawdown) : stats.pnl > 0 ? 99 : 0;
-  const riskControl =
-    stats.pnl > 0
-      ? Math.max(15, Math.min(100, 100 - (absDrawdown / Math.max(1, Math.abs(stats.pnl) + absDrawdown)) * 100))
-      : Math.max(10, 100 - absDrawdown / 10);
   const wins = trades.filter((trade) => trade.pnl > 0);
   const losses = trades.filter((trade) => trade.pnl < 0);
   return {
@@ -2768,9 +2761,9 @@ function buildTradeAnalysisPayload(
     maxWin: roundMetric(Math.max(0, ...wins.map((trade) => trade.pnl))),
     maxLoss: roundMetric(Math.min(0, ...losses.map((trade) => trade.pnl))),
     maxDrawdown: roundMetric(stats.maxDd),
-    recoveryFactor: roundMetric(recoveryFactor),
-    riskControl: roundMetric(riskControl),
-    consistency: roundMetric(consistency),
+    recoveryFactor: roundMetric(stats.recoveryFactor),
+    riskControl: roundMetric(stats.drawdownControl),
+    consistency: roundMetric(stats.consistency),
     tradingScore: tradingScore.score,
     propFirmSurvivalScore: context?.passProbability?.probability,
     bestSymbol: bySymbol[0]?.label || null,
@@ -3359,7 +3352,7 @@ function PropFirmRiskCoach({
     if (trade.pnl < 0) lossStreak += 1;
     else break;
   }
-  const consistency = consistencyScoreFromTrades(trades);
+  const consistency = stats.consistency;
   const expectancy = stats.exp;
   const sharpe = stats.sharpeRatio;
   const avgLoss = Math.max(35, stats.avgLoss || Math.max(50, Math.abs(expectancy || 0) * 1.7));
@@ -4930,19 +4923,6 @@ function RadarProfile({
 
 
 
-function consistencyScoreFromTrades(trades: Trade[]) {
-  const daily = buildDailySeries(trades);
-  if (!trades.length) return 0;
-  if (daily.length <= 1) return 62;
-  const winners = daily.filter((d) => d.value > 0).length;
-  const greenRate = (winners / daily.length) * 100;
-  const avgAbs = daily.reduce((a, d) => a + Math.abs(d.value), 0) / daily.length || 1;
-  const avg = daily.reduce((a, d) => a + d.value, 0) / daily.length;
-  const stdev = Math.sqrt(daily.reduce((a, d) => a + Math.pow(d.value - avg, 2), 0) / daily.length);
-  const stability = Math.max(0, 100 - (stdev / avgAbs) * 42);
-  return Math.max(0, Math.min(100, greenRate * 0.55 + stability * 0.45));
-}
-
 function TradeAnalysisCard({ result }: { result: TradeAnalysisResult }) {
   const sections = [
     { title: "Mistakes", tone: C.red, items: result.mistakes.map((item) => ({ title: item.title, body: item.evidence ? `${item.explanation} Evidence: ${item.evidence}` : item.explanation })) },
@@ -5734,12 +5714,9 @@ function Stats({
   const losses = visibleTrades.filter((t) => t.pnl < 0).length;
   const biggestWin = Math.max(0, ...visibleTrades.map((t) => t.pnl));
   const biggestLoss = Math.min(0, ...visibleTrades.map((t) => t.pnl));
-  const consistency = consistencyScoreFromTrades(visibleTrades);
-  const absDrawdown = Math.abs(s.maxDd);
-  const recoveryFactor = absDrawdown > 0 ? Math.max(0, s.pnl / absDrawdown) : s.pnl > 0 ? 99 : 0;
-  const drawdownControl = s.pnl > 0
-    ? Math.max(15, Math.min(100, 100 - (absDrawdown / Math.max(1, Math.abs(s.pnl) + absDrawdown)) * 100))
-    : Math.max(10, 100 - absDrawdown / 10);
+  const consistency = s.consistency;
+  const recoveryFactor = s.recoveryFactor;
+  const drawdownControl = s.drawdownControl;
 
   const heatmap = useMemo(() => buildSessionHeatmap(visibleTrades), [visibleTrades]);
   const monthPnl = periodPnlFromTrades(visibleTrades, selectedDate, "month");
@@ -5953,14 +5930,8 @@ function StatsScreen({
       const worstSession = [...monthStats.session].sort((a, b) => a.pnl - b.pnl)[0];
       const monthScore = tradingScoreForTrades(monthTrades);
       const monthPatterns = detectTradingPatterns(monthTrades);
-      const monthConsistency = consistencyScoreFromTrades(monthTrades);
-      const monthAbsDrawdown = Math.abs(monthStats.maxDd);
-      const monthRiskControl =
-        monthStats.pnl > 0
-          ? Math.max(15, Math.min(100, 100 - (monthAbsDrawdown / Math.max(1, Math.abs(monthStats.pnl) + monthAbsDrawdown)) * 100))
-          : Math.max(10, 100 - monthAbsDrawdown / 10);
       const monthSurvival = calculatePropSurvival({
-        consistency: monthConsistency,
+        consistency: monthStats.consistency,
         drawdown: monthStats.maxDd,
         dailyRemaining: propSnapshot.dailyRemaining,
         dailyLossLimit: propSnapshot.template.dailyLossLimit,
@@ -5977,7 +5948,7 @@ function StatsScreen({
         tradingScore: monthScore.score,
         winRate: monthStats.wr,
         profitFactor: monthStats.pf,
-        riskControl: monthRiskControl,
+        riskControl: monthStats.drawdownControl,
         propSurvivalScore: monthSurvival.probability,
         propTargetRemainingPct:
           propSnapshot.template.evaluationTarget > 0
