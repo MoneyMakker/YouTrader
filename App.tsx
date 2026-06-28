@@ -115,6 +115,16 @@ import {
 } from "./src/config/appConfig";
 import { openLegalUrl, PRIVACY_POLICY_URL, TERMS_OF_USE_EULA_URL } from "./src/config/legalUrls";
 import { SubscriptionLegalDisclosure } from "./src/components/subscription/SubscriptionLegalDisclosure";
+import {
+  checkClientRateLimit,
+  recordSecurityEvent,
+  runIdempotentLocal,
+  stableSecurityHash,
+  withTimeout,
+} from "./src/security/clientSecurity";
+import { SECURITY_LIMITS, SECURITY_MESSAGES } from "./src/security/securityConfig";
+import { validateImportedRows, validateTradeInput } from "./src/security/tradeValidation";
+import { validateSecureUploadInput } from "./src/security/uploadSecurity";
 import { GlassCard } from "./src/components/ui/GlassCard";
 import { AnimatedEquityCurve } from "./src/components/charts/AnimatedEquityCurve";
 import { PremiumGlassCard } from "./src/components/ui/PremiumGlassCard";
@@ -226,6 +236,50 @@ type EconEvent = {
   previous: string;
   bias: Record<Asset, Bias>;
 };
+type MarketDailyBrief = {
+  title: string;
+  summary: string;
+  marketRegime: string;
+  keyMacroEvents: string[];
+  topRisks: string[];
+  assetsToWatch: string[];
+  volatilityWarning: string;
+  propFirmCaution: string;
+  whatNotToDo: string;
+  generatedAt: string;
+};
+type MarketWatchlistItem = {
+  asset: string;
+  bias: Bias;
+  confidence: string;
+  reason: string;
+  caution: string;
+};
+type MarketSummary = {
+  macroTone: string;
+  riskMode: string;
+  strongestHeadlines: string[];
+  importantCalendarEvents: string[];
+  propFirmRiskWarnings: string[];
+  updatedAt: string;
+};
+type PropFirmUpdate = {
+  id: string;
+  firm: string;
+  category: string;
+  keyText: string;
+  detectedChangeSummary: string;
+  changedAt: string;
+  url: string;
+};
+type MarketIntelData = {
+  brief: MarketDailyBrief | null;
+  watchlist: MarketWatchlistItem[];
+  summary: MarketSummary | null;
+  events: EconEvent[];
+  propUpdates: PropFirmUpdate[];
+  headlines: MarketNews[];
+};
 type ServerSubscriptionRow = {
   status: string | null;
   expires_at: string | null;
@@ -271,8 +325,8 @@ const MAX_CONTRACTS = 1000;
 const MAX_PRICE = 10000000;
 const MAX_ABS_PNL = 10000000;
 const MAX_LOCAL_TRADES = 25000;
-const MAX_SCREENSHOT_BYTES = 6 * 1024 * 1024;
-const MAX_VOICE_NOTE_BYTES = 12 * 1024 * 1024;
+const MAX_SCREENSHOT_BYTES = SECURITY_LIMITS.screenshotMaxBytes;
+const MAX_VOICE_NOTE_BYTES = SECURITY_LIMITS.voiceNoteMaxBytes;
 const TRADE_SAVE_DEBOUNCE_MS = 900;
 
 const C = {
@@ -1145,6 +1199,29 @@ function cloudSafeAssetUrl(uri?: string | null) {
     return null;
   }
 }
+
+async function claimRemoteIdempotency(action: string, userId: string | undefined, payload: unknown) {
+  if (!supabase || !userId) return true;
+  const requestHash = stableSecurityHash(JSON.stringify(payload));
+  const idempotencyKey = `${action}:${requestHash}`;
+  try {
+    const { data, error } = await withTimeout(supabase.rpc("security_claim_idempotency_key", {
+      p_idempotency_key: idempotencyKey,
+      p_action: action,
+      p_request_hash: requestHash,
+    }));
+    if (error) return true;
+    const result = data as { duplicate?: boolean; hash_mismatch?: boolean } | null;
+    if (result?.hash_mismatch) {
+      await recordSecurityEvent("remote_idempotency_hash_mismatch", action, userId);
+      return false;
+    }
+    return !result?.duplicate;
+  } catch {
+    return true;
+  }
+}
+
 function addDays(date: Date, n: number) {
   const d = Number.isFinite(date?.getTime?.()) ? new Date(date) : new Date();
   d.setDate(d.getDate() + n);
@@ -1797,6 +1874,52 @@ async function fetchYahooFinanceNews(): Promise<MarketNews[]> {
   }
 }
 
+function normalizeMarketBias(value: unknown, fallbackText: string): Record<Asset, Bias> {
+  const fallback = estimateBias(fallbackText);
+  if (!value || typeof value !== "object") return fallback;
+  const raw = value as Record<string, unknown>;
+  return ASSETS.reduce((acc, asset) => {
+    const next = String(raw[asset] || fallback[asset] || "NEUTRAL").toUpperCase();
+    acc[asset] = next === "LONG" || next === "SHORT" ? (next as Bias) : "NEUTRAL";
+    return acc;
+  }, {} as Record<Asset, Bias>);
+}
+
+async function loadCachedMarketNews(): Promise<MarketNews[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from("market_news_items")
+        .select("id,source,url,title,summary,impact,bias,published_at,fetched_at")
+        .eq("status", "published")
+        .order("published_at", { ascending: false })
+        .limit(80),
+      SECURITY_LIMITS.requestTimeoutMs,
+    );
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row: any) => {
+      const text = `${row.title || ""} ${row.summary || ""}`;
+      const publishedAt = row.published_at || row.fetched_at;
+      const parsed = publishedAt ? Date.parse(publishedAt) / 1000 : Date.now() / 1000;
+      return {
+        id: String(row.id || uid()),
+        title: String(row.title || "Market update"),
+        summary: String(row.summary || ""),
+        source: String(row.source || "Market Intel"),
+        time: fmtTime(Number.isFinite(parsed) ? parsed : Date.now() / 1000),
+        url: String(row.url || ""),
+        bias: normalizeMarketBias(row.bias, text),
+        impact: ["HIGH", "MED", "LOW"].includes(String(row.impact || "").toUpperCase())
+          ? (String(row.impact).toUpperCase() as Impact)
+          : impactFromText(text),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 function makeOfflineCalendarEvents(): EconEvent[] {
   const base = new Date();
   return [
@@ -1923,6 +2046,9 @@ async function loadNews(): Promise<MarketNews[]> {
     return items;
   };
 
+  const marketIntelItems = await loadCachedMarketNews();
+  if (marketIntelItems.length) return persist(marketIntelItems);
+
   if (FINNHUB) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
@@ -1984,6 +2110,145 @@ function normalizeEvent(e: any, index: number): EconEvent {
     previous: String(e.previous || e.prev || "—"),
     bias: e.bias || estimateBias(text),
   });
+}
+
+async function loadCachedEconomicEvents(start: string, end: string): Promise<EconEvent[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from("economic_events")
+        .select("id,event_name,event_date,event_time,importance,affected_assets,previous,forecast,actual,source")
+        .eq("status", "published")
+        .gte("event_date", start)
+        .lte("event_date", end)
+        .order("event_date", { ascending: true })
+        .limit(200),
+      SECURITY_LIMITS.requestTimeoutMs,
+    );
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row: any, index: number) => {
+      const text = `${row.event_name || ""} ${(row.affected_assets || []).join(" ")}`;
+      return applyCalendarBias({
+        id: String(row.id || `${row.event_date}-${index}`),
+        date: String(row.event_date || todayISO()).slice(0, 10),
+        time: String(row.event_time || "TBD"),
+        name: String(row.event_name || "Economic event"),
+        impact: ["HIGH", "MED", "LOW"].includes(String(row.importance || "").toUpperCase())
+          ? (String(row.importance).toUpperCase() as Impact)
+          : impactFromText(text),
+        actual: String(row.actual || "—"),
+        forecast: String(row.forecast || "—"),
+        previous: String(row.previous || "—"),
+        bias: estimateBias(text),
+      } as EconEvent);
+    });
+  } catch {
+    return [];
+  }
+}
+
+function parseStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [];
+}
+
+function normalizeImpact(value: unknown, fallbackText = ""): Impact {
+  const next = String(value || "").toUpperCase();
+  return next === "HIGH" || next === "MED" || next === "LOW" ? (next as Impact) : impactFromText(fallbackText);
+}
+
+async function loadMarketIntelligence(): Promise<MarketIntelData> {
+  const empty: MarketIntelData = { brief: null, watchlist: [], summary: null, events: [], propUpdates: [], headlines: [] };
+  if (!supabase) return { ...empty, headlines: await loadNews(), events: await loadCalendarEvents() };
+  try {
+    const today = todayISO();
+    const [briefRes, watchlistRes, summaryRes, eventRes, propRes, newsRes] = await Promise.all([
+      withTimeout(supabase.from("market_daily_briefs").select("*").eq("status", "published").order("brief_date", { ascending: false }).limit(1)),
+      withTimeout(supabase.from("market_watchlists").select("*").eq("status", "published").order("watchlist_date", { ascending: false }).limit(1)),
+      withTimeout(supabase.from("market_summaries").select("*").eq("status", "published").eq("summary_key", "global").limit(1)),
+      withTimeout(supabase.from("economic_events").select("*").eq("status", "published").gte("event_date", today).order("event_date", { ascending: true }).limit(12)),
+      withTimeout(supabase.from("prop_firm_updates").select("id,firm,category,url,key_text,detected_change_summary,changed_at").eq("status", "published").order("changed_at", { ascending: false }).limit(8)),
+      withTimeout(supabase.from("market_news_items").select("id,source,url,title,summary,impact,bias,published_at,fetched_at").eq("status", "published").order("published_at", { ascending: false }).limit(30)),
+    ]);
+
+    const briefRow = Array.isArray(briefRes.data) ? briefRes.data[0] : null;
+    const watchRow = Array.isArray(watchlistRes.data) ? watchlistRes.data[0] : null;
+    const summaryRow = Array.isArray(summaryRes.data) ? summaryRes.data[0] : null;
+    const headlines = Array.isArray(newsRes.data)
+      ? newsRes.data.map((row: any) => {
+          const text = `${row.title || ""} ${row.summary || ""}`;
+          const parsed = row.published_at ? Date.parse(row.published_at) / 1000 : Date.now() / 1000;
+          return {
+            id: String(row.id || uid()),
+            title: String(row.title || "Market update"),
+            summary: String(row.summary || ""),
+            source: String(row.source || "Market Intel"),
+            time: fmtTime(Number.isFinite(parsed) ? parsed : Date.now() / 1000),
+            url: String(row.url || ""),
+            bias: normalizeMarketBias(row.bias, text),
+            impact: normalizeImpact(row.impact, text),
+          } as MarketNews;
+        })
+      : [];
+    const events = Array.isArray(eventRes.data)
+      ? eventRes.data.map((row: any, index: number) => {
+          const text = `${row.event_name || ""} ${(row.affected_assets || []).join(" ")}`;
+          return applyCalendarBias({
+            id: String(row.id || `${row.event_date}-${index}`),
+            date: String(row.event_date || today).slice(0, 10),
+            time: String(row.event_time || "TBD"),
+            name: String(row.event_name || "Economic event"),
+            impact: normalizeImpact(row.importance, text),
+            actual: String(row.actual || "—"),
+            forecast: String(row.forecast || "—"),
+            previous: String(row.previous || "—"),
+            bias: estimateBias(text),
+          } as EconEvent);
+        })
+      : [];
+    return {
+      brief: briefRow ? {
+        title: String(briefRow.title || "Daily Brief"),
+        summary: String(briefRow.summary || ""),
+        marketRegime: String(briefRow.market_regime || "Balanced"),
+        keyMacroEvents: parseStringArray(briefRow.key_macro_events),
+        topRisks: parseStringArray(briefRow.top_risks),
+        assetsToWatch: parseStringArray(briefRow.assets_to_watch),
+        volatilityWarning: String(briefRow.volatility_warning || ""),
+        propFirmCaution: String(briefRow.prop_firm_caution || ""),
+        whatNotToDo: String(briefRow.what_not_to_do || ""),
+        generatedAt: String(briefRow.generated_at || ""),
+      } : null,
+      watchlist: Array.isArray(watchRow?.items) ? watchRow.items.slice(0, 8).map((item: any) => ({
+        asset: String(item.asset || ""),
+        bias: normalizeMarketBias({ [String(item.asset || "ES")]: item.bias }, String(item.reason || ""))[String(item.asset || "ES") as Asset] || "NEUTRAL",
+        confidence: String(item.confidence || "LOW"),
+        reason: String(item.reason || "No cached reason yet."),
+        caution: String(item.caution || "Educational market context only. Not financial advice."),
+      })) : [],
+      summary: summaryRow ? {
+        macroTone: String(summaryRow.macro_tone || "Mixed"),
+        riskMode: String(summaryRow.risk_mode || "Balanced"),
+        strongestHeadlines: parseStringArray(summaryRow.strongest_headlines),
+        importantCalendarEvents: parseStringArray(summaryRow.important_calendar_events),
+        propFirmRiskWarnings: parseStringArray(summaryRow.prop_firm_risk_warnings),
+        updatedAt: String(summaryRow.updated_at || ""),
+      } : null,
+      events,
+      propUpdates: Array.isArray(propRes.data) ? propRes.data.map((row: any) => ({
+        id: String(row.id || uid()),
+        firm: String(row.firm || "Prop firm"),
+        category: String(row.category || "rules"),
+        keyText: String(row.key_text || ""),
+        detectedChangeSummary: String(row.detected_change_summary || "No change summary."),
+        changedAt: String(row.changed_at || ""),
+        url: String(row.url || ""),
+      })) : [],
+      headlines,
+    };
+  } catch {
+    return { ...empty, headlines: await loadNews(), events: await loadCalendarEvents() };
+  }
 }
 
 function formatEventTime(date: Date) {
@@ -2071,6 +2336,9 @@ async function loadCalendarEvents(): Promise<EconEvent[]> {
     }
     return items;
   };
+
+  const cachedIntelEvents = await loadCachedEconomicEvents(start, end);
+  if (cachedIntelEvents.length) return persist(cachedIntelEvents);
 
   if (CALENDAR_API_URL) {
     const controller = new AbortController();
@@ -4243,17 +4511,6 @@ function BottomSheetPanel({
   );
 }
 
-function CloudAIStatus({ status }: { status: AIProviderStatus | "idle" }) {
-  const label = status === "nvidia" ? "Cloud AI" : status === "idle" ? "Ready" : status === "quota_exceeded" ? "Limit" : "Local";
-  const color = status === "nvidia" ? C.green : status === "quota_exceeded" ? C.yellow : C.sub;
-  return (
-    <View style={styles.cloudStatus}>
-      <View style={[styles.cloudStatusDot, { backgroundColor: color }]} />
-      <Text style={[styles.cloudStatusText, { color }]}>{label}</Text>
-    </View>
-  );
-}
-
 type EquityRange = "7D" | "30D" | "90D" | "YTD" | "ALL";
 const EQUITY_RANGES: EquityRange[] = ["7D", "30D", "90D", "YTD", "ALL"];
 
@@ -4669,7 +4926,9 @@ function TerminalTraderStatus({
       dateLabel: achievementShareDateLabel(selectedDate),
     };
   }, [selectedDate, trades]);
-  const unlocked = achievements.filter((item) => item.unlocked).slice(0, 6);
+  const allUnlocked = achievements.filter((item) => item.unlocked);
+  const freeUnlockLimitReached = !isPremium && allUnlocked.length > 5;
+  const unlocked = isPremium ? allUnlocked : allUnlocked.slice(0, 5);
   const next = achievements.filter((item) => !item.unlocked).slice(0, 4);
   const waitForCard = () =>
     new Promise<void>((resolve) => {
@@ -5242,15 +5501,15 @@ function achievementShareDateLabel(selectedDate: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase();
 }
 
-function dayRangeIso(date = new Date()) {
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const end = addDays(start, 1);
+function monthRangeIso(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
 function achievementShareUsageStorageKey(userId: string | null, date = new Date()) {
-  const day = date.toISOString().slice(0, 10);
-  return `achievement-share-usage:${userId || "local"}:${day}`;
+  const month = date.toISOString().slice(0, 7);
+  return `achievement-share-usage:${userId || "local"}:${month}`;
 }
 
 async function checkAndRecordLocalAchievementShareUsage(limit: number, userId: string | null) {
@@ -5258,7 +5517,7 @@ async function checkAndRecordLocalAchievementShareUsage(limit: number, userId: s
   const raw = await AsyncStorage.getItem(key);
   const used = Number(raw || "0");
   if (Number.isFinite(used) && used >= limit) {
-    throw new Error(limit > 2 ? "You have reached your 10 achievement shares for today." : "Free users can share 2 achievements per day. YouTrader Pro includes 10 daily shares.");
+    throw new Error(limit > 5 ? "Your monthly achievement sharing allowance has been used." : "Free users can unlock and share 5 achievement cards. Upgrade to Pro.");
   }
   await AsyncStorage.setItem(key, String((Number.isFinite(used) ? used : 0) + 1));
 }
@@ -5272,12 +5531,12 @@ async function checkAndRecordAchievementShareUsage({
   isPremium: boolean;
   achievement: Achievement;
 }) {
-  const limit = isPremium ? 10 : 2;
+  const limit = isPremium ? 15 : 5;
   if (!supabase || !session?.user.id) {
     await checkAndRecordLocalAchievementShareUsage(limit, session?.user.id || null);
     return;
   }
-  const { start, end } = dayRangeIso();
+  const { start, end } = monthRangeIso();
   const { count, error: countError } = await supabase
     .from("achievement_share_usage")
     .select("id", { count: "exact", head: true })
@@ -5290,7 +5549,7 @@ async function checkAndRecordAchievementShareUsage({
     return;
   }
   if ((count || 0) >= limit) {
-    throw new Error(isPremium ? "You have reached your 10 achievement shares for today." : "Free users can share 2 achievements per day. YouTrader Pro includes 10 daily shares.");
+    throw new Error(isPremium ? "Your monthly achievement sharing allowance has been used." : "Free users can unlock and share 5 achievement cards. Upgrade to Pro.");
   }
   const { error: insertError } = await supabase.from("achievement_share_usage").insert({
     user_id: session.user.id,
@@ -5535,7 +5794,9 @@ function AchievementSection({
       dateLabel: achievementShareDateLabel(selectedDate),
     };
   }, [selectedDate, trades]);
-  const unlocked = achievements.filter((item) => item.unlocked).slice(0, 6);
+  const allUnlocked = achievements.filter((item) => item.unlocked);
+  const freeUnlockLimitReached = !isPremium && allUnlocked.length > 5;
+  const unlocked = isPremium ? allUnlocked : allUnlocked.slice(0, 5);
   const nextTargets = achievements.filter((item) => !item.unlocked && item.status === "next_target").slice(0, 4);
   const locked = achievements.filter((item) => !item.unlocked && item.status === "locked").slice(0, Math.max(0, 4 - nextTargets.length));
   const waitForCard = () =>
@@ -5586,6 +5847,9 @@ function AchievementSection({
           <View style={styles.achievementGrid}>
             {unlocked.map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={shareAchievement} />)}
           </View>
+          {freeUnlockLimitReached ? (
+            <Text style={styles.breakdownEmptyText}>Free users can unlock and share 5 achievement cards. Upgrade to Pro.</Text>
+          ) : null}
         </>
       ) : (
         <Text style={styles.breakdownEmptyText}>Keep logging trades to unlock your first trader-status badge.</Text>
@@ -5811,12 +6075,14 @@ function StatsScreen({
       netPnl: periodStats.pnl,
       winRate: periodStats.wr,
       profitFactor: periodStats.pf,
+      tradingScore: tradingScoreForTrades(periodTrades).score,
+      dateLabel: achievementShareDateLabel(selectedDate),
       weekPnl,
       trades: periodStats.count,
       dailyBuffer: moneyCompact(propSnapshot.dailyRemaining),
       propStatus: `${propSnapshot.template.label} • ${propSnapshot.status}`,
     }),
-    [period, selectedDate, periodStats, weekPnl, propSnapshot],
+    [period, selectedDate, periodStats, periodTrades, weekPnl, propSnapshot],
   );
 
   const waitForShareCardLayout = () =>
@@ -5826,6 +6092,11 @@ function StatsScreen({
 
   const runExport = async (action: "share" | "save" | "pdf") => {
     try {
+      const limit = await checkClientRateLimit("export:generate", "stats-local");
+      if (!limit.allowed) {
+        Alert.alert("Export", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
       setExportBusy(true);
       const { shareCapturedView, saveCapturedViewToPhotos, shareMonthlyPdfReport } = await import(
         "./src/components/insights/shareExport"
@@ -5834,12 +6105,13 @@ function StatsScreen({
         setShareCardMounted(true);
         await waitForShareCardLayout();
       }
+      const exportKey = { action, period, selectedDate, count: periodTrades.length, pnl: periodStats.pnl };
       if (action === "share") {
-        await shareCapturedView(shareCardRef);
+        await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareCapturedView(shareCardRef));
         return;
       }
       if (action === "save") {
-        await saveCapturedViewToPhotos(shareCardRef);
+        await runIdempotentLocal("export:generate", "stats-local", exportKey, () => saveCapturedViewToPhotos(shareCardRef));
         Alert.alert("Saved", "P&L card saved to Photos.");
         return;
       }
@@ -5881,7 +6153,7 @@ function StatsScreen({
       }).filter((item) => item.unlocked).map((item) => item.title);
       const start = periodStart(safeDateFromISO(selectedDate), "month");
       const end = addDays(addMonths(start, 1), -1);
-      await shareMonthlyPdfReport({
+      await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
         title: "YouTrader Monthly Report",
         rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
         netPnl: monthStats.pnl,
@@ -5889,6 +6161,11 @@ function StatsScreen({
         profitFactor: monthStats.pf,
         trades: monthStats.count,
         expectancy: monthStats.exp,
+        equityCurve: monthStats.curve,
+        drawdown: monthStats.maxDd,
+        consistency: monthStats.consistency,
+        recoveryFactor: monthStats.recoveryFactor,
+        riskControl: monthStats.drawdownControl,
         bestDay: best ? fullWeekdayName(best.label) : "—",
         worstDay: worst ? fullWeekdayName(worst.label) : "—",
         tradingScore: monthScore.score,
@@ -5899,7 +6176,7 @@ function StatsScreen({
         achievementsEarned: monthAchievements,
         aiSummary: tradeAnalysis?.summary,
         nextFocus: monthScore.weaknesses[0] || monthPatterns.opportunity.detail,
-      });
+      }));
     } catch (error) {
       alertExportError("Export failed", error);
     } finally {
@@ -6301,41 +6578,6 @@ function BulletList({ items }: { items?: string[] }) {
   );
 }
 
-function TerminalAICommandCenter({
-  confidence,
-  status,
-  loading,
-  onRefresh,
-  lastUpdated,
-}: {
-  confidence: number;
-  status: AIProviderStatus | "idle";
-  loading: boolean;
-  onRefresh: () => void;
-  lastUpdated?: string;
-}) {
-  return (
-    <TerminalGlassCard style={styles.aiTerminalHero}>
-      <View style={styles.terminalHeaderRow}>
-        <View>
-          <Text style={styles.terminalHeroTitle}>AI Confidence</Text>
-          <Text style={styles.terminalSub}>Blended pass-path and trading score confidence</Text>
-        </View>
-        <CloudAIStatus status={status} />
-      </View>
-      <View style={styles.aiCommandHeroRow}>
-        <View style={styles.aiConfidenceRing}>
-          <AppleRing label="" value={confidence} display={`${confidence}`} size={132} color={confidence >= 70 ? C.green : confidence >= 45 ? C.yellow : C.red} />
-        </View>
-      </View>
-      <Pressable disabled={loading} onPress={onRefresh} style={[styles.aiUnifiedRefresh, loading && styles.disabledBtn]}>
-        <Text style={styles.aiUnifiedRefreshText}>{loading ? "Refreshing..." : "Refresh Analysis"}</Text>
-      </Pressable>
-      {lastUpdated ? <Text style={styles.aiRefreshTimestamp}>Updated {new Date(lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text> : null}
-    </TerminalGlassCard>
-  );
-}
-
 function TerminalPatternDetective({
   stats,
 }: {
@@ -6501,12 +6743,16 @@ function TerminalFundedPanel({
   mode: FirmMode;
   onModeChange: (mode: FirmMode) => void;
 }) {
-  const maxContracts = snapshot.template.liveContracts;
-  const riskPct = snapshot.template.liveRiskPct;
+  const isFunded = mode === "funded";
+  const maxContracts = isFunded ? snapshot.template.liveContracts : snapshot.template.evaluationContracts;
+  const riskPct = isFunded ? snapshot.template.liveRiskPct : snapshot.template.evaluationRiskPct;
+  const modeLabel = isFunded ? "Funded" : "Evaluation";
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Funded</Text>
-      <Text style={styles.terminalSub}>Live account safety mode, buffers, and contract cap</Text>
+      <Text style={styles.terminalSectionTitle}>{modeLabel}</Text>
+      <Text style={styles.terminalSub}>
+        {isFunded ? "Live account safety mode, buffers, and contract cap" : "Evaluation pass-path risk plan, buffers, and contract cap"}
+      </Text>
       <View style={styles.propModeRail}>
         {(["evaluation", "funded"] as FirmMode[]).map((item) => {
           const active = item === mode;
@@ -6523,26 +6769,23 @@ function TerminalFundedPanel({
           );
         })}
       </View>
-      {mode === "funded" ? (
-        <>
-          <MetricPillRow
-            items={[
-              { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
-              { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
-              { label: "Live Cap", value: `${maxContracts} max`, tone: "purple" },
-              { label: "Risk / Trade", value: `${Math.round(riskPct * 100)}%`, tone: "grey" },
-              { label: "Status", value: snapshot.status, tone: snapshot.status === "CLEAR" ? "green" : snapshot.status === "STOP" ? "red" : "purple" },
-            ]}
-          />
-          <Text style={styles.terminalSub}>
-            {snapshot.status === "CLEAR"
-              ? "Keep live size stable and protect buffers before increasing contracts."
-              : "Reduce size, protect remaining buffer, and trade only checklist-perfect setups."}
-          </Text>
-        </>
-      ) : (
-        <Text style={styles.terminalSub}>Switch to Funded to view live-account risk plan and contract limits.</Text>
-      )}
+      <MetricPillRow
+        items={[
+          { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+          { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
+          { label: isFunded ? "Live Cap" : "To Pass", value: isFunded ? `${maxContracts} max` : moneyCompact(snapshot.remainingToPass), tone: isFunded ? "purple" : snapshot.remainingToPass <= 0 ? "green" : "purple" },
+          { label: "Contracts", value: `${maxContracts} max`, tone: "purple" },
+          { label: "Risk / Trade", value: `${Math.round(riskPct * 100)}%`, tone: "grey" },
+          { label: "Status", value: snapshot.status, tone: snapshot.status === "CLEAR" ? "green" : snapshot.status === "STOP" ? "red" : "purple" },
+        ]}
+      />
+      <Text style={styles.terminalSub}>
+        {snapshot.status === "CLEAR"
+          ? isFunded
+            ? "Keep live size stable and protect buffers before increasing contracts."
+            : "Keep evaluation size consistent and protect the pass path before increasing risk."
+          : "Reduce size, protect remaining buffer, and trade only checklist-perfect setups."}
+      </Text>
     </TerminalGlassCard>
   );
 }
@@ -6558,6 +6801,7 @@ function AiAnalysisScreen({
   showRestorePurchases,
   onPurchase,
   onRestore,
+  session,
 }: {
   trades: Trade[];
   propTemplates: RiskTemplate[];
@@ -6569,6 +6813,7 @@ function AiAnalysisScreen({
   showRestorePurchases: boolean;
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
+  session: Session | null;
 }) {
   const period: "month" = "month";
   const [selectedDate] = useState(todayISO());
@@ -6643,6 +6888,7 @@ function AiAnalysisScreen({
       }),
     [trades, selectedDate, activeTemplate.key, safeAnalysisTemplates],
   );
+  const selectedPropSnapshot = propMode === "funded" ? fundedSnapshot : propSnapshot;
   const passProbability = useMemo(
     () => calculatePassProbability({ trades, selectedDate, template: activeTemplate }),
     [trades, selectedDate, activeTemplate],
@@ -6677,6 +6923,27 @@ function AiAnalysisScreen({
     }),
     [hiddenLeaks, passProbability, periodStats, periodTrades, propSnapshot, revengeTrading, selectedDate, trades],
   );
+  const achievementList = useMemo(
+    () =>
+      calculateAchievements({
+        trades: periodTrades,
+        selectedDate,
+        tradingScore: tradingScore.score,
+        winRate: periodStats.wr,
+        profitFactor: periodStats.pf,
+        riskControl: periodStats.drawdownControl,
+        propSurvivalScore: passProbability.probability,
+        propTargetRemainingPct:
+          propSnapshot.template.evaluationTarget > 0
+            ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
+            : 100,
+        monthlyPnl: periodStats.pnl,
+        bestMonthPnl: Math.max(0, periodStats.pnl),
+        dailyLossLimit: propSnapshot.template.dailyLossLimit,
+      }),
+    [passProbability.probability, periodStats, periodTrades, propSnapshot, selectedDate, tradingScore.score],
+  );
+  const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
 
   const runCoachFeature = async (key: keyof AIResultMap) => {
     if (!isPremium) {
@@ -6705,68 +6972,6 @@ function AiAnalysisScreen({
       });
     } finally {
       setAiBusy((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
-  const aiUnifiedBusy = Object.values(aiBusy).some(Boolean) || tradeAnalysisBusy;
-  const aiProviderStatus: AIProviderStatus | "idle" =
-    aiResults.dailyPlan?.providerStatus ||
-    aiResults.riskPredictor?.providerStatus ||
-    aiResults.weeklyCoach?.providerStatus ||
-    aiResults.journalSummary?.providerStatus ||
-    aiResults.dailyChallenge?.providerStatus ||
-    (tradeAnalysis ? "local_fallback" : "idle");
-  const aiLastUpdated = [
-    aiResults.dailyPlan?.generatedAt,
-    aiResults.riskPredictor?.generatedAt,
-    aiResults.weeklyCoach?.generatedAt,
-    aiResults.journalSummary?.generatedAt,
-    aiResults.dailyChallenge?.generatedAt,
-  ].filter(Boolean).sort().pop();
-
-  const refreshUnifiedAnalysis = async () => {
-    if (!isPremium) {
-      warningHaptic();
-      Alert.alert("YouTrader Pro", "AI Analytics is included in YouTrader Pro.");
-      return;
-    }
-    setAiBusy({
-      dailyPlan: true,
-      riskPredictor: true,
-      weeklyCoach: true,
-      journalSummary: true,
-      dailyChallenge: true,
-    });
-    setTradeAnalysisBusy(true);
-    setTradeAnalysisError("");
-    try {
-      const [dailyPlan, riskPredictor, weeklyCoach, journalSummary, dailyChallenge] = await Promise.all([
-        fetchAIDailyPlan(aiCoachPayload),
-        fetchAIRiskPredictor(aiCoachPayload),
-        fetchAIWeeklyCoach(aiCoachPayload),
-        fetchAIJournalSummary(aiCoachPayload),
-        fetchAIDailyChallenge(aiCoachPayload),
-      ]);
-      setAiResults({ dailyPlan, riskPredictor, weeklyCoach, journalSummary, dailyChallenge });
-      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot });
-      setTradeAnalysis(await analyzeTrades(payload));
-      trackEvent("ai_terminal_analysis_refreshed", {
-        provider_status: dailyPlan.providerStatus,
-        trade_count: periodTrades.length,
-      });
-    } catch (error) {
-      logger.error(error, { feature: "ai_terminal", action: "refresh_failed" });
-      setTradeAnalysis(buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats)));
-      setTradeAnalysisError("Cloud AI is unavailable. Showing local YouTrader intelligence.");
-    } finally {
-      setAiBusy({
-        dailyPlan: false,
-        riskPredictor: false,
-        weeklyCoach: false,
-        journalSummary: false,
-        dailyChallenge: false,
-      });
-      setTradeAnalysisBusy(false);
     }
   };
 
@@ -6822,14 +7027,15 @@ function AiAnalysisScreen({
             <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
             <TerminalPatternDetective stats={periodStats} />
             <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
-            <TerminalAICommandCenter
-              confidence={Math.max(30, Math.min(98, Math.round((passProbability.probability + tradingScore.score) / 2)))}
-              status={aiProviderStatus}
-              loading={aiUnifiedBusy}
-              onRefresh={refreshUnifiedAnalysis}
-              lastUpdated={aiLastUpdated}
+            <TerminalFundedPanel snapshot={selectedPropSnapshot} mode={propMode} onModeChange={changePropMode} />
+            <AchievementSection
+              achievements={achievementList}
+              level={traderLevel}
+              trades={periodTrades}
+              selectedDate={selectedDate}
+              isPremium={isPremium}
+              session={session}
             />
-            <TerminalFundedPanel snapshot={fundedSnapshot} mode={propMode} onModeChange={changePropMode} />
             {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
           </View>
         </View>
@@ -6951,6 +7157,7 @@ function JournalScreen({
   const [photoView, setPhotoView] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [pnlSide, setPnlSide] = useState<"plus" | "minus">("plus");
+  const [savingTrade, setSavingTrade] = useState(false);
   const lastSaveAtRef = useRef(0);
   const emptyForm = {
     symbol: "MES",
@@ -7061,22 +7268,49 @@ function JournalScreen({
       ),
     );
   };
-  const save = () => {
-    const now = Date.now();
-    if (now - lastSaveAtRef.current < TRADE_SAVE_DEBOUNCE_MS) return;
-    lastSaveAtRef.current = now;
-    const validated = validateTradeForm(form, pnlSide);
-    if ("error" in validated) {
-      Alert.alert("Could not save trade", validated.error || "Check the trade details and try again.");
-      return;
-    }
-    const safe = validated.value;
-    if (!safe) {
-      Alert.alert("Could not save trade", "Check the trade details and try again.");
-      return;
-    }
-    const previousTrade = editId ? trades.find((x) => x.id === editId) : null;
-    const item: Trade = {
+  const save = async () => {
+    if (savingTrade) return;
+    setSavingTrade(true);
+    try {
+      const action = editId ? "trade:update" : "trade:create";
+      const limit = await checkClientRateLimit(action, "journal-local");
+      if (!limit.allowed) {
+        Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
+      const now = Date.now();
+      if (now - lastSaveAtRef.current < TRADE_SAVE_DEBOUNCE_MS) return;
+      lastSaveAtRef.current = now;
+      const validated = validateTradeForm(form, pnlSide);
+      if ("error" in validated) {
+        Alert.alert("Could not save trade", validated.error || "Check the trade details and try again.");
+        return;
+      }
+      const safe = validated.value;
+      if (!safe) {
+        Alert.alert("Could not save trade", "Check the trade details and try again.");
+        return;
+      }
+      const securityTrade = validateTradeInput({
+        symbol: safe.symbol,
+        direction: form.direction,
+        entry: safe.entry,
+        exit: safe.exit,
+        contracts: safe.contracts,
+        stopLoss: safe.stopLoss,
+        takeProfit: safe.takeProfit,
+        pnl: safe.pnl,
+        mood: safe.mood,
+        notes: safe.notes,
+        tags: safe.tags,
+      });
+      if (!securityTrade.ok) {
+        await recordSecurityEvent("invalid_trade_input", action, "journal-local");
+        Alert.alert("YouTrader", SECURITY_MESSAGES.invalidTrade);
+        return;
+      }
+      const previousTrade = editId ? trades.find((x) => x.id === editId) : null;
+      const item: Trade = {
       id: editId || uid(),
       date: selectedDate,
       symbol: safe.symbol,
@@ -7098,10 +7332,16 @@ function JournalScreen({
       createdAt: editId ? (previousTrade?.createdAt || now) : now,
       updatedAt: now,
     };
-    setTrades((prev) =>
-      editId ? prev.map((x) => (x.id === editId ? item : x)) : [item, ...prev],
-    );
-    setModal(false);
+      await runIdempotentLocal(action, "journal-local", item, () => {
+        setTrades((prev) =>
+          editId ? prev.map((x) => (x.id === editId ? item : x)) : [item, ...prev],
+        );
+        return { tradeId: item.id, updatedAt: item.updatedAt };
+      });
+      setModal(false);
+    } finally {
+      setSavingTrade(false);
+    }
   };
   const remove = () => {
     if (!editId) return;
@@ -7110,7 +7350,12 @@ function JournalScreen({
       {
         text: t("deleteTrade"),
         style: "destructive",
-        onPress: () => {
+        onPress: async () => {
+          const limit = await checkClientRateLimit("trade:delete", "journal-local");
+          if (!limit.allowed) {
+            Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
+            return;
+          }
           onTradeDeleted(editId);
           setTrades((prev) => prev.filter((x) => x.id !== editId));
           setModal(false);
@@ -7134,9 +7379,17 @@ function JournalScreen({
         });
         if (!r.canceled) {
           const asset = r.assets[0];
-          const fileSize = typeof (asset as any).fileSize === "number" ? (asset as any).fileSize : 0;
-          const ok = fileSize > 0 ? fileSize <= MAX_SCREENSHOT_BYTES : await fileSizeWithinLimit(asset.uri, MAX_SCREENSHOT_BYTES);
-          if (!ok) return Alert.alert("Photo too large", "Choose a screenshot under 6 MB.");
+          const limit = await checkClientRateLimit("upload:screenshot", "journal-local");
+          const uploadCheck = await validateSecureUploadInput({
+            uri: asset.uri,
+            category: "screenshot",
+            originalName: asset.fileName || "camera.jpg",
+            mimeType: asset.mimeType || "image/jpeg",
+          });
+          if (!limit.allowed || !uploadCheck.ok) {
+            await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
+            return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
+          }
           setForm({ ...form, photoUri: asset.uri });
         }
       } else {
@@ -7148,9 +7401,17 @@ function JournalScreen({
         });
         if (!r.canceled) {
           const asset = r.assets[0];
-          const fileSize = typeof (asset as any).fileSize === "number" ? (asset as any).fileSize : 0;
-          const ok = fileSize > 0 ? fileSize <= MAX_SCREENSHOT_BYTES : await fileSizeWithinLimit(asset.uri, MAX_SCREENSHOT_BYTES);
-          if (!ok) return Alert.alert("Photo too large", "Choose a screenshot under 6 MB.");
+          const limit = await checkClientRateLimit("upload:screenshot", "journal-local");
+          const uploadCheck = await validateSecureUploadInput({
+            uri: asset.uri,
+            category: "screenshot",
+            originalName: asset.fileName || "screenshot.jpg",
+            mimeType: asset.mimeType || "image/jpeg",
+          });
+          if (!limit.allowed || !uploadCheck.ok) {
+            await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
+            return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
+          }
           setForm({ ...form, photoUri: asset.uri });
         }
       }
@@ -7168,8 +7429,16 @@ function JournalScreen({
         await audioRecorder.stop();
         const uri = audioRecorder.uri;
         if (!uri) return Alert.alert("Recording failed");
-        if (!(await fileSizeWithinLimit(uri, MAX_VOICE_NOTE_BYTES))) {
-          return Alert.alert("Voice note too large", "Record a shorter voice note under 12 MB.");
+        const limit = await checkClientRateLimit("upload:voice", "journal-local");
+        const uploadCheck = await validateSecureUploadInput({
+          uri,
+          category: "voice-note",
+          originalName: "voice-note.m4a",
+          mimeType: "audio/x-m4a",
+        });
+        if (!limit.allowed || !uploadCheck.ok) {
+          await recordSecurityEvent("invalid_upload", "upload:voice", "journal-local");
+          return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
         }
         const safeName = `${Date.now()}-voice-note.m4a`;
         // expo-audio already saves the file in app storage. Keep its native URI directly.
@@ -7678,6 +7947,19 @@ function JournalScreen({
   );
 }
 
+function MarketSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.marketSection}>
+      <Text style={styles.marketSectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function MarketEmpty({ text }: { text: string }) {
+  return <Text style={styles.marketEmptyText}>{text}</Text>;
+}
+
 function NewsScreen({
   lang,
   isPremium,
@@ -7687,12 +7969,12 @@ function NewsScreen({
   isPremium: boolean;
   onUpgrade: () => void;
 }) {
-  const [items, setItems] = useState<MarketNews[]>([]);
+  const [intel, setIntel] = useState<MarketIntelData | null>(null);
   const [loading, setLoading] = useState(true);
   const refresh = async () => {
     setLoading(true);
-    const n = await loadNews();
-    setItems(n);
+    const data = await loadMarketIntelligence();
+    setIntel(data);
     setLoading(false);
   };
   useEffect(() => {
@@ -7700,79 +7982,113 @@ function NewsScreen({
     const id = setInterval(refresh, 60000);
     return () => clearInterval(id);
   }, []);
-  const visibleItems = items;
+
+  if (loading && !intel) {
+    return (
+      <View style={styles.screen}>
+        <ActivityIndicator color={C.green} size="large" style={{ marginTop: 60 }} />
+      </View>
+    );
+  }
+
+  const data = intel || { brief: null, watchlist: [], summary: null, events: [], propUpdates: [], headlines: [] };
   return (
-    <View style={styles.screen}>
-      {loading && !items.length ? (
-        <ActivityIndicator
-          color={C.green}
-          size="large"
-          style={{ marginTop: 60 }}
-        />
-      ) : (
-        <FlatList
-          data={visibleItems}
-          keyExtractor={(i) => i.id}
-          contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}
-          initialNumToRender={8}
-          maxToRenderPerBatch={8}
-          windowSize={7}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => (item.url ? Linking.openURL(item.url) : undefined)}
-            >
-              <GlassCard style={styles.purpleNewsCard} intensity={28}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}>
+      <MarketSection title="Daily Brief">
+        {data.brief ? (
+          <GlassCard style={styles.marketHeroCard} intensity={30}>
+            <View style={styles.rowBetween}>
+              <Pill text={data.brief.marketRegime} tone="med" />
+              <Text style={styles.sub}>{data.brief.generatedAt ? new Date(data.brief.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Cached"}</Text>
+            </View>
+            <Text style={styles.newsTitle}>{data.brief.title}</Text>
+            <Text style={styles.newsSummary}>{data.brief.summary}</Text>
+            {!!data.brief.whatNotToDo && <Text style={styles.marketCaution}>Do not: {data.brief.whatNotToDo}</Text>}
+          </GlassCard>
+        ) : <MarketEmpty text="Daily brief will appear after the worker publishes cached data." />}
+      </MarketSection>
+
+      <MarketSection title="AI Watchlist">
+        {data.watchlist.length ? (
+          <View style={styles.marketGrid}>
+            {data.watchlist.map((item) => (
+              <GlassCard key={item.asset} style={styles.marketMiniCard} intensity={22}>
                 <View style={styles.rowBetween}>
-                  <Pill
-                    text={item.impact}
-                    tone={
-                      item.impact === "HIGH"
-                        ? "high"
-                        : item.impact === "MED"
-                          ? "med"
-                          : "low"
-                    }
-                  />
-                  <Text style={styles.sub}>
-                    {item.source} • {item.time}
-                  </Text>
+                  <Text style={styles.marketAsset}>{item.asset}</Text>
+                  <Text style={[styles.marketBias, { color: item.bias === "LONG" ? C.green : item.bias === "SHORT" ? C.red : C.sub }]}>{item.bias}</Text>
                 </View>
-                <Text style={styles.newsTitle}>{item.title}</Text>
-                {!!item.summary && (
-                  <Text style={styles.newsSummary}>
-                    {item.summary.slice(0, 240)}
-                  </Text>
-                )}
-                <View style={styles.assetGrid}>
-                  {ASSETS.map((a) => (
-                    <View key={a} style={styles.assetCell}>
-                      <Text style={styles.asset}>{a}</Text>
-                      <Text
-                        style={{
-                          color:
-                            item.bias[a] === "LONG"
-                              ? C.green
-                              : item.bias[a] === "SHORT"
-                                ? C.red
-                                : C.sub,
-                          fontWeight: "900",
-                          fontSize: 11,
-                        }}
-                      >
-                        {item.bias[a] === "LONG" ? "LONG ↑" : item.bias[a] === "SHORT" ? "SHORT ↓" : "NEUTRAL -"}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                <Text style={styles.marketTinyLabel}>{item.confidence} confidence</Text>
+                <Text style={styles.marketBodyText}>{item.reason}</Text>
               </GlassCard>
-            </Pressable>
-          )}
-          ListFooterComponent={null}
-        />
-      )}
-    </View>
+            ))}
+          </View>
+        ) : <MarketEmpty text="Watchlist cache is empty." />}
+      </MarketSection>
+
+      <MarketSection title="Market Summary">
+        {data.summary ? (
+          <GlassCard style={styles.marketCard} intensity={24}>
+            <View style={styles.marketSummaryRow}>
+              <SmallMetric l="Macro" v={data.summary.macroTone} />
+              <SmallMetric l="Risk" v={data.summary.riskMode} />
+            </View>
+            {data.summary.strongestHeadlines.slice(0, 3).map((item) => <Text key={item} style={styles.marketListText}>• {item}</Text>)}
+          </GlassCard>
+        ) : <MarketEmpty text="Market summary cache is empty." />}
+      </MarketSection>
+
+      <MarketSection title="Economic Calendar">
+        {data.events.length ? data.events.slice(0, 6).map((event) => (
+          <GlassCard key={event.id} style={styles.marketCard} intensity={22}>
+            <View style={styles.rowBetween}>
+              <Pill text={event.impact} tone={event.impact === "HIGH" ? "high" : event.impact === "MED" ? "med" : "low"} />
+              <Text style={styles.sub}>{event.date} • {event.time}</Text>
+            </View>
+            <Text style={styles.newsTitle}>{event.name}</Text>
+            <Text style={styles.newsSummary}>Previous {event.previous || "—"} • Forecast {event.forecast || "—"} • Actual {event.actual || "—"}</Text>
+          </GlassCard>
+        )) : <MarketEmpty text="Calendar cache is empty. The worker has a deterministic fallback if no source is configured." />}
+      </MarketSection>
+
+      <MarketSection title="Prop Firm Monitor">
+        {data.propUpdates.length ? data.propUpdates.slice(0, 5).map((item) => (
+          <Pressable key={item.id} onPress={() => item.url ? Linking.openURL(item.url) : undefined}>
+            <GlassCard style={styles.marketCard} intensity={22}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.marketAsset}>{item.firm}</Text>
+                <Text style={styles.sub}>{item.category}</Text>
+              </View>
+              <Text style={styles.newsSummary}>{item.detectedChangeSummary}</Text>
+              {!!item.keyText && <Text style={styles.marketBodyText}>{item.keyText.slice(0, 220)}</Text>}
+            </GlassCard>
+          </Pressable>
+        )) : <MarketEmpty text="Prop firm monitor cache is empty." />}
+      </MarketSection>
+
+      <MarketSection title="Latest Market Headlines">
+        {data.headlines.length ? data.headlines.slice(0, 12).map((item) => (
+          <Pressable key={item.id} onPress={() => (item.url ? Linking.openURL(item.url) : undefined)}>
+            <GlassCard style={styles.purpleNewsCard} intensity={28}>
+              <View style={styles.rowBetween}>
+                <Pill text={item.impact} tone={item.impact === "HIGH" ? "high" : item.impact === "MED" ? "med" : "low"} />
+                <Text style={styles.sub}>{item.source} • {item.time}</Text>
+              </View>
+              <Text style={styles.newsTitle}>{item.title}</Text>
+              {!!item.summary && <Text style={styles.newsSummary}>{item.summary.slice(0, 240)}</Text>}
+            </GlassCard>
+          </Pressable>
+        )) : <MarketEmpty text="Headline cache is empty." />}
+      </MarketSection>
+
+      <MarketSection title="Cost Safety">
+        <GlassCard style={styles.marketCostCard} intensity={18}>
+          <Text style={styles.marketBodyText}>Cached market intelligence is shared by all users. The app is read-only, does not run crawlers, and does not trigger paid AI or per-user generation.</Text>
+        </GlassCard>
+      </MarketSection>
+    </ScrollView>
   );
 }
+
 function SmallMetric({ l, v }: any) {
   return (
     <View style={styles.smallMetric}>
@@ -8917,6 +9233,11 @@ function App() {
 
   const importTradesFromCsv = useCallback(async () => {
     try {
+      const limit = await checkClientRateLimit("csv:import", session?.user.id || "local");
+      if (!limit.allowed) {
+        Alert.alert("Import trades", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
       const picked = await DocumentPicker.getDocumentAsync({
         type: [
           "text/csv",
@@ -8929,7 +9250,30 @@ function App() {
         copyToCacheDirectory: true,
       });
       if (picked.canceled || !picked.assets?.[0]?.uri) return;
-      const text = await readCsvFileAsText(picked.assets[0].uri);
+      const asset = picked.assets[0];
+      const csvUploadCheck = await validateSecureUploadInput({
+        uri: asset.uri,
+        category: "csv",
+        originalName: asset.name || "trades.csv",
+        mimeType: asset.mimeType || "text/csv",
+      });
+      if (!csvUploadCheck.ok) {
+        await recordSecurityEvent("invalid_csv_import", "csv:import", session?.user.id || "local");
+        Alert.alert("Import trades", SECURITY_MESSAGES.invalidUpload);
+        return;
+      }
+      const text = await readCsvFileAsText(asset.uri);
+      const byteLength = new TextEncoder().encode(text).length;
+      const sourceRows = text.split(/\r?\n/).filter(Boolean).length;
+      const importCheck = validateImportedRows(sourceRows, byteLength);
+      if (!importCheck.ok) {
+        await recordSecurityEvent("invalid_csv_import", "csv:import", session?.user.id || "local");
+        Alert.alert(
+          "Import trades",
+          importCheck.reason === "too_large" ? SECURITY_MESSAGES.csvTooLarge : SECURITY_MESSAGES.csvTooManyRows,
+        );
+        return;
+      }
       const rows = parseTradesCsvText(text);
       if (!rows.length) {
         Alert.alert(
@@ -8938,26 +9282,48 @@ function App() {
         );
         return;
       }
-      const imported: Trade[] = rows.map((row) => ({
-        id: uid(),
-        date: row.date,
-        symbol: row.symbol,
-        direction: row.direction,
-        entry: row.entry,
-        exit: row.exit,
-        contracts: row.contracts,
-        pnl: row.pnl,
-        mood: row.mood,
-        notes: row.notes || "Imported from CSV",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }));
+      const imported: Trade[] = rows.flatMap((row) => {
+        const validated = validateTradeInput({
+          ...row,
+          stopLoss: null,
+          takeProfit: null,
+          notes: row.notes || "Imported from CSV",
+        });
+        if (!validated.ok) return [];
+        return [{
+          id: uid(),
+          date: row.date,
+          symbol: validated.value.symbol,
+          direction: validated.value.direction as Direction,
+          entry: validated.value.entry,
+          exit: validated.value.exit,
+          contracts: validated.value.contracts,
+          pnl: validated.value.pnl,
+          mood: validated.value.mood,
+          notes: validated.value.notes || "Imported from CSV",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }];
+      });
+      if (!imported.length) {
+        await recordSecurityEvent("invalid_csv_rows", "csv:import", session?.user.id || "local");
+        Alert.alert("Import trades", SECURITY_MESSAGES.invalidTrade);
+        return;
+      }
+      const claimed = await claimRemoteIdempotency("csv:import", session?.user.id, {
+        sourceHash: stableSecurityHash(text),
+        rowCount: imported.length,
+      });
+      if (!claimed) {
+        Alert.alert("Import trades", SECURITY_MESSAGES.duplicateRequest);
+        return;
+      }
       setTrades((prev) => [...imported, ...prev]);
       Alert.alert("Import complete", `${imported.length} trades added to your journal.`);
     } catch (error) {
       alertExportError("CSV import failed", error);
     }
-  }, []);
+  }, [session?.user.id]);
 
   const toggleLockScreenBuffer = useCallback(
     async (enabled: boolean) => {
@@ -9050,11 +9416,11 @@ function App() {
     setCloudSyncStatus("syncing");
     setCloudSyncMessage("Syncing journal with cloud...");
     try {
-      const { data, error } = await supabase
+      const { data, error } = await withTimeout(supabase
         .from("trade_journal")
         .select("*")
         .eq("user_id", session.user.id)
-        .order("updated_at", { ascending: false });
+        .order("updated_at", { ascending: false }));
       if (error) throw error;
 
       const cloudRows = (data || []) as TradeJournalRow[];
@@ -9068,11 +9434,34 @@ function App() {
       }
 
       if (merged.length && mergedSignature !== activeCloudSignature) {
-        const rows = merged.map((trade) => tradeToCloudRow(trade, session.user.id));
-        const { error: upsertError } = await supabase
-          .from("trade_journal")
-          .upsert(rows, { onConflict: "user_id,client_id" });
-        if (upsertError) throw upsertError;
+        const safeTrades = merged.filter((trade) =>
+          validateTradeInput({
+            symbol: trade.symbol,
+            direction: trade.direction,
+            entry: trade.entry ?? null,
+            exit: trade.exit ?? null,
+            contracts: trade.contracts,
+            stopLoss: trade.stopLoss ?? null,
+            takeProfit: trade.takeProfit ?? null,
+            pnl: trade.pnl,
+            mood: trade.mood,
+            notes: trade.notes,
+            tags: trade.tags || [],
+          }).ok,
+        );
+        if (safeTrades.length !== merged.length) {
+          await recordSecurityEvent("invalid_trade_blocked_cloud_sync", "trade:update", session.user.id);
+        }
+        const rows = safeTrades.map((trade) => tradeToCloudRow(trade, session.user.id));
+        if (rows.length) {
+          const claimed = await claimRemoteIdempotency("trade:cloud-upsert", session.user.id, rows);
+          if (claimed) {
+            const { error: upsertError } = await withTimeout(supabase
+              .from("trade_journal")
+              .upsert(rows, { onConflict: "user_id,client_id" }));
+            if (upsertError) throw upsertError;
+          }
+        }
       }
 
       const syncedAt = new Date().toISOString();
@@ -9092,11 +9481,13 @@ function App() {
     if (!supabase || !session?.user.id || !isPremium) return;
     try {
       const now = new Date().toISOString();
-      await supabase
+      const claimed = await claimRemoteIdempotency("trade:cloud-delete", session.user.id, { tradeId, now });
+      if (!claimed) return;
+      await withTimeout(supabase
         .from("trade_journal")
         .update({ deleted_at: now, updated_at: now })
         .eq("user_id", session.user.id)
-        .eq("client_id", tradeId);
+        .eq("client_id", tradeId));
     } catch (error) {
       logger.error(error, { feature: "supabase", action: "mark_trade_deleted", table: "trade_journal", userId: session?.user.id });
     }
@@ -9159,6 +9550,11 @@ function App() {
 
     setAuthBusy(true);
     try {
+      const limit = await checkClientRateLimit("auth", provider);
+      if (!limit.allowed) {
+        Alert.alert("Sign in failed", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
       trackEvent("signup_started", { provider });
       if (
         enableNativeAppleSignIn &&
@@ -9173,10 +9569,10 @@ function App() {
           ],
         });
         if (!credential.identityToken) throw new Error("Apple did not return an identity token.");
-        const { error } = await supabase.auth.signInWithIdToken({
+        const { error } = await withTimeout(supabase.auth.signInWithIdToken({
           provider: "apple",
           token: credential.identityToken,
-        });
+        }));
         if (error) throw error;
         if (credential.fullName?.givenName || credential.fullName?.familyName) {
           const fullName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(" ");
@@ -9192,13 +9588,13 @@ function App() {
         return;
       }
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await withTimeout(supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: AUTH_REDIRECT_TO,
           skipBrowserRedirect: true,
         },
-      });
+      }));
       if (error) throw error;
       const result = await WebBrowser.openAuthSessionAsync(data.url || "", AUTH_REDIRECT_TO);
       if (result.type === "success") {
@@ -9254,6 +9650,11 @@ function App() {
 
   const finishPurchaseFlow = useCallback(async (result: MakePurchaseResult, reason: string) => {
     const resultProductId = result.productIdentifier || result.transaction?.productIdentifier || "";
+    await claimRemoteIdempotency("subscription:purchase-verify", session?.user.id, {
+      productId: resultProductId,
+      entitlement: REVENUECAT_ENTITLEMENT_ID,
+      hasPro: customerHasPro(result.customerInfo),
+    });
     billingDebugLog("purchase result", {
       reason,
       productId: resultProductId,
@@ -9295,7 +9696,7 @@ function App() {
       "Purchase complete",
       "The purchase completed, but the subscription is not readable yet. Tap Restore Purchases.",
     );
-  }, [applyCustomerInfo, refreshCurrentEntitlements]);
+  }, [applyCustomerInfo, refreshCurrentEntitlements, session?.user.id]);
 
   const purchasePackage = useCallback(async (pkg?: PurchasesPackage | null, productId = YOU_TRADER_MONTHLY_PRODUCT_ID) => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
@@ -9322,6 +9723,11 @@ function App() {
     setPurchaseBusy(true);
     setShowRestorePurchases(false);
     try {
+      const limit = await checkClientRateLimit("purchase", session?.user.id || "local");
+      if (!limit.allowed) {
+        Alert.alert("YouTrader Pro", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
       logger.info("RevenueCat purchase started", { feature: "revenuecat", action: "purchase_started" });
       trackEvent("subscribe_pressed");
       billingDebugLog("purchase started", { productId });
@@ -9342,7 +9748,7 @@ function App() {
         findProPackage(catalogPackages, productId);
 
       if (selectedPackage) {
-        const result = await Purchases.purchasePackage(selectedPackage);
+        const result = await withTimeout(Purchases.purchasePackage(selectedPackage));
         await finishPurchaseFlow(result, "purchasePackage");
         return;
       }
@@ -9353,7 +9759,7 @@ function App() {
       const selectedProduct =
         catalogProducts.find((product) => product.identifier === productId) || null;
       if (selectedProduct) {
-        const result = await Purchases.purchaseStoreProduct(selectedProduct);
+        const result = await withTimeout(Purchases.purchaseStoreProduct(selectedProduct));
         await finishPurchaseFlow(result, "purchaseStoreProduct");
         return;
       }
@@ -9371,7 +9777,7 @@ function App() {
         return;
       }
 
-      const result = await Purchases.purchaseProduct(productId);
+      const result = await withTimeout(Purchases.purchaseProduct(productId));
       await finishPurchaseFlow(result, "purchaseProduct");
     } catch (error: any) {
       if (!error?.userCancelled) {
@@ -9385,7 +9791,7 @@ function App() {
     } finally {
       setPurchaseBusy(false);
     }
-  }, [finishPurchaseFlow, packages, refreshRevenueCat, revenueCatConfigured, storeProducts]);
+  }, [finishPurchaseFlow, packages, refreshRevenueCat, revenueCatConfigured, session?.user.id, storeProducts]);
 
   const restorePurchases = useCallback(async () => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
@@ -9398,8 +9804,18 @@ function App() {
 
     setPurchaseBusy(true);
     try {
+      const limit = await checkClientRateLimit("restore", session?.user.id || "local");
+      if (!limit.allowed) {
+        Alert.alert("Restore Purchases", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
       billingDebugLog("restore started", { productId: YOU_TRADER_MONTHLY_PRODUCT_ID });
-      const info = await Purchases.restorePurchases();
+      const info = await withTimeout(Purchases.restorePurchases());
+      await claimRemoteIdempotency("subscription:restore", session?.user.id, {
+        entitlement: REVENUECAT_ENTITLEMENT_ID,
+        hasPro: customerHasPro(info),
+        hour: new Date().toISOString().slice(0, 13),
+      });
       billingDebugLog("restore result", summarizeCustomerInfo(info));
       const hasPro = applyCustomerInfo(info, "restorePurchases");
       const refreshedInfo = hasPro ? info : await refreshCurrentEntitlements("restorePurchases", [0, 1200, 2400]);
@@ -9422,7 +9838,7 @@ function App() {
     } finally {
       setPurchaseBusy(false);
     }
-  }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured]);
+  }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id]);
 
   const appReady = tradesHydrated;
 
@@ -9510,6 +9926,7 @@ function App() {
               showRestorePurchases={showRestorePurchases}
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
+              session={session}
             />
           ) : tab === "news" ? (
             <NewsScreen
@@ -10024,8 +10441,8 @@ const styles = StyleSheet.create({
   },
   journalScrollCue: {
     alignItems: "center",
-    marginTop: 4,
-    marginBottom: 12,
+    marginTop: -2,
+    marginBottom: 18,
   },
   journalScrollCueGlass: {
     width: 28,
@@ -10209,6 +10626,21 @@ const styles = StyleSheet.create({
   },
   moodEmoji: { fontSize: 22, marginBottom: 4 },
   moodText: { color: C.text, fontWeight: "800", fontSize: 10 },
+  marketSection: { marginBottom: 18, gap: 10 },
+  marketSectionTitle: { color: C.text, fontSize: 13, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0, opacity: 0.92 },
+  marketHeroCard: { backgroundColor: "rgba(10,18,22,0.82)", borderColor: "rgba(163,255,18,0.26)", gap: 8 },
+  marketCard: { backgroundColor: "rgba(255,255,255,0.045)", borderColor: "rgba(255,255,255,0.1)", marginBottom: 8 },
+  marketCostCard: { backgroundColor: "rgba(163,255,18,0.055)", borderColor: "rgba(163,255,18,0.18)" },
+  marketGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  marketMiniCard: { width: "48.5%", minHeight: 138, backgroundColor: "rgba(255,255,255,0.045)", borderColor: "rgba(255,255,255,0.1)", gap: 6 },
+  marketSummaryRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  marketAsset: { color: C.text, fontSize: 15, fontWeight: "900" },
+  marketBias: { fontSize: 12, fontWeight: "900" },
+  marketTinyLabel: { color: C.sub, fontSize: 10, fontWeight: "900", textTransform: "uppercase" },
+  marketBodyText: { color: C.sub, fontSize: 12, lineHeight: 18, marginTop: 6 },
+  marketListText: { color: C.sub, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  marketCaution: { color: C.yellow, fontSize: 12, lineHeight: 18, fontWeight: "800", marginTop: 8 },
+  marketEmptyText: { color: C.sub, fontSize: 12, lineHeight: 18, fontWeight: "800", paddingVertical: 8 },
   newsTitle: {
     color: C.text,
     fontSize: 16,
@@ -11053,7 +11485,7 @@ const styles = StyleSheet.create({
   achievementShareCard: {
     width: 1080,
     height: 1920,
-    backgroundColor: "#000000",
+    backgroundColor: "#030507",
     padding: 42,
     overflow: "hidden",
   },
@@ -11062,7 +11494,7 @@ const styles = StyleSheet.create({
     width: 760,
     height: 760,
     borderRadius: 380,
-    backgroundColor: "rgba(156,255,0,0.26)",
+    backgroundColor: "rgba(156,255,0,0.18)",
     left: -220,
     top: -170,
   },
@@ -11071,7 +11503,7 @@ const styles = StyleSheet.create({
     width: 820,
     height: 820,
     borderRadius: 410,
-    backgroundColor: "rgba(138,43,226,0.34)",
+    backgroundColor: "rgba(138,43,226,0.24)",
     right: -260,
     bottom: -190,
   },
@@ -11102,16 +11534,16 @@ const styles = StyleSheet.create({
   shareCardFrame: {
     flex: 1,
     borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.34)",
-    borderRadius: 54,
-    backgroundColor: "rgba(8,6,15,0.84)",
+    borderColor: "rgba(255,255,255,0.24)",
+    borderRadius: 46,
+    backgroundColor: "rgba(8,6,15,0.9)",
     paddingHorizontal: 58,
     paddingTop: 70,
     paddingBottom: 54,
     alignItems: "center",
     shadowColor: "#B84DFF",
-    shadowOpacity: 0.48,
-    shadowRadius: 44,
+    shadowOpacity: 0.34,
+    shadowRadius: 34,
   },
   shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: 6 },
   shareCandleMark: { width: 82, height: 96, flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 8 },
@@ -11124,7 +11556,7 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: "900",
     letterSpacing: 9,
-    marginTop: 74,
+    marginTop: 64,
     textShadowColor: "rgba(156,255,0,0.78)",
     textShadowRadius: 18,
   },
@@ -11133,7 +11565,7 @@ const styles = StyleSheet.create({
     height: 610,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 42,
+    marginTop: 36,
     shadowColor: "#B84DFF",
     shadowOpacity: 0.8,
     shadowRadius: 58,
@@ -11146,7 +11578,7 @@ const styles = StyleSheet.create({
     width: 500,
     height: 500,
     borderRadius: 250,
-    backgroundColor: "rgba(138,43,226,0.26)",
+    backgroundColor: "rgba(138,43,226,0.2)",
     shadowColor: "#8A2BE2",
     shadowOpacity: 0.95,
     shadowRadius: 70,
@@ -11254,12 +11686,12 @@ const styles = StyleSheet.create({
   },
   shareBadgeTitle: {
     color: C.text,
-    fontSize: 112,
-    lineHeight: 122,
+    fontSize: 108,
+    lineHeight: 118,
     fontWeight: "900",
     textAlign: "center",
-    marginTop: 24,
-    minHeight: 244,
+    marginTop: 18,
+    minHeight: 236,
     textShadowColor: "rgba(184,77,255,0.72)",
     textShadowRadius: 24,
   },
@@ -11273,7 +11705,7 @@ const styles = StyleSheet.create({
   },
   shareMetricPanel: {
     width: "100%",
-    marginTop: 34,
+    marginTop: 30,
   },
   shareStatsGrid: {
     width: "100%",
@@ -11284,9 +11716,9 @@ const styles = StyleSheet.create({
   shareStatGlass: {
     width: "48%",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 24,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderRadius: 18,
     paddingHorizontal: 24,
     paddingVertical: 22,
     minHeight: 138,
@@ -11312,7 +11744,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 32,
     paddingVertical: 14,
-    marginTop: 34,
+    marginTop: 28,
   },
   shareRarityText: {
     fontSize: 24,
@@ -12452,26 +12884,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 10,
   },
-  cloudStatus: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    backgroundColor: "rgba(255,255,255,0.055)",
-  },
-  cloudStatusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  cloudStatusText: {
-    fontSize: 11,
-    fontWeight: "900",
-  },
   dnaHero: {
     marginTop: 16,
     gap: 18,
@@ -12735,19 +13147,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
   },
-  aiTerminalHero: {
-    borderColor: "rgba(163,255,18,0.18)",
-  },
-  aiCommandHeroRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 18,
-    marginTop: 18,
-  },
-  aiConfidenceRing: {
-    width: 142,
-    alignItems: "center",
-  },
   aiFocusText: {
     color: C.text,
     fontSize: 18,
@@ -12763,25 +13162,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     backgroundColor: "rgba(255,255,255,0.07)",
-  },
-  aiUnifiedRefresh: {
-    marginTop: 18,
-    borderRadius: 999,
-    backgroundColor: C.green,
-    alignItems: "center",
-    paddingVertical: 14,
-  },
-  aiUnifiedRefreshText: {
-    color: C.bg,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  aiRefreshTimestamp: {
-    color: C.sub,
-    fontSize: 11,
-    fontWeight: "800",
-    textAlign: "center",
-    marginTop: 8,
   },
   patternTimeline: {
     gap: 10,

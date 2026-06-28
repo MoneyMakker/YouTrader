@@ -827,17 +827,25 @@ AI Analytics should feel like one intelligent coach, not many disconnected AI wi
 
 Current structure:
 
-### 1. AI Command Center
+### 1. Coaching / Mission Stack
 
 Answers: “What should I focus on now?”
 
 Shows:
 
-- AI Confidence score
 - Today’s Focus
-- Three action chips
-- One Refresh Analysis button
-- Updated timestamp after refresh
+- Pass-path mission
+- Coaching guidance
+- Signal timeline
+- Performance intelligence
+- Evaluation/Funded account plan
+- Trader Status achievements
+
+Removed:
+
+- AI Confidence score
+- Unified Refresh Analysis button
+- Confidence gauge calculations
 
 ### 2. Pattern Detective
 

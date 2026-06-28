@@ -10,7 +10,15 @@
     "web": "expo start --web",
     "build:ios": "eas build --platform ios",
     "build:preview": "eas build --profile preview --platform ios",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "market-intel": "node scripts/market-intel-worker/index.mjs all",
+    "market-intel:news": "node scripts/market-intel-worker/index.mjs news",
+    "market-intel:brief": "node scripts/market-intel-worker/index.mjs daily-brief",
+    "market-intel:watchlist": "node scripts/market-intel-worker/index.mjs watchlist",
+    "market-intel:summary": "node scripts/market-intel-worker/index.mjs summary",
+    "market-intel:prop-firms": "node scripts/market-intel-worker/index.mjs prop-firms",
+    "market-intel:calendar": "node scripts/market-intel-worker/index.mjs calendar",
+    "market-intel:daily-brief": "node scripts/market-intel-worker/index.mjs daily-brief"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

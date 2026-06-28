@@ -7,6 +7,7 @@ export type AIResponse<T> = {
   providerStatus: AIProviderStatus;
   usedFallback: boolean;
   message?: string;
+  quota?: { remaining: number; limit: number; warning?: string };
   generatedAt: string;
 };
 
@@ -204,7 +205,8 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
       data: data.data as T,
       providerStatus: data.providerStatus || "nvidia",
       usedFallback: !!data.usedFallback,
-      message: data.message,
+      message: data.quota?.warning || data.message,
+      quota: data.quota,
       generatedAt: now(),
     };
   } catch {

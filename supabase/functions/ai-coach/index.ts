@@ -10,13 +10,7 @@ function getEnv(name: string) {
 
 function periodKey(action: string, period?: string) {
   const now = new Date();
-  const day = now.toISOString().slice(0, 10);
-  if (action === "weekly_coach") {
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    start.setUTCDate(start.getUTCDate() - start.getUTCDay());
-    return `week:${start.toISOString().slice(0, 10)}`;
-  }
-  return `${period || "day"}:${day}`;
+  return `${period || action}:month:${now.toISOString().slice(0, 7)}`;
 }
 
 async function hasServerProEntitlement(supabaseAdmin: ReturnType<typeof createClient>, userId: string) {
@@ -98,12 +92,32 @@ Deno.serve(async (req) => {
   const quota = await checkAIQuota(supabaseAdmin, userData.user.id, body.action);
   if (!quota.allowed) {
     const isCooldown = quota.reason === "cooldown";
+    if (!isCooldown) {
+      const result = await generateAI(
+        {
+          action: body.action,
+          period: body.period || "day",
+          payload: body.payload || {},
+        },
+        false,
+      );
+      return jsonResponse({
+        data: result.data,
+        providerStatus: "quota_exceeded",
+        usedFallback: true,
+        message: "Your monthly AI allowance has been used. AI features will automatically reset after your next billing cycle.",
+        quota: {
+          remaining: 0,
+          limit: quota.limit,
+        },
+      });
+    }
     return jsonResponse(
       {
         error: isCooldown ? "cooldown" : "quota_exceeded",
         message: isCooldown
           ? `Please wait ${quota.retryAfterSeconds || 60} seconds before generating this AI coach again.`
-          : "You reached today’s AI limit. Try again tomorrow.",
+          : "Your monthly AI allowance has been used. AI features will automatically reset after your next billing cycle.",
         providerStatus: "quota_exceeded",
       },
       429,
@@ -135,6 +149,7 @@ Deno.serve(async (req) => {
     quota: {
       remaining: Math.max(0, quota.remaining - 1),
       limit: quota.limit,
+      warning: quota.warning,
     },
   });
 });

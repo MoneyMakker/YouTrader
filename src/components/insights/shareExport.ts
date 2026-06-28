@@ -24,10 +24,10 @@ export async function shareCapturedView(ref: RefObject<View | null>, dialogTitle
 
 export async function saveCapturedViewToPhotos(ref: RefObject<View | null>) {
   const { captureRef, MediaLibrary } = await loadShareModules();
-  const perm = await MediaLibrary.requestPermissionsAsync();
-  if (!perm.granted) throw new Error('Photo library permission required');
+  const perm = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+  if (!perm.granted) throw new Error('Photos permission was denied. Allow Photos access in iPhone Settings to save YouTrader cards.');
   if (!ref.current) throw new Error('Share card is not ready');
-  const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile' });
+  const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile', width: 1080, height: 1350 });
   await MediaLibrary.saveToLibraryAsync(uri);
   return uri;
 }

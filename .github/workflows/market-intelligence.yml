@@ -1,0 +1,52 @@
+name: Market Intelligence
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Worker job to run"
+        required: false
+        default: "all"
+  schedule:
+    - cron: "0 */3 * * *"
+    - cron: "15 */12 * * *"
+    - cron: "30 10 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-intelligence-${{ github.event_name }}-${{ github.event.schedule || inputs.job || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  market-intelligence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ECONOMIC_CALENDAR_JSON_URL: ${{ secrets.ECONOMIC_CALENDAR_JSON_URL }}
+      ENABLE_LOCAL_LLM_SUMMARIES: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Resolve worker job
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "job=${{ inputs.job }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 */3 * * *" ]; then
+            echo "job=news,summary" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "15 */12 * * *" ]; then
+            echo "job=prop-firms" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "30 10 * * *" ]; then
+            echo "job=calendar,daily-brief,watchlist" >> "$GITHUB_OUTPUT"
+          else
+            echo "job=all" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run market intelligence worker
+        run: node scripts/market-intel-worker/index.mjs "${{ steps.resolve.outputs.job }}"

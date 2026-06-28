@@ -3,16 +3,16 @@ import type { AICoachAction } from "./aiSchemas.ts";
 
 type QuotaRule = {
   limit: number;
-  window: "day" | "week";
+  window: "month";
 };
 
 const QUOTAS: Record<AICoachAction, QuotaRule> = {
-  daily_plan: { limit: 1, window: "day" },
-  risk_predictor: { limit: 3, window: "day" },
-  weekly_coach: { limit: 1, window: "week" },
-  journal_summary: { limit: 3, window: "day" },
-  news_explainer: { limit: 10, window: "day" },
-  daily_challenge: { limit: 1, window: "day" },
+  daily_plan: { limit: 20, window: "month" },
+  risk_predictor: { limit: 30, window: "month" },
+  weekly_coach: { limit: 8, window: "month" },
+  journal_summary: { limit: 12, window: "month" },
+  news_explainer: { limit: 40, window: "month" },
+  daily_challenge: { limit: 20, window: "month" },
 };
 
 const COOLDOWN_SECONDS: Record<AICoachAction, number> = {
@@ -26,12 +26,7 @@ const COOLDOWN_SECONDS: Record<AICoachAction, number> = {
 
 function startOfWindow(rule: QuotaRule) {
   const now = new Date();
-  if (rule.window === "week") {
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    start.setUTCDate(start.getUTCDate() - start.getUTCDay());
-    return start.toISOString();
-  }
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
 
 export async function checkAIQuota(
@@ -57,7 +52,7 @@ export async function checkAIQuota(
         allowed: false,
         reason: "cooldown" as const,
         retryAfterSeconds: Math.ceil(cooldownSeconds - elapsed),
-        remaining: rule.limit,
+        remaining: Math.max(0, rule.limit - 1),
         limit: rule.limit,
       };
     }
@@ -81,6 +76,10 @@ export async function checkAIQuota(
     reason: used < rule.limit ? "ok" as const : "quota" as const,
     remaining: Math.max(0, rule.limit - used),
     limit: rule.limit,
+    warning:
+      used + 1 >= Math.floor(rule.limit * 0.9) && used < rule.limit
+        ? "You are approaching your monthly AI allowance."
+        : undefined,
   };
 }
 

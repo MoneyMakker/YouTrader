@@ -1,6 +1,6 @@
 # YouTrader Product Vision
 
-Last updated: 2026-06-27
+Last updated: 2026-06-28
 
 This document is the long-term product vision for YouTrader. Every future Cursor chat should read it alongside `MASTER_CONTEXT.md`. When product direction conflicts with older docs, this file and `MASTER_CONTEXT.md` win together: this file defines *why* and *what*; `MASTER_CONTEXT.md` defines *how* the codebase implements it today.
 
@@ -73,6 +73,7 @@ The app should never create FOMO, urgency to trade, or implied profit promises.
 6. **Prop survival before speed** — evaluation and funded safety come before aggression.
 7. **Apple bar** — if it would look wrong in Apple Health, it does not ship.
 8. **Ship ready** — every change must typecheck and preserve production behavior.
+9. **Cost controlled AI** — free users must not consume paid AI resources; Pro AI must respect monthly allowances and fail closed to local/non-paid behavior.
 
 ---
 
@@ -242,3 +243,7 @@ Before building a feature, ask:
 5. Would we be proud to show this beside Apple Health on the App Store?
 
 If any answer is no, redesign before shipping.
+
+## Market Intelligence Cost Philosophy
+
+Market Intelligence is educational cached context, not a signal engine. It must remain free or near-zero cost: one scheduled backend worker gathers shared public/free data, writes to Supabase, and every user reads the same published rows. The app must never trigger crawlers, paid AI, or per-user market generation. Calendar fallback data is deterministic and clearly educational when no public source is configured.

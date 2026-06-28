@@ -18,11 +18,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.youtrader.pro",
-      "buildNumber": "63",
+      "buildNumber": "65",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "YouTrader lets you attach a screenshot of your trade to your journal.",
         "NSPhotoLibraryUsageDescription": "YouTrader lets you upload a trade screenshot from your photo library.",
+        "NSPhotoLibraryAddUsageDescription": "YouTrader saves premium share cards directly to your photo library.",
         "NSMicrophoneUsageDescription": "YouTrader lets you record voice notes about your trades.",
         "NSFaceIDUsageDescription": "Allow YouTrader to use Face ID for quick secure unlock.",
         "UIFileSharingEnabled": true,

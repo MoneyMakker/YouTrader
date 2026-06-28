@@ -1416,23 +1416,12 @@ Current status:
 
 Current sections:
 
-- AI Command Center.
 - Pattern Detective.
 - Trading Coach.
 - Prop Firm Mission.
 - Monthly Intelligence.
-
-AI Command Center confidence:
-
-```text
-confidence = clamp(round((passProbability.probability + tradingScore.score) / 2), 30, 98)
-```
-
-Refresh behavior:
-
-- `Refresh Analysis` runs daily plan, risk predictor, weekly coach, journal summary, daily challenge, and local trade analysis.
-- Shows updated timestamp from generated AI responses.
-- Shows provider status via `CloudAIStatus`.
+- Prop account plan.
+- Trader Status achievements.
 
 Free users:
 
@@ -1743,10 +1732,11 @@ AI Analytics:
   3. Today's Coaching
   4. Signal Timeline
   5. Performance Intelligence (formerly Expandable Report)
-  6. AI Confidence
-  7. Funded (live-account mode panel)
+  6. Evaluation/Funded account plan
+  7. Trader Status achievements
 - Pro-gated with premium preview for free users.
-- AI Confidence no longer duplicates Today's Focus / rule chips (coaching owns that content).
+- AI Confidence and the unified Refresh Analysis button were removed; coaching owns focus/action content.
+- Evaluation mode and Funded mode must each display their own risk data and must not ask the user to switch modes.
 - Signal Timeline no longer duplicates Hidden Edge / Hidden Leak tiles (Performance Intelligence owns strengths/mistakes).
 
 Calendar:
@@ -2061,3 +2051,11 @@ Recommended next work order:
 8. Decide/document Expo Doctor non-CNG warning strategy.
 9. Clean release artifacts before any release commit/package.
 10. Start analytics consolidation only after release-critical checks are stable.
+
+## 2026-06-28 Market Intelligence Pipeline
+
+Market Intelligence is now a shared cached-data system, not a per-user AI feature. The mobile app reads published Supabase rows from `market_news_items`, `market_daily_briefs`, `market_watchlists`, `market_summaries`, `prop_firm_updates`, and `economic_events`. Users cannot trigger worker jobs from the app. Free users can read the same cached intelligence as Pro users; no paid AI and no per-user generation is used for this pipeline.
+
+The worker lives in `scripts/market-intel-worker/index.mjs` and supports `news`, `prop-firms`, `calendar`, `daily-brief`, `watchlist`, `summary`, comma-separated job lists, and `all`. Calendar uses `ECONOMIC_CALENDAR_JSON_URL` first, then a deterministic macro fallback covering CPI, PPI, FOMC, NFP, GDP, unemployment, Fed speakers, crude oil inventories, and rate decisions so `economic_events` is not empty when no free source is configured.
+
+GitHub Actions automation lives at `.github/workflows/market-intelligence.yml`. Required repository secrets: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Optional: `ECONOMIC_CALENDAR_JSON_URL`. `ENABLE_LOCAL_LLM_SUMMARIES` is forced to `false` in Actions. Never expose `SUPABASE_SERVICE_ROLE_KEY` in Expo public env.

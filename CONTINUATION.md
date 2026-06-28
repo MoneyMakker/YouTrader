@@ -2,7 +2,19 @@
 
 This is the short takeover checklist for the next senior engineer.
 
-## Recently Completed (2026-06-27)
+## Recently Completed (2026-06-28)
+
+- Confirmed current working baseline is `/Users/valentynborovyk/Projects/youtrader-final`, matching YouTrader `1.5.7` build `64` / `build-1782614005662.ipa`; do not use the older `2026-05-23` Codex folder as a source.
+- Removed AI Confidence and unified Refresh Analysis from AI Analytics.
+- Fixed Evaluation/Funded account plan so each mode renders its own data with no "Switch to Funded" prompt.
+- Restored premium Trader Status achievements inside AI Analytics/Funded flow.
+- Updated achievement share limits to monthly Free 5 / Pro 15, with Free unlocked cards capped at 5 before upgrade messaging.
+- Added monthly AI allowance handling and server-side quota messaging for Pro AI features.
+- Added Photos add permission and safer save-to-library handling.
+- Redesigned P&L card and Monthly PDF exports with premium YouTrader branding.
+- Moved Journal scroll cue slightly higher.
+
+## Previously Completed (2026-06-27)
 
 - Created `PRODUCT_VISION.md` as the long-term product direction doc.
 - Stats screen reordered: Equity Curve → Stats Dashboard → Trading Radar → Heatmap.
@@ -18,9 +30,9 @@ This is the short takeover checklist for the next senior engineer.
 1. Manually test the latest iOS 26 visual polish on iPhone and iPad.
    - Journal: subtle scroll cue below calendar, trades list readable.
    - Stats order: Equity → Dashboard → Radar → Heatmap; no Eval Account block.
-   - AI Analytics order: Eval Account → Eval → Coaching → Signal Timeline → Performance Intelligence → AI Confidence → Funded.
+   - AI Analytics order: Eval Account → Eval → Coaching → Signal Timeline → Performance Intelligence → Evaluation/Funded → Trader Status.
    - Calendar: no empty top gap, events load without manual refresh button.
-   - Achievement share still works if re-exposed elsewhere later.
+   - Achievement share works from Trader Status and respects monthly limits.
 
 2. Verify RevenueCat setup before the next App Store/TestFlight upload.
    - Monthly product: `youtrader_pro_monthly`.
@@ -70,7 +82,7 @@ Possible later extraction targets:
 
 ## Possible Risks
 
-- Stats no longer shows Trader Status achievements; confirm product intent before re-adding elsewhere.
+- Stats no longer shows Trader Status achievements; they are exposed from AI Analytics/Funded flow.
 - Funded mode in AI Analytics uses AsyncStorage key `prop-risk-mode-v1` shared with prop calculator.
 - Large `App.tsx` makes regressions easy during UI changes.
 - Aikido scan can fail with invalid token until re-authenticated.
@@ -85,3 +97,12 @@ Possible later extraction targets:
 - Keep AI output educational: no financial advice, no buy/sell signals, no market direction prediction.
 - Keep visual direction premium Apple/iOS 26/Liquid Glass, not cyberpunk/gamer/crypto/neon.
 - Every metric must have one source of truth in `tradeMetrics.ts` / `calcStats()`.
+
+## Market Intelligence Follow-Up (2026-06-28)
+
+- Worker supports scheduled cached jobs for news, prop firms, calendar, daily brief, watchlist, and summary.
+- Calendar now falls back to deterministic high-impact macro events when `ECONOMIC_CALENDAR_JSON_URL` is missing or empty.
+- GitHub Actions workflow `.github/workflows/market-intelligence.yml` runs the worker without paid hosting.
+- News / Market Intelligence screen reads all cached Supabase tables read-only and does not expose worker triggers.
+- Required GitHub Actions secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Optional: `ECONOMIC_CALENDAR_JSON_URL`.
+- Next QA: verify scheduled workflow logs in GitHub Actions and confirm Supabase row counts after the first cron run.
