@@ -2,7 +2,7 @@
 
 Last updated: 2026-06-27
 
-This file is the permanent source of truth for YouTrader. Future Cursor chats must read this file first before changing code. Older files such as `PROJECT_HANDOFF.md`, `CONTINUATION.md`, `KNOWLEDGE.md`, `ARCHITECTURE.md`, and `.cursor/project-memory.md` are historical context, but this file supersedes them when there is a conflict.
+This file is the permanent source of truth for YouTrader. Future Cursor chats must read this file first before changing code. Also read `PRODUCT_VISION.md` for long-term product direction. Older files such as `PROJECT_HANDOFF.md`, `CONTINUATION.md`, `KNOWLEDGE.md`, `ARCHITECTURE.md`, and `.cursor/project-memory.md` are historical context, but this file supersedes them when there is a conflict.
 
 Every major architectural decision, analytics engine change, AI behavior change, Supabase schema change, RevenueCat/subscription change, or design system change must update this file in the same branch.
 
@@ -65,6 +65,7 @@ High-level structure:
 ├── package-lock.json
 ├── tsconfig.json
 ├── MASTER_CONTEXT.md
+├── PRODUCT_VISION.md
 ├── PROJECT_HANDOFF.md
 ├── CONTINUATION.md
 ├── KNOWLEDGE.md
@@ -1719,38 +1720,42 @@ Journal:
 - Local storage.
 - Optional Pro cloud sync.
 - `DailyCoachCard` code may still exist, but current product direction does not render it in Journal.
+- No "Scroll to view trades" hint; subtle centered Liquid Glass chevron sits below the calendar instead.
 
 Stats:
 
-- Free-visible core stats:
-  - Win Rate.
-  - Trades.
-  - Win/Loss.
-  - Month P&L.
-  - Biggest Win.
-  - Biggest Loss.
-  - Max streak basics where surfaced.
-  - Live news remains generally visible.
-- Pro-gated advanced stats:
-  - Profit Factor.
-  - Expectancy.
-  - Consistency.
-  - Stability/Sharpe-style metric.
-  - Avg Win/Loss.
-  - Full AI/advanced exports.
+- Section order (top to bottom):
+  1. Equity Curve
+  2. Stats Dashboard
+  3. Trading Radar
+  4. Heatmap
+- Eval Account selector and Funded mode controls live in AI Analytics, not Stats.
+- Stats Dashboard no longer shows the subtitle "Core numbers from the selected journal period".
+- Trader Status / achievements block is not rendered on Stats (prop/eval controls moved to AI Analytics).
+- Free-visible core stats: Win Rate, Trades, Win/Loss, Month P&L, Week P&L, Biggest Win/Loss.
+- Pro-gated advanced stats: Profit Factor, Expectancy, Consistency, Stability Score, Avg Win/Loss, exports.
 
 AI Analytics:
 
+- Section order (top to bottom):
+  1. Eval Account (prop template selector)
+  2. Eval (pass-path mission card)
+  3. Today's Coaching
+  4. Signal Timeline
+  5. Performance Intelligence (formerly Expandable Report)
+  6. AI Confidence
+  7. Funded (live-account mode panel)
 - Pro-gated with premium preview for free users.
-- Five-section command center structure.
-- Uses local deterministic engines and cloud AI where available.
+- AI Confidence no longer duplicates Today's Focus / rule chips (coaching owns that content).
+- Signal Timeline no longer duplicates Hidden Edge / Hidden Leak tiles (Performance Intelligence owns strengths/mistakes).
 
 Calendar:
 
-- Journal-first calendar.
-- Today usable.
-- Extended/future access can be Pro-gated.
-- Calendar should show calm green/red performance context.
+- Journal-first calendar context remains product direction for the Calendar tab.
+- No "Live economic calendar" header.
+- No manual Refresh button (background refresh interval remains).
+- Content starts higher on screen with compact top padding.
+- Today usable; extended/future access can be Pro-gated.
 
 News:
 

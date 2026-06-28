@@ -2,16 +2,25 @@
 
 This is the short takeover checklist for the next senior engineer.
 
+## Recently Completed (2026-06-27)
+
+- Created `PRODUCT_VISION.md` as the long-term product direction doc.
+- Stats screen reordered: Equity Curve → Stats Dashboard → Trading Radar → Heatmap.
+- Removed Eval Account / Funded controls and Trader Status from Stats.
+- AI Analytics reordered and de-duplicated; renamed Expandable Report → Performance Intelligence.
+- Moved Eval Account + Funded panel into AI Analytics.
+- Journal scroll hint replaced with subtle centered glass chevron.
+- Calendar header and Refresh button removed; compact top layout.
+- Performance: removed duplicate analytics work from Stats render path; memoized AI trading score.
+
 ## Highest Priority Tasks
 
 1. Manually test the latest iOS 26 visual polish on iPhone and iPad.
-   - Journal calendar sizing, white month title, no `Edge Is Showing`.
-   - Stats contains premium `Performance Profile` radar.
-   - Heatmap cells are readable and selected detail opens.
-   - Trader Status achievements are pressable and share card exports correctly.
-   - AI Analytics refresh shows useful updated advice and timestamp.
-   - `Protect Pass Path` opens the detail bottom sheet.
-   - News no longer shows `Explain with AI`.
+   - Journal: subtle scroll cue below calendar, trades list readable.
+   - Stats order: Equity → Dashboard → Radar → Heatmap; no Eval Account block.
+   - AI Analytics order: Eval Account → Eval → Coaching → Signal Timeline → Performance Intelligence → AI Confidence → Funded.
+   - Calendar: no empty top gap, events load without manual refresh button.
+   - Achievement share still works if re-exposed elsewhere later.
 
 2. Verify RevenueCat setup before the next App Store/TestFlight upload.
    - Monthly product: `youtrader_pro_monthly`.
@@ -22,59 +31,36 @@ This is the short takeover checklist for the next senior engineer.
 
 3. Resolve release/build hygiene.
    - Decide whether to accept or fix the `expo-doctor` non-CNG warning.
-   - Align `package.json` version with `app.json` if desired.
    - Do not commit `.ipa` artifacts or backup folders.
 
-4. Create/verify SQL migrations for inferred Supabase tables.
-   - `trade_journal`
-   - `prop_firms`
-   - `user_subscriptions`
-   - `achievement_share_usage`
-   - Keep RLS strict by `auth.uid()`.
+4. Deploy/verify Supabase migrations in the target project.
 
 ## Unfinished Tasks
 
-- Manual UI QA is still needed after latest polish.
-- No simulator/TestFlight screenshots were verified in this session.
-- Formal SQL migrations are incomplete except `ai_usage_events`.
-- `App.tsx` remains very large and should eventually be split.
-- `DailyCoachCard` code may still exist but is no longer rendered.
-- AI News Explainer API still exists but News UI intentionally no longer exposes it.
+- Manual UI QA is still needed after latest screen reordering.
+- `App.tsx` remains very large and should eventually be split into `src/components/stats`, `src/components/ai`, and `src/screens`.
+- Aikido MCP token may still need re-auth for successful scans.
 - `expo-doctor` still has one non-CNG/native-folder warning.
 
 ## Next Logical Implementation Order
 
 1. Run the app locally on iPhone simulator.
 2. Run the app locally on iPad simulator.
-3. Fix any visual/runtime regressions from `App.tsx` polish.
-4. Verify achievement share card capture on device/simulator.
-5. Verify RevenueCat sandbox purchase/restore for monthly and yearly.
-6. Verify Supabase auth and Pro cloud sync.
-7. Add missing Supabase SQL migrations with RLS.
-8. Run:
+3. Fix any visual/runtime regressions from screen reordering.
+4. Verify RevenueCat sandbox purchase/restore for monthly and yearly.
+5. Verify Supabase auth and Pro cloud sync when re-enabled.
+6. Run:
    - `npm run typecheck`
    - `npx expo-doctor`
-9. Only after QA, prepare a clean release build.
+7. Only after QA, prepare a clean release build.
 
 ## Files That Must Be Edited Next
 
 Most likely:
 
-- `App.tsx`
-  - Fix any UI regressions from visual polish.
-  - Continue extracting oversized components later.
-
-- `supabase/*.sql` or a new migrations folder
-  - Add formal schemas/RLS for inferred tables.
-
-- `src/config/appConfig.ts`
-  - Only if RevenueCat entitlement/product env alignment needs changes.
-
-- `app.json`
-  - Only if release version/build config changes are needed.
-
-- `package.json`
-  - Only if version alignment or script changes are needed.
+- `App.tsx` — continue extracting terminal components after QA stabilizes.
+- `supabase/migrations/` — verify/deploy runtime schema.
+- `src/config/appConfig.ts` — only if RevenueCat env alignment needs changes.
 
 Possible later extraction targets:
 
@@ -84,33 +70,18 @@ Possible later extraction targets:
 
 ## Possible Risks
 
-- RevenueCat entitlement mismatch: code default is `pro`, earlier notes referenced `YouTrader Pro`.
-- `expo-doctor` non-CNG warning means native `ios/` config may not reflect `app.json` changes automatically.
-- Root folder contains many untracked `.ipa` files and backups; accidental commit risk is high.
-- Missing SQL/RLS migrations for several tables could break new Supabase environments.
+- Stats no longer shows Trader Status achievements; confirm product intent before re-adding elsewhere.
+- Funded mode in AI Analytics uses AsyncStorage key `prop-risk-mode-v1` shared with prop calculator.
 - Large `App.tsx` makes regressions easy during UI changes.
-- AI quota/server entitlement depends on `user_subscriptions`; if that table or entitlement ID is wrong, Pro cloud AI may fall back/free-preview incorrectly.
-- Achievement sharing depends on `react-native-view-shot`, sharing availability, and offscreen render timing.
-
-## Current Blockers
-
-- No current TypeScript blocker: `npm run typecheck` passes.
-- No current code blocker from `expo-doctor`; only the non-CNG warning remains.
-- Manual device/simulator verification is still missing.
-- Supabase production schema completeness is not fully represented in repo migrations.
-- RevenueCat dashboard/App Store Connect configuration must be verified outside code.
+- Aikido scan can fail with invalid token until re-authenticated.
 
 ## Assumptions That Should NOT Be Changed
 
 - Do not rewrite business logic during visual polish.
 - Do not change RevenueCat purchase/restore/pro entitlement logic unless specifically fixing subscription setup.
-- Do not change Supabase auth/session/cloud sync behavior without a focused plan.
 - Do not expose `NVIDIA_API_KEY` or any private server key in the mobile app.
-- Do not call NVIDIA directly from React Native.
 - Keep NVIDIA behind Supabase Edge Functions with local fallback.
-- Do not remove local fallback AI.
-- Do not add heavy native dependencies without explicit approval.
 - Keep free users able to see basic working value.
-- Keep advanced AI/stats/export/sync as Pro-gated where already designed.
 - Keep AI output educational: no financial advice, no buy/sell signals, no market direction prediction.
 - Keep visual direction premium Apple/iOS 26/Liquid Glass, not cyberpunk/gamer/crypto/neon.
+- Every metric must have one source of truth in `tradeMetrics.ts` / `calcStats()`.

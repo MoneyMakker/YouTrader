@@ -4153,7 +4153,6 @@ function StatsMetricDashboard({
     <View style={styles.statsMetricDashboard}>
       <View style={styles.statsMetricHeader}>
         <Text style={styles.terminalHeroTitle}>Stats Dashboard</Text>
-        <Text style={styles.terminalSub}>Core numbers from the selected journal period</Text>
       </View>
       <View style={styles.statsMetricGrid}>
         {rows.map((row) => {
@@ -5678,7 +5677,6 @@ function Stats({
   lang,
   selectedDate,
   isPremium,
-  propSnapshot,
   packages,
   storeProducts,
   purchaseBusy,
@@ -5692,7 +5690,6 @@ function Stats({
   lang: Lang;
   selectedDate: string;
   isPremium: boolean;
-  propSnapshot: ReturnType<typeof computePropRiskSnapshot>;
   packages: PurchasesPackage[];
   storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
@@ -5702,76 +5699,17 @@ function Stats({
   onRestore: () => void;
   session: Session | null;
 }) {
-  const proLocked = !isPremium;
   const visibleTrades = trades;
   const s = useMemo(() => calcStats(visibleTrades), [visibleTrades]);
-
-  const daily = buildDailySeries(visibleTrades);
-  let running = 0;
-  const cumulative = daily.map((x) => ({ label: x.label, value: (running += x.value) }));
-
-  const wins = visibleTrades.filter((t) => t.pnl > 0).length;
-  const losses = visibleTrades.filter((t) => t.pnl < 0).length;
-  const biggestWin = Math.max(0, ...visibleTrades.map((t) => t.pnl));
-  const biggestLoss = Math.min(0, ...visibleTrades.map((t) => t.pnl));
   const consistency = s.consistency;
   const recoveryFactor = s.recoveryFactor;
   const drawdownControl = s.drawdownControl;
-
-  const heatmap = useMemo(() => buildSessionHeatmap(visibleTrades), [visibleTrades]);
   const monthPnl = periodPnlFromTrades(visibleTrades, selectedDate, "month");
   const weekPnl = periodPnlFromTrades(visibleTrades, selectedDate, "week");
-  const tradingScore = useMemo(() => tradingScoreForTrades(visibleTrades), [visibleTrades]);
-  const survival = useMemo(
-    () =>
-      calculatePropSurvival({
-        consistency,
-        drawdown: s.maxDd,
-        dailyRemaining: propSnapshot.dailyRemaining,
-        dailyLossLimit: propSnapshot.template.dailyLossLimit,
-        accountRemaining: propSnapshot.accountRemaining,
-        maxLossLimit: propSnapshot.template.maxLossLimit,
-        expectancy: s.exp,
-        avgLoss: Math.abs(s.avgLoss),
-        lossStreak: Math.round(s.avgLossStreak),
-        dayPnl: propSnapshot.dayPnl,
-      }),
-    [consistency, propSnapshot, s.avgLoss, s.avgLossStreak, s.exp, s.maxDd],
-  );
-  const bestMonthPnl = useMemo(() => {
-    const months: Record<string, number> = {};
-    visibleTrades.forEach((trade) => {
-      const key = trade.date.slice(0, 7);
-      months[key] = (months[key] || 0) + trade.pnl;
-    });
-    return Math.max(0, ...Object.values(months));
-  }, [visibleTrades]);
-  const achievements = useMemo(
-    () => {
-      const targetRemainingPct =
-        propSnapshot.template.evaluationTarget > 0
-          ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
-          : 100;
-      return calculateAchievements({
-        trades: visibleTrades,
-        selectedDate,
-        tradingScore: tradingScore.score,
-        winRate: s.wr,
-        profitFactor: s.pf,
-        riskControl: drawdownControl,
-        propSurvivalScore: survival.probability,
-        propTargetRemainingPct: targetRemainingPct,
-        monthlyPnl: monthPnl,
-        bestMonthPnl,
-        dailyLossLimit: propSnapshot.template.dailyLossLimit,
-      });
-    },
-    [bestMonthPnl, drawdownControl, monthPnl, propSnapshot, s.pf, s.wr, selectedDate, survival.probability, tradingScore.score, visibleTrades],
-  );
-  const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
 
   return (
     <View style={styles.terminalScreenStack}>
+      <TerminalEquitySection trades={visibleTrades} stats={s} weekPnl={weekPnl} monthPnl={monthPnl} />
       <StatsMetricDashboard
         stats={s}
         trades={visibleTrades}
@@ -5780,7 +5718,6 @@ function Stats({
         consistency={consistency}
         isPremium={isPremium}
       />
-      <TerminalEquitySection trades={visibleTrades} stats={s} weekPnl={weekPnl} monthPnl={monthPnl} />
       <PremiumPerformanceRadar
         stats={s}
         consistency={consistency}
@@ -5788,14 +5725,6 @@ function Stats({
         drawdownControl={drawdownControl}
       />
       <TerminalSessionIntelligence trades={visibleTrades} />
-      <TerminalTraderStatus
-        achievements={achievements}
-        level={traderLevel}
-        trades={visibleTrades}
-        selectedDate={selectedDate}
-        isPremium={isPremium}
-        session={session}
-      />
 
       {!isPremium && (
         <PaywallPreview
@@ -5864,14 +5793,6 @@ function StatsScreen({
       if (savedMode === "evaluation" || savedMode === "funded") setPropMode(savedMode);
     });
   }, [safePropTemplates]);
-  const changePropTemplate = useCallback((key: string) => {
-    setPropTemplateKey(key);
-    AsyncStorage.setItem("prop-risk-template-v1", key).catch(() => {});
-  }, []);
-  const changePropMode = useCallback((mode: FirmMode) => {
-    setPropMode(mode);
-    AsyncStorage.setItem("prop-risk-mode-v1", mode).catch(() => {});
-  }, []);
   const propSnapshot = useMemo(
     () =>
       computePropRiskSnapshot({
@@ -6096,19 +6017,11 @@ function StatsScreen({
           </View>
         </View>
       ) : null}
-      <PropTemplateSelector
-        templates={safePropTemplates}
-        value={propTemplateKey}
-        mode={propMode}
-        onChange={changePropTemplate}
-        onModeChange={changePropMode}
-      />
       <Stats
         trades={periodTrades}
         lang={lang}
         selectedDate={selectedDate}
         isPremium={isPremium}
-        propSnapshot={propSnapshot}
         packages={packages}
         storeProducts={storeProducts}
         purchaseBusy={purchaseBusy}
@@ -6390,16 +6303,12 @@ function BulletList({ items }: { items?: string[] }) {
 
 function TerminalAICommandCenter({
   confidence,
-  focus,
-  chips,
   status,
   loading,
   onRefresh,
   lastUpdated,
 }: {
   confidence: number;
-  focus: string;
-  chips: string[];
   status: AIProviderStatus | "idle";
   loading: boolean;
   onRefresh: () => void;
@@ -6410,21 +6319,13 @@ function TerminalAICommandCenter({
       <View style={styles.terminalHeaderRow}>
         <View>
           <Text style={styles.terminalHeroTitle}>AI Confidence</Text>
+          <Text style={styles.terminalSub}>Blended pass-path and trading score confidence</Text>
         </View>
         <CloudAIStatus status={status} />
       </View>
       <View style={styles.aiCommandHeroRow}>
         <View style={styles.aiConfidenceRing}>
           <AppleRing label="" value={confidence} display={`${confidence}`} size={132} color={confidence >= 70 ? C.green : confidence >= 45 ? C.yellow : C.red} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.terminalSmallLabel}>Today's Focus</Text>
-          <Text style={styles.aiFocusText}>{focus}</Text>
-          <View style={styles.terminalChipRow}>
-            {chips.slice(0, 3).map((chip) => (
-              <Text key={chip} style={styles.aiActionChip}>{chip}</Text>
-            ))}
-          </View>
         </View>
       </View>
       <Pressable disabled={loading} onPress={onRefresh} style={[styles.aiUnifiedRefresh, loading && styles.disabledBtn]}>
@@ -6436,12 +6337,8 @@ function TerminalAICommandCenter({
 }
 
 function TerminalPatternDetective({
-  patterns,
-  hiddenLeaks,
   stats,
 }: {
-  patterns: PatternDetectionResult;
-  hiddenLeaks: HiddenLeak[];
   stats: ReturnType<typeof calcStats>;
 }) {
   const rows = [
@@ -6450,8 +6347,6 @@ function TerminalPatternDetective({
     { label: "Power Hour", data: stats.session.find((item) => item.label === "Afternoon") },
     { label: "News", data: stats.weekday[0] },
   ];
-  const edge = patterns.strengths[0];
-  const leak = hiddenLeaks[0] || patterns.risks[0];
   return (
     <TerminalGlassCard>
       <Text style={styles.terminalSectionTitle}>Signal Timeline</Text>
@@ -6470,18 +6365,6 @@ function TerminalPatternDetective({
             </View>
           );
         })}
-      </View>
-      <View style={styles.aiTwoColumn}>
-        <View style={styles.aiInsightTile}>
-          <Text style={styles.terminalSmallLabel}>Hidden Edge</Text>
-          <Text style={styles.terminalInsightTitle}>{edge?.title || "Best clean context"}</Text>
-          <Text style={styles.terminalSub}>{edge?.detail || "Keep collecting trade samples."}</Text>
-        </View>
-        <View style={styles.aiInsightTile}>
-          <Text style={styles.terminalSmallLabel}>Hidden Leak</Text>
-          <Text style={styles.terminalInsightTitle}>{("title" in (leak || {}) ? (leak as any).title : (leak as any)?.finding) || "Weak context"}</Text>
-          <Text style={styles.terminalSub}>{("evidence" in (leak || {}) ? (leak as any).evidence : (leak as any)?.detail) || "No major leak detected yet."}</Text>
-        </View>
       </View>
     </TerminalGlassCard>
   );
@@ -6533,7 +6416,8 @@ function TerminalPropFirmMission({
     <TerminalGlassCard>
       <View style={styles.terminalHeaderRow}>
         <View>
-          <Text style={styles.terminalSectionTitle}>{propSnapshot.template.label}</Text>
+          <Text style={styles.terminalSectionTitle}>Eval</Text>
+          <Text style={styles.terminalSub}>{propSnapshot.template.label}</Text>
         </View>
         <AppleRing label="PASS" value={passProbability.probability} display={`${passProbability.probability}%`} size={118} color={passProbability.probability >= 70 ? C.green : C.yellow} />
       </View>
@@ -6592,7 +6476,7 @@ function TerminalMonthlyIntelligence({
   ];
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Expandable Report</Text>
+      <Text style={styles.terminalSectionTitle}>Performance Intelligence</Text>
       <View style={styles.monthlyTimeline}>
         {rows.map((row, index) => (
           <View key={`${row.label}-${index}`} style={styles.monthlyTimelineRow}>
@@ -6604,6 +6488,61 @@ function TerminalMonthlyIntelligence({
           </View>
         ))}
       </View>
+    </TerminalGlassCard>
+  );
+}
+
+function TerminalFundedPanel({
+  snapshot,
+  mode,
+  onModeChange,
+}: {
+  snapshot: ReturnType<typeof computePropRiskSnapshot>;
+  mode: FirmMode;
+  onModeChange: (mode: FirmMode) => void;
+}) {
+  const maxContracts = snapshot.template.liveContracts;
+  const riskPct = snapshot.template.liveRiskPct;
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>Funded</Text>
+      <Text style={styles.terminalSub}>Live account safety mode, buffers, and contract cap</Text>
+      <View style={styles.propModeRail}>
+        {(["evaluation", "funded"] as FirmMode[]).map((item) => {
+          const active = item === mode;
+          return (
+            <Pressable
+              key={item}
+              onPress={() => onModeChange(item)}
+              style={[styles.propModeChip, active && styles.propModeChipActive]}
+            >
+              <Text style={[styles.propModeChipText, active && styles.propModeChipTextActive]}>
+                {item === "evaluation" ? "Evaluation" : "Funded"}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {mode === "funded" ? (
+        <>
+          <MetricPillRow
+            items={[
+              { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+              { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
+              { label: "Live Cap", value: `${maxContracts} max`, tone: "purple" },
+              { label: "Risk / Trade", value: `${Math.round(riskPct * 100)}%`, tone: "grey" },
+              { label: "Status", value: snapshot.status, tone: snapshot.status === "CLEAR" ? "green" : snapshot.status === "STOP" ? "red" : "purple" },
+            ]}
+          />
+          <Text style={styles.terminalSub}>
+            {snapshot.status === "CLEAR"
+              ? "Keep live size stable and protect buffers before increasing contracts."
+              : "Reduce size, protect remaining buffer, and trade only checklist-perfect setups."}
+          </Text>
+        </>
+      ) : (
+        <Text style={styles.terminalSub}>Switch to Funded to view live-account risk plan and contract limits.</Text>
+      )}
     </TerminalGlassCard>
   );
 }
@@ -6652,21 +6591,31 @@ function AiAnalysisScreen({
   });
   const safeAnalysisTemplates = propTemplates.length ? propTemplates : FALLBACK_PROP_RULES;
   const [analysisTemplateKey, setAnalysisTemplateKey] = useState(FALLBACK_PROP_RULES[0].key);
+  const [propMode, setPropMode] = useState<FirmMode>("evaluation");
 
   useEffect(() => {
-    AsyncStorage.getItem("prop-risk-template-v1").then((savedTemplate) => {
+    Promise.all([
+      AsyncStorage.getItem("prop-risk-template-v1"),
+      AsyncStorage.getItem("prop-risk-mode-v1"),
+    ]).then(([savedTemplate, savedMode]) => {
       if (savedTemplate && safeAnalysisTemplates.some((template) => template.key === savedTemplate)) {
         setAnalysisTemplateKey(savedTemplate);
       }
+      if (savedMode === "evaluation" || savedMode === "funded") setPropMode(savedMode);
     });
   }, [safeAnalysisTemplates]);
   const changeAnalysisTemplate = useCallback((key: string) => {
     setAnalysisTemplateKey(key);
     AsyncStorage.setItem("prop-risk-template-v1", key).catch(() => {});
   }, []);
+  const changePropMode = useCallback((mode: FirmMode) => {
+    setPropMode(mode);
+    AsyncStorage.setItem("prop-risk-mode-v1", mode).catch(() => {});
+  }, []);
 
   const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
+  const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
   const patterns = useMemo(() => detectTradingPatterns(periodTrades), [periodTrades]);
   const activeTemplate =
     safeAnalysisTemplates.find((template) => template.key === analysisTemplateKey) ||
@@ -6683,6 +6632,17 @@ function AiAnalysisScreen({
       }),
     [trades, selectedDate, activeTemplate.key, safeAnalysisTemplates],
   );
+  const fundedSnapshot = useMemo(
+    () =>
+      computePropRiskSnapshot({
+        trades,
+        selectedDate,
+        templateKey: activeTemplate.key,
+        mode: "funded",
+        templates: safeAnalysisTemplates,
+      }),
+    [trades, selectedDate, activeTemplate.key, safeAnalysisTemplates],
+  );
   const passProbability = useMemo(
     () => calculatePassProbability({ trades, selectedDate, template: activeTemplate }),
     [trades, selectedDate, activeTemplate],
@@ -6692,10 +6652,6 @@ function AiAnalysisScreen({
     [trades, selectedDate, passProbability.status],
   );
   const hiddenLeaks = useMemo(() => detectHiddenLeaks(trades), [trades]);
-  const aiCommand = useMemo(
-    () => buildAiCommandCenter({ trades, propSnapshot, passProbability, revengeTrading, hiddenLeaks }),
-    [trades, propSnapshot, passProbability, revengeTrading, hiddenLeaks],
-  );
   const aiCoachPayload = useMemo(
     () => ({
       period,
@@ -6862,19 +6818,18 @@ function AiAnalysisScreen({
       <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
         <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
           <View style={styles.terminalScreenStack}>
+            <TerminalPropFirmMission propSnapshot={propSnapshot} passProbability={passProbability} />
+            <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
+            <TerminalPatternDetective stats={periodStats} />
+            <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
             <TerminalAICommandCenter
-              confidence={Math.max(30, Math.min(98, Math.round((passProbability.probability + tradingScoreForTrades(periodTrades).score) / 2)))}
-              focus={aiResults.dailyPlan?.data.dailyFocus || aiCommand.action}
-              chips={aiResults.dailyPlan?.data.tradeRules || ["Protect pass path", "Trade best session", "Reduce size after red"]}
+              confidence={Math.max(30, Math.min(98, Math.round((passProbability.probability + tradingScore.score) / 2)))}
               status={aiProviderStatus}
               loading={aiUnifiedBusy}
               onRefresh={refreshUnifiedAnalysis}
               lastUpdated={aiLastUpdated}
             />
-            <TerminalPatternDetective patterns={patterns} hiddenLeaks={hiddenLeaks} stats={periodStats} />
-            <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
-            <TerminalPropFirmMission propSnapshot={propSnapshot} passProbability={passProbability} />
-            <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
+            <TerminalFundedPanel snapshot={fundedSnapshot} mode={propMode} onModeChange={changePropMode} />
             {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
           </View>
         </View>
@@ -7334,9 +7289,10 @@ function JournalScreen({
         </View>
       </View>
       {!isTabletLayout ? (
-        <View style={styles.journalScrollHint}>
-          <Text style={styles.journalScrollHintArrow}>⌄</Text>
-          <Text style={styles.journalScrollHintText}>Scroll to view trades</Text>
+        <View style={styles.journalScrollCue}>
+          <View style={styles.journalScrollCueGlass}>
+            <Text style={styles.journalScrollCueChevron}>⌄</Text>
+          </View>
         </View>
       ) : null}
       <Modal visible={monthPickerOpen} transparent animationType="fade">
@@ -7867,17 +7823,9 @@ function CalendarScreen({
       contentContainerStyle={[
         styles.content,
         isTabletLayout && styles.calendarTabletContent,
+        { paddingTop: 8, paddingBottom: 46 },
       ]}
     >
-      <View style={styles.calendarLiveHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.terminalSmallLabel}>Live economic calendar</Text>
-          <Text style={styles.terminalSub}>31-day agenda • {orderedAgenda.length} events for {eventDateLabel(agendaDate)}</Text>
-        </View>
-        <Pressable disabled={loading} onPress={refresh} style={[styles.calendarRefreshBtn, loading && styles.disabledBtn]}>
-          <Text style={styles.calendarRefreshText}>{loading ? "Updating" : "Refresh"}</Text>
-        </Pressable>
-      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -7925,7 +7873,7 @@ function CalendarScreen({
         <ActivityIndicator
           color={C.green}
           size="large"
-          style={{ marginTop: 50 }}
+          style={{ marginTop: 24 }}
         />
       ) : (
         orderedAgenda.length ? orderedAgenda.map((e) => {
@@ -10074,27 +10022,28 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "center",
   },
-  journalScrollHint: {
-    alignSelf: "flex-end",
+  journalScrollCue: {
     alignItems: "center",
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 8,
-    marginBottom: 8,
-    marginRight: 4,
-    opacity: 0.82,
+    marginTop: 4,
+    marginBottom: 12,
   },
-  journalScrollHintArrow: {
-    color: C.green,
-    fontSize: 16,
-    lineHeight: 16,
-    fontWeight: "900",
+  journalScrollCueGlass: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.55,
   },
-  journalScrollHintText: {
+  journalScrollCueChevron: {
     color: C.sub,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "800",
+    fontSize: 14,
+    lineHeight: 14,
+    fontWeight: "600",
+    marginTop: 1,
   },
   dayMuted: { opacity: 0.48 },
   dayNum: {
