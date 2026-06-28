@@ -2059,3 +2059,11 @@ Market Intelligence is now a shared cached-data system, not a per-user AI featur
 The worker lives in `scripts/market-intel-worker/index.mjs` and supports `news`, `prop-firms`, `calendar`, `daily-brief`, `watchlist`, `summary`, comma-separated job lists, and `all`. Calendar uses `ECONOMIC_CALENDAR_JSON_URL` first, then a deterministic macro fallback covering CPI, PPI, FOMC, NFP, GDP, unemployment, Fed speakers, crude oil inventories, and rate decisions so `economic_events` is not empty when no free source is configured.
 
 GitHub Actions automation lives at `.github/workflows/market-intelligence.yml`. Required repository secrets: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Optional: `ECONOMIC_CALENDAR_JSON_URL`. `ENABLE_LOCAL_LLM_SUMMARIES` is forced to `false` in Actions. Never expose `SUPABASE_SERVICE_ROLE_KEY` in Expo public env.
+
+## Security Hardening Notes
+
+- Never paste service role keys, private API tokens, Apple signing keys, or full `.env` files into AI chats/prompts.
+- Never put `SUPABASE_SERVICE_ROLE_KEY` or private AI keys into `EXPO_PUBLIC_*` env variables.
+- Never run destructive database commands against production without human review.
+- Never give AI agents unrestricted production access; prefer scoped, reviewed secrets and read-only access where possible.
+- Run `npm run security:check` and `npm run typecheck` before release.

@@ -18,7 +18,8 @@
     "market-intel:summary": "node scripts/market-intel-worker/index.mjs summary",
     "market-intel:prop-firms": "node scripts/market-intel-worker/index.mjs prop-firms",
     "market-intel:calendar": "node scripts/market-intel-worker/index.mjs calendar",
-    "market-intel:daily-brief": "node scripts/market-intel-worker/index.mjs daily-brief"
+    "market-intel:daily-brief": "node scripts/market-intel-worker/index.mjs daily-brief",
+    "security:check": "node scripts/security-check.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

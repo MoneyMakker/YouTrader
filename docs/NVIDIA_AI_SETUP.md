@@ -12,10 +12,10 @@ YouTrader uses NVIDIA NIM through Supabase Edge Functions. The mobile app must n
 
 ## 2. Add Supabase secrets
 
-Run from the project root after logging in to Supabase CLI:
+Run from the project root after logging in to Supabase CLI. Paste the real key only into the interactive prompt or a trusted local shell, never into docs or AI chat:
 
 ```bash
-supabase secrets set NVIDIA_API_KEY="YOUR_NVIDIA_KEY"
+supabase secrets set NVIDIA_API_KEY
 supabase secrets set NVIDIA_MODEL="meta/llama-3.1-70b-instruct"
 ```
 

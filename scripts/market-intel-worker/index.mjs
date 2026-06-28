@@ -6,7 +6,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../.
 loadEnv(path.join(ROOT, "scripts/market-intel-worker/.env"));
 
 const SUPABASE_URL = mustEnv("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = mustEnv("SUPABASE_SERVICE_ROLE_KEY");
+const SUPABASE_SERVICE_ROLE_KEY = mustSecretEnv("SUPABASE_SERVICE_ROLE_KEY");
 const ENABLE_LOCAL_LLM_SUMMARIES = process.env.ENABLE_LOCAL_LLM_SUMMARIES === "true";
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:7b";
@@ -39,9 +39,30 @@ function loadEnv(file) {
   }
 }
 
+function looksLikePlaceholder(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return !normalized || normalized.includes("your_") || normalized.includes("your-") || normalized.includes("replace") || normalized.includes("changeme") || normalized.includes("example") || normalized.includes("placeholder");
+}
+
 function mustEnv(name) {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
+  if (!value || looksLikePlaceholder(value)) throw new Error(`${name} is required and must not be a placeholder`);
+  return value;
+}
+
+function mustSecretEnv(name) {
+  const value = mustEnv(name);
+  if (name === "SUPABASE_SERVICE_ROLE_KEY") {
+    if (value.startsWith("sb_publishable_") || value.startsWith("sb_anon_")) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY must be a service role secret, not a publishable or anon key");
+    }
+    if (value.startsWith("EXPO_PUBLIC_")) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY must never come from an Expo public env variable");
+    }
+    if (value.length < 80) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY is too short to be a real service role key");
+    }
+  }
   return value;
 }
 

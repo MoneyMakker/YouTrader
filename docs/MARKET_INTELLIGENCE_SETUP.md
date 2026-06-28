@@ -132,3 +132,11 @@ The mobile app reads these published tables only:
 - `economic_events`
 
 The app must never trigger worker jobs, crawlers, scraping, or paid AI generation.
+
+## Security Hardening Notes
+
+- Never paste service role keys, private API tokens, Apple signing keys, or full `.env` files into AI chats/prompts.
+- Never put `SUPABASE_SERVICE_ROLE_KEY` or private AI keys into `EXPO_PUBLIC_*` env variables.
+- Never run destructive database commands against production without human review.
+- Never give AI agents unrestricted production access; prefer scoped, reviewed secrets and read-only access where possible.
+- Run `npm run security:check` and `npm run typecheck` before release.
