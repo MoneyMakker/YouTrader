@@ -4,10 +4,13 @@
 
 Before continuing development, read these files in order:
 
-1. `PROJECT_HANDOFF.md`
-2. `CONTINUATION.md`
-3. `KNOWLEDGE.md`
-4. `ARCHITECTURE.md`
+1. `MASTER_CONTEXT.md`
+2. `PROJECT_HANDOFF.md`
+3. `CONTINUATION.md`
+4. `KNOWLEDGE.md`
+5. `ARCHITECTURE.md`
+
+`MASTER_CONTEXT.md` is the permanent source of truth. The older handoff files are historical context and may be stale. If a major architectural decision, analytics engine, AI behavior, Supabase schema, RevenueCat/subscription flow, or design-system rule changes, update `MASTER_CONTEXT.md` in the same branch.
 
 Do not rewrite already implemented work. Preserve the current architecture unless the user explicitly asks for a focused migration.
 
@@ -40,8 +43,8 @@ It must not become a trade-signal, market-prediction, crypto-dashboard, gamer, o
 - Expo SDK: `~54.0.35`
 - React Native: `0.81.5`
 - App config version: `1.5.7`
-- iOS build number: `62`
-- `package.json` version is still `1.5.6`.
+- iOS build number: `63`
+- `package.json` version: `1.5.7`.
 - `npm run typecheck` passes.
 - `npx expo-doctor` previously passed 17/18 with one non-CNG/native-folder warning.
 - Root contains many `.ipa` artifacts and backup folders. Do not commit them accidentally.
@@ -56,12 +59,16 @@ Latest completed work before this memory:
 - Stats uses `Performance Profile` radar.
 - AI Analytics uses the consolidated five-section command center structure.
 - Achievement share flow was restored in `TerminalTraderStatus`.
-- A migration was added at `supabase/migrations/20260627231000_add_runtime_tables_rls.sql` for:
-  - `trade_journal.entry_time`
-  - `trade_journal.exit_time`
+- `MASTER_CONTEXT.md` was added as the permanent project brain.
+- `supabase/migrations/20260627231000_add_runtime_tables_rls.sql` is now the self-contained runtime schema path for:
+  - `prop_firms`
+  - `user_firm_settings`
+  - `trade_journal`
+  - `risk_snapshots`
   - `user_subscriptions`
+  - `ai_usage_events`
   - `achievement_share_usage`
-  - RLS policies and indexes for those tables.
+  - RLS policies, indexes and seed prop firm templates.
 
 ## Pending Work
 
@@ -73,7 +80,7 @@ Highest priority:
 4. Verify Supabase auth and Pro cloud sync.
 5. Deploy/verify SQL migrations and RLS in Supabase.
 6. Resolve or consciously accept the Expo Doctor non-CNG warning.
-7. Align `package.json` version with `app.json` if desired.
+7. Re-authenticate Aikido if scan still returns `Invalid token provided`.
 8. Clean release artifacts before commit or release packaging.
 
 Later refactors:
