@@ -1,21 +1,27 @@
+import { EXPORT_BRAND, EXPORT_COLORS } from "../components/insights/exportDesign";
+
 type ReportStats = Record<string, unknown>;
 
-const GREEN = "#9CFF00";
-const PURPLE = "#B026FF";
-const BG = "#030507";
-const CARD = "#0A0F14";
-const TEXT = "#F4F4F5";
-const SUB = "#9CA3AF";
+const GREEN = EXPORT_COLORS.green;
+const PURPLE = EXPORT_COLORS.purple;
+const BG = EXPORT_COLORS.bg;
+const CARD = EXPORT_COLORS.panel;
+const TEXT = EXPORT_COLORS.text;
+const SUB = EXPORT_COLORS.sub;
+const RED = EXPORT_COLORS.red;
 
-export function buildWeeklyReportHtml(stats: ReportStats) {
+export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
   const title = textValue(stats.title, "YouTrader Monthly Report");
   const rangeLabel = textValue(stats.rangeLabel, "");
   const equityCurve = numberArray(stats.equityCurve);
-  const highlights = stringArray(stats.achievementsEarned).slice(0, 5);
+  const highlights = stringArray(stats.achievementsEarned).slice(0, 6);
   const aiSummary = textValue(stats.aiSummary, "AI Summary will appear after you generate trade analysis for this month.");
   const chart = buildEquityChart(equityCurve);
   const netPnl = numberValue(stats.netPnl);
-  const pnlTone = netPnl >= 0 ? GREEN : "#FF3B5F";
+  const pnlTone = netPnl >= 0 ? GREEN : RED;
+  const logoHtml = logoDataUri
+    ? `<img class="logo" src="${logoDataUri}"/>`
+    : `<div class="fallback-logo">YT</div>`;
 
   return `<!doctype html>
 <html>
@@ -24,54 +30,46 @@ export function buildWeeklyReportHtml(stats: ReportStats) {
   <style>
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: ${BG};
-      color: ${TEXT};
-      font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", sans-serif;
-    }
-    .page { padding: 42px; min-height: 100vh; background: radial-gradient(circle at 82% 0%, rgba(176,38,255,.16), transparent 34%), ${BG}; }
-    .top { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.12); padding-bottom: 24px; }
+    body { margin: 0; background: ${BG}; color: ${TEXT}; font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", sans-serif; }
+    .page { min-height: 297mm; padding: 34px; background: radial-gradient(circle at 90% 0%, rgba(176,38,255,.20), transparent 32%), linear-gradient(180deg, #05070A 0%, #030507 100%); }
+    .top { display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.035); border-radius: 18px; padding: 18px 20px; }
     .brand { display: flex; align-items: center; gap: 14px; }
-    .mark { display: flex; align-items: flex-end; gap: 5px; height: 38px; }
-    .bar { width: 9px; border-radius: 8px; background: ${GREEN}; }
-    .bar.purple { height: 34px; background: ${PURPLE}; }
-    .bar.one { height: 26px; }
-    .bar.three { height: 30px; }
+    .logo { width: 48px; height: 48px; object-fit: contain; }
+    .fallback-logo { width: 48px; height: 48px; border-radius: 14px; background: ${PURPLE}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; }
     .brand-name { font-size: 28px; font-weight: 900; letter-spacing: 0; }
     .brand-sub { color: ${SUB}; font-size: 9px; font-weight: 900; letter-spacing: 3px; margin-top: 3px; }
-    .range { color: ${SUB}; text-align: right; font-size: 13px; font-weight: 800; }
-    h1 { font-size: 38px; margin: 34px 0 10px; letter-spacing: 0; }
-    .lead { color: ${SUB}; font-size: 15px; line-height: 1.55; max-width: 690px; }
-    .hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; margin-top: 28px; }
-    .panel { background: ${CARD}; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 22px; }
-    .label { color: ${SUB}; font-size: 10px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
-    .pnl { color: ${pnlTone}; font-size: 58px; line-height: 1; font-weight: 900; margin-top: 12px; }
-    .score { color: ${GREEN}; font-size: 54px; line-height: 1; font-weight: 900; margin-top: 12px; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
-    .metric { background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 15px; min-height: 86px; }
-    .value { font-size: 24px; font-weight: 900; margin-top: 8px; }
-    .chart { margin-top: 28px; }
-    svg { width: 100%; height: 190px; display: block; }
-    .section { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .copy { color: ${TEXT}; font-size: 14px; line-height: 1.62; margin-top: 12px; }
-    ul { padding: 0; list-style: none; margin: 14px 0 0; }
-    li { color: ${TEXT}; margin: 9px 0; padding-left: 18px; position: relative; font-weight: 750; }
-    li:before { content: ""; position: absolute; left: 0; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: ${GREEN}; }
-    .footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.12); color: ${SUB}; font-size: 11px; display: flex; justify-content: space-between; }
+    .range { color: ${SUB}; text-align: right; font-size: 13px; font-weight: 800; max-width: 220px; }
+    h1 { font-size: 38px; margin: 28px 0 8px; letter-spacing: 0; }
+    .lead { color: ${SUB}; font-size: 14px; line-height: 1.48; max-width: 710px; font-weight: 700; }
+    .hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; margin-top: 20px; }
+    .panel { background: ${CARD}; border: 1px solid rgba(255,255,255,.13); border-radius: 16px; padding: 18px; box-shadow: 0 18px 42px rgba(0,0,0,.22); }
+    .label { color: ${SUB}; font-size: 9px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+    .pnl { color: ${pnlTone}; font-size: 54px; line-height: 1; font-weight: 900; margin-top: 11px; }
+    .score { color: ${PURPLE}; font-size: 52px; line-height: 1; font-weight: 900; margin-top: 11px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+    .metric { background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.11); border-radius: 12px; padding: 12px; min-height: 74px; }
+    .value { color: ${TEXT}; font-size: 21px; line-height: 1.15; font-weight: 900; margin-top: 7px; }
+    .chart { margin-top: 16px; }
+    svg { width: 100%; height: 158px; display: block; }
+    .section { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .copy { color: ${TEXT}; font-size: 13px; line-height: 1.5; margin-top: 10px; font-weight: 750; }
+    ul { padding: 0; list-style: none; margin: 10px 0 0; }
+    li { color: ${TEXT}; margin: 7px 0; padding-left: 16px; position: relative; font-weight: 800; font-size: 13px; line-height: 1.35; }
+    li:before { content: ""; position: absolute; left: 0; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: ${PURPLE}; }
+    .footer { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.12); color: ${SUB}; font-size: 11px; display: flex; justify-content: space-between; font-weight: 800; }
   </style>
 </head>
 <body>
   <div class="page">
     <div class="top">
       <div class="brand">
-        <div class="mark"><div class="bar one"></div><div class="bar purple"></div><div class="bar three"></div></div>
-        <div><div class="brand-name">YouTrader</div><div class="brand-sub">TRADE. ANALYZE. IMPROVE.</div></div>
+        ${logoHtml}
+        <div><div class="brand-name">${EXPORT_BRAND.name}</div><div class="brand-sub">${EXPORT_BRAND.tagline}</div></div>
       </div>
       <div class="range">${escapeHtml(rangeLabel)}</div>
     </div>
     <h1>${escapeHtml(title)}</h1>
-    <div class="lead">Institutional monthly performance review built from real journal data, risk metrics, execution quality, and YouTrader AI context.</div>
+    <div class="lead">Premium monthly performance review built from journal data, risk metrics, execution quality, and YouTrader AI context.</div>
 
     <div class="hero">
       <div class="panel">
@@ -85,7 +83,7 @@ export function buildWeeklyReportHtml(stats: ReportStats) {
       </div>
       <div class="panel">
         <div class="label">Trading Score</div>
-        <div class="score">${escapeHtml(textValue(stats.tradingScore, "—"))}</div>
+        <div class="score">${escapeHtml(textValue(stats.tradingScore, "-"))}</div>
         <div class="copy">${escapeHtml(textValue(stats.grade, "Monthly grade"))}</div>
       </div>
     </div>
@@ -100,8 +98,8 @@ export function buildWeeklyReportHtml(stats: ReportStats) {
       ${metric("Risk Control", percent(stats.riskControl))}
       ${metric("Recovery Factor", fixed(stats.recoveryFactor, 2))}
       ${metric("Expectancy", money(numberValue(stats.expectancy)))}
-      ${metric("Best Session", textValue(stats.bestSession, "—"))}
-      ${metric("Worst Session", textValue(stats.worstSession, "—"))}
+      ${metric("Best Session", textValue(stats.bestSession, "-"))}
+      ${metric("Worst Session", textValue(stats.worstSession, "-"))}
     </div>
 
     <div class="section">
@@ -118,7 +116,7 @@ export function buildWeeklyReportHtml(stats: ReportStats) {
     <div class="section">
       <div class="panel">
         <div class="label">Best / Worst Day</div>
-        <div class="copy">Best: ${escapeHtml(textValue(stats.bestDay, "—"))}<br/>Worst: ${escapeHtml(textValue(stats.worstDay, "—"))}</div>
+        <div class="copy">Best: ${escapeHtml(textValue(stats.bestDay, "-"))}<br/>Worst: ${escapeHtml(textValue(stats.worstDay, "-"))}</div>
       </div>
       <div class="panel">
         <div class="label">Next Focus</div>
@@ -126,7 +124,7 @@ export function buildWeeklyReportHtml(stats: ReportStats) {
       </div>
     </div>
 
-    <div class="footer"><span>YouTrader professional performance report</span><span>Educational journal. Not financial advice.</span></div>
+    <div class="footer"><span>YouTrader professional performance report</span><span>${EXPORT_BRAND.disclaimer}</span></div>
   </div>
 </body>
 </html>`;

@@ -2067,3 +2067,15 @@ GitHub Actions automation lives at `.github/workflows/market-intelligence.yml`. 
 - Never run destructive database commands against production without human review.
 - Never give AI agents unrestricted production access; prefer scoped, reviewed secrets and read-only access where possible.
 - Run `npm run security:check` and `npm run typecheck` before release.
+
+## Release Polish Notes (2026-06-29)
+
+- Stats exports now share one branded YouTrader export design system for Share P&L card, Save image, and Monthly PDF.
+- Share/Save P&L images use the YouTrader logo asset and a vertical 1080x1920 social-share layout.
+- Monthly PDF uses a darker, higher-contrast premium report style with logo, period, core metrics, AI summary, highlights, and educational disclaimer.
+- News tab is restored to normal readable market news cards with source/time, headline, description, source URL tap-through, and ES/NQ/GOLD/OIL/BTC/ETH bias chips.
+- Market Intelligence cached sections moved into AI Analytics as read-only shared cached intelligence.
+- AI Analytics now uses one consolidated Prop Firm Coach section instead of duplicate Eval/Funded cards.
+- Stats Trading Radar accent moved from lime/neon to premium purple while preserving logic.
+- Heatmap losing cells now use clear red and empty cells are quieter.
+- Journal scroll cue was moved higher between the calendar and lower tab area.

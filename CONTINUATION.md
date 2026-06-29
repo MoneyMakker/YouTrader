@@ -114,3 +114,12 @@ Possible later extraction targets:
 - Never run destructive database commands against production without human review.
 - Never give AI agents unrestricted production access; prefer scoped, reviewed secrets and read-only access where possible.
 - Run `npm run security:check` and `npm run typecheck` before release.
+
+## Release Polish Follow-Up (2026-06-29)
+
+- Current release polish was applied incrementally on `/Users/valentynborovyk/Projects/youtrader-final`.
+- Do not reintroduce Market Intelligence blocks into the News tab; News should remain readable source-linked headline cards.
+- AI Analytics owns cached Market Intelligence plus the consolidated Prop Firm Coach.
+- Prop Firm Coach replaces the previous duplicate Eval and Evaluation/Funded blocks in the rendered AI Analytics flow.
+- Stats export visuals use `src/components/insights/exportDesign.ts` as the shared branding source.
+- Before release, manually QA Share P&L, Save image to Photos, Monthly PDF, News tap-through, AI Analytics Prop Firm Coach, Radar color, Heatmap colors, and Journal scroll cue on device.

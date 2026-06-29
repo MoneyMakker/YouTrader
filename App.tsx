@@ -4762,8 +4762,8 @@ function PremiumPerformanceRadar({
         <Svg width={size} height={size}>
           <Defs>
             <LinearGradient id="radarFill" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={C.green} stopOpacity="0.22" />
-              <Stop offset="1" stopColor={C.purple} stopOpacity="0.12" />
+              <Stop offset="0" stopColor={C.purple} stopOpacity="0.28" />
+              <Stop offset="1" stopColor="#D36BFF" stopOpacity="0.12" />
             </LinearGradient>
           </Defs>
           {[0.25, 0.5, 0.75, 1].map((ring) => (
@@ -4772,9 +4772,9 @@ function PremiumPerformanceRadar({
           {points.map((point) => (
             <Line key={`axis-${point.label}`} x1={center} y1={center} x2={point.lx} y2={point.ly} stroke="rgba(255,255,255,0.055)" strokeWidth={1} />
           ))}
-          <Polygon points={polygon} fill="url(#radarFill)" stroke={C.green} strokeWidth={3} />
+          <Polygon points={polygon} fill="url(#radarFill)" stroke={C.purple} strokeWidth={3} />
           {points.map((point) => (
-            <Circle key={`dot-${point.label}`} cx={point.x} cy={point.y} r={5.5} fill={C.green} stroke="rgba(0,0,0,0.72)" strokeWidth={2} />
+            <Circle key={`dot-${point.label}`} cx={point.x} cy={point.y} r={5.5} fill={C.purple} stroke="rgba(0,0,0,0.72)" strokeWidth={2} />
           ))}
         </Svg>
         <View style={styles.premiumRadarCenter}>
@@ -4796,7 +4796,7 @@ function PremiumPerformanceRadar({
         <View style={styles.radarSummaryBlock}>
           <Text style={styles.terminalSmallLabel}>Strengths</Text>
           <View style={styles.terminalChipRow}>
-            {strongest.map((item) => <Text key={item.label} style={styles.terminalChip}>● {item.label}</Text>)}
+            {strongest.map((item) => <Text key={item.label} style={[styles.terminalChip, styles.radarAccentText]}>● {item.label}</Text>)}
           </View>
         </View>
         <View style={styles.radarWeakBlock}>
@@ -4805,7 +4805,7 @@ function PremiumPerformanceRadar({
           <Text style={styles.terminalSub}>Target {weakest.target}</Text>
         </View>
       </View>
-      <MetricPillRow items={axes.map((axis) => ({ label: axis.label, value: axis.value, tone: axis.score >= 65 ? "green" : "grey" }))} />
+      <MetricPillRow items={axes.map((axis) => ({ label: axis.label, value: axis.value, tone: axis.score >= 65 ? "purple" : "grey" }))} />
       <BottomSheetPanel visible={!!selected} title={selected?.label || "Metric"} onClose={() => setSelected(null)}>
         {selected ? (
           <>
@@ -4850,9 +4850,9 @@ function buildSessionCells(trades: Trade[], mode: SessionMode) {
 }
 
 function heatCellColor(pnl: number, intensity: number) {
-  if (pnl > 0) return intensity > 0.65 ? "rgba(163,255,18,0.78)" : "rgba(90,145,34,0.58)";
-  if (pnl < 0) return intensity > 0.65 ? "rgba(255,59,95,0.70)" : "rgba(255,149,0,0.46)";
-  return "rgba(255,255,255,0.065)";
+  if (pnl > 0) return intensity > 0.65 ? "rgba(91,176,0,0.82)" : "rgba(91,176,0,0.46)";
+  if (pnl < 0) return intensity > 0.65 ? "rgba(255,59,95,0.78)" : "rgba(255,59,95,0.38)";
+  return "rgba(255,255,255,0.038)";
 }
 
 function TerminalSessionIntelligence({ trades }: { trades: Trade[] }) {
@@ -5870,12 +5870,12 @@ function AchievementSection({
 }
 
 function heatmapColor(cell: HourHeatmapCell) {
-  if (!cell.tradeCount) return "rgba(255,255,255,0.032)";
-  if (cell.pnl <= -500) return "rgba(255,59,95,0.72)";
-  if (cell.pnl < 0) return "rgba(255,59,95,0.34)";
-  if (cell.winRate < 50) return "rgba(255,159,10,0.34)";
-  if (cell.pnl < 1000) return "rgba(150,255,0,0.24)";
-  return "rgba(91,176,0,0.56)";
+  if (!cell.tradeCount) return "rgba(255,255,255,0.026)";
+  if (cell.pnl < 0) return cell.pnl <= -500 ? "rgba(255,59,95,0.74)" : "rgba(255,59,95,0.40)";
+  if (cell.pnl === 0) return "rgba(255,255,255,0.055)";
+  if (cell.winRate < 50) return "rgba(255,59,95,0.30)";
+  if (cell.pnl < 1000) return "rgba(91,176,0,0.30)";
+  return "rgba(91,176,0,0.62)";
 }
 
 function SessionHeatmapCard({ cells }: { cells: HourHeatmapCell[] }) {
@@ -6640,6 +6640,124 @@ function TerminalTradingCoach({
   );
 }
 
+function buildPropCoachRecommendation({
+  snapshot,
+  stats,
+  passProbability,
+  revengeTrading,
+}: {
+  snapshot: ReturnType<typeof computePropRiskSnapshot>;
+  stats: ReturnType<typeof calcStats>;
+  passProbability: PassProbabilityResult;
+  revengeTrading: RevengeTradingResult;
+}) {
+  const revengeRiskScore = revengeTrading.severity === "HIGH" ? 85 : revengeTrading.severity === "MEDIUM" ? 60 : 20;
+  const danger = snapshot.status === "STOP" || snapshot.dailyRemaining <= snapshot.template.dailyLossLimit * 0.15;
+  const caution = snapshot.status === "CAUTION" || passProbability.probability < 55 || stats.maxDd < 0 || revengeRiskScore >= 60;
+  const headline = danger
+    ? "Stop trading today and protect the account."
+    : caution
+      ? "Reduce size until the buffer and execution quality recover."
+      : "Protect the pass path with stable size and fewer decisions.";
+  const action = danger ? "Stop Trading Today" : caution ? "Reduce Size" : "Protect Pass Path";
+  const rules = danger
+    ? ["No new trades after a daily or account buffer breach.", "Review the last losing sequence before the next session.", "Return only with fixed risk and one A+ setup." ]
+    : caution
+      ? ["Cut risk per trade by at least half for the next session.", "Stop after one rule break or two consecutive losses.", "Trade only your best session and skip revenge entries." ]
+      : ["Keep contract size stable after green trades.", "Stop if daily buffer falls below 35%.", "Only add risk after clean journal notes and planned exits." ];
+  const reason = `Based on ${stats.count} trades, ${stats.wr.toFixed(0)}% win rate, ${moneyCompact(stats.maxDd)} drawdown, ${stats.consistency.toFixed(0)}% consistency, ${snapshot.status.toLowerCase()} buffer status, and ${revengeRiskScore}% revenge-trading risk.`;
+  return { headline, action, rules, reason };
+}
+
+function PropFirmCoachSection({
+  templates,
+  value,
+  mode,
+  snapshot,
+  stats,
+  passProbability,
+  revengeTrading,
+  onTemplateChange,
+  onModeChange,
+}: {
+  templates: RiskTemplate[];
+  value: string;
+  mode: FirmMode;
+  snapshot: ReturnType<typeof computePropRiskSnapshot>;
+  stats: ReturnType<typeof calcStats>;
+  passProbability: PassProbabilityResult;
+  revengeTrading: RevengeTradingResult;
+  onTemplateChange: (key: string) => void;
+  onModeChange: (mode: FirmMode) => void;
+}) {
+  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
+  const isFunded = mode === "funded";
+  const maxContracts = isFunded ? snapshot.template.liveContracts : snapshot.template.evaluationContracts;
+  const riskPct = isFunded ? snapshot.template.liveRiskPct : snapshot.template.evaluationRiskPct;
+  const coach = buildPropCoachRecommendation({ snapshot, stats, passProbability, revengeTrading });
+  const revengeRiskScore = revengeTrading.severity === "HIGH" ? 85 : revengeTrading.severity === "MEDIUM" ? 60 : 20;
+  const safetyScore = Math.max(0, Math.min(100, Math.round((passProbability.probability * 0.45) + (snapshot.bufferPct * 0.35) + (stats.drawdownControl * 0.2) - (revengeRiskScore * 0.15))));
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSectionTitle}>Prop Firm Coach</Text>
+          <Text style={styles.terminalSub}>Discipline, risk and buffer coaching from your journal metrics.</Text>
+        </View>
+        <AppleRing label={isFunded ? "SAFE" : "PASS"} value={isFunded ? safetyScore : passProbability.probability} display={`${isFunded ? safetyScore : passProbability.probability}%`} size={112} color={snapshot.statusColor} />
+      </View>
+      <View style={styles.propModeRail}>
+        {(["evaluation", "funded"] as FirmMode[]).map((item) => {
+          const active = item === mode;
+          return (
+            <Pressable key={item} onPress={() => onModeChange(item)} style={[styles.propModeChip, active && styles.propModeChipActive]}>
+              <Text style={[styles.propModeChipText, active && styles.propModeChipTextActive]}>
+                {item === "evaluation" ? "Evaluation" : "Funded"}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+        {safeTemplates.map((template) => {
+          const active = template.key === value;
+          return (
+            <Pressable key={template.key} onPress={() => onTemplateChange(template.key)} style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}>
+              <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>{template.accountSize / 1000}K</Text>
+              <Text style={styles.propTemplateChipSub}>{template.evaluationContracts} eval / {template.liveContracts} live</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <View style={styles.propCoachStatusCard}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>Status</Text>
+          <Text style={[styles.propCoachStatus, { color: snapshot.statusColor }]}>{snapshot.status}</Text>
+        </View>
+        <Text style={[styles.propCoachAction, { color: snapshot.statusColor }]}>{coach.action}</Text>
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+          { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
+          { label: isFunded ? "Safety Score" : "To Pass", value: isFunded ? `${safetyScore}%` : moneyCompact(snapshot.remainingToPass), tone: isFunded ? "purple" : snapshot.remainingToPass <= 0 ? "green" : "purple" },
+          { label: "Max Loss", value: moneyCompact(snapshot.template.maxLossLimit), tone: "grey" },
+          { label: "Daily Limit", value: moneyCompact(snapshot.template.dailyLossLimit), tone: "grey" },
+          { label: "Contracts", value: `${maxContracts} max`, tone: "purple" },
+          { label: "Risk / Trade", value: `${Math.round(riskPct * 100)}%`, tone: "grey" },
+          { label: "Revenge Risk", value: `${revengeRiskScore}%`, tone: revengeRiskScore >= 60 ? "red" : "grey" },
+        ]}
+      />
+      <View style={styles.propCoachAdviceCard}>
+        <Text style={styles.propCoachHeadline}>{coach.headline}</Text>
+        <BulletList items={coach.rules} />
+        <Text style={styles.terminalSub}>{coach.reason}</Text>
+      </View>
+      <Text style={styles.newsDisclaimer}>Educational analysis only. Not financial advice.</Text>
+    </TerminalGlassCard>
+  );
+}
+
 function TerminalPropFirmMission({
   propSnapshot,
   passProbability,
@@ -7015,19 +7133,24 @@ function AiAnalysisScreen({
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
-      <PropTemplateSelector
-        templates={safeAnalysisTemplates}
-        value={activeTemplate.key}
-        onChange={changeAnalysisTemplate}
-      />
+      <MarketIntelligencePanel />
       <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
         <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
           <View style={styles.terminalScreenStack}>
-            <TerminalPropFirmMission propSnapshot={propSnapshot} passProbability={passProbability} />
+            <PropFirmCoachSection
+              templates={safeAnalysisTemplates}
+              value={activeTemplate.key}
+              mode={propMode}
+              snapshot={selectedPropSnapshot}
+              stats={periodStats}
+              passProbability={passProbability}
+              revengeTrading={revengeTrading}
+              onTemplateChange={changeAnalysisTemplate}
+              onModeChange={changePropMode}
+            />
             <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
             <TerminalPatternDetective stats={periodStats} />
             <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
-            <TerminalFundedPanel snapshot={selectedPropSnapshot} mode={propMode} onModeChange={changePropMode} />
             <AchievementSection
               achievements={achievementList}
               level={traderLevel}
@@ -7960,42 +8083,26 @@ function MarketEmpty({ text }: { text: string }) {
   return <Text style={styles.marketEmptyText}>{text}</Text>;
 }
 
-function NewsScreen({
-  lang,
-  isPremium,
-  onUpgrade,
-}: {
-  lang: Lang;
-  isPremium: boolean;
-  onUpgrade: () => void;
-}) {
+function MarketIntelligencePanel() {
   const [intel, setIntel] = useState<MarketIntelData | null>(null);
   const [loading, setLoading] = useState(true);
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     const data = await loadMarketIntelligence();
     setIntel(data);
     setLoading(false);
-  };
+  }, []);
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 60000);
     return () => clearInterval(id);
-  }, []);
-
-  if (loading && !intel) {
-    return (
-      <View style={styles.screen}>
-        <ActivityIndicator color={C.green} size="large" style={{ marginTop: 60 }} />
-      </View>
-    );
-  }
+  }, [refresh]);
 
   const data = intel || { brief: null, watchlist: [], summary: null, events: [], propUpdates: [], headlines: [] };
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}>
+    <View style={styles.terminalScreenStack}>
       <MarketSection title="Daily Brief">
-        {data.brief ? (
+        {loading && !intel ? <ActivityIndicator color={C.purple} /> : data.brief ? (
           <GlassCard style={styles.marketHeroCard} intensity={30}>
             <View style={styles.rowBetween}>
               <Pill text={data.brief.marketRegime} tone="med" />
@@ -8045,7 +8152,7 @@ function NewsScreen({
               <Text style={styles.sub}>{event.date} • {event.time}</Text>
             </View>
             <Text style={styles.newsTitle}>{event.name}</Text>
-            <Text style={styles.newsSummary}>Previous {event.previous || "—"} • Forecast {event.forecast || "—"} • Actual {event.actual || "—"}</Text>
+            <Text style={styles.newsSummary}>Previous {event.previous || "-"} • Forecast {event.forecast || "-"} • Actual {event.actual || "-"}</Text>
           </GlassCard>
         )) : <MarketEmpty text="Calendar cache is empty. The worker has a deterministic fallback if no source is configured." />}
       </MarketSection>
@@ -8066,7 +8173,7 @@ function NewsScreen({
       </MarketSection>
 
       <MarketSection title="Latest Market Headlines">
-        {data.headlines.length ? data.headlines.slice(0, 12).map((item) => (
+        {data.headlines.length ? data.headlines.slice(0, 6).map((item) => (
           <Pressable key={item.id} onPress={() => (item.url ? Linking.openURL(item.url) : undefined)}>
             <GlassCard style={styles.purpleNewsCard} intensity={28}>
               <View style={styles.rowBetween}>
@@ -8074,7 +8181,7 @@ function NewsScreen({
                 <Text style={styles.sub}>{item.source} • {item.time}</Text>
               </View>
               <Text style={styles.newsTitle}>{item.title}</Text>
-              {!!item.summary && <Text style={styles.newsSummary}>{item.summary.slice(0, 240)}</Text>}
+              {!!item.summary && <Text style={styles.newsSummary}>{item.summary.slice(0, 220)}</Text>}
             </GlassCard>
           </Pressable>
         )) : <MarketEmpty text="Headline cache is empty." />}
@@ -8085,7 +8192,78 @@ function NewsScreen({
           <Text style={styles.marketBodyText}>Cached market intelligence is shared by all users. The app is read-only, does not run crawlers, and does not trigger paid AI or per-user generation.</Text>
         </GlassCard>
       </MarketSection>
-    </ScrollView>
+    </View>
+  );
+}
+
+function NewsScreen({
+  lang,
+  isPremium,
+  onUpgrade,
+}: {
+  lang: Lang;
+  isPremium: boolean;
+  onUpgrade: () => void;
+}) {
+  const [items, setItems] = useState<MarketNews[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const news = await loadNews();
+    setItems(news);
+    setLoading(false);
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  if (loading && !items.length) {
+    return (
+      <View style={styles.screen}>
+        <ActivityIndicator color={C.green} size="large" style={{ marginTop: 60 }} />
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      style={styles.screen}
+      contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}
+      data={items}
+      keyExtractor={(item) => item.id}
+      refreshing={loading}
+      onRefresh={refresh}
+      ListEmptyComponent={
+        <GlassCard style={styles.marketCard} intensity={28}>
+          <Text style={styles.newsTitle}>Market headlines are warming up.</Text>
+          <Text style={styles.newsSummary}>Pull to refresh. Cached news appears here when Supabase or the public fallback returns headlines.</Text>
+        </GlassCard>
+      }
+      renderItem={({ item }) => (
+        <Pressable onPress={() => (item.url ? Linking.openURL(item.url) : undefined)}>
+          <GlassCard style={styles.purpleNewsCard} intensity={28}>
+            <View style={styles.rowBetween}>
+              <Pill text={item.impact} tone={item.impact === "HIGH" ? "high" : item.impact === "MED" ? "med" : "low"} />
+              <Text style={styles.sub}>{item.source} • {item.time}</Text>
+            </View>
+            <Text style={styles.newsTitle}>{item.title}</Text>
+            {!!item.summary && <Text style={styles.newsSummary}>{item.summary}</Text>}
+            <View style={styles.assetGrid}>
+              {ASSETS.map((asset) => {
+                const bias = item.bias[asset] || "NEUTRAL";
+                const tone = bias === "LONG" ? C.green : bias === "SHORT" ? C.red : C.sub;
+                return (
+                  <View key={asset} style={styles.assetCell}>
+                    <Text style={styles.asset}>{asset}</Text>
+                    <Text style={[styles.calendarBiasValue, { color: tone }]}>{bias} {bias === "LONG" ? "↑" : bias === "SHORT" ? "↓" : "-"}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </GlassCard>
+        </Pressable>
+      )}
+    />
   );
 }
 
@@ -10352,6 +10530,59 @@ const styles = StyleSheet.create({
     height: 1920,
     backgroundColor: "#000000",
   },
+  propTemplateRailCompact: {
+    gap: 8,
+    paddingVertical: 10,
+  },
+  propTemplateChipCompact: {
+    minWidth: 112,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.055)",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  propCoachStatusCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    padding: 16,
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  propCoachStatus: {
+    fontSize: 30,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  propCoachAction: {
+    flex: 1,
+    textAlign: "right",
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  propCoachAdviceCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.28)",
+    backgroundColor: "rgba(176,38,255,0.08)",
+    padding: 16,
+    marginTop: 12,
+  },
+  propCoachHeadline: {
+    color: C.text,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "900",
+    marginBottom: 8,
+  },
   todayTop: { alignItems: "flex-end", maxWidth: 190, paddingTop: 6 },
   todayTopTitle: { color: C.text, fontSize: 16, fontWeight: "900" },
   todayTopDate: {
@@ -10441,8 +10672,8 @@ const styles = StyleSheet.create({
   },
   journalScrollCue: {
     alignItems: "center",
-    marginTop: -2,
-    marginBottom: 18,
+    marginTop: -24,
+    marginBottom: 8,
   },
   journalScrollCueGlass: {
     width: 28,
@@ -12941,6 +13172,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
   },
+  radarAccentText: {
+    color: C.purple,
+  },
   dnaWeakText: {
     color: C.text,
     fontSize: 18,
@@ -12969,7 +13203,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.36)",
   },
   premiumRadarScore: {
-    color: C.green,
+    color: C.purple,
     fontSize: 34,
     fontWeight: "900",
   },
@@ -12997,7 +13231,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   premiumRadarAxisValue: {
-    color: C.green,
+    color: C.purple,
     fontSize: 10,
     fontWeight: "900",
     marginTop: 1,
@@ -13029,11 +13263,11 @@ const styles = StyleSheet.create({
   },
   calendarHeatmapCell: {
     width: "22.7%",
-    minHeight: 72,
-    borderRadius: 17,
+    minHeight: 76,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    padding: 9,
+    borderColor: "rgba(255,255,255,0.12)",
+    padding: 10,
     justifyContent: "space-between",
     shadowColor: "#000",
     shadowOpacity: 0.16,
