@@ -17,7 +17,7 @@ export const EXPORT_COLORS = {
 
 export const EXPORT_BRAND = {
   name: "YouTrader",
-  tagline: "TRADE. ANALYZE. IMPROVE.",
+  tagline: "Track. Review. Improve.",
   disclaimer: "Educational journal. Not financial advice.",
-  appStoreHint: "Find YouTrader on the App Store",
+  appStoreHint: "Available on the App Store",
 };

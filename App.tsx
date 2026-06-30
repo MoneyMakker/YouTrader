@@ -4722,7 +4722,7 @@ function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: T
   );
 
   return (
-    <TerminalGlassCard style={styles.terminalHeroCard}>
+    <TerminalGlassCard style={[styles.terminalHeroCard, styles.terminalEquityCard]}>
       <View style={styles.terminalHeaderRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.terminalHeroTitle}>Equity Curve</Text>
@@ -4851,21 +4851,29 @@ function TerminalTradingDna({
   );
 }
 
+const RADAR_PRO_ONLY_LABELS = new Set(["Consistency", "Recovery", "Profit Factor"]);
+
 function PremiumPerformanceRadar({
   stats,
   consistency,
   recoveryFactor,
   drawdownControl,
+  isPremium,
+  onUpgrade,
 }: {
   stats: ReturnType<typeof calcStats>;
   consistency: number;
   recoveryFactor: number;
   drawdownControl: number;
+  isPremium: boolean;
+  onUpgrade: () => void;
 }) {
   const [selected, setSelected] = useState<{ label: string; value: string; target: string; explanation: string } | null>(null);
   const size = 286;
   const center = size / 2;
   const maxR = 102;
+  const lockedBaselineR = maxR * 0.22;
+  const isAxisLocked = (label: string) => !isPremium && RADAR_PRO_ONLY_LABELS.has(label);
   const axes = [
     { label: "Win Rate", value: `${stats.wr.toFixed(0)}%`, score: Math.min(100, stats.wr), target: "55%+", explanation: "Percent of trades closed green." },
     { label: "Risk Ctrl", value: `${drawdownControl.toFixed(0)}%`, score: drawdownControl, target: "70%+", explanation: "Drawdown control relative to total performance and risk buffer." },
@@ -4876,9 +4884,11 @@ function PremiumPerformanceRadar({
   ];
   const points = axes.map((axis, index) => {
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / axes.length;
-    const r = Math.max(18, Math.min(100, axis.score)) / 100 * maxR;
+    const locked = isAxisLocked(axis.label);
+    const r = locked ? lockedBaselineR : (Math.max(18, Math.min(100, axis.score)) / 100) * maxR;
     return {
       ...axis,
+      locked,
       x: center + Math.cos(angle) * r,
       y: center + Math.sin(angle) * r,
       lx: center + Math.cos(angle) * (maxR + 34),
@@ -4886,9 +4896,12 @@ function PremiumPerformanceRadar({
     };
   });
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
-  const profileScore = Math.round(axes.reduce((sum, axis) => sum + Math.max(0, Math.min(100, axis.score)), 0) / axes.length);
-  const strongest = [...axes].sort((a, b) => b.score - a.score).slice(0, 3);
-  const weakest = [...axes].sort((a, b) => a.score - b.score)[0];
+  const visibleAxes = isPremium ? axes : axes.filter((axis) => !isAxisLocked(axis.label));
+  const profileScore = Math.round(
+    visibleAxes.reduce((sum, axis) => sum + Math.max(0, Math.min(100, axis.score)), 0) / Math.max(1, visibleAxes.length),
+  );
+  const strongest = isPremium ? [...axes].sort((a, b) => b.score - a.score).slice(0, 3) : [];
+  const weakest = isPremium ? [...axes].sort((a, b) => a.score - b.score)[0] : null;
 
   return (
     <TerminalGlassCard>
@@ -4914,33 +4927,61 @@ function PremiumPerformanceRadar({
         </Svg>
         <View style={styles.premiumRadarCenter}>
           <Text style={styles.premiumRadarScore}>{profileScore}</Text>
-          <Text style={styles.premiumRadarLabel}>PROFILE</Text>
+          <Text style={styles.premiumRadarLabel}>{isPremium ? "PROFILE" : "PREVIEW"}</Text>
         </View>
         {points.map((point) => (
           <Pressable
             key={`label-${point.label}`}
-            onPress={() => setSelected({ label: point.label, value: point.value, target: point.target, explanation: point.explanation })}
-            style={[styles.premiumRadarAxisLabel, { left: Math.max(0, Math.min(size - 86, point.lx - 43)), top: Math.max(0, Math.min(size - 38, point.ly - 18)) }]}
+            onPress={() => {
+              if (point.locked) {
+                onUpgrade();
+                return;
+              }
+              setSelected({ label: point.label, value: point.value, target: point.target, explanation: point.explanation });
+            }}
+            style={[styles.premiumRadarAxisLabel, point.locked && styles.premiumRadarAxisLabelLocked, { left: Math.max(0, Math.min(size - 86, point.lx - 43)), top: Math.max(0, Math.min(size - 38, point.ly - 18)) }]}
           >
             <Text style={styles.premiumRadarAxisText}>{point.label}</Text>
-            <Text style={styles.premiumRadarAxisValue}>{point.value}</Text>
+            <Text style={[styles.premiumRadarAxisValue, point.locked && styles.premiumRadarAxisValueLocked]}>{point.locked ? "PRO" : point.value}</Text>
           </Pressable>
         ))}
       </View>
-      <View style={styles.radarSummaryRow}>
-        <View style={styles.radarSummaryBlock}>
-          <Text style={styles.terminalSmallLabel}>Strengths</Text>
-          <View style={styles.terminalChipRow}>
-            {strongest.map((item) => <Text key={item.label} style={[styles.terminalChip, styles.radarAccentText]}>● {item.label}</Text>)}
+      {isPremium ? (
+        <View style={styles.radarSummaryRow}>
+          <View style={styles.radarSummaryBlock}>
+            <Text style={styles.terminalSmallLabel}>Strengths</Text>
+            <View style={styles.terminalChipRow}>
+              {strongest.map((item) => <Text key={item.label} style={[styles.terminalChip, styles.radarAccentText]}>● {item.label}</Text>)}
+            </View>
+          </View>
+          <View style={styles.radarWeakBlock}>
+            <Text style={styles.terminalSmallLabel}>Weakest Area</Text>
+            <Text style={styles.dnaWeakText}>{weakest?.label || "—"}</Text>
+            <Text style={styles.terminalSub}>Target {weakest?.target || "—"}</Text>
           </View>
         </View>
-        <View style={styles.radarWeakBlock}>
-          <Text style={styles.terminalSmallLabel}>Weakest Area</Text>
-          <Text style={styles.dnaWeakText}>{weakest.label}</Text>
-          <Text style={styles.terminalSub}>Target {weakest.target}</Text>
-        </View>
-      </View>
-      <MetricPillRow items={axes.map((axis) => ({ label: axis.label, value: axis.value, tone: axis.score >= 65 ? "purple" : "grey" }))} />
+      ) : (
+        <>
+          <View style={styles.radarLockedGrid}>
+            {["Profit Factor", "Consistency", "Recovery"].map((label) => (
+              <View key={label} style={styles.radarLockedCard}>
+                <Text style={styles.radarLockedLabel}>{label}</Text>
+                <Text style={styles.radarLockedPro}>PRO</Text>
+              </View>
+            ))}
+          </View>
+          <Pressable onPress={onUpgrade} style={styles.radarUnlockBtn}>
+            <Text style={styles.radarUnlockBtnText}>Unlock Full Trading Profile</Text>
+          </Pressable>
+        </>
+      )}
+      <MetricPillRow
+        items={axes.map((axis) => ({
+          label: axis.label,
+          value: isAxisLocked(axis.label) ? "PRO" : axis.value,
+          tone: isAxisLocked(axis.label) ? "grey" : axis.score >= 65 ? "purple" : "grey",
+        }))}
+      />
       <BottomSheetPanel visible={!!selected} title={selected?.label || "Metric"} onClose={() => setSelected(null)}>
         {selected ? (
           <>
@@ -6031,6 +6072,7 @@ function Stats({
   showRestorePurchases,
   onPurchase,
   onRestore,
+  onRadarUpgrade,
   session,
 }: {
   trades: Trade[];
@@ -6044,6 +6086,7 @@ function Stats({
   showRestorePurchases: boolean;
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
+  onRadarUpgrade: () => void;
   session: Session | null;
 }) {
   const visibleTrades = trades;
@@ -6070,6 +6113,8 @@ function Stats({
         consistency={consistency}
         recoveryFactor={recoveryFactor}
         drawdownControl={drawdownControl}
+        isPremium={isPremium}
+        onUpgrade={onRadarUpgrade}
       />
       <TerminalSessionIntelligence trades={visibleTrades} />
 
@@ -6174,6 +6219,16 @@ function StatsScreen({
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
 
+  const openRadarUpgrade = () => {
+    setValueModal({
+      visible: true,
+      reason: "pro_feature",
+      title: "Unlock Full Trading Profile",
+      message: "Pro unlocks Profit Factor, Consistency, Recovery, strengths, and weakest-area analysis in your full Trading Radar.",
+      bullets: ["Full radar profile score", "Strengths and weakest-area insights", "Advanced performance metrics"],
+    });
+  };
+
   const runExport = async (action: "share" | "save" | "pdf") => {
     try {
       const limit = await checkClientRateLimit("export:generate", "stats-local");
@@ -6234,65 +6289,43 @@ function StatsScreen({
       }
       const monthTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "month"));
       const monthStats = calcStats(monthTrades);
+      const monthWins = monthTrades.filter((trade) => trade.pnl > 0).length;
+      const monthLosses = monthTrades.filter((trade) => trade.pnl < 0).length;
       const best = monthStats.weekday[0];
       const worst = [...monthStats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
       const bestSession = monthStats.session[0];
       const worstSession = [...monthStats.session].sort((a, b) => a.pnl - b.pnl)[0];
+      const formatDayLabel = (row?: { label: string; pnl: number }) =>
+        row && row.pnl !== 0 ? `${fullWeekdayName(row.label)} · ${moneyCompact(row.pnl)}` : row ? fullWeekdayName(row.label) : "N/A";
+      const formatSessionLabel = (row?: { label: string; pnl: number }) =>
+        row && row.pnl !== 0 ? `${row.label} · ${moneyCompact(row.pnl)}` : row?.label || "N/A";
       const monthScore = tradingScoreForTrades(monthTrades);
-      const monthPatterns = detectTradingPatterns(monthTrades);
-      const monthSurvival = calculatePropSurvival({
-        consistency: monthStats.consistency,
-        drawdown: monthStats.maxDd,
-        dailyRemaining: propSnapshot.dailyRemaining,
-        dailyLossLimit: propSnapshot.template.dailyLossLimit,
-        accountRemaining: propSnapshot.accountRemaining,
-        maxLossLimit: propSnapshot.template.maxLossLimit,
-        expectancy: monthStats.exp,
-        avgLoss: Math.abs(monthStats.avgLoss),
-        lossStreak: Math.round(monthStats.avgLossStreak),
-        dayPnl: propSnapshot.dayPnl,
-      });
-      const monthAchievements = calculateAchievements({
-        trades: monthTrades,
-        selectedDate,
-        tradingScore: monthScore.score,
-        winRate: monthStats.wr,
-        profitFactor: monthStats.pf,
-        riskControl: monthStats.drawdownControl,
-        propSurvivalScore: monthSurvival.probability,
-        propTargetRemainingPct:
-          propSnapshot.template.evaluationTarget > 0
-            ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
-            : 100,
-        monthlyPnl: monthStats.pnl,
-        bestMonthPnl: Math.max(0, monthStats.pnl),
-        dailyLossLimit: propSnapshot.template.dailyLossLimit,
-      }).filter((item) => item.unlocked).map((item) => item.title);
       const start = periodStart(safeDateFromISO(selectedDate), "month");
       const end = addDays(addMonths(start, 1), -1);
       await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
-        title: "YouTrader Monthly Report",
+        title: "Monthly Performance Report",
         rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
         netPnl: monthStats.pnl,
         winRate: monthStats.wr,
         profitFactor: monthStats.pf,
         trades: monthStats.count,
+        wins: monthWins,
+        losses: monthLosses,
         expectancy: monthStats.exp,
+        avgWin: monthStats.avgWin,
+        avgLoss: monthStats.avgLoss,
+        avgWinLoss: monthStats.avgWinLoss,
         equityCurve: monthStats.curve,
         drawdown: monthStats.maxDd,
         consistency: monthStats.consistency,
         recoveryFactor: monthStats.recoveryFactor,
         riskControl: monthStats.drawdownControl,
-        bestDay: best ? fullWeekdayName(best.label) : "—",
-        worstDay: worst ? fullWeekdayName(worst.label) : "—",
+        bestDay: formatDayLabel(best),
+        worstDay: formatDayLabel(worst),
         tradingScore: monthScore.score,
         grade: monthScore.grade,
-        bestSession: bestSession?.label || "—",
-        worstSession: worstSession?.label || "—",
-        patternOpportunity: monthPatterns.opportunity.detail,
-        achievementsEarned: monthAchievements,
-        aiSummary: tradeAnalysis?.summary,
-        nextFocus: monthScore.weaknesses[0] || monthPatterns.opportunity.detail,
+        bestSession: formatSessionLabel(bestSession),
+        worstSession: formatSessionLabel(worstSession),
         watermarked: !isPremium,
       }));
       trackEvent("pdf_exported", { period: "month", trade_count: monthTrades.length, is_pro: isPremium, watermarked: !isPremium });
@@ -6384,28 +6417,34 @@ function StatsScreen({
         ))}
       </View>
       <View style={styles.statsActionsRow}>
-          <Pressable
-            disabled={exportBusy}
-            onPress={() => runExport("share")}
-            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.statsActionText}>Share P&L card</Text>
-          </Pressable>
-          <Pressable
-            disabled={exportBusy}
-            onPress={() => runExport("save")}
-            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.statsActionText}>{isPremium ? "Save image" : "Save image — Pro"}</Text>
-          </Pressable>
-          <Pressable
-            disabled={exportBusy}
-            onPress={() => runExport("pdf")}
-            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.statsActionText}>{isPremium ? "Monthly PDF" : "Monthly PDF preview"}</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          disabled={exportBusy}
+          onPress={() => runExport("share")}
+          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+        >
+          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+            Share P&L card
+          </Text>
+        </Pressable>
+        <Pressable
+          disabled={exportBusy}
+          onPress={() => runExport("save")}
+          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+        >
+          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+            {isPremium ? "Save image" : "Save image - Pro"}
+          </Text>
+        </Pressable>
+        <Pressable
+          disabled={exportBusy}
+          onPress={() => runExport("pdf")}
+          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+        >
+          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+            Monthly PDF
+          </Text>
+        </Pressable>
+      </View>
       <ProValueModal
         content={valueModal}
         packages={packages}
@@ -6437,6 +6476,7 @@ function StatsScreen({
         showRestorePurchases={showRestorePurchases}
         onPurchase={onPurchase}
         onRestore={onRestore}
+        onRadarUpgrade={openRadarUpgrade}
         session={session}
       />
     </ScrollView>
@@ -10799,22 +10839,26 @@ const styles = StyleSheet.create({
   journalHeader: { display: "none" },
   statsActionsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 6,
   },
   statsActionBtn: {
+    flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.card,
     borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
   },
   statsActionText: {
     color: C.text,
     fontWeight: "800",
-    fontSize: 12,
+    fontSize: 11,
+    textAlign: "center",
   },
   offscreenShareCard: {
     position: "absolute",
@@ -13323,10 +13367,14 @@ const styles = StyleSheet.create({
     color: C.green,
   },
   terminalHeroCard: {
-    paddingBottom: 20,
+    paddingBottom: 14,
+  },
+  terminalEquityCard: {
+    paddingTop: 14,
+    marginTop: -2,
   },
   terminalChartWrap: {
-    marginTop: 18,
+    marginTop: 8,
     alignItems: "center",
     minHeight: 250,
   },
@@ -13556,6 +13604,58 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     marginTop: 1,
+  },
+  premiumRadarAxisLabelLocked: {
+    opacity: 0.72,
+    borderColor: "rgba(176,38,255,0.28)",
+  },
+  premiumRadarAxisValueLocked: {
+    color: C.sub,
+  },
+  radarLockedGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  radarLockedCard: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.24)",
+    backgroundColor: "rgba(176,38,255,0.06)",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radarLockedLabel: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  radarLockedPro: {
+    color: C.purple,
+    fontSize: 16,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  radarUnlockBtn: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.42)",
+    backgroundColor: "rgba(176,38,255,0.12)",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  radarUnlockBtnText: {
+    color: C.text,
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
   },
   radarSummaryRow: {
     flexDirection: "row",
