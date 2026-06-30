@@ -1,0 +1,142 @@
+# YouTrader App Store Release Checklist
+
+Use this before every TestFlight/App Store upload. Do not paste secrets into chats, issues, screenshots, or commits.
+
+## Build Identity
+
+- App version is correct in `app.json`, `package.json`, and `ios/YouTrader/Info.plist`.
+- iOS build number is higher than the last uploaded App Store Connect build.
+- Bundle identifier remains `com.youtrader.pro`.
+- EAS project ID is correct.
+- No `.ipa`, `.env`, signing keys, `.p8`, `.mobileprovision`, or build artifacts are staged.
+
+## TestFlight Checklist
+
+- Build installs on a real iPhone.
+- Build opens cold without crash.
+- Existing local journal data loads.
+- App works with observability env vars missing.
+- App works with Supabase/cloud AI temporarily unavailable.
+- Legal links open.
+- No debug/internal secret text appears in UI.
+
+## RevenueCat Checklist
+
+- Monthly product: `youtrader_pro_monthly`.
+- Yearly product: `youtrader_pro_yearly`.
+- Both products unlock the same `pro` entitlement.
+- Current/default offering contains monthly and yearly packages.
+- 3-day trial is configured in App Store Connect and visible through RevenueCat if enabled.
+- Sandbox purchase succeeds.
+- Restore purchases succeeds for an active entitlement.
+- Canceled/no-subscription restore shows a friendly message.
+- Paywall has subscription terms, restore, and clear pricing.
+
+## Supabase Checklist
+
+- No service role key is in Expo public env.
+- RLS remains enabled on user-owned tables.
+- Market Intelligence cached tables remain read-only for app users.
+- `ai-coach` Edge Function has required secrets only in Supabase dashboard.
+- `secure-upload` remains deployed and private upload paths still work.
+- Cloud sync remains disabled unless explicitly QA-tested end to end.
+
+## Sentry Checklist
+
+- Runtime DSN is set only if crash reporting should be live: `EXPO_PUBLIC_SENTRY_DSN` or `SENTRY_DSN`.
+- Source map upload secrets are configured only in CI/EAS secrets: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
+- App builds/runs without Sentry env vars.
+- No Sentry auth token is committed.
+- Verify one non-PII test error in Sentry before production release.
+
+## PostHog Checklist
+
+- `EXPO_PUBLIC_POSTHOG_API_KEY` is configured only for the intended PostHog project.
+- `EXPO_PUBLIC_POSTHOG_HOST` is correct, default `https://us.i.posthog.com`.
+- Autocapture and session replay remain disabled.
+- Events contain only safe metadata/counts.
+- No notes, screenshots, voice notes, full trade payloads, tokens, or PII-heavy data are captured.
+
+## Expo Push Checklist
+
+- Permission denied path does not crash.
+- Permission allowed path schedules local reminders.
+- Local notification use cases are QA-tested: log today's trade, weekly report ready, daily brief ready, risk limit close, prop daily buffer at risk.
+- Remote push sending is not enabled until backend token storage is designed and RLS-reviewed.
+- Expo push token is not stored unless a safe server path exists.
+- Manual setup for remote push later: Apple push credentials in EAS/Expo, backend token table with RLS, server sender, unsubscribe/delete cleanup.
+
+## AI Provider Checklist
+
+Server-only Supabase Edge Function secrets:
+
+- `AI_PROVIDER` = `auto`, `openrouter`, `gemini`, `anthropic`, or `nvidia`.
+- `OPENROUTER_API_KEY` for OpenRouter gateway.
+- `GEMINI_API_KEY` for direct Gemini fallback/use.
+- `ANTHROPIC_API_KEY` for direct Claude/Sonnet fallback/use.
+- `AI_MODEL_FAST` for cheap/fast tasks, for example Gemini 2.5 Flash.
+- `AI_MODEL_DEEP` for Pro deep analysis, for example Claude Sonnet through OpenRouter or Anthropic.
+- Existing optional fallback: `NVIDIA_API_KEY`, `NVIDIA_MODEL`.
+
+Rules:
+
+- No paid/private AI keys in Expo public env.
+- Free users must not trigger paid per-user AI unless quota rules explicitly allow it.
+- Pro AI remains quota/cooldown protected.
+- Missing keys return safe local fallback.
+- AI must not provide financial advice or buy/sell/hold signals.
+
+## Skia Phase 2
+
+- React Native Skia is not required for this App Store release.
+- Do not install `@shopify/react-native-skia` right before release unless compatibility is tested.
+- Phase 2 candidates: premium charts, radar/heatmap visuals, export cards, achievement cards.
+
+## Privacy Policy Checklist
+
+- Describes journal data, screenshots, voice notes, CSV imports, purchases, crash analytics, product analytics, and notification permissions.
+- Explains no financial advice and no broker/dealer role.
+- Covers account deletion/export expectations.
+- Links match App Store Connect metadata.
+
+## Screenshots Checklist
+
+- Screenshots use current UI.
+- No real private journal data unless anonymized.
+- Show Journal, Stats, AI Analytics, News, Calendar, Paywall/Pro value.
+- Do not imply market prediction or guaranteed profits.
+
+## Manual QA Matrix
+
+- Free user basic journal add/edit/delete.
+- Pro user unlocked flows.
+- Trial user entitlement flow.
+- 31 trades/month free limit.
+- 5-trade First Insight.
+- 7-10 trade locked insight.
+- Share cards.
+- Save image to Photos.
+- Monthly PDF export/preview.
+- Achievement cards.
+- Long-press delete day.
+- CSV import.
+- Cloud sync disabled/enabled state messaging.
+- News source link open.
+- Cached Market Intelligence read-only display.
+- AI Trade Analysis.
+- Prop Firm Coach.
+- Push permission denied.
+- Push permission allowed.
+- Paywall monthly purchase.
+- Paywall yearly purchase.
+- Restore purchase.
+- App relaunch after purchase/restore.
+
+## Apple Review Notes
+
+- YouTrader is an educational trading journal, not a broker, signal app, or financial advisor.
+- AI output is process/risk/journal coaching only.
+- Market news and calendar are informational.
+- Subscriptions unlock analytics, exports, AI coaching, and workflow tools.
+- Restore purchases is visible.
+- Privacy policy and terms links must be live.

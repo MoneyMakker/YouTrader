@@ -160,3 +160,21 @@ Possible later extraction targets:
 - Stats Heatmap trade-count text now uses the YouTrader purple accent while P&L green/red remains unchanged.
 - Monthly PDF, Share P&L/Save Image, and Achievement/Milestone export cards were polished for premium App Store-ready branding, readable metrics, YouTrader logo placement, App Store CTA, and educational disclaimer.
 - Manual iPhone QA still required for long-press timing, Photos save/share sheet sizing, PDF preview readability, and achievement card rendering.
+
+## Production Observability Follow-Up (2026-06-30)
+
+- Added env-gated Sentry crash reporting through `src/observability/monitoring.ts`; the app builds and runs without `EXPO_PUBLIC_SENTRY_DSN`/`SENTRY_DSN`.
+- Installed `@sentry/react-native` with Expo SDK 54 compatibility. Source map upload should only be enabled in EAS/CI when `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are configured as secrets.
+- Connected `posthog-react-native` through `src/lib/posthog.ts` and `src/observability/analytics.ts`; analytics is disabled when no PostHog key exists. Autocapture/session replay remain disabled.
+- Added safe product events for app open, trade add/delete, day delete, paywall, purchase/restore/trial, CSV import, AI analysis, exports, news, Market Intelligence, weekly report, and push permission status. Events use metadata/counts only; no notes, screenshots, voice notes, tokens, or full trade payloads.
+- Added `src/notifications/push.ts` for Expo notification permission handling, local reminder scheduling, preference storage, and future Expo push token retrieval without storing tokens until backend/RLS storage is designed.
+- Added `docs/OBSERVABILITY.md` and `.env.example` placeholders for observability setup.
+
+## App Store Readiness And AI Gateway Follow-Up (2026-06-30)
+
+- Added AI provider abstraction in `supabase/functions/_shared/aiProvider.ts` without changing Supabase schema or AI quota tables.
+- `AI_PROVIDER=auto` now tries server-side providers by task tier: OpenRouter/Gemini for cheap fast work and OpenRouter/Anthropic Claude for deeper Pro analysis, with NVIDIA retained as fallback compatibility.
+- Required server-only AI secrets are documented: `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `AI_PROVIDER`, `AI_MODEL_FAST`, and `AI_MODEL_DEEP`. Do not put these in Expo public env.
+- React Native Skia is not installed and should remain Phase 2 until compatibility is deliberately tested after App Store submission.
+- Added `docs/APP_STORE_RELEASE_CHECKLIST.md` covering TestFlight, RevenueCat, Supabase, Sentry, PostHog, Expo Push, AI providers, privacy, screenshots, subscription paywall, Apple review notes, and manual QA.
+- Current release identity remains YouTrader `1.5.7` with iOS build number `69`; do not lower build number because App Store Connect already rejected `67` reuse.

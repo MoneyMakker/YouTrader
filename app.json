@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.youtrader.pro",
-      "buildNumber": "67",
+      "buildNumber": "69",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "YouTrader lets you attach a screenshot of your trade to your journal.",
@@ -58,7 +58,8 @@
         {
           "faceIDPermission": "Allow YouTrader to use Face ID for quick secure unlock."
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {

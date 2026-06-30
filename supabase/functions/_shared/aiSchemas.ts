@@ -14,7 +14,7 @@ export type AICoachRequest = {
   payload?: Record<string, unknown>;
 };
 
-export type ProviderStatus = "nvidia" | "local_fallback" | "quota_exceeded" | "free_preview";
+export type ProviderStatus = "openrouter" | "gemini" | "anthropic" | "nvidia" | "local_fallback" | "quota_exceeded" | "free_preview";
 
 export const AI_ACTIONS: AICoachAction[] = [
   "weekly_coach",

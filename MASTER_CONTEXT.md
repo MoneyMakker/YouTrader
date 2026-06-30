@@ -1320,15 +1320,28 @@ Source:
 
 - `supabase/functions/_shared/aiProvider.ts`.
 
-Provider:
+Provider strategy:
 
-- NVIDIA NIM via OpenAI-compatible API.
-- Base URL: `https://integrate.api.nvidia.com/v1`.
-- Default model: `meta/llama-3.1-70b-instruct`.
-- Override: `NVIDIA_MODEL`.
+- `AI_PROVIDER=auto` chooses the first configured server-side provider for the action tier.
+- OpenRouter is the preferred gateway when `OPENROUTER_API_KEY` is configured because it can switch Gemini/Claude models without mobile app changes.
+- Gemini 2.5 Flash is the cheap/fast tier for summaries, daily plans, lightweight coaching, market/news explanation, and brief generation.
+- Claude Sonnet is the deep tier for Pro-only deeper journal analysis, hidden leaks, pattern work, risk coaching, and Prop Firm Coach style output.
+- NVIDIA NIM remains supported for backward compatibility through `NVIDIA_API_KEY` / `NVIDIA_MODEL`.
 - Timeout: 18 seconds.
 - `temperature: 0.2`.
-- `max_tokens: 900`.
+- max output/tokens: 900.
+
+Server-only AI secrets:
+
+- `AI_PROVIDER` = `auto`, `openrouter`, `gemini`, `anthropic`, or `nvidia`.
+- `OPENROUTER_API_KEY`.
+- `GEMINI_API_KEY`.
+- `ANTHROPIC_API_KEY`.
+- `AI_MODEL_FAST`.
+- `AI_MODEL_DEEP`.
+- Optional legacy fallback: `NVIDIA_API_KEY`, `NVIDIA_MODEL`.
+
+No AI provider key may be placed in Expo public env. Missing keys produce deterministic local fallback.
 
 System prompt rules:
 
@@ -1572,6 +1585,36 @@ Critical external setup:
 - Monthly and yearly products must unlock the same entitlement.
 - Both products should be in current/default offering.
 - App Store Connect products must be attached and approved for TestFlight/App Store flow.
+
+
+## 9.5 Production Observability
+
+Current observability is env-gated and must not block app startup or builds when keys are missing.
+
+Sentry:
+
+- Runtime wrapper: `src/observability/monitoring.ts`.
+- Dependency: `@sentry/react-native`.
+- Runtime DSN: `EXPO_PUBLIC_SENTRY_DSN` or `SENTRY_DSN`.
+- Optional environment label: `EXPO_PUBLIC_APP_ENV` or `APP_ENV`.
+- Source map upload must only run in EAS/CI when `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are configured as secrets. Do not commit these values.
+
+PostHog:
+
+- Client: `src/lib/posthog.ts`.
+- Wrapper: `src/observability/analytics.ts`.
+- Runtime key: `EXPO_PUBLIC_POSTHOG_API_KEY` or `POSTHOG_API_KEY`.
+- Host: `EXPO_PUBLIC_POSTHOG_HOST` or `POSTHOG_HOST`, defaulting to `https://us.i.posthog.com`.
+- Autocapture and session replay are disabled. Only explicit safe events are allowed. Never track private notes, screenshots, voice notes, full trade payloads, tokens, secrets, or PII-heavy data.
+
+Push readiness:
+
+- Helper: `src/notifications/push.ts`.
+- Current implementation supports permission requests, graceful denial, local reminders, and notification preferences.
+- Supported use cases: log today's trade, weekly report ready, daily brief ready, risk limit close, and prop daily buffer at risk.
+- Expo push token retrieval is helper-only and does not store tokens until safe backend storage and RLS are designed.
+
+See `docs/OBSERVABILITY.md` for setup details.
 
 ## 10. UI Design System
 
@@ -1835,10 +1878,11 @@ Sources:
 
 Current implementation status:
 
-- `src/lib/posthog.ts` currently exports `posthogClient = undefined`.
-- `src/observability/monitoring.ts` is a no-op wrapper except development `console.error` / `console.log`.
-- `wrapAppWithSentry` currently returns the component unchanged.
-- Treat production observability as placeholder until real PostHog/Sentry/Crashlytics wiring is implemented or intentionally removed.
+- Sentry is installed through `@sentry/react-native` and is env-gated in `src/observability/monitoring.ts`.
+- The app builds and runs when Sentry DSN is missing; `wrapAppWithSentry` returns the component unchanged without a DSN.
+- PostHog is installed through `posthog-react-native` and is env-gated in `src/lib/posthog.ts`.
+- Autocapture and session replay are disabled. Only explicit safe events are sent.
+- Expo Push readiness lives in `src/notifications/push.ts`; remote push tokens are not stored until backend/RLS storage is designed.
 
 Rules:
 

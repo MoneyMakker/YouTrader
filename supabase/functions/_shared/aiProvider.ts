@@ -11,15 +11,25 @@ type GenerateInput = {
   payload: Record<string, unknown>;
 };
 
+type ProviderName = "openrouter" | "gemini" | "anthropic" | "nvidia" | "local";
+type ModelTier = "fast" | "deep";
+
 type ProviderResult = {
   data: Record<string, unknown>;
-  provider: "nvidia" | "local";
+  provider: ProviderName;
   usedFallback: boolean;
   message?: string;
 };
 
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-const DEFAULT_MODEL = "meta/llama-3.1-70b-instruct";
+const DEFAULT_NVIDIA_MODEL = "meta/llama-3.1-70b-instruct";
+const DEFAULT_FAST_MODEL = "google/gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_DEEP_MODEL = "anthropic/claude-sonnet-4";
+const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
 const TIMEOUT_MS = 18_000;
 
 function timeoutSignal() {
@@ -36,6 +46,34 @@ function compactPayload(payload: Record<string, unknown>) {
   delete safe.screenshots;
   delete safe.images;
   return safe;
+}
+
+function modelTier(action: AICoachAction): ModelTier {
+  if (["weekly_coach", "journal_summary", "risk_predictor"].includes(action)) return "deep";
+  return "fast";
+}
+
+function configuredProvider() {
+  const provider = (Deno.env.get("AI_PROVIDER") || "auto").trim().toLowerCase();
+  if (["openrouter", "gemini", "anthropic", "nvidia"].includes(provider)) return provider as Exclude<ProviderName, "local">;
+  return "auto";
+}
+
+function modelFor(provider: Exclude<ProviderName, "local">, tier: ModelTier) {
+  const fast = Deno.env.get("AI_MODEL_FAST")?.trim();
+  const deep = Deno.env.get("AI_MODEL_DEEP")?.trim();
+  if (provider === "gemini") return (tier === "deep" ? deep : fast) || DEFAULT_GEMINI_MODEL;
+  if (provider === "anthropic") return (tier === "deep" ? deep : fast) || DEFAULT_ANTHROPIC_MODEL;
+  if (provider === "nvidia") return Deno.env.get("NVIDIA_MODEL")?.trim() || DEFAULT_NVIDIA_MODEL;
+  return (tier === "deep" ? deep : fast) || (tier === "deep" ? DEFAULT_DEEP_MODEL : DEFAULT_FAST_MODEL);
+}
+
+function userContent(input: GenerateInput) {
+  return JSON.stringify({
+    action: input.action,
+    period: input.period,
+    payload: compactPayload(input.payload),
+  });
 }
 
 function systemPrompt(action: AICoachAction) {
@@ -117,19 +155,21 @@ function fallbackBase(action: AICoachAction, payload: Record<string, unknown>) {
   return normalizeAIOutput(action, fallbacks[action]);
 }
 
-async function callNvidia(input: GenerateInput, attempt = 0): Promise<Record<string, unknown>> {
-  const apiKey = Deno.env.get("NVIDIA_API_KEY")?.trim();
-  if (!apiKey) throw new Error("NVIDIA_API_KEY missing");
-  const model = Deno.env.get("NVIDIA_MODEL")?.trim() || DEFAULT_MODEL;
+async function callOpenAICompatible(input: GenerateInput, provider: "openrouter" | "nvidia", attempt = 0): Promise<Record<string, unknown>> {
+  const isOpenRouter = provider === "openrouter";
+  const apiKey = (isOpenRouter ? Deno.env.get("OPENROUTER_API_KEY") : Deno.env.get("NVIDIA_API_KEY"))?.trim();
+  if (!apiKey) throw new Error(`${provider.toUpperCase()} API key missing`);
+  const model = modelFor(provider, modelTier(input.action));
   const { controller, done } = timeoutSignal();
 
   try {
-    const response = await fetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${isOpenRouter ? OPENROUTER_BASE_URL : NVIDIA_BASE_URL}/chat/completions`, {
       method: "POST",
       signal: controller.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        ...(isOpenRouter ? { "HTTP-Referer": "https://youtrader.app", "X-Title": "YouTrader" } : {}),
       },
       body: JSON.stringify({
         model,
@@ -137,36 +177,130 @@ async function callNvidia(input: GenerateInput, attempt = 0): Promise<Record<str
         max_tokens: 900,
         messages: [
           { role: "system", content: systemPrompt(input.action) },
-          {
-            role: "user",
-            content: JSON.stringify({
-              action: input.action,
-              period: input.period,
-              payload: compactPayload(input.payload),
-            }),
-          },
+          { role: "user", content: userContent(input) },
         ],
       }),
     });
 
-    if ([401, 403, 429].includes(response.status)) {
-      throw new Error(`NVIDIA non-retryable status ${response.status}`);
-    }
+    if ([401, 403, 429].includes(response.status)) throw new Error(`${provider} non-retryable status ${response.status}`);
     if (!response.ok) {
-      if (attempt < 1 && response.status >= 500) return callNvidia(input, attempt + 1);
-      throw new Error(`NVIDIA status ${response.status}`);
+      if (attempt < 1 && response.status >= 500) return callOpenAICompatible(input, provider, attempt + 1);
+      throw new Error(`${provider} status ${response.status}`);
     }
 
     const json = await response.json();
     const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== "string" || !content.trim()) throw new Error("Empty NVIDIA response");
+    if (typeof content !== "string" || !content.trim()) throw new Error(`Empty ${provider} response`);
     return normalizeAIOutput(input.action, safeParseJsonObject(content));
   } catch (error) {
-    if (attempt < 1 && error instanceof TypeError) return callNvidia(input, attempt + 1);
+    if (attempt < 1 && error instanceof TypeError) return callOpenAICompatible(input, provider, attempt + 1);
     throw error;
   } finally {
     done();
   }
+}
+
+async function callGemini(input: GenerateInput, attempt = 0): Promise<Record<string, unknown>> {
+  const apiKey = Deno.env.get("GEMINI_API_KEY")?.trim();
+  if (!apiKey) throw new Error("GEMINI_API_KEY missing");
+  const model = modelFor("gemini", modelTier(input.action));
+  const { controller, done } = timeoutSignal();
+
+  try {
+    const response = await fetch(`${GEMINI_BASE_URL}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt(input.action) }] },
+        contents: [{ role: "user", parts: [{ text: userContent(input) }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 900 },
+      }),
+    });
+    if ([401, 403, 429].includes(response.status)) throw new Error(`Gemini non-retryable status ${response.status}`);
+    if (!response.ok) {
+      if (attempt < 1 && response.status >= 500) return callGemini(input, attempt + 1);
+      throw new Error(`Gemini status ${response.status}`);
+    }
+    const json = await response.json();
+    const content = json?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || "").join("\n");
+    if (typeof content !== "string" || !content.trim()) throw new Error("Empty Gemini response");
+    return normalizeAIOutput(input.action, safeParseJsonObject(content));
+  } catch (error) {
+    if (attempt < 1 && error instanceof TypeError) return callGemini(input, attempt + 1);
+    throw error;
+  } finally {
+    done();
+  }
+}
+
+async function callAnthropic(input: GenerateInput, attempt = 0): Promise<Record<string, unknown>> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY")?.trim();
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY missing");
+  const model = modelFor("anthropic", modelTier(input.action));
+  const { controller, done } = timeoutSignal();
+
+  try {
+    const response = await fetch(`${ANTHROPIC_BASE_URL}/messages`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 900,
+        temperature: 0.2,
+        system: systemPrompt(input.action),
+        messages: [{ role: "user", content: userContent(input) }],
+      }),
+    });
+    if ([401, 403, 429].includes(response.status)) throw new Error(`Anthropic non-retryable status ${response.status}`);
+    if (!response.ok) {
+      if (attempt < 1 && response.status >= 500) return callAnthropic(input, attempt + 1);
+      throw new Error(`Anthropic status ${response.status}`);
+    }
+    const json = await response.json();
+    const content = json?.content?.map((part: { text?: string }) => part.text || "").join("\n");
+    if (typeof content !== "string" || !content.trim()) throw new Error("Empty Anthropic response");
+    return normalizeAIOutput(input.action, safeParseJsonObject(content));
+  } catch (error) {
+    if (attempt < 1 && error instanceof TypeError) return callAnthropic(input, attempt + 1);
+    throw error;
+  } finally {
+    done();
+  }
+}
+
+async function callConfiguredProvider(input: GenerateInput): Promise<{ data: Record<string, unknown>; provider: Exclude<ProviderName, "local"> }> {
+  const provider = configuredProvider();
+  if (provider === "openrouter") return { data: await callOpenAICompatible(input, "openrouter"), provider };
+  if (provider === "gemini") return { data: await callGemini(input), provider };
+  if (provider === "anthropic") return { data: await callAnthropic(input), provider };
+  if (provider === "nvidia") return { data: await callOpenAICompatible(input, "nvidia"), provider };
+
+  const tier = modelTier(input.action);
+  const candidates: Exclude<ProviderName, "local">[] = tier === "deep"
+    ? ["openrouter", "anthropic", "gemini", "nvidia"]
+    : ["openrouter", "gemini", "nvidia", "anthropic"];
+
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      if (candidate === "openrouter" && !Deno.env.get("OPENROUTER_API_KEY")?.trim()) continue;
+      if (candidate === "gemini" && !Deno.env.get("GEMINI_API_KEY")?.trim()) continue;
+      if (candidate === "anthropic" && !Deno.env.get("ANTHROPIC_API_KEY")?.trim()) continue;
+      if (candidate === "nvidia" && !Deno.env.get("NVIDIA_API_KEY")?.trim()) continue;
+      if (candidate === "openrouter" || candidate === "nvidia") return { data: await callOpenAICompatible(input, candidate), provider: candidate };
+      if (candidate === "gemini") return { data: await callGemini(input), provider: candidate };
+      return { data: await callAnthropic(input), provider: candidate };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("No AI provider configured");
 }
 
 export async function generateAI(input: GenerateInput, allowNvidia: boolean): Promise<ProviderResult> {
@@ -180,13 +314,14 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
   }
 
   try {
+    const result = await callConfiguredProvider(input);
     return {
-      data: await callNvidia(input),
-      provider: "nvidia",
+      data: result.data,
+      provider: result.provider,
       usedFallback: false,
     };
   } catch (error) {
-    console.error("nvidia_ai_fallback", {
+    console.error("cloud_ai_fallback", {
       action: input.action,
       message: error instanceof Error ? error.message : "unknown",
     });

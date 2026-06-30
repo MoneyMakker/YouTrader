@@ -72,6 +72,7 @@ import { alertExportError } from "./src/utils/alertExportError";
 import { parseTradesCsvText } from "./src/utils/importTradesCsv";
 import { readCsvFileAsText } from "./src/utils/readCsvFile";
 import { scheduleDailyPropRiskNotification } from "./src/utils/propRiskNotification";
+import { clearLocalReminder, scheduleLocalReminder } from "./src/notifications/push";
 import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "./src/api/finnhubCalendar";
 import {
   analyzeTrades,
@@ -6180,11 +6181,13 @@ function StatsScreen({
       const exportKey = { action, period, selectedDate, count: periodTrades.length, pnl: periodStats.pnl };
       if (action === "share") {
         await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareCapturedView(shareCardRef));
+        trackEvent("share_card_exported", { action: "share", period, trade_count: periodTrades.length, is_pro: isPremium });
         if (!isPremium) await incrementMonthlyUsageCount("share-cards", session?.user.id || null);
         return;
       }
       if (action === "save") {
         await runIdempotentLocal("export:generate", "stats-local", exportKey, () => saveCapturedViewToPhotos(shareCardRef));
+        trackEvent("share_card_exported", { action: "save", period, trade_count: periodTrades.length, is_pro: isPremium });
         Alert.alert("Saved", "P&L card saved to Photos.");
         return;
       }
@@ -6251,6 +6254,8 @@ function StatsScreen({
         nextFocus: monthScore.weaknesses[0] || monthPatterns.opportunity.detail,
         watermarked: !isPremium,
       }));
+      trackEvent("pdf_exported", { period: "month", trade_count: monthTrades.length, is_pro: isPremium, watermarked: !isPremium });
+      trackEvent("weekly_report_opened", { period: "month", trade_count: monthTrades.length, is_pro: isPremium });
       if (!isPremium) await incrementMonthlyUsageCount("pdf-previews", session?.user.id || null);
     } catch (error) {
       alertExportError("Export failed", error);
@@ -6276,6 +6281,7 @@ function StatsScreen({
       setTradeAnalysisBusy(true);
       setTradeAnalysisError("");
       trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
+      trackEvent("ai_analysis_opened", { period, trade_count: periodTrades.length });
       const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { propSnapshot });
       const result = await analyzeTrades(payload);
       setTradeAnalysis(result);
@@ -6598,14 +6604,20 @@ type AIResultMap = {
 
 function ProviderBadge({ status }: { status: AIProviderStatus }) {
   const label =
-    status === "nvidia"
-      ? "NVIDIA"
-      : status === "quota_exceeded"
-        ? "LIMIT"
-        : status === "free_preview"
-          ? "PREVIEW"
-          : "LOCAL";
-  const color = status === "nvidia" ? C.green : status === "quota_exceeded" ? C.yellow : C.purple;
+    status === "openrouter"
+      ? "OPENROUTER"
+      : status === "gemini"
+        ? "GEMINI"
+        : status === "anthropic"
+          ? "CLAUDE"
+          : status === "nvidia"
+            ? "NVIDIA"
+            : status === "quota_exceeded"
+              ? "LIMIT"
+              : status === "free_preview"
+                ? "PREVIEW"
+                : "LOCAL";
+  const color = ["openrouter", "gemini", "anthropic", "nvidia"].includes(status) ? C.green : status === "quota_exceeded" ? C.yellow : C.purple;
   return (
     <View style={[styles.aiProviderBadge, { borderColor: color, backgroundColor: `${color}18` }]}>
       <Text style={[styles.aiProviderBadgeText, { color }]}>{label}</Text>
@@ -7193,6 +7205,7 @@ function AiAnalysisScreen({
       setTradeAnalysisBusy(true);
       setTradeAnalysisError("");
       trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
+      trackEvent("ai_analysis_opened", { period, trade_count: periodTrades.length });
       const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot });
       const result = await analyzeTrades(payload);
       setTradeAnalysis(result);
@@ -7528,6 +7541,7 @@ function JournalScreen({
       await recordSecurityEvent("delete_trading_day_confirmed", "trade:delete", "journal-local");
       dayTrades.forEach((trade) => onTradeDeleted(trade.id));
       setTrades((prev) => prev.filter((trade) => trade.date !== deleteDayDate));
+      trackEvent("day_deleted", { trade_count: dayTrades.length });
       setDeleteDayDate(null);
     } finally {
       setDeleteDayBusy(false);
@@ -7676,6 +7690,15 @@ function JournalScreen({
         );
         return { tradeId: item.id, updatedAt: item.updatedAt };
       });
+      if (!editId) {
+        trackEvent("trade_added", {
+          source: "manual",
+          pnl_result: item.pnl > 0 ? "win" : item.pnl < 0 ? "loss" : "flat",
+          has_screenshot: !!item.photoUri,
+          has_voice: !!item.voiceUri,
+          tag_count: item.tags?.length || 0,
+        });
+      }
       setModal(false);
     } finally {
       setSavingTrade(false);
@@ -7696,6 +7719,7 @@ function JournalScreen({
           }
           onTradeDeleted(editId);
           setTrades((prev) => prev.filter((x) => x.id !== editId));
+          trackEvent("trade_deleted", { source: "manual" });
           setModal(false);
         },
       },
@@ -8380,6 +8404,7 @@ function MarketIntelligencePanel() {
     setLoading(false);
   }, []);
   useEffect(() => {
+    trackEvent("market_intel_viewed", { source: "cached" });
     refresh();
     const id = setInterval(refresh, 60000);
     return () => clearInterval(id);
@@ -8461,7 +8486,10 @@ function NewsScreen({
         </GlassCard>
       }
       renderItem={({ item }) => (
-        <Pressable onPress={() => (item.url ? Linking.openURL(item.url) : undefined)}>
+        <Pressable onPress={() => {
+          trackEvent("news_opened", { source: item.source, impact: item.impact, has_url: !!item.url });
+          return item.url ? Linking.openURL(item.url) : undefined;
+        }}>
           <GlassCard style={styles.purpleNewsCard} intensity={28}>
             <View style={styles.rowBetween}>
               <Pill text={item.impact} tone={item.impact === "HIGH" ? "high" : item.impact === "MED" ? "med" : "low"} />
@@ -8934,35 +8962,23 @@ function SettingsScreen({
 
   const togglePropRiskAlerts = async () => {
     if (propRiskAlertsEnabled) {
-      const existingId = await AsyncStorage.getItem(PROP_RISK_ALERT_ID_KEY);
-      if (existingId) {
-        await Notifications.cancelScheduledNotificationAsync(existingId);
-        await AsyncStorage.removeItem(PROP_RISK_ALERT_ID_KEY);
-      }
+      await clearLocalReminder(PROP_RISK_ALERT_ID_KEY, "propDailyBufferAtRisk");
       await AsyncStorage.setItem("prop-risk-alerts-v1", "off");
       setPropRiskAlertsEnabled(false);
       return;
     }
-    const permission = await Notifications.requestPermissionsAsync();
-    if (!permission.granted) {
+    const id = await scheduleLocalReminder({
+      idKey: PROP_RISK_ALERT_ID_KEY,
+      title: "YouTrader Risk Coach",
+      body: "Review your prop firm risk status before trading.",
+      hour: 8,
+      minute: 15,
+      preference: "propDailyBufferAtRisk",
+    });
+    if (!id) {
       Alert.alert("Notifications", "Allow notifications to receive risk alerts.");
       return;
     }
-    const existingId = await AsyncStorage.getItem(PROP_RISK_ALERT_ID_KEY);
-    if (existingId) await Notifications.cancelScheduledNotificationAsync(existingId);
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "YouTrader Risk Coach",
-        body: "Review your prop firm risk status before trading.",
-        sound: false,
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: 8,
-        minute: 15,
-      },
-    });
-    await AsyncStorage.setItem(PROP_RISK_ALERT_ID_KEY, id);
     await AsyncStorage.setItem("prop-risk-alerts-v1", "on");
     setPropRiskAlertsEnabled(true);
   };
@@ -8971,36 +8987,24 @@ function SettingsScreen({
     setCalendarAlertsEnabled(enabled);
     try {
       if (!enabled) {
-        const existingId = await AsyncStorage.getItem(CALENDAR_ALERT_ID_KEY);
-        if (existingId) {
-          await Notifications.cancelScheduledNotificationAsync(existingId);
-          await AsyncStorage.removeItem(CALENDAR_ALERT_ID_KEY);
-        }
+        await clearLocalReminder(CALENDAR_ALERT_ID_KEY, "dailyBriefReady");
         await AsyncStorage.setItem("calendar-alerts-v1", "off");
         return;
       }
 
-      const permission = await Notifications.requestPermissionsAsync();
-      if (!permission.granted) {
+      const id = await scheduleLocalReminder({
+        idKey: CALENDAR_ALERT_ID_KEY,
+        title: "YouTrader Economic Calendar",
+        body: "Check today's high-impact events before trading.",
+        hour: 7,
+        minute: 45,
+        preference: "dailyBriefReady",
+      });
+      if (!id) {
         setCalendarAlertsEnabled(false);
         Alert.alert("Notifications", "Allow notifications to receive economic calendar alerts.");
         return;
       }
-      const existingId = await AsyncStorage.getItem(CALENDAR_ALERT_ID_KEY);
-      if (existingId) await Notifications.cancelScheduledNotificationAsync(existingId);
-      const id = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "YouTrader Economic Calendar",
-          body: "Check today's high-impact events before trading.",
-          sound: false,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: 7,
-          minute: 45,
-        },
-      });
-      await AsyncStorage.setItem(CALENDAR_ALERT_ID_KEY, id);
       await AsyncStorage.setItem("calendar-alerts-v1", "on");
     } catch (error) {
       setCalendarAlertsEnabled(!enabled);
@@ -9637,6 +9641,7 @@ function App() {
         Alert.alert("Import trades", SECURITY_MESSAGES.rateLimited);
         return;
       }
+      trackEvent("csv_import_started", { source: "settings" });
       const picked = await DocumentPicker.getDocumentAsync({
         type: [
           "text/csv",
@@ -9718,6 +9723,7 @@ function App() {
         return;
       }
       setTrades((prev) => [...imported, ...prev]);
+      trackEvent("csv_import_completed", { row_count: imported.length });
       Alert.alert("Import complete", `${imported.length} trades added to your journal.`);
     } catch (error) {
       alertExportError("CSV import failed", error);
@@ -10075,6 +10081,7 @@ function App() {
     if (applyCustomerInfo(result.customerInfo, `${reason}:purchase-result`)) {
       logger.info("RevenueCat purchase unlocked Pro", { feature: "revenuecat", action: "purchase_success", reason });
       trackEvent("purchase_success", { reason });
+      trackEvent("pro_purchased", { reason });
       Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
       return;
     }
@@ -10083,6 +10090,7 @@ function App() {
     if (customerHasPro(refreshedInfo)) {
       logger.info("RevenueCat entitlement refresh unlocked Pro", { feature: "revenuecat", action: "purchase_success_after_refresh", reason });
       trackEvent("purchase_success", { reason });
+      trackEvent("pro_purchased", { reason });
       Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
       return;
     }
@@ -10128,7 +10136,7 @@ function App() {
         return;
       }
       logger.info("RevenueCat purchase started", { feature: "revenuecat", action: "purchase_started" });
-      trackEvent("subscribe_pressed");
+      trackEvent("subscribe_pressed", { plan: isYearly ? "yearly" : "monthly" });
       billingDebugLog("purchase started", { productId });
       let catalogPackages = packages;
       let catalogProducts = storeProducts;
@@ -10147,7 +10155,9 @@ function App() {
         findProPackage(catalogPackages, productId);
 
       if (selectedPackage) {
+        const trialEligible = !!(selectedPackage.product as any)?.introPrice;
         const result = await withTimeout(Purchases.purchasePackage(selectedPackage));
+        if (trialEligible) trackEvent("trial_started", { plan: isYearly ? "yearly" : "monthly" });
         await finishPurchaseFlow(result, "purchasePackage");
         return;
       }
@@ -10222,6 +10232,7 @@ function App() {
         logger.info("RevenueCat restore unlocked Pro", { feature: "revenuecat", action: "restore_success" });
         setPaywallError("");
         setShowRestorePurchases(false);
+        trackEvent("pro_restored", { source: "restore_purchases" });
         Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
       } else {
         logger.warn("RevenueCat restore found no active subscription", { feature: "revenuecat", action: "restore_no_active_subscription" });

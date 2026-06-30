@@ -1,11 +1,60 @@
-import React from 'react';
-export function initializeMonitoring() {}
+import React from "react";
+import * as Sentry from "@sentry/react-native";
+
+const SENTRY_DSN = (process.env.EXPO_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN || "").trim();
+const SENTRY_ENVIRONMENT = (process.env.EXPO_PUBLIC_APP_ENV || process.env.APP_ENV || (__DEV__ ? "development" : "production")).trim();
+
+let monitoringInitialized = false;
+
+function sanitizeContext(context?: Record<string, unknown>) {
+  if (!context) return undefined;
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(context)) {
+    const lower = key.toLowerCase();
+    if (lower.includes("token") || lower.includes("secret") || lower.includes("key") || lower.includes("password")) continue;
+    if (typeof value === "string") safe[key] = value.slice(0, 240);
+    else if (typeof value === "number" || typeof value === "boolean" || value == null) safe[key] = value;
+    else safe[key] = JSON.stringify(value).slice(0, 240);
+  }
+  return safe;
+}
+
+export function initializeMonitoring() {
+  if (monitoringInitialized || !SENTRY_DSN) return;
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    enabled: true,
+    environment: SENTRY_ENVIRONMENT,
+    attachStacktrace: true,
+    tracesSampleRate: __DEV__ ? 0 : 0.05,
+    beforeSend(event) {
+      if (event.request) delete event.request.cookies;
+      return event;
+    },
+  });
+  monitoringInitialized = true;
+}
+
 export function captureAppError(error: unknown, context?: Record<string, unknown>) {
-  if (__DEV__) console.error('[app:error]', error, context || {});
+  const safeContext = sanitizeContext(context);
+  if (SENTRY_DSN) {
+    initializeMonitoring();
+    Sentry.captureException(error, safeContext ? { extra: safeContext } : undefined);
+  }
+  if (__DEV__) console.error("[app:error]", error, safeContext || {});
 }
+
 export function logCrashlyticsBreadcrumb(message: string, data?: Record<string, unknown>) {
-  if (__DEV__) console.log('[breadcrumb]', message, data || {});
+  const safeData = sanitizeContext(data);
+  if (SENTRY_DSN) {
+    initializeMonitoring();
+    Sentry.addBreadcrumb({ message, data: safeData, level: "info" });
+  }
+  if (__DEV__) console.log("[breadcrumb]", message, safeData || {});
 }
+
 export function wrapAppWithSentry<T extends React.ComponentType<any>>(Component: T): T {
-  return Component;
+  if (!SENTRY_DSN) return Component;
+  initializeMonitoring();
+  return Sentry.wrap(Component) as T;
 }

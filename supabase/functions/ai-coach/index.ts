@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
 
   return jsonResponse({
     data: result.data,
-    providerStatus: result.provider === "nvidia" ? "nvidia" : "local_fallback",
+    providerStatus: result.provider === "local" ? "local_fallback" : result.provider,
     usedFallback: result.usedFallback,
     message: result.message,
     quota: {

@@ -1,6 +1,6 @@
 import { isSupabaseConfigured, supabase } from "../config/appConfig";
 
-export type AIProviderStatus = "nvidia" | "local_fallback" | "quota_exceeded" | "free_preview";
+export type AIProviderStatus = "openrouter" | "gemini" | "anthropic" | "nvidia" | "local_fallback" | "quota_exceeded" | "free_preview";
 
 export type AIResponse<T> = {
   data: T;
