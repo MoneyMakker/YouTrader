@@ -5961,7 +5961,11 @@ function AchievementSection({
         <View style={styles.traderLevelScoreBox}>
           <SafeMetricLabel style={styles.traderLevelScoreLabel}>Score</SafeMetricLabel>
           <SafeText style={styles.traderLevelScore}>{level.score}</SafeText>
-          <SafeText style={styles.traderLevelTop}>{level.topLabel}</SafeText>
+          {level.topLabel ? (
+            <SafeText style={styles.traderLevelTop}>{level.topLabel}</SafeText>
+          ) : level.nextLevel ? (
+            <SafeText style={styles.traderLevelTop}>Next · {level.nextLevel}</SafeText>
+          ) : null}
         </View>
       </View>
       {shareBusy ? <ActivityIndicator color={C.green} style={{ marginVertical: 10 }} /> : null}
@@ -7330,14 +7334,6 @@ function AiAnalysisScreen({
             <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
             <TerminalPatternDetective stats={periodStats} />
             <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
-            <AchievementSection
-              achievements={achievementList}
-              level={traderLevel}
-              trades={periodTrades}
-              selectedDate={selectedDate}
-              isPremium={isPremium}
-              session={session}
-            />
             {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
           </View>
         </View>
@@ -7359,6 +7355,15 @@ function AiAnalysisScreen({
           </View>
         ) : null}
       </View>
+
+      <AchievementSection
+        achievements={achievementList}
+        level={traderLevel}
+        trades={periodTrades}
+        selectedDate={selectedDate}
+        isPremium={isPremium}
+        session={session}
+      />
 
       {!isPremium && (
         <PaywallPreview

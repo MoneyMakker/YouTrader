@@ -131,5 +131,5 @@ export function traderLevelFromScore(score: number, _selectedDate?: string): Tra
   if (score >= 88) return { title: "Elite", phrase: "Your process is behaving like a professional desk.", score, topLabel: "Top 5%", nextAction: "Protect size and consistency." };
   if (score >= 76) return { title: "Funded", phrase: "Your edge is strong enough to protect like funded capital.", score, topLabel: "Top 10%", nextLevel: "Elite", nextAction: "Reduce drawdown and keep clean execution." };
   if (score >= 58) return { title: "Consistent", phrase: "Your edge is forming. Protect risk and repeat the best setups.", score, topLabel: "Top 25%", nextLevel: "Funded", nextAction: "Improve profit factor and green-day consistency." };
-  return { title: "Rookie", phrase: "Keep logging trades to reveal your edge.", score, topLabel: "Building", nextLevel: "Consistent", nextAction: "Log more trades and control risk per setup." };
+  return { title: "Rookie", phrase: "Keep logging trades to reveal your edge.", score, topLabel: "", nextLevel: "Consistent", nextAction: "Log more trades and control risk per setup." };
 }
