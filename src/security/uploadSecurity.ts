@@ -1,4 +1,4 @@
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { supabase } from "../config/appConfig";
 import { recordSecurityEvent, withTimeout } from "./clientSecurity";
 import { SECURITY_LIMITS, SECURITY_MESSAGES } from "./securityConfig";

@@ -7,7 +7,7 @@ import {
 } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -333,6 +333,7 @@ const MAX_LOCAL_TRADES = 25000;
 const MAX_SCREENSHOT_BYTES = SECURITY_LIMITS.screenshotMaxBytes;
 const MAX_VOICE_NOTE_BYTES = SECURITY_LIMITS.voiceNoteMaxBytes;
 const TRADE_SAVE_DEBOUNCE_MS = 900;
+const JOURNAL_MEDIA_DIR = `${FileSystem.documentDirectory || ""}youtrader-media/`;
 
 const C = {
   bg: "#000000",
@@ -1194,6 +1195,46 @@ async function fileSizeWithinLimit(uri: string, maxBytes: number) {
   } catch {
     return false;
   }
+}
+function journalMediaExtension(mimeType?: string | null, originalName?: string | null, fallback = "bin") {
+  const fromName = String(originalName || "").toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1];
+  if (fromName && /^[a-z0-9]{2,5}$/.test(fromName)) return fromName === "jpeg" ? "jpg" : fromName;
+  const mime = String(mimeType || "").toLowerCase();
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("heic")) return "heic";
+  if (mime.includes("heif")) return "heif";
+  if (mime.includes("m4a") || mime.includes("mp4")) return "m4a";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return "mp3";
+  if (mime.includes("wav")) return "wav";
+  if (mime.includes("aac")) return "aac";
+  return fallback;
+}
+async function persistJournalMediaAsset({
+  uri,
+  kind,
+  mimeType,
+  originalName,
+}: {
+  uri: string;
+  kind: "photos" | "voice";
+  mimeType?: string | null;
+  originalName?: string | null;
+}) {
+  if (!uri || !JOURNAL_MEDIA_DIR) throw new Error("Media storage is unavailable.");
+  if (uri.startsWith(`${JOURNAL_MEDIA_DIR}${kind}/`)) return uri;
+  const directory = `${JOURNAL_MEDIA_DIR}${kind}/`;
+  await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+  const ext = journalMediaExtension(mimeType, originalName, kind === "photos" ? "jpg" : "m4a");
+  const destination = `${directory}${Date.now()}-${uid()}.${ext}`;
+  await FileSystem.copyAsync({ from: uri, to: destination });
+  const info = await FileSystem.getInfoAsync(destination);
+  const size = info.exists && typeof info.size === "number" ? info.size : 0;
+  if (!info.exists || size <= 0) {
+    throw new Error("Media file could not be saved.");
+  }
+  return destination;
 }
 function cloudSafeAssetUrl(uri?: string | null) {
   if (!uri) return null;
@@ -7755,18 +7796,26 @@ function JournalScreen({
         if (!r.canceled) {
           const asset = r.assets[0];
           const limit = await checkClientRateLimit("upload:screenshot", "journal-local");
+          const originalName = asset.fileName || "camera.jpg";
+          const mimeType = asset.mimeType || "image/jpeg";
           const uploadCheck = await validateSecureUploadInput({
             uri: asset.uri,
             category: "screenshot",
-            originalName: asset.fileName || "camera.jpg",
-            mimeType: asset.mimeType || "image/jpeg",
+            originalName,
+            mimeType,
           });
           if (!limit.allowed || !uploadCheck.ok) {
             await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
             return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
           }
+          const savedUri = await persistJournalMediaAsset({
+            uri: asset.uri,
+            kind: "photos",
+            originalName,
+            mimeType,
+          });
           if (!isPremium) await incrementMonthlyUsageCount("screenshots", null);
-          setForm({ ...form, photoUri: asset.uri });
+          setForm((prev) => ({ ...prev, photoUri: savedUri }));
         }
       } else {
         const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -7778,22 +7827,30 @@ function JournalScreen({
         if (!r.canceled) {
           const asset = r.assets[0];
           const limit = await checkClientRateLimit("upload:screenshot", "journal-local");
+          const originalName = asset.fileName || "screenshot.jpg";
+          const mimeType = asset.mimeType || "image/jpeg";
           const uploadCheck = await validateSecureUploadInput({
             uri: asset.uri,
             category: "screenshot",
-            originalName: asset.fileName || "screenshot.jpg",
-            mimeType: asset.mimeType || "image/jpeg",
+            originalName,
+            mimeType,
           });
           if (!limit.allowed || !uploadCheck.ok) {
             await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
             return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
           }
+          const savedUri = await persistJournalMediaAsset({
+            uri: asset.uri,
+            kind: "photos",
+            originalName,
+            mimeType,
+          });
           if (!isPremium) await incrementMonthlyUsageCount("screenshots", null);
-          setForm({ ...form, photoUri: asset.uri });
+          setForm((prev) => ({ ...prev, photoUri: savedUri }));
         }
       }
     } catch {
-      Alert.alert("Photo upload failed");
+      Alert.alert("Photo upload failed", "Your existing trade data was preserved. Please try again.");
     }
   };
   const pickAudio = async () => {
@@ -7818,8 +7875,13 @@ function JournalScreen({
           return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
         }
         const safeName = `${Date.now()}-voice-note.m4a`;
-        // expo-audio already saves the file in app storage. Keep its native URI directly.
-        setForm({ ...form, voiceUri: uri, voiceName: safeName });
+        const savedUri = await persistJournalMediaAsset({
+          uri,
+          kind: "voice",
+          originalName: safeName,
+          mimeType: "audio/x-m4a",
+        });
+        setForm((prev) => ({ ...prev, voiceUri: savedUri, voiceName: safeName }));
         return;
       }
       if (!audioReady) {
@@ -7830,8 +7892,8 @@ function JournalScreen({
       }
       await audioRecorder.prepareToRecordAsync();
       await audioRecorder.record();
-    } catch (e) {
-      Alert.alert("Audio recording failed");
+    } catch {
+      Alert.alert("Audio recording failed", "Your existing trade data was preserved. Please try again.");
     }
   };
   return (
@@ -10878,8 +10940,8 @@ const styles = StyleSheet.create({
   dayProfit: { backgroundColor: "rgba(94,132,36,0.28)", borderColor: "rgba(163,255,18,0.44)" },
   dayLoss: { backgroundColor: "rgba(110,22,40,0.34)", borderColor: "rgba(255,59,95,0.42)" },
   dayActive: {
-    backgroundColor: "rgba(255,255,255,0.11)",
-    borderColor: "rgba(255,255,255,0.72)",
+    backgroundColor: "rgba(176,38,255,0.18)",
+    borderColor: "rgba(176,38,255,0.86)",
     borderWidth: 2,
   },
   dayPnlText: {
