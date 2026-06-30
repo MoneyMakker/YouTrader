@@ -5713,140 +5713,58 @@ function AchievementShareCard({
   const rarity = achievementRarity(item, level);
   const rarityAccent = rarityColor(rarity);
   const title = item.title.toUpperCase();
-  const isFundingBadge = item.title.toLowerCase().includes("fund");
-  const particles = Array.from({ length: 34 }, (_, index) => ({
-    left: 52 + ((index * 89) % 980),
-    top: 190 + ((index * 137) % 1450),
-    size: 3 + (index % 4),
-    opacity: 0.16 + (index % 5) * 0.07,
-  }));
+  const metricResult = item.progressLabel || `${Math.round(item.progress)} / ${Math.round(item.target)}`;
   return (
     <View style={styles.achievementShareCard}>
       <View style={styles.shareGlowGreen} />
       <View style={styles.shareGlowPurple} />
       <View style={styles.shareGlowTopLine} />
-      {particles.map((particle, index) => (
-        <View
-          key={`particle-${index}`}
-          style={[
-            styles.shareParticle,
-            {
-              left: particle.left,
-              top: particle.top,
-              width: particle.size,
-              height: particle.size,
-              borderRadius: particle.size / 2,
-              opacity: particle.opacity,
-            },
-          ]}
-        />
-      ))}
-      <Svg width={1080} height={1920} style={styles.shareSvgBackdrop}>
-        <Defs>
-          <LinearGradient id="candleGlow" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#B8FF00" stopOpacity="0.38" />
-            <Stop offset="1" stopColor="#B84DFF" stopOpacity="0.18" />
-          </LinearGradient>
-        </Defs>
-        {Array.from({ length: 28 }, (_, index) => {
-          const x = 40 + index * 38;
-          const h = 42 + ((index * 31) % 160);
-          const y = 1640 - h / 2 + ((index % 3) * 26);
-          return (
-            <React.Fragment key={`candle-bg-${index}`}>
-              <Line x1={x + 8} y1={y - 30} x2={x + 8} y2={y + h + 30} stroke="url(#candleGlow)" strokeWidth="3" opacity="0.26" />
-              <Rect x={x} y={y} width="16" height={h} rx="5" fill="url(#candleGlow)" opacity="0.22" />
-            </React.Fragment>
-          );
-        })}
-      </Svg>
       <View style={styles.shareCardFrame}>
         <View style={styles.shareBrandRow}>
-          <View style={styles.shareCandleMark}>
-            <View style={[styles.shareCandle, { height: 46, backgroundColor: C.green }]} />
-            <View style={[styles.shareCandle, { height: 64, backgroundColor: C.purple }]} />
-            <View style={[styles.shareCandle, { height: 54, backgroundColor: C.green }]} />
-          </View>
-          <View>
+          <Image source={YOU_TRADER_BULL_LOGO} style={styles.shareBrandLogo} resizeMode="contain" />
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.shareBrandText}>YouTrader</Text>
             <Text style={styles.shareBrandSub}>TRADE. ANALYZE. IMPROVE.</Text>
           </View>
         </View>
-        <Text style={styles.shareUnlockedText}>ACHIEVEMENT UNLOCKED</Text>
-        <View style={[styles.shareBadgeStage, isFundingBadge && styles.shareBadgeStageShield]}>
-          <View style={styles.shareBadgeHalo} />
-          <View style={styles.shareBadgeOrbitOne} />
-          <View style={styles.shareBadgeOrbitTwo} />
-          <Svg width={560} height={560} style={styles.shareBadgeSvg}>
-            <Defs>
-              <LinearGradient id="hexMain" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor="#9CFF00" stopOpacity="0.96" />
-                <Stop offset="0.52" stopColor="#101418" stopOpacity="0.98" />
-                <Stop offset="1" stopColor="#8A2BE2" stopOpacity="0.94" />
-              </LinearGradient>
-              <LinearGradient id="hexGlass" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0.42" />
-                <Stop offset="0.42" stopColor="#9CFF00" stopOpacity="0.2" />
-                <Stop offset="1" stopColor="#8A2BE2" stopOpacity="0.42" />
-              </LinearGradient>
-            </Defs>
-            {isFundingBadge ? (
-              <>
-                <Polygon points="280,18 490,102 458,346 280,536 102,346 70,102" fill="url(#hexMain)" opacity="0.94" />
-                <Polygon points="280,54 456,126 430,326 280,492 130,326 104,126" fill="#05070A" opacity="0.78" />
-                <Polygon points="280,84 426,144 404,308 280,452 156,308 134,144" fill="url(#hexGlass)" opacity="0.34" />
-              </>
-            ) : (
-              <>
-                <Polygon points="280,24 502,150 502,410 280,536 58,410 58,150" fill="url(#hexMain)" opacity="0.94" />
-                <Polygon points="280,54 474,166 474,394 280,506 86,394 86,166" fill="#05070A" opacity="0.78" />
-                <Polygon points="280,78 452,178 452,382 280,482 108,382 108,178" fill="url(#hexGlass)" opacity="0.34" />
-              </>
-            )}
-            <Circle cx="280" cy="280" r="184" fill="#000000" opacity="0.26" />
-            <Circle cx="280" cy="280" r="222" fill="none" stroke="#9CFF00" strokeWidth="3" opacity="0.3" />
-            <Circle cx="280" cy="280" r="250" fill="none" stroke="#8A2BE2" strokeWidth="3" opacity="0.24" />
-            <Line x1="88" y1="164" x2="472" y2="396" stroke="#9CFF00" strokeWidth="3" opacity="0.28" />
-            <Line x1="472" y1="164" x2="88" y2="396" stroke="#8A2BE2" strokeWidth="3" opacity="0.28" />
-            <Line x1="158" y1="280" x2="402" y2="280" stroke="#FFFFFF" strokeWidth="2" opacity="0.16" />
-            <Line x1="280" y1="126" x2="280" y2="434" stroke="#FFFFFF" strokeWidth="2" opacity="0.14" />
-          </Svg>
-          <View style={[styles.shareLogoOrb, isFundingBadge && styles.shareLogoOrbShield]}>
-            <Image source={YOU_TRADER_BULL_LOGO} style={styles.shareLogoImage} resizeMode="cover" />
-            <View style={styles.shareLogoShine} />
+
+        <View style={styles.shareHeroBlock}>
+          <Text style={styles.shareUnlockedText}>{item.status === "unlocked" ? "ACHIEVEMENT UNLOCKED" : "MILESTONE UNLOCKED"}</Text>
+          <View style={[styles.shareBadgeStage, { borderColor: rarityAccent }]}>
+            <View style={[styles.shareBadgeHalo, { backgroundColor: `${rarityAccent}26` }]} />
+            <Image source={YOU_TRADER_BULL_LOGO} style={styles.shareLogoImage} resizeMode="contain" />
+            <Text style={[styles.shareRarityText, { color: rarityAccent }]}>{rarity}</Text>
           </View>
-          <View style={styles.shareHudRail}>
-            <View style={styles.shareHudTick} />
-            <View style={[styles.shareHudTick, styles.shareHudTickPurple]} />
-            <View style={styles.shareHudTick} />
-          </View>
+          <Text style={styles.shareBadgeTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.62}>{title}</Text>
+          <Text style={styles.sharePrestigeText}>{prestigeStatement(item)}</Text>
         </View>
-        <Text style={styles.shareBadgeTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.62}>{title}</Text>
-        <Text style={styles.sharePrestigeText}>{prestigeStatement(item)}</Text>
+
         <View style={styles.shareMetricPanel}>
           <View style={styles.shareStatsGrid}>
             <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>TRADES LOGGED</Text>
-              <Text style={styles.shareMetricValue}>{stats.tradesLogged} / {Math.max(10, stats.tradesLogged)}</Text>
+              <Text style={styles.shareMetricLabel}>RESULT</Text>
+              <Text style={styles.shareMetricValue} numberOfLines={1} adjustsFontSizeToFit>{metricResult}</Text>
             </View>
             <View style={styles.shareStatGlass}>
               <Text style={styles.shareMetricLabel}>WIN RATE</Text>
               <Text style={styles.shareMetricValue}>{stats.winRate.toFixed(0)}%</Text>
             </View>
             <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>P/L</Text>
+              <Text style={styles.shareMetricLabel}>NET P&L</Text>
               <Text style={[styles.shareMetricValue, { color: stats.totalPnl >= 0 ? "#9CFF00" : "#FF3B5F" }]}>{money(stats.totalPnl)}</Text>
             </View>
             <View style={styles.shareStatGlass}>
               <Text style={styles.shareMetricLabel}>DATE</Text>
-              <Text style={styles.shareMetricValue}>{stats.dateLabel}</Text>
+              <Text style={styles.shareMetricValue} numberOfLines={1} adjustsFontSizeToFit>{stats.dateLabel}</Text>
             </View>
           </View>
         </View>
-        <View style={[styles.shareRarityTag, { borderColor: rarityAccent, backgroundColor: `${rarityAccent}22` }]}>
-          <Text style={[styles.shareRarityText, { color: rarityAccent }]}>{rarity}</Text>
+
+        <View style={styles.shareFooterBlock}>
+          <Text style={styles.shareAppStoreCta}>Find YouTrader on the App Store</Text>
+          <Text style={styles.shareDisclaimer}>Educational journal. Not financial advice.</Text>
+          <Text style={styles.shareHashtag}>#YouTrader</Text>
         </View>
-        <Text style={styles.shareMadeBy}>MADE BY A TRADER, FOR TRADERS</Text>
       </View>
     </View>
   );
@@ -7300,6 +7218,7 @@ function AiAnalysisScreen({
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
       <MarketIntelligencePanel />
+
       <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
         <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
           <View style={styles.terminalScreenStack}>
@@ -7501,6 +7420,8 @@ function JournalScreen({
   const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "pro_feature", title: "YouTrader Pro", message: "Unlock serious trader tools." });
   const [firstInsightDismissed, setFirstInsightDismissed] = useState(false);
   const [lockedInsightDismissed, setLockedInsightDismissed] = useState(false);
+  const [deleteDayDate, setDeleteDayDate] = useState<string | null>(null);
+  const [deleteDayBusy, setDeleteDayBusy] = useState(false);
   const lastSaveAtRef = useRef(0);
   const emptyForm = {
     symbol: "MES",
@@ -7582,6 +7503,37 @@ function JournalScreen({
     },
     [onUpgrade, t],
   );
+  const openDeleteDayConfirm = useCallback((date: string) => {
+    const dayTrades = trades.filter((trade) => trade.date === date);
+    if (!dayTrades.length) return;
+    warningHaptic();
+    setSelectedDate(date);
+    setDeleteDayDate(date);
+  }, [trades]);
+
+  const confirmDeleteDay = useCallback(async () => {
+    if (!deleteDayDate || deleteDayBusy) return;
+    const dayTrades = trades.filter((trade) => trade.date === deleteDayDate);
+    if (!dayTrades.length) {
+      setDeleteDayDate(null);
+      return;
+    }
+    setDeleteDayBusy(true);
+    try {
+      const limit = await checkClientRateLimit("trade:delete", "journal-local");
+      if (!limit.allowed) {
+        Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
+      await recordSecurityEvent("delete_trading_day_confirmed", "trade:delete", "journal-local");
+      dayTrades.forEach((trade) => onTradeDeleted(trade.id));
+      setTrades((prev) => prev.filter((trade) => trade.date !== deleteDayDate));
+      setDeleteDayDate(null);
+    } finally {
+      setDeleteDayBusy(false);
+    }
+  }, [deleteDayBusy, deleteDayDate, onTradeDeleted, setTrades, trades]);
+
   const monthDays = useMemo(() => {
     const y = viewMonth.getFullYear();
     const m = viewMonth.getMonth();
@@ -7925,21 +7877,23 @@ function JournalScreen({
                         setSelectedDate(d);
                       }
                     }}
+                    onLongPress={() => openDeleteDayConfirm(d)}
+                    delayLongPress={3000}
                     style={[
                       styles.day,
                       { width: dayCellWidth, height: dayCellHeight },
                       dayTrades.length > 0 && (pnl >= 0 ? styles.dayProfit : styles.dayLoss),
-                      active && styles.dayActive,
+                      active && dayTrades.length === 0 && styles.dayActive,
                     ]}
                   >
-                    <SafeText style={[styles.dayNum, active && { color: C.white }]} minScale={0.72}>
+                    <SafeText style={[styles.dayNum, active && dayTrades.length === 0 && { color: C.white }]} minScale={0.72}>
                       {Number(d.slice(8, 10))}
                     </SafeText>
                     <SafeText
                       style={[
                         styles.dayPnlText,
                         {
-                          color: active ? C.white : dayTrades.length ? (pnl >= 0 ? C.green : C.red) : C.sub,
+                          color: active && dayTrades.length === 0 ? C.white : dayTrades.length ? (pnl >= 0 ? C.green : C.red) : C.sub,
                         },
                       ]}
                       minScale={0.6}
@@ -7960,6 +7914,7 @@ function JournalScreen({
       </View>
       {!isTabletLayout ? (
         <View style={styles.journalScrollCue}>
+          <Text style={styles.journalScrollCueLabel}>Scroll to view trades</Text>
           <View style={styles.journalScrollCueGlass}>
             <Text style={styles.journalScrollCueChevron}>⌄</Text>
           </View>
@@ -7999,37 +7954,11 @@ function JournalScreen({
           </Pressable>
         </Pressable>
       </Modal>
-      {!firstInsightDismissed && firstInsight ? (
-        <GlassCard style={styles.freeInsightCard} intensity={34}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
-            <Pressable onPress={dismissFirstInsight}>
-              <Text style={styles.valueModalLaterText}>Dismiss</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
-          <Text style={styles.freeInsightCta}>Pro unlocks Hidden Leaks, Revenge Alerts, Pattern Detective, and Prop Firm Coach.</Text>
-        </GlassCard>
-      ) : null}
-      {!isPremium && !lockedInsightDismissed && trades.length >= 7 && trades.length <= 10 ? (
-        <GlassCard style={styles.lockedInsightCard} intensity={36}>
-          <Text style={styles.freeInsightTitle}>Your journal found 3 hidden leaks.</Text>
-          <Text style={styles.freeInsightText}>Unlock Pro to see exactly which session, setup, and behavior is costing you money.</Text>
-          <View style={styles.valueInlineActions}>
-            <Pressable onPress={openLockedInsightModal} style={[styles.secondaryBig, styles.purpleAction, styles.valueInlineButton]}>
-              <Text style={styles.secondaryText}>Start 3-Day Free Pro</Text>
-            </Pressable>
-            <Pressable onPress={dismissLockedInsight} style={[styles.secondaryBig, styles.valueInlineButton]}>
-              <Text style={styles.secondaryText}>Maybe later</Text>
-            </Pressable>
-          </View>
-        </GlassCard>
-      ) : null}
-      <Text style={styles.tradesTodayTitle}>
+      <Text style={styles.tradesTodayTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
         TRADES TODAY • {eventDateLabel(selectedDate)}
       </Text>
       {filtered.map((tr) => (
-        <Pressable key={tr.id} onPress={() => openEdit(tr)}>
+        <Pressable key={tr.id} onPress={() => openEdit(tr)} onLongPress={() => openDeleteDayConfirm(tr.date)} delayLongPress={3000}>
           <Card>
             <View style={styles.rowBetween}>
               <Text style={styles.tradeSymbolTitle}>{tr.symbol}</Text>
@@ -8079,6 +8008,49 @@ function JournalScreen({
           </Card>
         </Pressable>
       ))}
+      {!firstInsightDismissed && firstInsight ? (
+        <GlassCard style={styles.freeInsightCard} intensity={34}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
+            <Pressable onPress={dismissFirstInsight}>
+              <Text style={styles.valueModalLaterText}>Dismiss</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
+          <Text style={styles.freeInsightCta}>Pro unlocks Hidden Leaks, Revenge Alerts, Pattern Detective, and Prop Firm Coach.</Text>
+        </GlassCard>
+      ) : null}
+      {!isPremium && !lockedInsightDismissed && trades.length >= 7 && trades.length <= 10 ? (
+        <GlassCard style={styles.lockedInsightCard} intensity={36}>
+          <Text style={styles.freeInsightTitle}>Your journal found 3 hidden leaks.</Text>
+          <Text style={styles.freeInsightText}>Unlock Pro to see exactly which session, setup, and behavior is costing you money.</Text>
+          <View style={styles.valueInlineActions}>
+            <Pressable onPress={openLockedInsightModal} style={[styles.secondaryBig, styles.purpleAction, styles.valueInlineButton]}>
+              <Text style={styles.secondaryText}>Start 3-Day Free Pro</Text>
+            </Pressable>
+            <Pressable onPress={dismissLockedInsight} style={[styles.secondaryBig, styles.valueInlineButton]}>
+              <Text style={styles.secondaryText}>Maybe later</Text>
+            </Pressable>
+          </View>
+        </GlassCard>
+      ) : null}
+      <Modal visible={!!deleteDayDate} transparent animationType="fade">
+        <View style={styles.deleteDayBackdrop}>
+          <View style={styles.deleteDayCard}>
+            <Text style={styles.deleteDayEyebrow}>Journal safety</Text>
+            <Text style={styles.deleteDayTitle}>Delete this trading day?</Text>
+            <Text style={styles.deleteDayBody}>This will permanently delete every trade logged for this day. This action cannot be undone.</Text>
+            <View style={styles.deleteDayActions}>
+              <Pressable disabled={deleteDayBusy} onPress={() => setDeleteDayDate(null)} style={styles.deleteDayCancel}>
+                <Text style={styles.deleteDayCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable disabled={deleteDayBusy} onPress={confirmDeleteDay} style={[styles.deleteDayConfirm, deleteDayBusy && styles.disabledBtn]}>
+                <Text style={styles.deleteDayConfirmText}>{deleteDayBusy ? "Deleting..." : "Delete Day"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <ProValueModal
         content={valueModal}
         packages={packages}
@@ -8430,23 +8402,6 @@ function MarketIntelligencePanel() {
         ) : <MarketEmpty text="Daily brief will appear after the worker publishes cached data." />}
       </MarketSection>
 
-      <MarketSection title="AI Watchlist">
-        {data.watchlist.length ? (
-          <View style={styles.marketGrid}>
-            {data.watchlist.map((item) => (
-              <GlassCard key={item.asset} style={styles.marketMiniCard} intensity={22}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.marketAsset}>{item.asset}</Text>
-                  <Text style={[styles.marketBias, { color: item.bias === "LONG" ? C.green : item.bias === "SHORT" ? C.red : C.sub }]}>{item.bias}</Text>
-                </View>
-                <Text style={styles.marketTinyLabel}>{item.confidence} confidence</Text>
-                <Text style={styles.marketBodyText}>{item.reason}</Text>
-              </GlassCard>
-            ))}
-          </View>
-        ) : <MarketEmpty text="Watchlist cache is empty." />}
-      </MarketSection>
-
       <MarketSection title="Market Summary">
         {data.summary ? (
           <GlassCard style={styles.marketCard} intensity={24}>
@@ -8457,55 +8412,6 @@ function MarketIntelligencePanel() {
             {data.summary.strongestHeadlines.slice(0, 3).map((item) => <Text key={item} style={styles.marketListText}>• {item}</Text>)}
           </GlassCard>
         ) : <MarketEmpty text="Market summary cache is empty." />}
-      </MarketSection>
-
-      <MarketSection title="Economic Calendar">
-        {data.events.length ? data.events.slice(0, 6).map((event) => (
-          <GlassCard key={event.id} style={styles.marketCard} intensity={22}>
-            <View style={styles.rowBetween}>
-              <Pill text={event.impact} tone={event.impact === "HIGH" ? "high" : event.impact === "MED" ? "med" : "low"} />
-              <Text style={styles.sub}>{event.date} • {event.time}</Text>
-            </View>
-            <Text style={styles.newsTitle}>{event.name}</Text>
-            <Text style={styles.newsSummary}>Previous {event.previous || "-"} • Forecast {event.forecast || "-"} • Actual {event.actual || "-"}</Text>
-          </GlassCard>
-        )) : <MarketEmpty text="Calendar cache is empty. The worker has a deterministic fallback if no source is configured." />}
-      </MarketSection>
-
-      <MarketSection title="Prop Firm Monitor">
-        {data.propUpdates.length ? data.propUpdates.slice(0, 5).map((item) => (
-          <Pressable key={item.id} onPress={() => item.url ? Linking.openURL(item.url) : undefined}>
-            <GlassCard style={styles.marketCard} intensity={22}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.marketAsset}>{item.firm}</Text>
-                <Text style={styles.sub}>{item.category}</Text>
-              </View>
-              <Text style={styles.newsSummary}>{item.detectedChangeSummary}</Text>
-              {!!item.keyText && <Text style={styles.marketBodyText}>{item.keyText.slice(0, 220)}</Text>}
-            </GlassCard>
-          </Pressable>
-        )) : <MarketEmpty text="Prop firm monitor cache is empty." />}
-      </MarketSection>
-
-      <MarketSection title="Latest Market Headlines">
-        {data.headlines.length ? data.headlines.slice(0, 6).map((item) => (
-          <Pressable key={item.id} onPress={() => (item.url ? Linking.openURL(item.url) : undefined)}>
-            <GlassCard style={styles.purpleNewsCard} intensity={28}>
-              <View style={styles.rowBetween}>
-                <Pill text={item.impact} tone={item.impact === "HIGH" ? "high" : item.impact === "MED" ? "med" : "low"} />
-                <Text style={styles.sub}>{item.source} • {item.time}</Text>
-              </View>
-              <Text style={styles.newsTitle}>{item.title}</Text>
-              {!!item.summary && <Text style={styles.newsSummary}>{item.summary.slice(0, 220)}</Text>}
-            </GlassCard>
-          </Pressable>
-        )) : <MarketEmpty text="Headline cache is empty." />}
-      </MarketSection>
-
-      <MarketSection title="Cost Safety">
-        <GlassCard style={styles.marketCostCard} intensity={18}>
-          <Text style={styles.marketBodyText}>Cached market intelligence is shared by all users. The app is read-only, does not run crawlers, and does not trigger paid AI or per-user generation.</Text>
-        </GlassCard>
       </MarketSection>
     </View>
   );
@@ -10997,6 +10903,14 @@ const styles = StyleSheet.create({
     marginTop: -24,
     marginBottom: 8,
   },
+  journalScrollCueLabel: {
+    color: "rgba(166,174,188,0.72)",
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "800",
+    marginBottom: 4,
+    textAlign: "center",
+  },
   journalScrollCueGlass: {
     width: 28,
     height: 28,
@@ -12087,18 +12001,20 @@ const styles = StyleSheet.create({
   shareCardFrame: {
     flex: 1,
     borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.24)",
+    borderColor: "rgba(255,255,255,0.22)",
     borderRadius: 46,
-    backgroundColor: "rgba(8,6,15,0.9)",
+    backgroundColor: "rgba(8,6,15,0.94)",
     paddingHorizontal: 58,
     paddingTop: 70,
     paddingBottom: 54,
     alignItems: "center",
+    justifyContent: "space-between",
     shadowColor: "#B84DFF",
     shadowOpacity: 0.34,
     shadowRadius: 34,
   },
-  shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: 6 },
+  shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: 6, width: "100%" },
+  shareBrandLogo: { width: 88, height: 88 },
   shareCandleMark: { width: 82, height: 96, flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 8 },
   shareCandle: { width: 14, borderRadius: 8 },
   shareBrandText: { color: C.text, fontSize: 58, lineHeight: 64, fontWeight: "900" },
@@ -12113,12 +12029,16 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(156,255,0,0.78)",
     textShadowRadius: 18,
   },
+  shareHeroBlock: { width: "100%", alignItems: "center", marginTop: 44 },
   shareBadgeStage: {
-    width: 610,
-    height: 610,
+    width: 440,
+    height: 440,
+    borderRadius: 220,
+    borderWidth: 4,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 36,
+    marginTop: 34,
+    backgroundColor: "rgba(0,0,0,0.45)",
     shadowColor: "#B84DFF",
     shadowOpacity: 0.8,
     shadowRadius: 58,
@@ -12178,8 +12098,8 @@ const styles = StyleSheet.create({
     shadowColor: "#8A2BE2",
   },
   shareLogoImage: {
-    width: 330,
-    height: 330,
+    width: 250,
+    height: 250,
   },
   shareLogoShine: {
     position: "absolute",
@@ -12300,13 +12220,19 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   shareRarityText: {
-    fontSize: 24,
-    lineHeight: 30,
+    position: "absolute",
+    bottom: 54,
+    fontSize: 20,
+    lineHeight: 26,
     fontWeight: "900",
-    letterSpacing: 6,
+    letterSpacing: 5,
   },
   sharePhrase: { color: C.text, fontSize: 17, lineHeight: 24, fontWeight: "800", textAlign: "center", marginTop: 24 },
   shareMadeBy: { color: "#B8FF00", fontSize: 17, lineHeight: 24, fontWeight: "900", letterSpacing: 4, marginTop: "auto" },
+  shareFooterBlock: { width: "100%", alignItems: "center", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.14)", paddingTop: 28 },
+  shareAppStoreCta: { color: C.text, fontSize: 28, lineHeight: 36, fontWeight: "900", textAlign: "center" },
+  shareDisclaimer: { color: C.sub, fontSize: 18, lineHeight: 26, fontWeight: "800", marginTop: 8, textAlign: "center" },
+  shareHashtag: { color: C.purple, fontSize: 22, lineHeight: 30, fontWeight: "900", marginTop: 10, letterSpacing: 1.2 },
   youTraderBadge: {
     color: C.green,
     fontSize: 11,
@@ -12362,7 +12288,7 @@ const styles = StyleSheet.create({
   },
   heatmapLabel: { color: C.text, fontSize: 12, fontWeight: "900" },
   heatmapValue: { color: C.text, fontSize: 17, lineHeight: 21, fontWeight: "900", marginTop: 8 },
-  heatmapMeta: { color: C.sub, fontSize: 10, fontWeight: "900", marginTop: 5, flexShrink: 1 },
+  heatmapMeta: { color: C.purple, fontSize: 10, fontWeight: "900", marginTop: 5, flexShrink: 1 },
   heatmapMetaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5, minWidth: 0, overflow: "hidden" },
   heatmapMetaPercent: { color: C.purple, fontSize: 10, fontWeight: "900", flexShrink: 0 },
   heatmapSummaryRow: { flexDirection: "row", gap: 8, marginTop: 12 },
@@ -14312,13 +14238,35 @@ const styles = StyleSheet.create({
 
   tradesTodayTitle: {
     color: C.purple,
-    fontSize: 22,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: "900",
-    letterSpacing: 0.8,
+    letterSpacing: 0.2,
     textTransform: "uppercase",
-    marginTop: 140,
+    marginTop: 12,
     marginBottom: 12,
   },
+  deleteDayBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "center",
+    padding: 18,
+  },
+  deleteDayCard: {
+    borderRadius: 28,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,59,95,0.42)",
+    backgroundColor: "rgba(8,10,14,0.96)",
+  },
+  deleteDayEyebrow: { color: C.red, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  deleteDayTitle: { color: C.text, fontSize: 25, lineHeight: 31, fontWeight: "900", marginTop: 12 },
+  deleteDayBody: { color: C.sub, fontSize: 14, lineHeight: 21, fontWeight: "800", marginTop: 8 },
+  deleteDayActions: { flexDirection: "row", gap: 10, marginTop: 18 },
+  deleteDayCancel: { flex: 1, borderRadius: 18, borderWidth: 1, borderColor: C.border, backgroundColor: C.card2, paddingVertical: 14, alignItems: "center" },
+  deleteDayCancelText: { color: C.text, fontSize: 14, fontWeight: "900" },
+  deleteDayConfirm: { flex: 1, borderRadius: 18, borderWidth: 1, borderColor: C.red, backgroundColor: C.redSoft, paddingVertical: 14, alignItems: "center" },
+  deleteDayConfirmText: { color: C.red, fontSize: 14, fontWeight: "900" },
   legalRow: {
     flexDirection: "row",
     alignItems: "center",

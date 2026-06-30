@@ -150,3 +150,13 @@ Possible later extraction targets:
 - Future UI work must run `frontend-design` thinking first, compare against `docs/MY_UI.md`, then pass the `design-review` checklist before completion.
 - Design-review checks premium dark iOS quality, trader-first next action clarity, readable iPhone metrics, spacing, charts, Pro/paywall timing, exports/PDF/share branding, and business-logic preservation.
 - This is a review gate only; it does not redesign the app or change Supabase, RevenueCat, GitHub Actions, or security flows.
+
+## UI Export And Journal Polish Follow-Up (2026-06-30)
+
+- Journal calendar selected empty Today cell now uses the YouTrader premium purple accent while green profit days and red loss days keep their semantic colors.
+- Journal shows the subtle `Scroll to view trades` cue above the existing gray arrow, and Trades Today appears before First Insight with a single-line title.
+- Added a hidden 3-second long-press delete-day flow on logged Journal days/trade cards with haptic feedback and a destructive confirmation modal. It deletes only trades from the selected date through existing local/cloud delete paths.
+- AI Analytics UI was cleaned so cached Market Intelligence keeps Daily Brief and Market Summary only; removed Watchlist, Economic Calendar, Prop Firm Monitor, Latest Headlines, and Cost Safety placeholder blocks from that tab.
+- Stats Heatmap trade-count text now uses the YouTrader purple accent while P&L green/red remains unchanged.
+- Monthly PDF, Share P&L/Save Image, and Achievement/Milestone export cards were polished for premium App Store-ready branding, readable metrics, YouTrader logo placement, App Store CTA, and educational disclaimer.
+- Manual iPhone QA still required for long-press timing, Photos save/share sheet sizing, PDF preview readability, and achievement card rendering.

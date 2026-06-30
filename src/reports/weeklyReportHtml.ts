@@ -2,13 +2,14 @@ import { EXPORT_BRAND, EXPORT_COLORS } from "../components/insights/exportDesign
 
 type ReportStats = Record<string, unknown>;
 
-const GREEN = EXPORT_COLORS.green;
+const GREEN = "#147A2E";
+const RED = "#C5223F";
 const PURPLE = EXPORT_COLORS.purple;
-const BG = EXPORT_COLORS.bg;
-const CARD = EXPORT_COLORS.panel;
-const TEXT = EXPORT_COLORS.text;
-const SUB = EXPORT_COLORS.sub;
-const RED = EXPORT_COLORS.red;
+const INK = "#101217";
+const SUB = "#4C5564";
+const LINE = "#DDE2EA";
+const PAPER = "#FFFFFF";
+const SOFT = "#F5F7FA";
 
 export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
   const title = textValue(stats.title, "YouTrader Monthly Report");
@@ -18,7 +19,6 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
   const aiSummary = textValue(stats.aiSummary, "AI Summary will appear after you generate trade analysis for this month.");
   const chart = buildEquityChart(equityCurve);
   const netPnl = numberValue(stats.netPnl);
-  const pnlTone = netPnl >= 0 ? GREEN : RED;
   const watermarked = Boolean(stats.watermarked);
   const logoHtml = logoDataUri
     ? `<img class="logo" src="${logoDataUri}"/>`
@@ -31,34 +31,41 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
   <style>
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: ${BG}; color: ${TEXT}; font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", sans-serif; }
-    .page { min-height: 297mm; padding: 34px; background: radial-gradient(circle at 90% 0%, rgba(176,38,255,.20), transparent 32%), linear-gradient(180deg, #05070A 0%, #030507 100%); }
-    .top { display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.035); border-radius: 18px; padding: 18px 20px; }
+    body { margin: 0; background: ${PAPER}; color: ${INK}; font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", sans-serif; }
+    .page { min-height: 297mm; padding: 30px 34px 24px; background: ${PAPER}; }
+    .top { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid ${INK}; padding-bottom: 16px; }
     .brand { display: flex; align-items: center; gap: 14px; }
-    .logo { width: 48px; height: 48px; object-fit: contain; }
-    .fallback-logo { width: 48px; height: 48px; border-radius: 14px; background: ${PURPLE}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; }
-    .brand-name { font-size: 28px; font-weight: 900; letter-spacing: 0; }
-    .brand-sub { color: ${SUB}; font-size: 9px; font-weight: 900; letter-spacing: 3px; margin-top: 3px; }
-    .range { color: ${SUB}; text-align: right; font-size: 13px; font-weight: 800; max-width: 220px; }
-    h1 { font-size: 38px; margin: 28px 0 8px; letter-spacing: 0; }
-    .lead { color: ${SUB}; font-size: 14px; line-height: 1.48; max-width: 710px; font-weight: 700; }
-    .hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; margin-top: 20px; }
-    .panel { background: ${CARD}; border: 1px solid rgba(255,255,255,.13); border-radius: 16px; padding: 18px; box-shadow: 0 18px 42px rgba(0,0,0,.22); }
-    .label { color: ${SUB}; font-size: 9px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
-    .pnl { color: ${pnlTone}; font-size: 54px; line-height: 1; font-weight: 900; margin-top: 11px; }
-    .score { color: ${PURPLE}; font-size: 52px; line-height: 1; font-weight: 900; margin-top: 11px; }
+    .logo { width: 52px; height: 52px; object-fit: contain; }
+    .fallback-logo { width: 52px; height: 52px; border-radius: 15px; background: ${INK}; color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; }
+    .brand-name { font-size: 30px; font-weight: 900; letter-spacing: 0; color: ${INK}; }
+    .brand-sub { color: ${SUB}; font-size: 10px; font-weight: 900; letter-spacing: 3px; margin-top: 3px; }
+    .range { color: ${INK}; text-align: right; font-size: 13px; font-weight: 900; max-width: 240px; }
+    h1 { font-size: 34px; line-height: 1.08; margin: 24px 0 8px; letter-spacing: 0; color: ${INK}; }
+    .lead { color: ${SUB}; font-size: 14px; line-height: 1.45; max-width: 720px; font-weight: 700; }
+    .hero { display: grid; grid-template-columns: 1.12fr .88fr; gap: 14px; margin-top: 20px; }
+    .panel { background: ${SOFT}; border: 1px solid ${LINE}; border-radius: 16px; padding: 17px; break-inside: avoid; }
+    .panel.dark { background: ${INK}; color: white; border-color: ${INK}; }
+    .label { color: ${SUB}; font-size: 10px; font-weight: 900; letter-spacing: 1.8px; text-transform: uppercase; }
+    .dark .label { color: #C9D0DA; }
+    .pnl { color: ${netPnl >= 0 ? GREEN : RED}; font-size: 54px; line-height: 1; font-weight: 900; margin-top: 10px; }
+    .score { color: ${PURPLE}; font-size: 54px; line-height: 1; font-weight: 900; margin-top: 10px; }
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
-    .metric { background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.11); border-radius: 12px; padding: 12px; min-height: 74px; }
-    .value { color: ${TEXT}; font-size: 21px; line-height: 1.15; font-weight: 900; margin-top: 7px; }
-    .chart { margin-top: 16px; }
-    svg { width: 100%; height: 158px; display: block; }
+    .metric { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: 12px; padding: 11px; min-height: 72px; break-inside: avoid; }
+    .metric.loss .value { color: ${RED}; }
+    .metric.good .value { color: ${GREEN}; }
+    .value { color: ${INK}; font-size: 21px; line-height: 1.12; font-weight: 900; margin-top: 7px; }
+    .chart { margin-top: 14px; background: ${PAPER}; }
+    svg { width: 100%; height: 148px; display: block; }
     .section { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .copy { color: ${TEXT}; font-size: 13px; line-height: 1.5; margin-top: 10px; font-weight: 750; }
+    .copy { color: ${INK}; font-size: 13px; line-height: 1.48; margin-top: 10px; font-weight: 700; }
     ul { padding: 0; list-style: none; margin: 10px 0 0; }
-    li { color: ${TEXT}; margin: 7px 0; padding-left: 16px; position: relative; font-weight: 800; font-size: 13px; line-height: 1.35; }
+    li { color: ${INK}; margin: 7px 0; padding-left: 16px; position: relative; font-weight: 800; font-size: 13px; line-height: 1.32; }
     li:before { content: ""; position: absolute; left: 0; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: ${PURPLE}; }
-    .footer { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.12); color: ${SUB}; font-size: 11px; display: flex; justify-content: space-between; font-weight: 800; }
-    .watermark { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.075); font-size: 64px; font-weight: 900; transform: rotate(-28deg); pointer-events: none; letter-spacing: 2px; }
+    .footer { margin-top: 16px; padding-top: 13px; border-top: 1px solid ${LINE}; color: ${SUB}; font-size: 11px; display: flex; align-items: center; justify-content: space-between; gap: 14px; font-weight: 800; }
+    .footer-brand { display: flex; align-items: center; gap: 8px; color: ${INK}; font-weight: 900; }
+    .footer-logo { width: 24px; height: 24px; object-fit: contain; }
+    .cta { color: ${PURPLE}; font-weight: 900; }
+    .watermark { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(16,18,23,.075); font-size: 64px; font-weight: 900; transform: rotate(-28deg); pointer-events: none; letter-spacing: 2px; }
   </style>
 </head>
 <body>
@@ -72,16 +79,16 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
       <div class="range">${escapeHtml(rangeLabel)}</div>
     </div>
     <h1>${escapeHtml(title)}</h1>
-    <div class="lead">Premium monthly performance review built from journal data, risk metrics, execution quality, and YouTrader AI context.</div>
+    <div class="lead">Institutional monthly performance review built from journal data, risk metrics, execution quality, and YouTrader AI context.</div>
 
     <div class="hero">
-      <div class="panel">
+      <div class="panel dark">
         <div class="label">Net P&L</div>
         <div class="pnl">${money(netPnl)}</div>
         <div class="grid">
-          ${metric("Win Rate", percent(stats.winRate))}
-          ${metric("Profit Factor", fixed(stats.profitFactor, 2))}
-          ${metric("Drawdown", money(numberValue(stats.drawdown)))}
+          ${metric("Win Rate", percent(stats.winRate), "good")}
+          ${metric("Profit Factor", fixed(stats.profitFactor, 2), "")}
+          ${metric("Drawdown", money(numberValue(stats.drawdown)), "loss")}
         </div>
       </div>
       <div class="panel">
@@ -97,12 +104,12 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
     </div>
 
     <div class="grid">
-      ${metric("Consistency", percent(stats.consistency))}
-      ${metric("Risk Control", percent(stats.riskControl))}
-      ${metric("Recovery Factor", fixed(stats.recoveryFactor, 2))}
-      ${metric("Expectancy", money(numberValue(stats.expectancy)))}
-      ${metric("Best Session", textValue(stats.bestSession, "-"))}
-      ${metric("Worst Session", textValue(stats.worstSession, "-"))}
+      ${metric("Consistency", percent(stats.consistency), "")}
+      ${metric("Risk Control", percent(stats.riskControl), "")}
+      ${metric("Recovery Factor", fixed(stats.recoveryFactor, 2), "")}
+      ${metric("Expectancy", money(numberValue(stats.expectancy)), numberValue(stats.expectancy) >= 0 ? "good" : "loss")}
+      ${metric("Best Session", textValue(stats.bestSession, "-"), "")}
+      ${metric("Worst Session", textValue(stats.worstSession, "-"), "")}
     </div>
 
     <div class="section">
@@ -127,14 +134,18 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
       </div>
     </div>
 
-    <div class="footer"><span>YouTrader professional performance report</span><span>${EXPORT_BRAND.disclaimer}</span></div>
+    <div class="footer">
+      <span class="footer-brand">${logoDataUri ? `<img class="footer-logo" src="${logoDataUri}"/>` : ""}YouTrader professional performance report</span>
+      <span class="cta">${EXPORT_BRAND.appStoreHint}</span>
+      <span>${EXPORT_BRAND.disclaimer}</span>
+    </div>
   </div>
 </body>
 </html>`;
 }
 
-function metric(label: string, value: string) {
-  return `<div class="metric"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div></div>`;
+function metric(label: string, value: string, tone = "") {
+  return `<div class="metric ${tone}"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div></div>`;
 }
 
 function buildEquityChart(values: number[]) {
@@ -145,14 +156,15 @@ function buildEquityChart(values: number[]) {
   const points = series
     .map((value, index) => {
       const x = series.length === 1 ? 0 : (index / (series.length - 1)) * 700;
-      const y = 150 - ((value - min) / spread) * 130;
+      const y = 140 - ((value - min) / spread) * 118;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
-  return `<svg viewBox="0 0 700 180" preserveAspectRatio="none">
-    <defs><linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${GREEN}" stop-opacity=".22"/><stop offset="1" stop-color="${GREEN}" stop-opacity="0"/></linearGradient></defs>
-    <polyline points="${points} 700,170 0,170" fill="url(#curveFill)" stroke="none"/>
-    <polyline points="${points}" fill="none" stroke="${GREEN}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  return `<svg viewBox="0 0 700 165" preserveAspectRatio="none">
+    <defs><linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${GREEN}" stop-opacity=".20"/><stop offset="1" stop-color="${GREEN}" stop-opacity="0"/></linearGradient></defs>
+    <line x1="0" y1="140" x2="700" y2="140" stroke="${LINE}" stroke-width="2"/>
+    <polyline points="${points} 700,152 0,152" fill="url(#curveFill)" stroke="none"/>
+    <polyline points="${points}" fill="none" stroke="${GREEN}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 }
 
