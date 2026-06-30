@@ -301,6 +301,10 @@ const YOU_TRADER_BULL_LOGO = require("./assets/youtrader-bull-mark.png");
 const AUTH_REDIRECT_TO = makeRedirectUri({ scheme: "com.youtrader.pro", path: "auth" });
 const PREMIUM_PRICE = "$12.99/mo";
 const PREMIUM_PRICE_YEARLY = "$99.99/yr";
+const FREE_MONTHLY_TRADE_LIMIT = 31;
+const FREE_MONTHLY_SHARE_CARD_LIMIT = 5;
+const FREE_MONTHLY_PDF_PREVIEW_LIMIT = 1;
+const FREE_MONTHLY_SCREENSHOT_LIMIT = 3;
 // RevenueCat product ids. Both must exist in App Store Connect AND be added to the
 // DEFAULT RevenueCat offering as packages. Both unlock the same entitlement
 // (REVENUECAT_ENTITLEMENT_ID, default "YouTrader Pro").
@@ -4213,6 +4217,90 @@ function SplitCount({
   );
 }
 
+type ProValueModalReason = "trade_limit" | "locked_insight" | "pro_feature" | "usage_limit";
+
+type ProValueModalContent = {
+  visible: boolean;
+  reason: ProValueModalReason;
+  title: string;
+  message: string;
+  bullets?: string[];
+  primaryTrial?: boolean;
+};
+
+function ProValueModal({
+  content,
+  packages,
+  storeProducts,
+  purchaseBusy,
+  paywallError,
+  showRestorePurchases,
+  onPurchase,
+  onRestore,
+  onClose,
+}: {
+  content: ProValueModalContent;
+  packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
+  purchaseBusy: boolean;
+  paywallError: string;
+  showRestorePurchases: boolean;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
+  onRestore: () => void;
+  onClose: () => void;
+}) {
+  const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
+  const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null;
+  const monthlyProduct = storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null;
+  const yearlyProduct = storeProducts.find((product) => product.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) || null;
+  const monthlyPrice = monthly ? packagePrice(monthly) : monthlyProduct?.priceString || PREMIUM_PRICE;
+  const yearlyPrice = yearly ? packagePrice(yearly) : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
+  return (
+    <Modal visible={content.visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.valueModalBackdrop}>
+        <GlassCard style={styles.valueModalCard} intensity={52}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.valueModalEyebrow}>YouTrader Pro</Text>
+            <Pressable onPress={onClose} style={styles.valueModalClose}>
+              <Text style={styles.closeX}>×</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.valueModalTitle}>{content.title}</Text>
+          <Text style={styles.valueModalText}>{content.message}</Text>
+          {(content.bullets || ["Unlimited trades and media notes", "Hidden Leaks, Revenge Alerts, Pattern Detective", "Prop Firm Coach, exports, sync, and monthly reports"]).slice(0, 4).map((item) => (
+            <Text key={item} style={styles.valueModalBullet}>✓ {item}</Text>
+          ))}
+          {content.primaryTrial ? (
+            <Pressable disabled={purchaseBusy} onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)} style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}>
+              <Text style={styles.primaryText}>{purchaseBusy ? "Connecting..." : "Start 3-Day Free Pro"}</Text>
+            </Pressable>
+          ) : null}
+          <View style={styles.valueModalPlanRow}>
+            <Pressable disabled={purchaseBusy} onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)} style={[styles.valueModalPlan, purchaseBusy && styles.disabledBtn]}>
+              <Text style={styles.planName}>MONTHLY</Text>
+              <Text style={styles.planPrice}>Upgrade Monthly</Text>
+              <Text style={styles.sub}>{monthlyPrice}</Text>
+            </Pressable>
+            <Pressable disabled={purchaseBusy} onPress={() => onPurchase(yearly, YOU_TRADER_YEARLY_PRODUCT_ID)} style={[styles.valueModalPlan, styles.valueModalYearlyPlan, purchaseBusy && styles.disabledBtn]}>
+              <Text style={styles.planName}>YEARLY</Text>
+              <Text style={styles.planPrice}>Upgrade Yearly</Text>
+              <Text style={styles.sub}>{yearlyPrice}</Text>
+            </Pressable>
+          </View>
+          <Pressable disabled={purchaseBusy} onPress={onRestore} style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}>
+            <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+          </Pressable>
+          <Pressable onPress={onClose} style={styles.valueModalLaterBtn}>
+            <Text style={styles.valueModalLaterText}>Maybe later</Text>
+          </Pressable>
+          {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
+          <Text style={styles.newsDisclaimer}>Educational analysis only. Not financial advice.</Text>
+        </GlassCard>
+      </View>
+    </Modal>
+  );
+}
+
 function PaywallPreview({
   packages,
   storeProducts,
@@ -5507,6 +5595,36 @@ function monthRangeIso(date = new Date()) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+function usageMonthKey(date = new Date()) {
+  return date.toISOString().slice(0, 7);
+}
+
+function monthlyUsageStorageKey(name: string, userId: string | null = null, date = new Date()) {
+  return `usage:${name}:${userId || "local"}:${usageMonthKey(date)}`;
+}
+
+async function getMonthlyUsageCount(name: string, userId: string | null = null) {
+  const raw = await AsyncStorage.getItem(monthlyUsageStorageKey(name, userId));
+  const count = Number(raw || "0");
+  return Number.isFinite(count) ? count : 0;
+}
+
+async function incrementMonthlyUsageCount(name: string, userId: string | null = null) {
+  const next = (await getMonthlyUsageCount(name, userId)) + 1;
+  await AsyncStorage.setItem(monthlyUsageStorageKey(name, userId), String(next));
+  return next;
+}
+
+function tradeLoggedMonthKey(trade: Trade) {
+  const source = typeof trade.createdAt === "number" ? new Date(trade.createdAt) : safeDateFromISO(trade.date);
+  return usageMonthKey(Number.isFinite(source.getTime()) ? source : new Date());
+}
+
+function monthlyLoggedTradeCount(trades: Trade[], date = new Date()) {
+  const month = usageMonthKey(date);
+  return trades.filter((trade) => tradeLoggedMonthKey(trade) === month).length;
+}
+
 function achievementShareUsageStorageKey(userId: string | null, date = new Date()) {
   const month = date.toISOString().slice(0, 7);
   return `achievement-share-usage:${userId || "local"}:${month}`;
@@ -6036,6 +6154,7 @@ function StatsScreen({
   const [selectedDate] = useState(todayISO());
   const [exportBusy, setExportBusy] = useState(false);
   const [shareCardMounted, setShareCardMounted] = useState(false);
+  const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "usage_limit", title: "YouTrader Pro", message: "Unlock premium exports." });
   const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
   const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
   const [tradeAnalysisError, setTradeAnalysisError] = useState("");
@@ -6097,6 +6216,36 @@ function StatsScreen({
         Alert.alert("Export", SECURITY_MESSAGES.rateLimited);
         return;
       }
+      if (!isPremium && action === "save") {
+        setValueModal({
+          visible: true,
+          reason: "usage_limit",
+          title: "Save Image is Pro",
+          message: "Free traders can share 5 P&L cards per month. Pro unlocks full Save Image exports and unlimited reports.",
+          bullets: ["Full Share P&L and Save Image exports", "Unlimited monthly PDFs", "Premium branded report design"],
+        });
+        return;
+      }
+      if (!isPremium && action === "share" && (await getMonthlyUsageCount("share-cards", session?.user.id || null)) >= FREE_MONTHLY_SHARE_CARD_LIMIT) {
+        setValueModal({
+          visible: true,
+          reason: "usage_limit",
+          title: "Share card limit reached",
+          message: "Free includes 5 share cards per month. Pro unlocks more sharing, premium exports, and monthly reports.",
+          bullets: ["15+ share cards per month", "Full image exports", "Monthly PDF reports"],
+        });
+        return;
+      }
+      if (!isPremium && action === "pdf" && (await getMonthlyUsageCount("pdf-previews", session?.user.id || null)) >= FREE_MONTHLY_PDF_PREVIEW_LIMIT) {
+        setValueModal({
+          visible: true,
+          reason: "usage_limit",
+          title: "Monthly PDF preview used",
+          message: "Free includes 1 watermarked monthly PDF preview per month. Pro unlocks unlimited premium reports.",
+          bullets: ["Unlimited monthly PDF exports", "No watermark", "AI summary and full report history"],
+        });
+        return;
+      }
       setExportBusy(true);
       const { shareCapturedView, saveCapturedViewToPhotos, shareMonthlyPdfReport } = await import(
         "./src/components/insights/shareExport"
@@ -6108,6 +6257,7 @@ function StatsScreen({
       const exportKey = { action, period, selectedDate, count: periodTrades.length, pnl: periodStats.pnl };
       if (action === "share") {
         await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareCapturedView(shareCardRef));
+        if (!isPremium) await incrementMonthlyUsageCount("share-cards", session?.user.id || null);
         return;
       }
       if (action === "save") {
@@ -6176,7 +6326,9 @@ function StatsScreen({
         achievementsEarned: monthAchievements,
         aiSummary: tradeAnalysis?.summary,
         nextFocus: monthScore.weaknesses[0] || monthPatterns.opportunity.detail,
+        watermarked: !isPremium,
       }));
+      if (!isPremium) await incrementMonthlyUsageCount("pdf-previews", session?.user.id || null);
     } catch (error) {
       alertExportError("Export failed", error);
     } finally {
@@ -6261,8 +6413,7 @@ function StatsScreen({
           </Pressable>
         ))}
       </View>
-      {isPremium ? (
-        <View style={styles.statsActionsRow}>
+      <View style={styles.statsActionsRow}>
           <Pressable
             disabled={exportBusy}
             onPress={() => runExport("share")}
@@ -6275,17 +6426,27 @@ function StatsScreen({
             onPress={() => runExport("save")}
             style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
           >
-            <Text style={styles.statsActionText}>Save image</Text>
+            <Text style={styles.statsActionText}>{isPremium ? "Save image" : "Save image — Pro"}</Text>
           </Pressable>
           <Pressable
             disabled={exportBusy}
             onPress={() => runExport("pdf")}
             style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
           >
-            <Text style={styles.statsActionText}>Monthly PDF</Text>
+            <Text style={styles.statsActionText}>{isPremium ? "Monthly PDF" : "Monthly PDF preview"}</Text>
           </Pressable>
         </View>
-      ) : null}
+      <ProValueModal
+        content={valueModal}
+        packages={packages}
+        storeProducts={storeProducts}
+        purchaseBusy={purchaseBusy}
+        paywallError={paywallError}
+        showRestorePurchases={showRestorePurchases}
+        onPurchase={onPurchase}
+        onRestore={onRestore}
+        onClose={() => setValueModal((prev) => ({ ...prev, visible: false }))}
+      />
       {exportBusy ? <ActivityIndicator color={C.green} style={{ marginBottom: 10 }} /> : null}
       {shareCardMounted ? (
         <View style={styles.offscreenShareCard} collapsable={false}>
@@ -7248,14 +7409,58 @@ function InstrumentButton({
   );
 }
 
+function buildFirstInsight(trades: Trade[], stats: ReturnType<typeof calcStats>) {
+  if (trades.length < 5) return null;
+  const bestSession = stats.session[0];
+  const worstSession = [...stats.session].sort((a, b) => a.pnl - b.pnl)[0];
+  const hourlyCells = buildSessionHeatmap(trades).filter((item) => item.tradeCount > 0);
+  const bestHour = [...hourlyCells].sort((a, b) => b.pnl - a.pnl)[0];
+  const worstHour = [...hourlyCells].sort((a, b) => a.pnl - b.pnl)[0];
+  if (stats.avgLoss && stats.avgWin && Math.abs(stats.avgLoss) > stats.avgWin) {
+    return {
+      title: "First Insight",
+      text: `Your average loss (${moneyCompact(stats.avgLoss)}) is bigger than your average win (${moneyCompact(stats.avgWin)}). Protect risk before chasing more trades.`,
+    };
+  }
+  if (worstHour && worstHour.pnl < 0) {
+    return {
+      title: "First Insight",
+      text: `Your worst trading hour is ${worstHour.label}. That window is costing ${moneyCompact(worstHour.pnl)} in this sample.`,
+    };
+  }
+  if (bestSession) {
+    return {
+      title: "First Insight",
+      text: `Your best session is ${bestSession.label}. It has produced ${moneyCompact(bestSession.pnl)} across your logged trades.`,
+    };
+  }
+  if (bestHour && worstHour && bestHour.label !== worstHour.label) {
+    return {
+      title: "First Insight",
+      text: `Your win rate and P&L are stronger around ${bestHour.label} than ${worstHour.label}.`,
+    };
+  }
+  return {
+    title: "First Insight",
+    text: `You have enough data for a first sample: ${trades.length} trades, ${stats.wr.toFixed(0)}% win rate, ${moneyCompact(stats.pnl)} net P&L.`,
+  };
+}
+
 function JournalScreen({
   lang,
   trades,
   propTemplates,
   setTrades,
   isPremium,
+  packages,
+  storeProducts,
+  purchaseBusy,
+  paywallError,
+  showRestorePurchases,
   onOpenPropRisk,
   onUpgrade,
+  onPurchase,
+  onRestore,
   onTradeDeleted,
 }: {
   lang: Lang;
@@ -7263,8 +7468,15 @@ function JournalScreen({
   propTemplates: RiskTemplate[];
   setTrades: React.Dispatch<React.SetStateAction<Trade[]>>;
   isPremium: boolean;
+  packages: PurchasesPackage[];
+  storeProducts: PurchasesStoreProduct[];
+  purchaseBusy: boolean;
+  paywallError: string;
+  showRestorePurchases: boolean;
   onOpenPropRisk: (date: string) => void;
   onUpgrade: () => void;
+  onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
+  onRestore: () => void;
   onTradeDeleted: (tradeId: string) => void;
 }) {
   const t = (k: string) => tText(lang, k);
@@ -7281,6 +7493,9 @@ function JournalScreen({
   const [editId, setEditId] = useState<string | null>(null);
   const [pnlSide, setPnlSide] = useState<"plus" | "minus">("plus");
   const [savingTrade, setSavingTrade] = useState(false);
+  const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "pro_feature", title: "YouTrader Pro", message: "Unlock serious trader tools." });
+  const [firstInsightDismissed, setFirstInsightDismissed] = useState(false);
+  const [lockedInsightDismissed, setLockedInsightDismissed] = useState(false);
   const lastSaveAtRef = useRef(0);
   const emptyForm = {
     symbol: "MES",
@@ -7318,6 +7533,41 @@ function JournalScreen({
     })();
   }, []);
   const filtered = trades.filter((x) => x.date === selectedDate);
+  const monthlyTradeCount = useMemo(() => monthlyLoggedTradeCount(trades), [trades]);
+  const journalStats = useMemo(() => calcStats(trades), [trades]);
+  const firstInsight = useMemo(() => buildFirstInsight(trades, journalStats), [trades, journalStats]);
+  const lockedInsightKey = `locked-insight-dismissed:${usageMonthKey()}`;
+  useEffect(() => {
+    AsyncStorage.getItem("first-insight-dismissed:5").then((value) => setFirstInsightDismissed(value === "true")).catch(() => {});
+    AsyncStorage.getItem(lockedInsightKey).then((value) => setLockedInsightDismissed(value === "true")).catch(() => {});
+  }, [lockedInsightKey]);
+  const dismissFirstInsight = useCallback(() => {
+    setFirstInsightDismissed(true);
+    AsyncStorage.setItem("first-insight-dismissed:5", "true").catch(() => {});
+  }, []);
+  const dismissLockedInsight = useCallback(() => {
+    setLockedInsightDismissed(true);
+    AsyncStorage.setItem(lockedInsightKey, "true").catch(() => {});
+  }, [lockedInsightKey]);
+  const openTradeLimitModal = useCallback(() => {
+    setValueModal({
+      visible: true,
+      reason: "trade_limit",
+      title: "31 trades logged this month",
+      message: "You’ve logged 31 trades this month. That’s a real trading sample. Upgrade to Pro for unlimited trades, deeper analytics, and AI coaching.",
+      bullets: ["Unlimited monthly trades", "Deeper setup/session/symbol analytics", "AI coaching and Prop Firm Coach"],
+    });
+  }, []);
+  const openLockedInsightModal = useCallback(() => {
+    setValueModal({
+      visible: true,
+      reason: "locked_insight",
+      title: "Your journal found 3 hidden leaks",
+      message: "Unlock Pro to see exactly which session, setup, and behavior is costing you money.",
+      bullets: ["Hidden Leaks from your own trades", "Revenge Alerts after emotional sequences", "Pattern Detective and Prop Firm Coach"],
+      primaryTrial: true,
+    });
+  }, []);
   const showProGate = useCallback(
     (feature: string) => {
       Alert.alert("YouTrader Pro", `${feature} is included in YouTrader Pro.`, [
@@ -7345,6 +7595,10 @@ function JournalScreen({
     return rows;
   }, [monthDays]);
   const openNew = (date = selectedDate) => {
+    if (!isPremium && monthlyTradeCount >= FREE_MONTHLY_TRADE_LIMIT) {
+      openTradeLimitModal();
+      return;
+    }
     setSelectedDate(date);
     setEditId(null);
     setPnlSide("plus");
@@ -7396,6 +7650,10 @@ function JournalScreen({
     setSavingTrade(true);
     try {
       const action = editId ? "trade:update" : "trade:create";
+      if (!isPremium && !editId && monthlyTradeCount >= FREE_MONTHLY_TRADE_LIMIT) {
+        openTradeLimitModal();
+        return;
+      }
       const limit = await checkClientRateLimit(action, "journal-local");
       if (!limit.allowed) {
         Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
@@ -7449,7 +7707,7 @@ function JournalScreen({
       mood: safe.mood,
       notes: safe.notes,
       tags: safe.tags,
-      photoUri: isPremium ? safe.photoUri || null : null,
+      photoUri: safe.photoUri || null,
       voiceUri: isPremium ? safe.voiceUri || null : null,
       voiceName: isPremium && safe.voiceUri ? safeText(form.voiceName || "Voice note", 128) : null,
       createdAt: editId ? (previousTrade?.createdAt || now) : now,
@@ -7489,8 +7747,21 @@ function JournalScreen({
   const pnlPreview = calcPnl();
   const pickImage = async (camera: boolean) => {
     if (!isPremium) {
-      showProGate("Trade screenshots and photo uploads");
-      return;
+      const usedScreenshots = await getMonthlyUsageCount("screenshots", null);
+      if (form.photoUri) {
+        Alert.alert("YouTrader", "Free plan allows one screenshot on this trade. Replace the current image by removing it first.");
+        return;
+      }
+      if (usedScreenshots >= FREE_MONTHLY_SCREENSHOT_LIMIT) {
+        setValueModal({
+          visible: true,
+          reason: "usage_limit",
+          title: "Screenshot limit reached",
+          message: "Free includes 3 screenshots per month. Pro unlocks media notes for every setup.",
+          bullets: ["Unlimited or high-limit screenshots", "Voice notes for trade review", "Cloud sync and monthly reports"],
+        });
+        return;
+      }
     }
     try {
       if (camera) {
@@ -7513,6 +7784,7 @@ function JournalScreen({
             await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
             return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
           }
+          if (!isPremium) await incrementMonthlyUsageCount("screenshots", null);
           setForm({ ...form, photoUri: asset.uri });
         }
       } else {
@@ -7535,6 +7807,7 @@ function JournalScreen({
             await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
             return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
           }
+          if (!isPremium) await incrementMonthlyUsageCount("screenshots", null);
           setForm({ ...form, photoUri: asset.uri });
         }
       }
@@ -7721,6 +7994,32 @@ function JournalScreen({
           </Pressable>
         </Pressable>
       </Modal>
+      {!firstInsightDismissed && firstInsight ? (
+        <GlassCard style={styles.freeInsightCard} intensity={34}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
+            <Pressable onPress={dismissFirstInsight}>
+              <Text style={styles.valueModalLaterText}>Dismiss</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
+          <Text style={styles.freeInsightCta}>Pro unlocks Hidden Leaks, Revenge Alerts, Pattern Detective, and Prop Firm Coach.</Text>
+        </GlassCard>
+      ) : null}
+      {!isPremium && !lockedInsightDismissed && trades.length >= 7 && trades.length <= 10 ? (
+        <GlassCard style={styles.lockedInsightCard} intensity={36}>
+          <Text style={styles.freeInsightTitle}>Your journal found 3 hidden leaks.</Text>
+          <Text style={styles.freeInsightText}>Unlock Pro to see exactly which session, setup, and behavior is costing you money.</Text>
+          <View style={styles.valueInlineActions}>
+            <Pressable onPress={openLockedInsightModal} style={[styles.secondaryBig, styles.purpleAction, styles.valueInlineButton]}>
+              <Text style={styles.secondaryText}>Start 3-Day Free Pro</Text>
+            </Pressable>
+            <Pressable onPress={dismissLockedInsight} style={[styles.secondaryBig, styles.valueInlineButton]}>
+              <Text style={styles.secondaryText}>Maybe later</Text>
+            </Pressable>
+          </View>
+        </GlassCard>
+      ) : null}
       <Text style={styles.tradesTodayTitle}>
         TRADES TODAY • {eventDateLabel(selectedDate)}
       </Text>
@@ -7775,6 +8074,17 @@ function JournalScreen({
           </Card>
         </Pressable>
       ))}
+      <ProValueModal
+        content={valueModal}
+        packages={packages}
+        storeProducts={storeProducts}
+        purchaseBusy={purchaseBusy}
+        paywallError={paywallError}
+        showRestorePurchases={showRestorePurchases}
+        onPurchase={onPurchase}
+        onRestore={onRestore}
+        onClose={() => setValueModal((prev) => ({ ...prev, visible: false }))}
+      />
       <Modal visible={modal} animationType="slide">
         <SafeAreaView style={styles.modal}>
           <KeyboardAvoidingView
@@ -9842,7 +10152,7 @@ function App() {
       ...summarizeCustomerInfo(result.customerInfo),
     });
 
-    if (resultProductId !== YOU_TRADER_MONTHLY_PRODUCT_ID) {
+    if (resultProductId && !YOU_TRADER_PRO_PRODUCT_IDS.includes(resultProductId)) {
       const message = "Purchase completed for a different product. Please contact support.";
       setPaywallError(message);
       setShowRestorePurchases(true);
@@ -10070,11 +10380,18 @@ function App() {
               propTemplates={propTemplates}
               setTrades={setTrades}
               isPremium={isPremium}
+              packages={packages}
+              storeProducts={storeProducts}
+              purchaseBusy={purchaseBusy}
+              paywallError={paywallError}
+              showRestorePurchases={showRestorePurchases}
               onOpenPropRisk={(date) => {
                 setPropRiskDate(date);
                 setPropRiskOpen(true);
               }}
               onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+              onPurchase={purchasePackage}
+              onRestore={restorePurchases}
               onTradeDeleted={markCloudTradeDeleted}
             />
           ) : tab === "stats" ? (
@@ -13786,6 +14103,36 @@ const styles = StyleSheet.create({
   },
   freeNoticeTitle: { color: C.purple, fontSize: 15, fontWeight: "900" },
   freeNoticeText: { color: C.sub, fontSize: 13, marginTop: 5, lineHeight: 18 },
+  valueModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "center",
+    padding: 18,
+  },
+  valueModalCard: {
+    borderRadius: 28,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.42)",
+    backgroundColor: "rgba(8,10,14,0.94)",
+  },
+  valueModalEyebrow: { color: C.purple, fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  valueModalClose: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.06)" },
+  valueModalTitle: { color: C.text, fontSize: 25, lineHeight: 31, fontWeight: "900", marginTop: 12 },
+  valueModalText: { color: C.sub, fontSize: 14, lineHeight: 21, fontWeight: "800", marginTop: 8 },
+  valueModalBullet: { color: C.text, fontSize: 13, lineHeight: 19, fontWeight: "800", marginTop: 8 },
+  valueModalPlanRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  valueModalPlan: { flex: 1, borderRadius: 18, borderWidth: 1, borderColor: C.border, backgroundColor: C.card2, padding: 12 },
+  valueModalYearlyPlan: { borderColor: C.purple, backgroundColor: C.purpleSoft },
+  valueModalLaterBtn: { alignItems: "center", paddingVertical: 10 },
+  valueModalLaterText: { color: C.sub, fontSize: 12, fontWeight: "900" },
+  valueInlineActions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  valueInlineButton: { flex: 1, paddingVertical: 12, marginTop: 0 },
+  freeInsightCard: { marginTop: 12, marginBottom: 12, borderColor: "rgba(163,255,18,0.24)", backgroundColor: "rgba(163,255,18,0.055)" },
+  lockedInsightCard: { marginTop: 4, marginBottom: 12, borderColor: "rgba(176,38,255,0.34)", backgroundColor: C.purpleSoft },
+  freeInsightTitle: { color: C.text, fontSize: 18, fontWeight: "900" },
+  freeInsightText: { color: C.text, fontSize: 14, lineHeight: 21, fontWeight: "800", marginTop: 8 },
+  freeInsightCta: { color: C.purple, fontSize: 12, lineHeight: 18, fontWeight: "900", marginTop: 10 },
   paywallPreview: {
     marginTop: 16,
     borderRadius: 22,

@@ -123,3 +123,13 @@ Possible later extraction targets:
 - Prop Firm Coach replaces the previous duplicate Eval and Evaluation/Funded blocks in the rendered AI Analytics flow.
 - Stats export visuals use `src/components/insights/exportDesign.ts` as the shared branding source.
 - Before release, manually QA Share P&L, Save image to Photos, Monthly PDF, News tap-through, AI Analytics Prop Firm Coach, Radar color, Heatmap colors, and Journal scroll cue on device.
+
+## Monetization And Security Follow-Up (2026-06-30)
+
+- Free mode now uses local monthly counters for 31 trades/month, 5 share cards/month, 1 watermarked PDF preview/month, and 3 screenshots/month. Anonymous/local users do not need sign-in.
+- Free users get a deterministic First Insight after 5 trades using local analytics only. No paid AI/API call is made.
+- Free users can see a non-blocking locked hidden-leaks preview around 7-10 trades; Maybe Later is stored for the month.
+- The 31-trade limit blocks only new trade creation for the current month. Existing data, Calendar P&L, Basic Stats, News, Market Intelligence read-only data, and Calculator remain usable.
+- RevenueCat monthly product remains `youtrader_pro_monthly` ($12.99/mo) and yearly remains `youtrader_pro_yearly` ($99.99/yr). Both should map to the shared Pro entitlement.
+- 3-day trial manual setup required: App Store Connect → Subscriptions → YouTrader Pro monthly product → Introductory Offer → Free Trial → 3 days; RevenueCat → Products/Offerings → refresh products and confirm the monthly package displays trial eligibility. Code does not fake trial entitlement; Apple/RevenueCat controls availability, already-used-trial, cancellation, and return to free mode.
+- Added Supabase migration `202606300001_harden_security_function_search_paths.sql` for Security Advisor warnings: explicit function search_path and removed direct anon/authenticated EXECUTE on affected security-definer helpers while preserving service_role access. Apply with `supabase db push` in the target project.

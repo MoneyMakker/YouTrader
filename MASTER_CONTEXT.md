@@ -2079,3 +2079,13 @@ GitHub Actions automation lives at `.github/workflows/market-intelligence.yml`. 
 - Stats Trading Radar accent moved from lime/neon to premium purple while preserving logic.
 - Heatmap losing cells now use clear red and empty cells are quieter.
 - Journal scroll cue was moved higher between the calendar and lower tab area.
+
+## Free / Pro Monetization Update (2026-06-30)
+
+YouTrader free mode should build habit before asking for payment. Free users can use the manual journal, edit/delete trades, view Calendar P&L, Calculator/Risk Calculator, Basic Stats, readable News, and shared cached Market Intelligence when the backend worker has published rows. Free mode includes 31 logged trades per calendar month, 5 share cards per month, 1 watermarked monthly PDF preview per month, and up to 3 screenshots per month.
+
+Value gates are now milestone-based: after 5 trades the app shows a deterministic First Insight from existing analytics engines, with no AI/API call. Around 7-10 trades, the app can show a non-blocking locked hidden-leaks preview. At 31 trades in the current month, adding new trades is blocked until next month unless the user upgrades, but existing journal/calendar/stats/news/calculator remain usable.
+
+Pro unlocks unlimited trades, higher media/export limits, voice notes, CSV import, cloud sync, full Share/Save/PDF exports, AI Trade Analysis, Prop Firm Coach, Hidden Leaks, Revenge Trading Alerts, Pattern Detective/deeper intelligence, setup/session/symbol breakdowns, advanced filters, monthly reports, and higher achievement/share allowances.
+
+RevenueCat product IDs remain `youtrader_pro_monthly` ($12.99/mo) and `youtrader_pro_yearly` ($99.99/yr). Both must unlock the same `REVENUECAT_ENTITLEMENT_ID`. Trial copy is shown only as a RevenueCat/App Store purchase entry point; the 3-day trial itself must be configured in App Store Connect and RevenueCat, not faked in app code.

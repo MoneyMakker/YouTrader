@@ -106,3 +106,30 @@ Or paste the SQL into the Supabase SQL editor.
 - Current screenshot and voice note attachments are local URIs unless future cloud upload is added; storage policies are ready for secure cloud uploads.
 - IP-based bot protection requires a server/Edge layer because mobile apps do not have trustworthy client-side IP identity.
 
+## Security Advisor Function Hardening (2026-06-30)
+
+Migration: `supabase/migrations/202606300001_harden_security_function_search_paths.sql`
+
+This migration addresses Supabase Security Advisor warnings for:
+
+- `public.security_validate_trade_journal`
+- `public.security_validate_upload_metadata`
+- `public.security_claim_idempotency_key`
+- `public.security_consume_request_limit`
+- `public.security_log_event`
+
+Changes:
+
+- Sets explicit `search_path = public, pg_catalog` on affected functions.
+- Revokes direct `EXECUTE` from `public`, `anon`, and `authenticated` for trigger-only validation functions.
+- Revokes direct client RPC access for affected security-definer helper functions.
+- Preserves `service_role` access for backend/Edge Function workflows.
+- Preserves `security_consume_request_limit_for_actor` for the secure-upload Edge Function with service-role-only execution.
+
+Apply to Supabase with:
+
+```bash
+supabase db push
+```
+
+After deployment, rerun Supabase Security Advisor. Client-side local rate limiting and idempotency remain active; privileged request limiting should run through service-role Edge Functions.

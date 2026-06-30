@@ -19,6 +19,7 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
   const chart = buildEquityChart(equityCurve);
   const netPnl = numberValue(stats.netPnl);
   const pnlTone = netPnl >= 0 ? GREEN : RED;
+  const watermarked = Boolean(stats.watermarked);
   const logoHtml = logoDataUri
     ? `<img class="logo" src="${logoDataUri}"/>`
     : `<div class="fallback-logo">YT</div>`;
@@ -57,9 +58,11 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
     li { color: ${TEXT}; margin: 7px 0; padding-left: 16px; position: relative; font-weight: 800; font-size: 13px; line-height: 1.35; }
     li:before { content: ""; position: absolute; left: 0; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: ${PURPLE}; }
     .footer { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.12); color: ${SUB}; font-size: 11px; display: flex; justify-content: space-between; font-weight: 800; }
+    .watermark { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.075); font-size: 64px; font-weight: 900; transform: rotate(-28deg); pointer-events: none; letter-spacing: 2px; }
   </style>
 </head>
 <body>
+  ${watermarked ? '<div class="watermark">FREE PREVIEW</div>' : ''}
   <div class="page">
     <div class="top">
       <div class="brand">

@@ -255,3 +255,9 @@ Market Intelligence is educational cached context, not a signal engine. It must 
 - Never run destructive database commands against production without human review.
 - Never give AI agents unrestricted production access; prefer scoped, reviewed secrets and read-only access where possible.
 - Run `npm run security:check` and `npm run typecheck` before release.
+
+## Free / Pro Packaging Principle (2026-06-30)
+
+Free YouTrader must feel useful, not blocked: journal, calendar P&L, calculator, basic stats, readable news, and cached market intelligence remain habit-building value. Pro should appear after meaningful value moments: trade sample complete, hidden leak preview, export/media limits, or explicit Pro feature taps.
+
+Current packaging: Free includes 31 trades/month, 5 share cards/month, 1 watermarked PDF preview/month, and 3 screenshots/month. Pro unlocks unlimited serious trader workflow: AI coaching, Prop Firm Coach, Hidden Leaks, Revenge Alerts, Pattern Detective, voice notes, CSV import, cloud sync, advanced analytics, and premium reports.
