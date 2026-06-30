@@ -142,3 +142,11 @@ Possible later extraction targets:
 - Added `docs/AI_CODING_SECURITY_RULES.md` for AI-agent safety, deny-by-default rules, package hygiene, CORS allowlists, webhook validation, backups, restore tests, and test/prod separation.
 - `App.tsx` billing debug logging no longer uses direct `console.log`; it goes through the app logger and remains gated by billing debug mode.
 - Existing migration `202606300001_harden_security_function_search_paths.sql` remains the Security Advisor fix for function `search_path` and SECURITY DEFINER execute grants. Apply with `supabase db push` if the target Supabase project has not received it yet.
+
+## Design Review Skill Follow-Up (2026-06-30)
+
+- Added project-level skill `.agents/skills/design-review/SKILL.md`.
+- Added `docs/MY_UI.md` as the permanent YouTrader UI source of truth.
+- Future UI work must run `frontend-design` thinking first, compare against `docs/MY_UI.md`, then pass the `design-review` checklist before completion.
+- Design-review checks premium dark iOS quality, trader-first next action clarity, readable iPhone metrics, spacing, charts, Pro/paywall timing, exports/PDF/share branding, and business-logic preservation.
+- This is a review gate only; it does not redesign the app or change Supabase, RevenueCat, GitHub Actions, or security flows.

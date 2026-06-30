@@ -1,6 +1,6 @@
 # YouTrader Master Context
 
-Last updated: 2026-06-27
+Last updated: 2026-06-30
 
 This file is the permanent source of truth for YouTrader. Future Cursor chats must read this file first before changing code. Also read `PRODUCT_VISION.md` for long-term product direction. Older files such as `PROJECT_HANDOFF.md`, `CONTINUATION.md`, `KNOWLEDGE.md`, `ARCHITECTURE.md`, and `.cursor/project-memory.md` are historical context, but this file supersedes them when there is a conflict.
 
@@ -26,6 +26,8 @@ Product vision:
 - Dark, glassy, visual, information-dense, disciplined.
 - More like Apple Wallet, Apple Health, Apple Fitness, Apple Stocks, Linear, Arc Browser, Notion Calendar, and a minimal Bloomberg terminal.
 - Not cyberpunk, not gamer, not crypto-dashboard, not neon-heavy.
+- Project UI source of truth: `docs/MY_UI.md`.
+- UI work must use `.agents/skills/frontend-design` first and then pass `.agents/skills/design-review` before completion.
 
 Business constraints:
 
@@ -52,6 +54,17 @@ Current app state:
 - `package.json` version: `1.5.7`.
 - Dark UI only.
 - iPad/tablet support is enabled.
+
+
+## Design Review System (2026-06-30)
+
+YouTrader now has a permanent project-level UI review gate:
+
+- `.agents/skills/frontend-design` — first-pass design thinking for visual direction and quality.
+- `docs/MY_UI.md` — the user's YouTrader UI source of truth: premium dark iOS/Liquid Glass, trader-first hierarchy, color semantics, Pro/paywall timing, charts, exports, and readability.
+- `.agents/skills/design-review` — final checklist before any UI task is considered complete.
+
+For every future UI task, agents must run frontend-design thinking, compare against `docs/MY_UI.md`, run the design-review checklist, fix obvious UI issues, and only then summarize. Do not treat business logic changes as design fixes.
 
 ## 2. Current Repository Structure
 
