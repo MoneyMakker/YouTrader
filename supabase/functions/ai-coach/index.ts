@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import { corsHeadersFor, jsonResponse } from "../_shared/cors.ts";
 import { checkAIQuota, recordAIUsage } from "../_shared/aiQuota.ts";
 import { generateAI } from "../_shared/aiProvider.ts";
 import { isAICoachAction, type AICoachRequest } from "../_shared/aiSchemas.ts";
@@ -34,8 +34,8 @@ async function hasServerProEntitlement(supabaseAdmin: ReturnType<typeof createCl
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeadersFor(req) });
+  if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405, req);
 
   const supabaseUrl = getEnv("SUPABASE_URL");
   const anonKey = getEnv("SUPABASE_ANON_KEY") || getEnv("SUPABASE_PUBLISHABLE_KEY");
@@ -43,12 +43,12 @@ Deno.serve(async (req) => {
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     console.error("ai_coach_missing_supabase_env");
-    return jsonResponse({ error: "AI service is not configured." }, 500);
+    return jsonResponse({ error: "AI service is not configured." }, 500, req);
   }
 
   const authHeader = req.headers.get("Authorization") || "";
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!jwt) return jsonResponse({ error: "Authentication required." }, 401);
+  if (!jwt) return jsonResponse({ error: "Authentication required." }, 401, req);
 
   const supabase = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
@@ -57,18 +57,18 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userError } = await supabase.auth.getUser(jwt);
   if (userError || !userData.user) {
-    return jsonResponse({ error: "Authentication required." }, 401);
+    return jsonResponse({ error: "Authentication required." }, 401, req);
   }
 
   let body: AICoachRequest;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: "Invalid JSON body." }, 400);
+    return jsonResponse({ error: "Invalid JSON body." }, 400, req);
   }
 
   if (!isAICoachAction(body.action)) {
-    return jsonResponse({ error: "Unsupported AI action." }, 400);
+    return jsonResponse({ error: "Unsupported AI action." }, 400, req);
   }
 
   const isPro = await hasServerProEntitlement(supabaseAdmin, userData.user.id);
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       providerStatus: "free_preview",
       usedFallback: true,
       message: "Upgrade to Pro to run NVIDIA AI coaching. This preview uses local analysis.",
-    });
+    }, 200, req);
   }
 
   const quota = await checkAIQuota(supabaseAdmin, userData.user.id, body.action);
@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
           remaining: 0,
           limit: quota.limit,
         },
-      });
+      }, 200, req);
     }
     return jsonResponse(
       {
@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
         providerStatus: "quota_exceeded",
       },
       429,
+      req,
     );
   }
 
@@ -151,5 +152,5 @@ Deno.serve(async (req) => {
       limit: quota.limit,
       warning: quota.warning,
     },
-  });
+  }, 200, req);
 });

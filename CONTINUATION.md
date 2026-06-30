@@ -133,3 +133,12 @@ Possible later extraction targets:
 - RevenueCat monthly product remains `youtrader_pro_monthly` ($12.99/mo) and yearly remains `youtrader_pro_yearly` ($99.99/yr). Both should map to the shared Pro entitlement.
 - 3-day trial manual setup required: App Store Connect → Subscriptions → YouTrader Pro monthly product → Introductory Offer → Free Trial → 3 days; RevenueCat → Products/Offerings → refresh products and confirm the monthly package displays trial eligibility. Code does not fake trial entitlement; Apple/RevenueCat controls availability, already-used-trial, cancellation, and return to free mode.
 - Added Supabase migration `202606300001_harden_security_function_search_paths.sql` for Security Advisor warnings: explicit function search_path and removed direct anon/authenticated EXECUTE on affected security-definer helpers while preserving service_role access. Apply with `supabase db push` in the target project.
+
+
+## Production Security Hardening Follow-Up (2026-06-30)
+
+- Edge Function CORS was hardened away from wildcard origins. Configure Supabase Edge Function secret `ALLOWED_ORIGINS` with production app origins before redeploying `ai-coach` and `secure-upload`.
+- `scripts/security-check.mjs` now scans additional private-token patterns including GitHub, Slack, RevenueCat webhook secret assignments, generic webhook secrets, and service-role assignments.
+- Added `docs/AI_CODING_SECURITY_RULES.md` for AI-agent safety, deny-by-default rules, package hygiene, CORS allowlists, webhook validation, backups, restore tests, and test/prod separation.
+- `App.tsx` billing debug logging no longer uses direct `console.log`; it goes through the app logger and remains gated by billing debug mode.
+- Existing migration `202606300001_harden_security_function_search_paths.sql` remains the Security Advisor fix for function `search_path` and SECURITY DEFINER execute grants. Apply with `supabase db push` if the target Supabase project has not received it yet.

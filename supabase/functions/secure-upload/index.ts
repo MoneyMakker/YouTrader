@@ -1,11 +1,29 @@
 // @ts-nocheck
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const defaultAllowedOrigins = ["https://youtrader.app", "https://www.youtrader.app"];
+
+function configuredAllowedOrigins() {
+  const raw = Deno.env.get("ALLOWED_ORIGINS") || "";
+  const configured = raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return configured.length ? configured : defaultAllowedOrigins;
+}
+
+function corsHeadersFor(req?: Request) {
+  const allowedOrigins = configuredAllowedOrigins();
+  const origin = req?.headers.get("Origin") || "";
+  const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, idempotency-key",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 type Category = "screenshot" | "voice-note" | "export" | "csv";
 
@@ -50,15 +68,15 @@ const config: Record<Category, { bucket: string; folder: string; maxBytes: numbe
   },
 };
 
-function json(status: number, body: Record<string, unknown>) {
+function json(status: number, body: Record<string, unknown>, req?: Request) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "content-type": "application/json" },
+    headers: { ...corsHeadersFor(req), "content-type": "application/json" },
   });
 }
 
-function invalid(status = 400) {
-  return json(status, { error: "Upload rejected." });
+function invalid(status = 400, req?: Request) {
+  return json(status, { error: "Upload rejected." }, req);
 }
 
 function hasTraversalTrick(value: string) {
@@ -146,19 +164,19 @@ async function consumeUploadLimit(admin: ReturnType<typeof createClient>, userId
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return invalid(405);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeadersFor(req) });
+  if (req.method !== "POST") return invalid(405, req);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (!supabaseUrl || !serviceKey) return invalid(500);
+  if (!supabaseUrl || !serviceKey) return invalid(500, req);
 
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   const { data: userData, error: userError } = await admin.auth.getUser(token);
   const user = userData.user;
-  if (userError || !user) return invalid(401);
+  if (userError || !user) return invalid(401, req);
 
   const logEvent = async (eventType: string, category = "upload", severity = "warning") => {
     await admin.from("security_events").insert({
@@ -176,37 +194,37 @@ Deno.serve(async (req) => {
     payload = await req.json();
   } catch {
     await logEvent("malformed_upload_metadata");
-    return invalid();
+    return invalid(400, req);
   }
 
   const category = payload.category;
   if (!category || !config[category]) {
     await logEvent("invalid_upload_category");
-    return invalid();
+    return invalid(400, req);
   }
   const rule = config[category];
   const limitAllowed = await consumeUploadLimit(admin, user.id, `upload:${category}`);
   if (!limitAllowed) {
     await logEvent("rate_limit_exceeded", category);
-    return invalid(429);
+    return invalid(429, req);
   }
 
   const originalName = String(payload.originalName || "");
   if (!validateFilename(originalName)) {
     await logEvent(hasTraversalTrick(originalName) ? "path_traversal_attempt" : "invalid_filename", category);
-    return invalid();
+    return invalid(400, req);
   }
 
   const mimeType = String(payload.mimeType || "").toLowerCase().trim();
   const ext = extensionFor(originalName);
   if (!rule.mimes[mimeType] || !rule.mimes[mimeType].includes(ext)) {
     await logEvent("invalid_mime_or_extension", category);
-    return invalid();
+    return invalid(400, req);
   }
 
   if (!payload.base64 || typeof payload.base64 !== "string") {
     await logEvent("malformed_upload_metadata", category);
-    return invalid();
+    return invalid(400, req);
   }
 
   let bytes: Uint8Array;
@@ -214,21 +232,21 @@ Deno.serve(async (req) => {
     bytes = decodeBase64(payload.base64);
   } catch {
     await logEvent("malformed_upload_body", category);
-    return invalid();
+    return invalid(400, req);
   }
 
   const size = Number(payload.size || bytes.byteLength);
   if (!Number.isFinite(size) || size !== bytes.byteLength || size <= 0) {
     await logEvent("invalid_upload_size_metadata", category);
-    return invalid();
+    return invalid(400, req);
   }
   if (size > rule.maxBytes) {
     await logEvent("oversized_upload", category);
-    return invalid(413);
+    return invalid(413, req);
   }
   if (!validateMagicBytes(category, mimeType, bytes)) {
     await logEvent("invalid_magic_bytes", category);
-    return invalid();
+    return invalid(400, req);
   }
 
   const fileHash = await sha256(bytes);
@@ -254,21 +272,21 @@ Deno.serve(async (req) => {
       sha256: duplicate.sha256,
       duplicate: true,
       createdAt: duplicate.created_at,
-    });
+    }, req);
   }
 
   const safeExt = rule.mimes[mimeType][0];
   const path = `${user.id}/${rule.folder}/${crypto.randomUUID()}.${safeExt}`;
   if (!path.startsWith(`${user.id}/`) || path.includes("..")) {
     await logEvent("path_traversal_attempt", category);
-    return invalid();
+    return invalid(400, req);
   }
 
   const { error: uploadError } = await admin.storage.from(rule.bucket).upload(path, bytes, {
     contentType: mimeType,
     upsert: false,
   });
-  if (uploadError) return invalid(500);
+  if (uploadError) return invalid(500, req);
 
   const metadata = {
     user_id: user.id,
@@ -286,7 +304,7 @@ Deno.serve(async (req) => {
     .select("bucket,path,content_type,file_size,sha256,created_at")
     .single();
 
-  if (insertError) return invalid(500);
+  if (insertError) return invalid(500, req);
   return json(200, {
     bucket: inserted.bucket,
     path: inserted.path,
@@ -295,5 +313,5 @@ Deno.serve(async (req) => {
     sha256: inserted.sha256,
     duplicate: false,
     createdAt: inserted.created_at,
-  });
+  }, req);
 });

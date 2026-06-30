@@ -1340,7 +1340,12 @@ function moodLabel(key: string) {
 
 function billingDebugLog(message: string, details?: Record<string, unknown>) {
   if (!BILLING_DEBUG_LOGS) return;
-  console.log(`[billing] ${message}`, details || {});
+  logger.info("RevenueCat billing debug", {
+    feature: "revenuecat",
+    action: "billing_debug",
+    message,
+    details: details || {},
+  });
 }
 
 function sleep(ms: number) {

@@ -17,9 +17,12 @@ const allowListedReferences = [
 const secretPatterns = [
   { name: "Supabase secret key", pattern: /sb_secret_[A-Za-z0-9_\-.]{20,}/g },
   { name: "OpenAI-style secret", pattern: /sk-[A-Za-z0-9_-]{32,}/g },
+  { name: "GitHub token", pattern: /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{20,}/g },
+  { name: "Slack token", pattern: /xox[baprs]-[A-Za-z0-9-]{20,}/g },
   { name: "Private key block", pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
   { name: "Hard-coded service role JWT", pattern: /eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]*service_role[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+/g },
-  { name: "Assigned private API key", pattern: /(?:OPENAI_API_KEY|ANTHROPIC_API_KEY|NVIDIA_API_KEY|SUPABASE_SERVICE_ROLE_KEY|REVENUECAT_SECRET_KEY)\s*[:=]\s*["'][^"']{12,}["']/g },
+  { name: "Assigned private API key", pattern: /(?:OPENAI_API_KEY|ANTHROPIC_API_KEY|NVIDIA_API_KEY|SUPABASE_SERVICE_ROLE_KEY|REVENUECAT_SECRET_KEY|REVENUECAT_WEBHOOK_SECRET|WEBHOOK_SECRET|PRIVATE_API_TOKEN)\s*[:=]\s*["'][^"']{12,}["']/g },
+  { name: "Assigned service role secret", pattern: /service_role(?:_key)?\s*[:=]\s*["'][^"']{12,}["']/gi },
 ];
 
 const problems = [];

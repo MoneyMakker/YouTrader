@@ -133,3 +133,51 @@ supabase db push
 ```
 
 After deployment, rerun Supabase Security Advisor. Client-side local rate limiting and idempotency remain active; privileged request limiting should run through service-role Edge Functions.
+
+
+## Production Security Audit Addendum (2026-06-30)
+
+### Edge Function CORS
+
+- Production Edge Functions must not use wildcard CORS.
+- `_shared/cors.ts`, `ai-coach`, and `secure-upload` now use an origin allowlist.
+- Set the optional Supabase Edge Function secret `ALLOWED_ORIGINS` to a comma-separated list, for example:
+
+```text
+https://youtrader.app,https://www.youtrader.app
+```
+
+Native Expo/iOS requests usually do not send a browser `Origin`; those continue to work while browser-based calls are constrained to the allowlist.
+
+### Secrets And AI Agent Safety
+
+- `npm run security:check` scans tracked files for Supabase secret keys, service-role JWTs, private key blocks, private AI keys, RevenueCat/webhook secret assignments, GitHub tokens, and Slack tokens.
+- Do not paste service role keys, webhook secrets, private Apple keys, RevenueCat secrets, or `.env` files into AI chats.
+- Review agents should use read-only database access. Production write access requires human approval.
+- Do not put private server keys in `EXPO_PUBLIC_*` variables.
+
+### Environments
+
+- Local: developer `.env` only, never committed.
+- Staging/sandbox: separate Supabase and RevenueCat/App Store sandbox credentials.
+- Production: human-reviewed deploys only; verify branch, latest commit, migrations, and secrets before `supabase db push` or release builds.
+
+### Backups And Recovery
+
+- Verify Supabase production backups/PITR in the Supabase dashboard according to the project plan.
+- Test restore into a non-production project before relying on backups for releases.
+- Keep storage cleanup aligned with user data deletion; user upload buckets are private and path-scoped by user id.
+- Rotate production secrets every 90 days and immediately after suspected exposure.
+
+### GDPR And Account/Data Deletion
+
+- Users must be able to export their journal data before deletion when applicable.
+- Account deletion should remove or anonymize user-owned journal rows, uploads metadata, screenshots, voice notes, exports, idempotency keys, request limits, and security events where legally appropriate.
+- Storage cleanup should delete files under the user's `<user_id>/...` prefixes in private buckets.
+- Payment/subscription records may need retention for fraud, tax, or App Store/RevenueCat reconciliation; document retention before adding automated deletion.
+
+### Webhooks And Payments
+
+- RevenueCat/App Store webhook handlers must validate provider signatures before changing entitlement state.
+- Test webhook endpoints must not be able to mutate production subscription data.
+- Payment entitlement changes should be logged without raw webhook secrets or full payment payloads.
