@@ -50,6 +50,16 @@ function mustEnv(name) {
   return value;
 }
 
+function isValidSupabaseServiceRoleKey(value) {
+  if (value.startsWith("eyJ")) {
+    return value.length >= 80;
+  }
+  if (value.startsWith("sb_secret_")) {
+    return /^sb_secret_[A-Za-z0-9_\-.]{20,}$/.test(value);
+  }
+  return false;
+}
+
 function mustSecretEnv(name) {
   const value = mustEnv(name);
   if (name === "SUPABASE_SERVICE_ROLE_KEY") {
@@ -59,8 +69,8 @@ function mustSecretEnv(name) {
     if (value.startsWith("EXPO_PUBLIC_")) {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY must never come from an Expo public env variable");
     }
-    if (value.length < 80) {
-      throw new Error("SUPABASE_SERVICE_ROLE_KEY is too short to be a real service role key");
+    if (!isValidSupabaseServiceRoleKey(value)) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY must be a legacy service role JWT (eyJ...) or a Supabase secret key (sb_secret_...)");
     }
   }
   return value;
