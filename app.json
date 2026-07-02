@@ -3,6 +3,9 @@
     "name": "YouTrader",
     "slug": "youtrader-pro",
     "version": "1.5.7",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "scheme": "com.youtrader.pro",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

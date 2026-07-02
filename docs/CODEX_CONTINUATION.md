@@ -54,6 +54,15 @@ Version sources checked:
 - Expo Notifications package installed: `expo-notifications`.
 - Push readiness exists for permission handling/local helpers; do not assume remote push sending is live without backend/token storage review.
 
+## Growth Infrastructure Readiness
+
+- Growth infrastructure documentation lives in `docs/GROWTH_INFRASTRUCTURE.md`.
+- Firebase Remote Config is readiness-only; Firebase SDK/config files are not installed in this checkpoint.
+- Safe growth defaults live in `src/config/growthConfig.ts`.
+- Firebase/A-B flags may control only safe copy and UI flags. They must never control secrets, RevenueCat product IDs, entitlement IDs, prices, Supabase rules, or security behavior.
+- Expo Updates readiness uses `runtimeVersion.policy = appVersion` in `app.json`; `expo-updates` is not installed yet.
+- GitHub Actions QA workflow lives in `.github/workflows/qa.yml` and does not replace manual TestFlight/iPhone QA.
+
 Observability safety rules:
 
 - Do not log secrets, tokens, screenshots, voice notes, private journal notes, full trade payloads, or payment payloads.
@@ -107,9 +116,11 @@ Safe next tasks after this checkpoint:
 5. Verify Expo notification permission denied/allowed flows.
 6. Verify PDF/share card exports on real iPhone Photos/share sheet.
 7. Verify News and Market Intelligence cached read-only screens.
-8. Run release checks before any next upload:
+8. Verify growth defaults and Remote Config/A-B docs before enabling Firebase.
+9. Run release checks before any next upload:
    - `npm run typecheck`
    - `npm run security:check`
+   - `npm audit`
    - `npx expo-doctor`
 
 Phase 2 candidates, not urgent release blockers:
@@ -118,6 +129,7 @@ Phase 2 candidates, not urgent release blockers:
 - Evaluate React Native Skia only after release stability.
 - Re-enable or harden Supabase auth/cloud sync only with explicit QA plan.
 - Add remote push token backend only after RLS/storage design.
+- Install Firebase Remote Config or `expo-updates` only after compatibility and App Store build risk are reviewed.
 
 ## Rules For Future Codex Sessions
 
@@ -132,8 +144,9 @@ Phase 2 candidates, not urgent release blockers:
 9. Preserve existing Journal, Stats, AI Analytics, News, Calendar, exports, paywall, and RevenueCat flows.
 10. For UI tasks, follow `docs/MY_UI.md` and the design-review gate.
 11. For security tasks, prefer docs/scripts/migrations over risky rewrites.
-12. Run requested validation before final response.
-13. Do not commit until the user asks, except when the prompt explicitly includes a commit instruction.
+12. For growth experiments, keep Remote Config limited to safe copy/flags and document every manual Firebase dashboard step.
+13. Run requested validation before final response.
+14. Do not commit until the user asks, except when the prompt explicitly includes a commit instruction.
 
 ## Codex Session Starter Prompt
 

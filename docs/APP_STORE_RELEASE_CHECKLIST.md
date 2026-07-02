@@ -66,6 +66,23 @@ Use this before every TestFlight/App Store upload. Do not paste secrets into cha
 - Expo push token is not stored unless a safe server path exists.
 - Manual setup for remote push later: Apple push credentials in EAS/Expo, backend token table with RLS, server sender, unsubscribe/delete cleanup.
 
+## Remote Config And A/B Testing Checklist
+
+- App builds and runs when Firebase config is missing.
+- Remote Config is used only for safe copy/flags, never secrets, prices, RevenueCat product IDs, entitlement IDs, security rules, or Supabase behavior.
+- Safe keys are limited to paywall headline/CTA, upgrade button wording, `show_trial_offer`, `show_yearly_discount`, `show_locked_insight_after_7_trades`, `show_push_prompt`, and copy variants.
+- A/B experiments preserve Restore Purchases, legal subscription disclosure, and current App Store pricing.
+- Initial experiment ideas are documented in `docs/GROWTH_INFRASTRUCTURE.md`.
+- No Firebase admin credentials or private files are committed.
+
+## Expo Updates / OTA Checklist
+
+- `runtimeVersion` remains configured with `policy: appVersion`.
+- OTA is not used for native dependencies, RevenueCat IDs, entitlement changes, Info.plist permissions, Supabase schema/security, or legal/privacy changes.
+- OTA candidates are limited to JavaScript-only fixes, copy, safe UI polish, and non-security bug fixes.
+- Preview channel is tested before any production update.
+- Rollback plan is documented before production OTA rollout.
+
 ## AI Provider Checklist
 
 Server-only Supabase Edge Function secrets:
@@ -108,6 +125,12 @@ Rules:
 
 ## Manual QA Matrix
 
+- App runs with Firebase config missing.
+- Growth flags use safe local defaults.
+- Remote Config variants do not change prices/product IDs.
+- EAS Update/OTA is disabled or preview-tested before production.
+- GitHub Actions QA passes.
+- Expo Doctor may show the known non-CNG/native-folder warning; review it before native config changes.
 - Free user basic journal add/edit/delete.
 - Pro user unlocked flows.
 - Trial user entitlement flow.
