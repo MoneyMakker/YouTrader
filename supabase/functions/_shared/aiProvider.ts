@@ -4,6 +4,7 @@ import {
   schemaInstruction,
   type AICoachAction,
 } from "./aiSchemas.ts";
+import { traceAIEvent } from "./langfuse.ts";
 
 type GenerateInput = {
   action: AICoachAction;
@@ -66,6 +67,11 @@ function modelFor(provider: Exclude<ProviderName, "local">, tier: ModelTier) {
   if (provider === "anthropic") return (tier === "deep" ? deep : fast) || DEFAULT_ANTHROPIC_MODEL;
   if (provider === "nvidia") return Deno.env.get("NVIDIA_MODEL")?.trim() || DEFAULT_NVIDIA_MODEL;
   return (tier === "deep" ? deep : fast) || (tier === "deep" ? DEFAULT_DEEP_MODEL : DEFAULT_FAST_MODEL);
+}
+
+function traceModelFor(provider: ProviderName, tier: ModelTier) {
+  if (provider === "local") return "local_fallback";
+  return modelFor(provider, tier);
 }
 
 function userContent(input: GenerateInput) {
@@ -304,9 +310,24 @@ async function callConfiguredProvider(input: GenerateInput): Promise<{ data: Rec
 }
 
 export async function generateAI(input: GenerateInput, allowNvidia: boolean): Promise<ProviderResult> {
+  const startedAt = Date.now();
+  const tier = modelTier(input.action);
+  const userTier = allowNvidia ? "pro" : "free";
   if (!allowNvidia) {
+    const data = fallbackBase(input.action, input.payload);
+    await traceAIEvent({
+      action: input.action,
+      period: input.period,
+      provider: "local",
+      model: traceModelFor("local", tier),
+      tier: userTier,
+      latencyMs: Date.now() - startedAt,
+      success: true,
+      usedFallback: true,
+      responseSize: JSON.stringify(data).length,
+    });
     return {
-      data: fallbackBase(input.action, input.payload),
+      data,
       provider: "local",
       usedFallback: true,
       message: "AI preview uses local analysis for free users.",
@@ -315,6 +336,17 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
 
   try {
     const result = await callConfiguredProvider(input);
+    await traceAIEvent({
+      action: input.action,
+      period: input.period,
+      provider: result.provider,
+      model: traceModelFor(result.provider, tier),
+      tier: userTier,
+      latencyMs: Date.now() - startedAt,
+      success: true,
+      usedFallback: false,
+      responseSize: JSON.stringify(result.data).length,
+    });
     return {
       data: result.data,
       provider: result.provider,
@@ -325,8 +357,21 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
       action: input.action,
       message: error instanceof Error ? error.message : "unknown",
     });
+    const data = fallbackBase(input.action, input.payload);
+    await traceAIEvent({
+      action: input.action,
+      period: input.period,
+      provider: "local",
+      model: traceModelFor("local", tier),
+      tier: userTier,
+      latencyMs: Date.now() - startedAt,
+      success: false,
+      usedFallback: true,
+      errorMessage: error instanceof Error ? error.message : "unknown",
+      responseSize: JSON.stringify(data).length,
+    });
     return {
-      data: fallbackBase(input.action, input.payload),
+      data,
       provider: "local",
       usedFallback: true,
       message: "Cloud AI is unavailable right now, so YouTrader used safe local analysis.",

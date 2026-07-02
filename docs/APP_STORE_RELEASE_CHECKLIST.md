@@ -101,6 +101,7 @@ Server-only Supabase Edge Function secrets:
 - `AI_MODEL_FAST` for cheap/fast tasks, for example Gemini 2.5 Flash.
 - `AI_MODEL_DEEP` for Pro deep analysis, for example Claude Sonnet through OpenRouter or Anthropic.
 - Existing optional fallback: `NVIDIA_API_KEY`, `NVIDIA_MODEL`.
+- Optional observability: `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`.
 
 Rules:
 
@@ -111,6 +112,10 @@ Rules:
 - AI must not provide financial advice or buy/sell/hold signals.
 - Client AI calls must go through Supabase Edge Function `ai-coach`; no private provider key may exist in Expo public env.
 - Free users must receive local preview/fallback only and must not trigger paid provider generation.
+- Langfuse tracing, if enabled, is server-side only and must not log raw prompts, private notes, screenshots, voice notes, full trade entries, tokens, or PII.
+- Promptfoo AI safety checks pass or are reviewed before AI prompt/provider changes:
+  - `npm run test:ai-safety`
+  - See `docs/AI_SAFETY_TESTS.md`.
 
 ## Subscription Webhook Checklist
 

@@ -71,6 +71,8 @@ Version sources checked:
 - Subscription server notifications should prefer RevenueCat webhooks. Direct Apple App Store Server Notifications require signedPayload/JWS verification and sandbox/production separation before any state changes.
 - AI provider setup is documented in `docs/AI_PROVIDER_SETUP.md`.
 - All private AI provider keys must remain server-side in Supabase Edge Function secrets. The Expo app must only call `supabase.functions.invoke("ai-coach")` and use local fallback when unavailable.
+- Optional AI observability uses server-side Langfuse readiness only; no Langfuse secret belongs in Expo public env.
+- AI safety/red-team readiness lives in `docs/AI_SAFETY_TESTS.md` and `promptfoo.config.yaml`.
 
 Observability safety rules:
 
@@ -130,8 +132,9 @@ Safe next tasks after this checkpoint:
 10. Verify Clarity remains disabled/not installed unless explicitly approved.
 11. Verify RevenueCat webhook strategy before adding direct Apple notification endpoints.
 12. Verify AI provider keys are server-side only before deploying Edge Functions.
-13. Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
-14. Run release checks before any next upload:
+13. Run Promptfoo safety tests before AI prompt/provider changes when Promptfoo is available.
+14. Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
+15. Run release checks before any next upload:
    - `npm run typecheck`
    - `npm run security:check`
    - `npm audit`
@@ -190,6 +193,7 @@ npm run typecheck
 npm run security:check
 npx expo-doctor
 npm run test:maestro:launch
+npm run test:ai-safety
 ```
 
 EAS iOS build:

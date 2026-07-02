@@ -27,6 +27,7 @@ Supabase Edge Functions:
 - Pro users are checked against server-side entitlement state before paid cloud AI.
 - AI quota and cooldown are enforced in `supabase/functions/_shared/aiQuota.ts`.
 - Provider routing is implemented in `supabase/functions/_shared/aiProvider.ts`.
+- Optional Langfuse tracing is implemented in `supabase/functions/_shared/langfuse.ts` and is disabled unless Langfuse env vars are set.
 
 Provider routing:
 
@@ -48,6 +49,9 @@ Store these only in Supabase Edge Function secrets or another server secret mana
 - `NVIDIA_MODEL`
 - `AI_MODEL_FAST`
 - `AI_MODEL_DEEP`
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+- `LANGFUSE_HOST`
 
 Never use:
 
@@ -65,6 +69,66 @@ Never use:
 - Provider errors must not expose keys, raw prompts, screenshots, voice notes, private notes, or full journal payloads.
 - Media fields are stripped before cloud provider calls.
 
+## Langfuse Observability
+
+Langfuse is optional and server-side only.
+
+Tracked metadata is intentionally limited to:
+
+- feature/action name
+- period
+- provider
+- model
+- user tier (`free` or `pro`)
+- latency
+- success/failure
+- fallback usage
+- rough response token estimate
+
+Do not send:
+
+- private notes
+- screenshots
+- voice notes
+- full trade entries
+- raw prompts
+- raw payloads
+- user email
+- auth tokens
+- provider API keys
+
+If Langfuse env vars are missing, tracing is skipped and AI behavior remains unchanged.
+
+Manual setup:
+
+```bash
+supabase secrets set LANGFUSE_PUBLIC_KEY=...
+supabase secrets set LANGFUSE_SECRET_KEY=...
+supabase secrets set LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+Redeploy the Edge Function after setting secrets:
+
+```bash
+supabase functions deploy ai-coach
+```
+
+## Promptfoo Safety Tests
+
+Promptfoo readiness lives in:
+
+- `promptfoo.config.yaml`
+- `scripts/promptfoo-local-provider.mjs`
+- `docs/AI_SAFETY_TESTS.md`
+
+Run without paid AI provider keys:
+
+```bash
+npm run test:ai-safety
+```
+
+The default suite uses a local deterministic provider to check safety boundaries. Provider-backed tests should only be added later from a secure server/developer environment with synthetic data.
+
 ## Validation Checklist
 
 Before deploying AI changes:
@@ -74,10 +138,12 @@ Before deploying AI changes:
 3. Confirm Edge Function auth uses verified JWT.
 4. Confirm free users use fallback/preview only.
 5. Confirm `ai_usage_events` quota/cooldown still records Pro usage.
-6. Run:
+6. Run AI safety tests when changing prompts/provider routing.
+7. Run:
    ```bash
    npm run typecheck
    npm run security:check
+   npm run test:ai-safety
    ```
 
 ## Manual Supabase Setup
@@ -91,6 +157,9 @@ supabase secrets set GEMINI_API_KEY=...
 supabase secrets set ANTHROPIC_API_KEY=...
 supabase secrets set AI_MODEL_FAST=google/gemini-2.5-flash
 supabase secrets set AI_MODEL_DEEP=anthropic/claude-sonnet-4
+supabase secrets set LANGFUSE_PUBLIC_KEY=...
+supabase secrets set LANGFUSE_SECRET_KEY=...
+supabase secrets set LANGFUSE_HOST=https://cloud.langfuse.com
 ```
 
 Only set provider keys you actually intend to use. The app must work with no AI provider keys by falling back safely.

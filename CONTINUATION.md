@@ -210,3 +210,11 @@ Possible later extraction targets:
 - Added `docs/MAESTRO_SMOKE_TESTS.md` with local setup, test plan, flow inventory, CI safety rules, limitations, and manual iPhone QA boundaries.
 - Added npm scripts `test:maestro` and `test:maestro:launch`; they require a locally installed Maestro CLI and a running simulator/device.
 - Maestro is not installed as an app dependency, is not bundled into Expo runtime, and is not added to GitHub Actions yet to avoid flaky simulator CI.
+
+## AI Observability And Safety Readiness Follow-Up (2026-07-02)
+
+- Added optional server-side Langfuse tracing in `supabase/functions/_shared/langfuse.ts`, called from `aiProvider.ts`.
+- Langfuse is disabled unless `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and optional `LANGFUSE_HOST` are set as Supabase Edge Function secrets.
+- Langfuse metadata is limited to provider/model/feature/tier/latency/success/fallback/rough token estimate. It does not send raw prompts, notes, screenshots, voice notes, full trade entries, tokens, or PII.
+- Added Promptfoo readiness with `promptfoo.config.yaml`, `scripts/promptfoo-local-provider.mjs`, `docs/AI_SAFETY_TESTS.md`, and npm script `test:ai-safety`.
+- Default Promptfoo safety tests use a local deterministic provider and do not require paid AI keys.

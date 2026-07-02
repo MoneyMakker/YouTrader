@@ -21,7 +21,8 @@
     "market-intel:daily-brief": "node scripts/market-intel-worker/index.mjs daily-brief",
     "security:check": "node scripts/security-check.mjs",
     "test:maestro": "maestro test .maestro",
-    "test:maestro:launch": "maestro test .maestro/01_app_launch.yaml"
+    "test:maestro:launch": "maestro test .maestro/01_app_launch.yaml",
+    "test:ai-safety": "npx promptfoo@latest eval -c promptfoo.config.yaml"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

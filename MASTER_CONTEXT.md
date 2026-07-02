@@ -78,6 +78,8 @@ For every future UI task, agents must run frontend-design thinking, compare agai
 - EAS Update readiness is documented in `docs/EAS_UPDATE_PLAYBOOK.md`. `appVersion` runtime policy and preview/production channels are used; publish preview OTA first and never ship native/store/security changes via OTA.
 - Context7 is a developer-only MCP workflow tool. Use it before changing Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple API integrations.
 - Maestro smoke-test readiness is documented in `docs/MAESTRO_SMOKE_TESTS.md` with local `.maestro/` flows. Maestro is manual/local for now and must not replace real iPhone/TestFlight QA.
+- Langfuse AI observability is optional, server-side only, and disabled without Supabase Edge Function secrets. It must log safe metadata only, never raw prompts or private journal data.
+- Promptfoo AI safety readiness is documented in `docs/AI_SAFETY_TESTS.md`; default tests use a local deterministic provider and require no paid AI keys.
 
 ## 2. Current Repository Structure
 
