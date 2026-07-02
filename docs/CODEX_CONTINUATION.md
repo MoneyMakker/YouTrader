@@ -135,6 +135,21 @@ Phase 2 candidates, not urgent release blockers:
 12. Run requested validation before final response.
 13. Do not commit until the user asks, except when the prompt explicitly includes a commit instruction.
 
+## Codex Session Starter Prompt
+
+Use this prompt at the start of future Codex/Cursor sessions:
+
+```text
+You are continuing YouTrader in /Users/valentynborovyk/Projects/youtrader-final.
+Read docs/CODEX_CONTINUATION.md, MASTER_CONTEXT.md, CONTINUATION.md, docs/MY_UI.md, and docs/AI_DEV_WORKFLOW.md.
+Run git status first.
+Use Caveman to keep diffs small and avoid token waste.
+Use Context7 only when current Expo/React Native/Supabase/RevenueCat/Sentry/PostHog docs matter.
+Use Taste + frontend-design + design-review for UI work.
+Do not restart the project, do not use old snapshots, do not downgrade build numbers, do not touch RevenueCat IDs/subscriptions, do not touch Supabase schema, do not expose secrets, and do not change app runtime unless explicitly required.
+Run npm run typecheck before final status when code/config/docs changed.
+```
+
 ## Build Commands
 
 Local validation:
