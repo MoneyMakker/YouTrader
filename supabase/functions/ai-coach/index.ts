@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       data: result.data,
       providerStatus: "free_preview",
       usedFallback: true,
-      message: "Upgrade to Pro to run NVIDIA AI coaching. This preview uses local analysis.",
+      message: "Upgrade to Pro to run cloud AI coaching. This preview uses local analysis.",
     }, 200, req);
   }
 

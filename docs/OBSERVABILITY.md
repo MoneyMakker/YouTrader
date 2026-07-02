@@ -30,6 +30,30 @@ Supported env:
 
 Autocapture and session replay are disabled. YouTrader only sends explicit safe events with metadata/counts. Do not track notes, screenshots, voice notes, full trade data, tokens, or sensitive payloads.
 
+## Microsoft Clarity Evaluation
+
+Microsoft Clarity has an official React Native SDK, but it depends on native code, requires a new EAS/native build, and does not run in Expo Go. Because YouTrader is a sensitive trading journal with notes, screenshots, voice notes, and trade records, Clarity is not installed in the Expo app at this time.
+
+Reference:
+
+- Microsoft Clarity React Native SDK docs: https://learn.microsoft.com/en-us/clarity/mobile-sdk/react-native-sdk
+
+Current recommendation:
+
+- Use Clarity only for marketing websites or landing pages where no private journal/trade data is rendered.
+- Keep mobile product analytics in PostHog with explicit safe events and no autocapture/session replay.
+- Re-evaluate Clarity only after a privacy review, native build QA, and proof that sensitive surfaces can be fully masked/excluded.
+
+Do not capture:
+
+- journal notes
+- screenshots
+- voice notes
+- trade details
+- account identifiers
+- payment payloads
+- personal data or PII-heavy screens
+
 ## Push Notifications
 
 Expo local notification readiness exists for:

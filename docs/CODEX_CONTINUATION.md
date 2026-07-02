@@ -63,6 +63,14 @@ Version sources checked:
 - Expo Updates readiness uses `runtimeVersion.policy = appVersion` in `app.json`; `expo-updates` is not installed yet.
 - GitHub Actions QA workflow lives in `.github/workflows/qa.yml` and does not replace manual TestFlight/iPhone QA.
 
+## Analytics, Subscriptions, And AI Readiness
+
+- Microsoft Clarity is evaluated but not installed in the mobile app. It is native-code based, requires a new build, and is currently recommended only for public web/landing pages after privacy review.
+- PostHog remains the preferred mobile analytics path because YouTrader sends explicit safe metadata events only.
+- Subscription server notifications should prefer RevenueCat webhooks. Direct Apple App Store Server Notifications require signedPayload/JWS verification and sandbox/production separation before any state changes.
+- AI provider setup is documented in `docs/AI_PROVIDER_SETUP.md`.
+- All private AI provider keys must remain server-side in Supabase Edge Function secrets. The Expo app must only call `supabase.functions.invoke("ai-coach")` and use local fallback when unavailable.
+
 Observability safety rules:
 
 - Do not log secrets, tokens, screenshots, voice notes, private journal notes, full trade payloads, or payment payloads.
@@ -117,7 +125,10 @@ Safe next tasks after this checkpoint:
 6. Verify PDF/share card exports on real iPhone Photos/share sheet.
 7. Verify News and Market Intelligence cached read-only screens.
 8. Verify growth defaults and Remote Config/A-B docs before enabling Firebase.
-9. Run release checks before any next upload:
+9. Verify Clarity remains disabled/not installed unless explicitly approved.
+10. Verify RevenueCat webhook strategy before adding direct Apple notification endpoints.
+11. Verify AI provider keys are server-side only before deploying Edge Functions.
+12. Run release checks before any next upload:
    - `npm run typecheck`
    - `npm run security:check`
    - `npm audit`
@@ -130,6 +141,8 @@ Phase 2 candidates, not urgent release blockers:
 - Re-enable or harden Supabase auth/cloud sync only with explicit QA plan.
 - Add remote push token backend only after RLS/storage design.
 - Install Firebase Remote Config or `expo-updates` only after compatibility and App Store build risk are reviewed.
+- Install Microsoft Clarity only after native-build/privacy review; default path is web/landing-page analytics only.
+- Build subscription webhooks through RevenueCat first; direct Apple notifications require signature verification.
 
 ## Rules For Future Codex Sessions
 
@@ -145,8 +158,9 @@ Phase 2 candidates, not urgent release blockers:
 10. For UI tasks, follow `docs/MY_UI.md` and the design-review gate.
 11. For security tasks, prefer docs/scripts/migrations over risky rewrites.
 12. For growth experiments, keep Remote Config limited to safe copy/flags and document every manual Firebase dashboard step.
-13. Run requested validation before final response.
-14. Do not commit until the user asks, except when the prompt explicitly includes a commit instruction.
+13. Keep all AI provider keys server-side and verify no Expo public AI key exists.
+14. Run requested validation before final response.
+15. Do not commit until the user asks, except when the prompt explicitly includes a commit instruction.
 
 ## Codex Session Starter Prompt
 

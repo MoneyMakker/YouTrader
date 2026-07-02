@@ -66,6 +66,14 @@ YouTrader now has a permanent project-level UI review gate:
 
 For every future UI task, agents must run frontend-design thinking, compare against `docs/MY_UI.md`, run the design-review checklist, fix obvious UI issues, and only then summarize. Do not treat business logic changes as design fixes.
 
+## Production Infrastructure Readiness (2026-07-02)
+
+- Current App Store baseline is YouTrader `1.5.7` build `72`.
+- Microsoft Clarity is not installed in the mobile app. It has an official React Native SDK, but it requires native code/new EAS build and should be treated as web/landing-page analytics only unless a privacy/native-build review explicitly approves mobile use.
+- Subscription server notification strategy should prefer RevenueCat webhooks. Direct Apple App Store Server Notifications require signedPayload/JWS verification, environment separation, idempotency, and must never let sandbox/test events modify production subscriptions.
+- AI provider setup is documented in `docs/AI_PROVIDER_SETUP.md`. Private AI keys must stay server-side in Supabase Edge Function secrets; Expo public env must never contain OpenRouter/Gemini/Anthropic/NVIDIA/OpenAI private keys.
+- Client AI uses Supabase Edge Function `ai-coach` with deterministic local fallback. Free users must not trigger paid provider generation; Pro AI remains quota/cooldown protected.
+
 ## 2. Current Repository Structure
 
 High-level structure:

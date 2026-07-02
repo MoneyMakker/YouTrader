@@ -57,6 +57,13 @@ Use this before every TestFlight/App Store upload. Do not paste secrets into cha
 - Events contain only safe metadata/counts.
 - No notes, screenshots, voice notes, full trade payloads, tokens, or PII-heavy data are captured.
 
+## Microsoft Clarity Checklist
+
+- Clarity is not installed in the mobile app unless explicitly approved after privacy/native-build review.
+- If Clarity is ever used, it must be env-gated, disabled by default, and fully mask/exclude journal notes, screenshots, voice notes, trade details, PII, and payment surfaces.
+- Clarity is currently recommended only for public web/landing pages, not the Expo mobile app.
+- Prefer PostHog explicit safe events for mobile analytics.
+
 ## Expo Push Checklist
 
 - Permission denied path does not crash.
@@ -102,6 +109,17 @@ Rules:
 - Pro AI remains quota/cooldown protected.
 - Missing keys return safe local fallback.
 - AI must not provide financial advice or buy/sell/hold signals.
+- Client AI calls must go through Supabase Edge Function `ai-coach`; no private provider key may exist in Expo public env.
+- Free users must receive local preview/fallback only and must not trigger paid provider generation.
+
+## Subscription Webhook Checklist
+
+- Prefer RevenueCat webhooks over direct Apple App Store Server Notifications for subscription state.
+- RevenueCat webhook authorization/HMAC signing is enabled before production use.
+- Sandbox and production webhook handling are separated.
+- Test webhook events must not grant production subscriptions.
+- Direct Apple Server Notifications require v2 `signedPayload` JWS verification before any state change.
+- Do not duplicate RevenueCat subscription state unless a reviewed backend requirement exists.
 
 ## Skia Phase 2
 

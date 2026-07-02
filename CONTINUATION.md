@@ -178,3 +178,11 @@ Possible later extraction targets:
 - React Native Skia is not installed and should remain Phase 2 until compatibility is deliberately tested after App Store submission.
 - Added `docs/APP_STORE_RELEASE_CHECKLIST.md` covering TestFlight, RevenueCat, Supabase, Sentry, PostHog, Expo Push, AI providers, privacy, screenshots, subscription paywall, Apple review notes, and manual QA.
 - Current release identity remains YouTrader `1.5.7` with iOS build number `69`; do not lower build number because App Store Connect already rejected `67` reuse.
+
+## Final Production Infrastructure Follow-Up (2026-07-02)
+
+- Current App Store baseline is YouTrader `1.5.7` build `72`; do not downgrade.
+- Microsoft Clarity was evaluated and not installed in the mobile app. It has an official React Native SDK, but it requires native code/new EAS build and is not appropriate for sensitive journal/session capture without a dedicated privacy review. Use Clarity only for public web/landing pages for now.
+- Added `docs/APP_STORE_SERVER_NOTIFICATIONS.md`; subscription backend readiness should prefer RevenueCat webhooks with authorization/HMAC signing, sandbox/production separation, idempotency, and canonical RevenueCat subscriber sync. Direct Apple notifications require signedPayload/JWS verification before state changes.
+- Added `docs/AI_PROVIDER_SETUP.md`; AI provider keys remain server-side only in Supabase Edge Function secrets. Client AI goes through `supabase.functions.invoke("ai-coach")` with local fallback when unavailable.
+- AI audit found no direct Expo/mobile calls to OpenRouter, Gemini, Anthropic, NVIDIA, or OpenAI provider APIs. `src/api/tradeAnalysis.ts` is deterministic local analysis, not paid AI.
