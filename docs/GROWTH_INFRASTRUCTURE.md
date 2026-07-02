@@ -8,7 +8,7 @@ This document covers safe free growth and iteration infrastructure for YouTrader
 
 - Firebase Remote Config: readiness only; Firebase SDK is not installed yet.
 - Firebase A/B Testing: readiness through Remote Config experiment keys; no experiment is live by default.
-- Expo Updates OTA: `runtimeVersion` is configured with `policy: appVersion`; `expo-updates` is not installed yet.
+- EAS Update OTA: `runtimeVersion` is configured with `policy: appVersion`; `updates.url` and preview/production channels are configured. See `docs/EAS_UPDATE_PLAYBOOK.md`.
 - GitHub Actions QA: `.github/workflows/qa.yml` runs typecheck, security check, npm audit, and Expo Doctor.
 
 The app must build and run when Firebase config is missing.
@@ -95,7 +95,7 @@ Meaning:
 
 - OTA updates are scoped to app version.
 - Native/runtime-breaking changes require a new App Store build.
-- JavaScript-only fixes can later be shipped with EAS Update after `expo-updates` is deliberately installed and tested.
+- JavaScript-only fixes can be shipped with EAS Update after a compatible preview/production build is installed and tested.
 
 Safe OTA candidates:
 
@@ -116,15 +116,12 @@ Do not ship OTA for:
 - privacy policy/legal requirement changes
 - upload/security limit changes
 
-Manual OTA setup later:
+Manual OTA process:
 
-1. Confirm `expo-updates` compatibility with Expo SDK 54.
-2. Install with Expo tooling only:
-   ```bash
-   npx expo install expo-updates
-   ```
-3. Configure EAS Update channels deliberately.
-4. Test a preview channel before production.
+1. Keep `runtimeVersion.policy = appVersion`.
+2. Use the `preview` channel for internal QA.
+3. Use the `production` channel only after preview QA passes.
+4. Never ship native dependency, permission, RevenueCat, Supabase schema, or privacy-label changes OTA.
 5. Keep rollback instructions in release notes.
 
 ## GitHub Actions QA

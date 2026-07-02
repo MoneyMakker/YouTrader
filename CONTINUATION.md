@@ -195,3 +195,11 @@ Possible later extraction targets:
 - Added `docs/POSTHOG_FUNNELS.md` with recommended Activation, Monetization, Retention, Export Virality, and News Engagement funnels.
 - Added `docs/SENTRY_TESTFLIGHT_QA.md` with DSN/env setup, safe development-only test error guidance, and source-map upload guardrails.
 - Keep PostHog autocapture/session replay disabled unless a future privacy review explicitly approves them.
+
+## EAS Update And Context7 Workflow Follow-Up (2026-07-02)
+
+- EAS Update readiness is configured with `runtimeVersion.policy = appVersion`, `updates.url`, and `preview` / `production` EAS build channels.
+- Added `docs/EAS_UPDATE_PLAYBOOK.md` with OTA-safe scope, forbidden native/store changes, preview-first workflow, rollback guidance, and command examples.
+- OTA updates must be JavaScript/asset/copy/styling safe and must not change native dependencies, permissions, RevenueCat IDs, Supabase schema, or App Store privacy behavior.
+- Context7 is already project-configured in `.cursor/mcp.json` as a developer-only MCP command and is not bundled into the mobile app.
+- Future Codex/Cursor prompts should say: "Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs."

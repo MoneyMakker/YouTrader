@@ -6,6 +6,9 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "updates": {
+      "url": "https://u.expo.dev/02ed40d6-5ad8-4a6d-9716-5ba40ec714c6"
+    },
     "scheme": "com.youtrader.pro",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

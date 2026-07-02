@@ -75,6 +75,8 @@ For every future UI task, agents must run frontend-design thinking, compare agai
 - Client AI uses Supabase Edge Function `ai-coach` with deterministic local fallback. Free users must not trigger paid provider generation; Pro AI remains quota/cooldown protected.
 - PostHog funnels are documented in `docs/POSTHOG_FUNNELS.md`. Use explicit safe events only; mobile autocapture/session replay remain disabled.
 - Sentry TestFlight QA is documented in `docs/SENTRY_TESTFLIGHT_QA.md`. Runtime Sentry needs only a DSN; source map upload requires `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` as CI/EAS secrets.
+- EAS Update readiness is documented in `docs/EAS_UPDATE_PLAYBOOK.md`. `appVersion` runtime policy and preview/production channels are used; publish preview OTA first and never ship native/store/security changes via OTA.
+- Context7 is a developer-only MCP workflow tool. Use it before changing Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple API integrations.
 
 ## 2. Current Repository Structure
 

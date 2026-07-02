@@ -60,7 +60,7 @@ Version sources checked:
 - Firebase Remote Config is readiness-only; Firebase SDK/config files are not installed in this checkpoint.
 - Safe growth defaults live in `src/config/growthConfig.ts`.
 - Firebase/A-B flags may control only safe copy and UI flags. They must never control secrets, RevenueCat product IDs, entitlement IDs, prices, Supabase rules, or security behavior.
-- Expo Updates readiness uses `runtimeVersion.policy = appVersion` in `app.json`; `expo-updates` is not installed yet.
+- EAS Update readiness uses `runtimeVersion.policy = appVersion`, `updates.url`, and `preview`/`production` EAS channels. Process documentation lives in `docs/EAS_UPDATE_PLAYBOOK.md`.
 - GitHub Actions QA workflow lives in `.github/workflows/qa.yml` and does not replace manual TestFlight/iPhone QA.
 
 ## Analytics, Subscriptions, And AI Readiness
@@ -128,7 +128,8 @@ Safe next tasks after this checkpoint:
 9. Verify Clarity remains disabled/not installed unless explicitly approved.
 10. Verify RevenueCat webhook strategy before adding direct Apple notification endpoints.
 11. Verify AI provider keys are server-side only before deploying Edge Functions.
-12. Run release checks before any next upload:
+12. Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
+13. Run release checks before any next upload:
    - `npm run typecheck`
    - `npm run security:check`
    - `npm audit`
@@ -140,7 +141,8 @@ Phase 2 candidates, not urgent release blockers:
 - Evaluate React Native Skia only after release stability.
 - Re-enable or harden Supabase auth/cloud sync only with explicit QA plan.
 - Add remote push token backend only after RLS/storage design.
-- Install Firebase Remote Config or `expo-updates` only after compatibility and App Store build risk are reviewed.
+- Install Firebase Remote Config only after compatibility and App Store build risk are reviewed.
+- Treat EAS Update production publishing as a release action: preview channel first, manual device QA, then production.
 - Install Microsoft Clarity only after native-build/privacy review; default path is web/landing-page analytics only.
 - Build subscription webhooks through RevenueCat first; direct Apple notifications require signature verification.
 
@@ -171,7 +173,7 @@ You are continuing YouTrader in /Users/valentynborovyk/Projects/youtrader-final.
 Read docs/CODEX_CONTINUATION.md, MASTER_CONTEXT.md, CONTINUATION.md, docs/MY_UI.md, and docs/AI_DEV_WORKFLOW.md.
 Run git status first.
 Use Caveman to keep diffs small and avoid token waste.
-Use Context7 only when current Expo/React Native/Supabase/RevenueCat/Sentry/PostHog docs matter.
+Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
 Use Taste + frontend-design + design-review for UI work.
 Do not restart the project, do not use old snapshots, do not downgrade build numbers, do not touch RevenueCat IDs/subscriptions, do not touch Supabase schema, do not expose secrets, and do not change app runtime unless explicitly required.
 Run npm run typecheck before final status when code/config/docs changed.

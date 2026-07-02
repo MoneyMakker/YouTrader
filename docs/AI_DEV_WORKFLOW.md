@@ -15,6 +15,7 @@ Purpose:
 - Fetch current documentation while coding.
 - Use for Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, and TypeScript docs.
 - Reduce stale assumptions when APIs change.
+- Check current EAS Update, Apple, and Expo SDK docs before touching release/build behavior.
 
 Safe usage:
 
@@ -40,6 +41,8 @@ Rules:
 - Do not paste API keys into Context7 prompts.
 - Do not use Context7 output as a reason to change production behavior without inspecting local code.
 - Prefer official docs returned by Context7 over blog snippets.
+- Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
+- If Context7 is unavailable, use official vendor docs and document the source before making build/runtime changes.
 
 ### Playwright MCP
 
@@ -162,6 +165,12 @@ Do not touch Supabase schema, RevenueCat IDs, subscriptions, AI gateway, or buil
 Run npm run typecheck before final status.
 ```
 
+Required starter sentence for API-sensitive tasks:
+
+```text
+Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
+```
+
 ## Context7 Recipes
 
 Expo / React Native:
@@ -189,6 +198,19 @@ Observability:
 ```text
 Use Context7 to check Sentry React Native and PostHog React Native docs before changing instrumentation.
 Keep events metadata-only.
+```
+
+EAS / OTA:
+
+```text
+Use Context7 to check current EAS Update docs before changing app.json, eas.json, runtimeVersion, update channels, native build profiles, or OTA playbooks.
+Verify whether a change is OTA-safe or requires a new App Store/TestFlight build.
+```
+
+Apple APIs:
+
+```text
+Use Context7 or official Apple/Expo docs before touching Sign in with Apple, App Store Server Notifications, StoreKit-adjacent flows, entitlements, URL schemes, or iOS permission strings.
 ```
 
 ## Playwright MCP QA Recipes
