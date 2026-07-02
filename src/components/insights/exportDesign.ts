@@ -5,6 +5,7 @@ export const EXPORT_COLORS = {
   bg: "#030507",
   panel: "#0A0F14",
   panel2: "#10151B",
+  panel3: "#151A22",
   text: "#F7F8FA",
   sub: "#A7AFBC",
   muted: "#6F7887",
@@ -12,12 +13,13 @@ export const EXPORT_COLORS = {
   red: "#FF3B5F",
   purple: "#B026FF",
   purple2: "#D36BFF",
+  gold: "#F4C95D",
   border: "rgba(255,255,255,0.14)",
 };
 
 export const EXPORT_BRAND = {
   name: "YouTrader",
-  tagline: "Track. Review. Improve.",
+  tagline: "Professional trading journal",
   disclaimer: "Educational journal. Not financial advice.",
-  appStoreHint: "Available on the App Store",
+  appStoreHint: "Find YouTrader on the App Store",
 };

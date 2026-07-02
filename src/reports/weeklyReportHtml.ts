@@ -18,6 +18,8 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
   const tradeCount = numberValue(stats.trades);
   const equityCurve = numberArray(stats.equityCurve);
   const netPnl = numberValue(stats.netPnl);
+  const tradingScore = textValue(stats.tradingScore, "N/A");
+  const grade = textValue(stats.grade, "N/A");
   const performanceSummary = buildPerformanceSummary(stats);
   const nextFocus = buildNextFocus(stats);
   const logoHtml = logoDataUri
@@ -60,26 +62,31 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
 <head>
   <meta charset="utf-8"/>
   <style>
-    @page { size: A4; margin: 14mm 12mm; }
+    @page { size: A4; margin: 12mm 11mm; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { margin: 0; background: ${PAPER}; color: ${INK}; font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", sans-serif; }
-    .page { width: 100%; max-width: 186mm; margin: 0 auto; }
-    .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 16px; border-bottom: 2px solid ${INK}; }
+    .page { width: 100%; max-width: 188mm; margin: 0 auto; }
+    .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 2px solid ${INK}; }
     .brand-block { display: flex; align-items: center; gap: 14px; min-width: 0; }
-    .logo { width: 48px; height: 48px; object-fit: contain; flex-shrink: 0; }
-    .text-logo { font-size: 26px; font-weight: 900; color: ${PURPLE}; letter-spacing: -0.4px; line-height: 1; }
+    .logo { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
+    .text-logo { font-size: 24px; font-weight: 900; color: ${PURPLE}; letter-spacing: -0.4px; line-height: 1; }
     .brand-copy { min-width: 0; }
-    .brand-name { font-size: 22px; font-weight: 900; color: ${INK}; line-height: 1.1; }
+    .brand-name { font-size: 21px; font-weight: 900; color: ${INK}; line-height: 1.1; }
     .brand-tagline { margin-top: 4px; color: ${SUB}; font-size: 10px; font-weight: 800; letter-spacing: 2.4px; text-transform: uppercase; }
     .period-block { text-align: right; flex-shrink: 0; max-width: 42%; }
     .period-label { color: ${MUTED}; font-size: 9px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; }
     .period-value { margin-top: 4px; color: ${INK}; font-size: 12px; font-weight: 800; line-height: 1.35; }
-    .report-title { margin: 18px 0 0; font-size: 28px; font-weight: 900; letter-spacing: -0.3px; color: ${INK}; line-height: 1.1; }
-    .hero { margin-top: 18px; padding: 22px 22px 18px; border-radius: 18px; border: 1px solid ${LINE}; background: linear-gradient(180deg, ${SOFT} 0%, ${PAPER} 100%); break-inside: avoid; }
+    .report-title { margin: 16px 0 0; font-size: 27px; font-weight: 900; letter-spacing: -0.3px; color: ${INK}; line-height: 1.1; }
+    .hero { margin-top: 16px; padding: 20px; border-radius: 18px; border: 1px solid ${LINE}; background: linear-gradient(135deg, ${SOFT} 0%, ${PAPER} 58%, rgba(176,38,255,0.045) 100%); break-inside: avoid; display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 18px; align-items: stretch; }
     .hero-label { color: ${SUB}; font-size: 10px; font-weight: 900; letter-spacing: 1.8px; text-transform: uppercase; }
-    .hero-value { margin-top: 8px; font-size: 52px; line-height: 1; font-weight: 900; color: ${netPnl >= 0 ? GREEN : RED}; }
+    .hero-value { margin-top: 8px; font-size: 50px; line-height: 1; font-weight: 900; color: ${netPnl >= 0 ? GREEN : RED}; }
     .hero-sub { margin-top: 8px; color: ${MUTED}; font-size: 12px; font-weight: 700; line-height: 1.4; }
-    .section-title { margin: 18px 0 10px; color: ${INK}; font-size: 11px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; }
+    .hero-side { border-left: 1px solid ${LINE}; padding-left: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: center; }
+    .hero-mini { border: 1px solid ${LINE}; border-radius: 12px; background: ${PAPER}; padding: 10px; min-height: 58px; }
+    .hero-mini-label { color: ${SUB}; font-size: 8px; font-weight: 900; letter-spacing: 1.1px; text-transform: uppercase; }
+    .hero-mini-value { color: ${INK}; font-size: 18px; font-weight: 900; margin-top: 5px; }
+    .hero-mini.accent .hero-mini-value { color: ${PURPLE}; }
+    .section-title { margin: 16px 0 9px; color: ${INK}; font-size: 11px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; }
     .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; break-inside: avoid; }
     .kpi-grid.compact { grid-template-columns: repeat(2, 1fr); margin-top: 8px; }
     .kpi { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: 12px; padding: 10px 11px; min-height: 68px; break-inside: avoid; }
@@ -88,14 +95,14 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
     .kpi.accent .kpi-value { color: ${PURPLE}; }
     .kpi-label { color: ${SUB}; font-size: 9px; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; line-height: 1.25; }
     .kpi-value { margin-top: 6px; color: ${INK}; font-size: 17px; line-height: 1.15; font-weight: 900; word-break: break-word; }
-    .chart-panel { margin-top: 6px; padding: 14px 14px 10px; border: 1px solid ${LINE}; border-radius: 16px; background: ${PAPER}; break-inside: avoid; }
-    .chart-panel svg { width: 100%; height: 132px; display: block; overflow: visible; }
-    .insights { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 10px; margin-top: 16px; break-inside: avoid; page-break-inside: avoid; }
+    .chart-panel { margin-top: 6px; padding: 13px 14px 9px; border: 1px solid ${LINE}; border-radius: 16px; background: ${PAPER}; break-inside: avoid; }
+    .chart-panel svg { width: 100%; height: 124px; display: block; overflow: visible; }
+    .insights { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 10px; margin-top: 15px; break-inside: avoid; page-break-inside: avoid; }
     .insight-card { border: 1px solid ${LINE}; border-radius: 16px; background: ${SOFT}; padding: 14px 15px; min-height: 118px; }
     .insight-card.focus { border-color: rgba(176,38,255,0.28); background: rgba(176,38,255,0.05); }
     .insight-title { color: ${INK}; font-size: 10px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; }
     .insight-body { margin-top: 10px; color: ${INK}; font-size: 12px; line-height: 1.55; font-weight: 650; }
-    .footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid ${LINE}; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; break-inside: avoid; }
+    .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid ${LINE}; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; break-inside: avoid; }
     .footer-left { flex: 1; min-width: 0; }
     .footer-brand { color: ${INK}; font-size: 11px; font-weight: 900; }
     .footer-disclaimer { margin-top: 4px; color: ${MUTED}; font-size: 10px; font-weight: 700; line-height: 1.4; }
@@ -122,9 +129,17 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
     <h1 class="report-title">${escapeHtml(title)}</h1>
 
     <section class="hero">
-      <div class="hero-label">Net P&amp;L</div>
-      <div class="hero-value">${tradeCount ? money(netPnl) : "N/A"}</div>
-      <div class="hero-sub">${tradeCount ? `${tradeCount} logged trade${tradeCount === 1 ? "" : "s"} in this period` : "No trades logged during this reporting period"}</div>
+      <div>
+        <div class="hero-label">Net P&amp;L</div>
+        <div class="hero-value">${tradeCount ? money(netPnl) : "N/A"}</div>
+        <div class="hero-sub">${tradeCount ? `${tradeCount} logged trade${tradeCount === 1 ? "" : "s"} in this period` : "No trades logged during this reporting period"}</div>
+      </div>
+      <div class="hero-side">
+        <div class="hero-mini accent"><div class="hero-mini-label">Trading Score</div><div class="hero-mini-value">${escapeHtml(tradingScore)}</div></div>
+        <div class="hero-mini"><div class="hero-mini-label">Grade</div><div class="hero-mini-value">${escapeHtml(grade)}</div></div>
+        <div class="hero-mini"><div class="hero-mini-label">Win Rate</div><div class="hero-mini-value">${tradeCount ? percent(stats.winRate) : "N/A"}</div></div>
+        <div class="hero-mini"><div class="hero-mini-label">Profit Factor</div><div class="hero-mini-value">${tradeCount ? fixedOrNA(stats.profitFactor) : "N/A"}</div></div>
+      </div>
     </section>
 
     <div class="section-title">Core Performance</div>
