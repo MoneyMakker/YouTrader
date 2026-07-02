@@ -4,6 +4,8 @@ This is the short takeover checklist for the next senior engineer.
 
 ## Recently Completed (2026-06-28)
 
+- Completed translation hardening for the current `App.tsx` i18n layer: core tabs, Journal/Add/Edit Trade, mood labels, validation alerts, Stats exports, AI Analytics cached blocks, Settings notifications, CSV import, and key RevenueCat alerts now read from `I18N`.
+- Added `npm run translations:check` to detect missing translation keys used by `t(...)` / `tText(...)` and keep locale dictionaries complete with English fallback where a full human translation is not yet available.
 - Confirmed current working baseline is `/Users/valentynborovyk/Projects/youtrader-final`, matching YouTrader `1.5.7` build `64` / `build-1782614005662.ipa`; do not use the older `2026-05-23` Codex folder as a source.
 - Removed AI Confidence and unified Refresh Analysis from AI Analytics.
 - Fixed Evaluation/Funded account plan so each mode renders its own data with no "Switch to Funded" prompt.

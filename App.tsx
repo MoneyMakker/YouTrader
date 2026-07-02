@@ -951,6 +951,356 @@ const I18N: Record<Lang, Record<string, string>> = {
     maxRisk: "Max SL Risk",
   },
 };
+
+const I18N_ADDITIONS: Record<Lang, Record<string, string>> = {
+  en: {
+    aiAnalytics: "AI Analytics",
+    entryTime: "Entry time",
+    exitTime: "Exit time",
+    tags: "Tags",
+    customTags: "Custom tags",
+    couldNotSaveTrade: "Could not save trade",
+    checkTradeDetails: "Check the trade details and try again.",
+    entryTimeInvalid: "Entry time must look like 09:30 or 9:30 AM.",
+    exitTimeInvalid: "Exit time must look like 09:45 or 9:45 AM.",
+    contractsInvalid: "Contracts must be between 1 and 1000.",
+    valueOutsideSafeRange: "{label} is outside the safe range.",
+    entryPrice: "Entry price",
+    exitPrice: "Exit price",
+    stopLossPrice: "Stop loss",
+    takeProfitPrice: "Take profit",
+    pnlOutsideSafeRange: "P&L is outside the safe range.",
+    addPnlOrEntryExit: "Add P&L or entry/exit prices.",
+    manualPnlRequired: "Manual P&L is required for custom symbols.",
+    calculatedPnlOutsideSafeRange: "Calculated P&L is outside the safe range.",
+    screenshotLimitTrade: "Free plan allows one screenshot on this trade. Replace the current image by removing it first.",
+    screenshotLimitReached: "Screenshot limit reached",
+    screenshotLimitMessage: "Free includes 3 screenshots per month. Pro unlocks media notes for every setup.",
+    unlimitedScreenshots: "Unlimited or high-limit screenshots",
+    voiceNotesReview: "Voice notes for trade review",
+    cloudSyncReports: "Cloud sync and monthly reports",
+    cameraPermissionNeeded: "Camera permission needed",
+    photoPermissionNeeded: "Photo permission needed",
+    photoUploadFailed: "Photo upload failed",
+    mediaPreservedRetry: "Your existing trade data was preserved. Please try again.",
+    recordingFailed: "Recording failed",
+    microphonePermissionNeeded: "Microphone permission needed",
+    audioRecordingFailed: "Audio recording failed",
+    voiceNotes: "Voice notes",
+    voiceNoteName: "Voice note",
+    journalSafety: "Journal safety",
+    deleteThisTradingDay: "Delete this trading day?",
+    deleteTradingDayBody: "This will permanently delete every trade logged for this day. This action cannot be undone.",
+    cancel: "Cancel",
+    deleteDay: "Delete Day",
+    deleting: "Deleting...",
+    tapToViewEdit: "Tap to view / edit",
+    dismiss: "Dismiss",
+    firstInsightProCta: "Pro unlocks Hidden Leaks, Revenge Alerts, Pattern Detective, and Prop Firm Coach.",
+    lockedInsightTitle: "Your journal found 3 hidden leaks.",
+    lockedInsightBody: "Unlock Pro to see exactly which session, setup, and behavior is costing you money.",
+    startThreeDayPro: "Start 3-Day Free Pro",
+    maybeLater: "Maybe later",
+    scrollToViewTrades: "Scroll to view trades",
+    tradesToday: "TRADES TODAY",
+    selectMonth: "Select Month",
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
+    sharePnlCard: "Share P&L card",
+    saveImage: "Save image",
+    saveImagePro: "Save image - Pro",
+    monthlyPdf: "Monthly PDF",
+    exportTitle: "Export",
+    savedTitle: "Saved",
+    pnlCardSaved: "P&L card saved to Photos.",
+    exportFailed: "Export failed",
+    saveImageProTitle: "Save Image is Pro",
+    saveImageProMessage: "Free traders can share 5 P&L cards per month. Pro unlocks full Save Image exports and unlimited reports.",
+    fullExportsBenefit: "Full Share P&L and Save Image exports",
+    unlimitedPdfBenefit: "Unlimited monthly PDFs",
+    premiumReportBenefit: "Premium branded report design",
+    shareCardLimitReached: "Share card limit reached",
+    shareCardLimitMessage: "Free includes 5 share cards per month. Pro unlocks more sharing, premium exports, and monthly reports.",
+    moreShareCardsBenefit: "15+ share cards per month",
+    fullImageExportsBenefit: "Full image exports",
+    monthlyReportsBenefit: "Monthly PDF reports",
+    monthlyPdfPreviewUsed: "Monthly PDF preview used",
+    monthlyPdfPreviewMessage: "Free includes 1 watermarked monthly PDF preview per month. Pro unlocks unlimited premium reports.",
+    noWatermarkBenefit: "No watermark",
+    aiSummaryReportBenefit: "AI summary and full report history",
+    aiTradeAnalysis: "AI Trade Analysis",
+    unlockAiAnalytics: "Unlock AI Analytics",
+    aiTradeAnalysisSub: "Generate mistakes, strengths, and recommendations from the selected period.",
+    analyzeMyTrades: "Analyze My Trades",
+    analyzing: "Analyzing...",
+    analysisReady: "Analysis ready below.",
+    aiUnavailableLocal: "Cloud AI is unavailable right now. Generated a local journal analysis instead.",
+    addTradesFirstAnalysis: "Add trades first, then run analysis.",
+    aiTradeAnalysisPro: "AI Trade Analysis is included in YouTrader Pro.",
+    ok: "OK",
+    unlockPro: "Unlock Pro",
+    dailyBrief: "Daily Brief",
+    marketSummary: "Market Summary",
+    cached: "Cached",
+    doNot: "Do not:",
+    dailyBriefEmpty: "Daily brief will appear after the worker publishes cached data.",
+    marketSummaryEmpty: "Market summary cache is empty.",
+    macro: "Macro",
+    risk: "Risk",
+    notifications: "Notifications",
+    notificationsRiskPermission: "Allow notifications to receive risk alerts.",
+    notificationsCalendarPermission: "Allow notifications to receive economic calendar alerts.",
+    calendarAlertsTitle: "Calendar alerts",
+    calendarAlertsUpdateFailed: "Could not update economic calendar alerts. Please try again.",
+    dailyPropReminder: "Daily prop firm reminder",
+    dailyPropReminderBody: "Morning notification with your daily buffer and risk status.",
+    riskAlerts: "Risk alerts",
+    riskAlertsBody: "Daily risk coach reminder before trading.",
+    economicCalendarAlerts: "Economic calendar alerts",
+    economicCalendarAlertsBody: "Morning reminder to check high-impact events.",
+    youTraderRiskCoach: "YouTrader Risk Coach",
+    riskCoachReminderBody: "Review your prop firm risk status before trading.",
+    youTraderEconomicCalendar: "YouTrader Economic Calendar",
+    economicCalendarReminderBody: "Check today's high-impact events before trading.",
+    importTrades: "Import trades",
+    importTradesBody: "Import a CSV journal from another platform. Pro feature.",
+    importTradesCsv: "Import trades (CSV)",
+    importTradesCsvPro: "Import trades (CSV) — Pro",
+    csvImportPro: "CSV import is available in YouTrader Pro.",
+    proActiveTitle: "Your Pro subscription is active",
+    proLockedTitle: "YouTrader Pro is locked",
+    proActiveBody: "All premium analytics, AI tools, news, calendar, import, and export features are unlocked.",
+    proLockedBody: "Unlock AI analysis, full analytics, Market Pulse news, CSV import, and premium journal tools.",
+    monthlyPrice: "Monthly • $12.99",
+    yearlyPrice: "Yearly • $99.99",
+    checking: "Checking...",
+    restorePurchases: "Restore Purchases",
+    connecting: "Connecting...",
+    monthlyPlan: "MONTHLY",
+    yearlyPlan: "YEARLY",
+    upgradeMonthly: "Upgrade Monthly",
+    upgradeYearly: "Upgrade Yearly",
+    unlimitedTradesMedia: "Unlimited trades and media notes",
+    hiddenLeaksBenefit: "Hidden Leaks, Revenge Alerts, Pattern Detective",
+    proToolsBenefit: "Prop Firm Coach, exports, sync, and monthly reports",
+    educationalDisclaimer: "Educational analysis only. Not financial advice.",
+    unlockFullEdgeAnalysis: "Unlock Full Edge Analysis",
+    paywallPreviewSub: "Your journal stays free. Pro unlocks AI coaching, prop firm protection, hidden leaks, advanced stats, media notes, import/export, full news, and the full economic calendar.",
+    purchaseFailed: "Purchase failed",
+    purchaseIssue: "Purchase issue",
+    purchaseComplete: "Purchase complete",
+    purchaseDifferentProduct: "Purchase completed for a different product. Please contact support.",
+    purchaseUnreadable: "Purchase completed, but the subscription is not readable yet. Tap Restore Purchases.",
+    restoreUnavailable: "Subscriptions are not available in this build. Please update the app from the App Store.",
+    proUnlocked: "YouTrader Pro unlocked.",
+    noActiveSubscription: "No active subscription found.",
+    restoreFailedTryAgain: "Could not restore purchases. Please try again.",
+    noTradesFoundCsv: "No trades found. Use header row: date, symbol, direction, pnl (optional: entry, exit, contracts, notes).",
+    importedFromCsv: "Imported from CSV",
+    importComplete: "Import complete",
+    tradesAddedJournal: "{count} trades added to your journal.",
+    csvImportFailed: "CSV import failed",
+    loadingJournal: "Loading your journal...",
+    moodFocused: "Focused",
+    moodAngry: "Angry",
+    moodFomo: "FOMO",
+    moodFoggy: "Foggy",
+    moodSick: "Sick",
+    moodTired: "Tired",
+    moodOops: "Oops",
+    moodReckless: "Reckless",
+    moodGambling: "Gambling",
+    moodPatient: "Patient",
+    moodGreedy: "Greedy",
+  },
+  ru: {
+    stats: "Статистика",
+    winRate: "Процент побед",
+    profitFactor: "Профит-фактор",
+    expectancy: "Ожидание",
+    avgWinStreak: "Средняя серия побед",
+    avgLossStreak: "Средняя серия лоссов",
+    stopLoss: "Стоп-лосс",
+    takeProfit: "Тейк-профит",
+    percentRiskCalculator: "% калькулятор риска",
+    accountBalance: "Баланс счёта",
+    riskPercent: "Риск %",
+    maxRisk: "Макс. риск SL",
+    cloudSync: "Локальный backup",
+    aiAnalytics: "AI Аналитика",
+    entryTime: "Время входа",
+    exitTime: "Время выхода",
+    tags: "Теги",
+    customTags: "Свои теги",
+    couldNotSaveTrade: "Не удалось сохранить сделку",
+    checkTradeDetails: "Проверь данные сделки и попробуй ещё раз.",
+    entryTimeInvalid: "Время входа должно быть формата 09:30 или 9:30 AM.",
+    exitTimeInvalid: "Время выхода должно быть формата 09:45 или 9:45 AM.",
+    contractsInvalid: "Контракты должны быть от 1 до 1000.",
+    valueOutsideSafeRange: "{label} вне безопасного диапазона.",
+    entryPrice: "Цена входа",
+    exitPrice: "Цена выхода",
+    stopLossPrice: "Стоп-лосс",
+    takeProfitPrice: "Тейк-профит",
+    pnlOutsideSafeRange: "P&L вне безопасного диапазона.",
+    addPnlOrEntryExit: "Добавь P&L или цены входа/выхода.",
+    manualPnlRequired: "Для своего символа нужно ввести P&L вручную.",
+    calculatedPnlOutsideSafeRange: "Рассчитанный P&L вне безопасного диапазона.",
+    screenshotLimitTrade: "В бесплатном плане доступен один скриншот для этой сделки. Сначала удали текущий, чтобы заменить.",
+    screenshotLimitReached: "Лимит скриншотов достигнут",
+    screenshotLimitMessage: "Бесплатно доступно 3 скриншота в месяц. Pro открывает медиа-заметки для каждого сетапа.",
+    unlimitedScreenshots: "Безлимитные или расширенные скриншоты",
+    voiceNotesReview: "Голосовые заметки для разбора сделок",
+    cloudSyncReports: "Cloud sync и monthly reports",
+    cameraPermissionNeeded: "Нужен доступ к камере",
+    photoPermissionNeeded: "Нужен доступ к фото",
+    photoUploadFailed: "Не удалось добавить фото",
+    mediaPreservedRetry: "Данные сделки сохранены. Попробуй ещё раз.",
+    recordingFailed: "Запись не удалась",
+    microphonePermissionNeeded: "Нужен доступ к микрофону",
+    audioRecordingFailed: "Не удалось записать аудио",
+    voiceNotes: "Голосовые заметки",
+    voiceNoteName: "Голосовая заметка",
+    journalSafety: "Безопасность журнала",
+    deleteThisTradingDay: "Удалить этот торговый день?",
+    deleteTradingDayBody: "Это навсегда удалит все сделки за этот день. Действие нельзя отменить.",
+    cancel: "Отмена",
+    deleteDay: "Удалить день",
+    deleting: "Удаление...",
+    tapToViewEdit: "Нажми, чтобы открыть / редактировать",
+    dismiss: "Скрыть",
+    firstInsightProCta: "Pro открывает Hidden Leaks, Revenge Alerts, Pattern Detective и Prop Firm Coach.",
+    lockedInsightTitle: "Журнал нашёл 3 скрытые утечки.",
+    lockedInsightBody: "Открой Pro, чтобы увидеть, какая сессия, сетап и поведение стоят тебе денег.",
+    startThreeDayPro: "Начать 3-дневный Pro",
+    maybeLater: "Позже",
+    scrollToViewTrades: "Листай вниз, чтобы увидеть сделки",
+    tradesToday: "СДЕЛКИ СЕГОДНЯ",
+    selectMonth: "Выбрать месяц",
+    previousMonth: "Предыдущий месяц",
+    nextMonth: "Следующий месяц",
+    sharePnlCard: "Поделиться P&L",
+    saveImage: "Сохранить изображение",
+    saveImagePro: "Сохранить — Pro",
+    monthlyPdf: "Monthly PDF",
+    exportTitle: "Экспорт",
+    savedTitle: "Сохранено",
+    pnlCardSaved: "P&L карточка сохранена в Фото.",
+    exportFailed: "Экспорт не удался",
+    saveImageProTitle: "Save Image доступен в Pro",
+    saveImageProMessage: "Бесплатно можно делиться 5 P&L карточками в месяц. Pro открывает Save Image и безлимитные отчёты.",
+    fullExportsBenefit: "Полный Share P&L и Save Image экспорт",
+    unlimitedPdfBenefit: "Безлимитные monthly PDF",
+    premiumReportBenefit: "Премиальный дизайн отчётов",
+    shareCardLimitReached: "Лимит share card достигнут",
+    shareCardLimitMessage: "Бесплатно доступно 5 share cards в месяц. Pro открывает больше шаринга, premium exports и отчёты.",
+    moreShareCardsBenefit: "15+ share cards в месяц",
+    fullImageExportsBenefit: "Полный экспорт изображений",
+    monthlyReportsBenefit: "Monthly PDF reports",
+    monthlyPdfPreviewUsed: "Monthly PDF preview использован",
+    monthlyPdfPreviewMessage: "Бесплатно доступен 1 watermarked monthly PDF в месяц. Pro открывает безлимитные premium reports.",
+    noWatermarkBenefit: "Без watermark",
+    aiSummaryReportBenefit: "AI summary и история отчётов",
+    aiTradeAnalysis: "AI-анализ сделок",
+    unlockAiAnalytics: "Открыть AI Analytics",
+    aiTradeAnalysisSub: "Сгенерировать ошибки, сильные стороны и рекомендации за выбранный период.",
+    analyzeMyTrades: "Проанализировать сделки",
+    analyzing: "Анализ...",
+    analysisReady: "Анализ готов ниже.",
+    aiUnavailableLocal: "Cloud AI сейчас недоступен. Создан локальный анализ журнала.",
+    addTradesFirstAnalysis: "Сначала добавь сделки, затем запускай анализ.",
+    aiTradeAnalysisPro: "AI Trade Analysis входит в YouTrader Pro.",
+    ok: "OK",
+    unlockPro: "Открыть Pro",
+    dailyBrief: "Daily Brief",
+    marketSummary: "Market Summary",
+    cached: "Кэш",
+    doNot: "Не делай:",
+    dailyBriefEmpty: "Daily brief появится после публикации кэшированных данных worker.",
+    marketSummaryEmpty: "Market summary cache пуст.",
+    macro: "Macro",
+    risk: "Risk",
+    notifications: "Уведомления",
+    notificationsRiskPermission: "Разреши уведомления, чтобы получать risk alerts.",
+    notificationsCalendarPermission: "Разреши уведомления, чтобы получать calendar alerts.",
+    calendarAlertsTitle: "Calendar alerts",
+    calendarAlertsUpdateFailed: "Не удалось обновить economic calendar alerts. Попробуй ещё раз.",
+    dailyPropReminder: "Ежедневное prop firm напоминание",
+    dailyPropReminderBody: "Утреннее уведомление с daily buffer и risk status.",
+    riskAlerts: "Risk alerts",
+    riskAlertsBody: "Ежедневное напоминание risk coach перед торговлей.",
+    economicCalendarAlerts: "Economic calendar alerts",
+    economicCalendarAlertsBody: "Утреннее напоминание проверить high-impact events.",
+    youTraderRiskCoach: "YouTrader Risk Coach",
+    riskCoachReminderBody: "Проверь prop firm risk status перед торговлей.",
+    youTraderEconomicCalendar: "YouTrader Economic Calendar",
+    economicCalendarReminderBody: "Проверь важные события дня перед торговлей.",
+    importTrades: "Импорт сделок",
+    importTradesBody: "Импортируй CSV journal из другой платформы. Pro функция.",
+    importTradesCsv: "Импорт сделок (CSV)",
+    importTradesCsvPro: "Импорт сделок (CSV) — Pro",
+    csvImportPro: "CSV import доступен в YouTrader Pro.",
+    proActiveTitle: "Подписка Pro активна",
+    proLockedTitle: "YouTrader Pro закрыт",
+    proActiveBody: "Все premium analytics, AI tools, news, calendar, import и export features открыты.",
+    proLockedBody: "Открой AI analysis, full analytics, Market Pulse news, CSV import и premium journal tools.",
+    monthlyPrice: "Monthly • $12.99",
+    yearlyPrice: "Yearly • $99.99",
+    checking: "Проверка...",
+    restorePurchases: "Восстановить покупки",
+    connecting: "Подключение...",
+    monthlyPlan: "MONTHLY",
+    yearlyPlan: "YEARLY",
+    upgradeMonthly: "Upgrade Monthly",
+    upgradeYearly: "Upgrade Yearly",
+    unlimitedTradesMedia: "Безлимитные сделки и медиа-заметки",
+    hiddenLeaksBenefit: "Hidden Leaks, Revenge Alerts, Pattern Detective",
+    proToolsBenefit: "Prop Firm Coach, exports, sync и monthly reports",
+    educationalDisclaimer: "Только образовательный анализ. Не финансовый совет.",
+    unlockFullEdgeAnalysis: "Открыть полный Edge Analysis",
+    paywallPreviewSub: "Журнал остаётся бесплатным. Pro открывает AI coaching, prop firm protection, hidden leaks, advanced stats, media notes, import/export, full news и полный economic calendar.",
+    purchaseFailed: "Покупка не удалась",
+    purchaseIssue: "Проблема с покупкой",
+    purchaseComplete: "Покупка завершена",
+    purchaseDifferentProduct: "Покупка завершена для другого продукта. Обратись в поддержку.",
+    purchaseUnreadable: "Покупка завершена, но подписка пока не читается. Нажми Restore Purchases.",
+    restoreUnavailable: "Подписки недоступны в этой сборке. Обнови приложение из App Store.",
+    proUnlocked: "YouTrader Pro открыт.",
+    noActiveSubscription: "Активная подписка не найдена.",
+    restoreFailedTryAgain: "Не удалось восстановить покупки. Попробуй ещё раз.",
+    noTradesFoundCsv: "Сделки не найдены. Используй заголовки: date, symbol, direction, pnl (опционально: entry, exit, contracts, notes).",
+    importedFromCsv: "Импортировано из CSV",
+    importComplete: "Импорт завершён",
+    tradesAddedJournal: "{count} сделок добавлено в журнал.",
+    csvImportFailed: "CSV import не удался",
+    loadingJournal: "Загружаю журнал...",
+    moodFocused: "Собран",
+    moodAngry: "Злой",
+    moodFomo: "FOMO",
+    moodFoggy: "Туман",
+    moodSick: "Болею",
+    moodTired: "Устал",
+    moodOops: "Ошибка",
+    moodReckless: "Безрассудно",
+    moodGambling: "Азарт",
+    moodPatient: "Терпелив",
+    moodGreedy: "Жадность",
+  },
+  es: {},
+  fr: {},
+  it: {},
+  uk: {},
+  de: {},
+};
+
+for (const langKey of Object.keys(I18N) as Lang[]) {
+  Object.assign(I18N[langKey], I18N_ADDITIONS.en, I18N_ADDITIONS[langKey]);
+}
+for (const langKey of Object.keys(I18N) as Lang[]) {
+  for (const key of Object.keys(I18N.en)) {
+    if (!I18N[langKey][key]) I18N[langKey][key] = I18N.en[key];
+  }
+}
 function tText(lang: Lang, key: string) {
   return I18N[lang]?.[key] || I18N.en[key] || key;
 }
@@ -1091,12 +1441,21 @@ function normalizeSymbolInput(value: string) {
     .slice(0, MAX_SYMBOL_LENGTH);
   return symbol || "MES";
 }
-function optionalPositiveNumber(value: string, label: string, max = MAX_PRICE) {
+function interpolateI18n(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce(
+    (text, [key, value]) => text.replace(new RegExp(`\\{${key}\\}`, "g"), String(value)),
+    template,
+  );
+}
+function optionalPositiveNumber(value: string, label: string, lang: Lang, max = MAX_PRICE) {
   const trimmed = String(value || "").trim();
   if (!trimmed) return { value: null as number | null };
   const n = Number(trimmed.replace(",", "."));
   if (!Number.isFinite(n) || n < 0 || n > max) {
-    return { value: null as number | null, error: `${label} is outside the safe range.` };
+    return {
+      value: null as number | null,
+      error: interpolateI18n(tText(lang, "valueOutsideSafeRange"), { label }),
+    };
   }
   return { value: n };
 }
@@ -1119,28 +1478,29 @@ function validateTradeForm(
     voiceUri: string;
   },
   pnlSide: "plus" | "minus",
+  lang: Lang = "en",
 ) {
   const symbol = normalizeSymbolInput(form.symbol);
   const entryTime = normalizeTradeClock(form.entryTime);
   const exitTime = normalizeTradeClock(form.exitTime);
   if (String(form.entryTime || "").trim() && !entryTime) {
-    return { error: "Entry time must look like 09:30 or 9:30 AM." };
+    return { error: tText(lang, "entryTimeInvalid") };
   }
   if (String(form.exitTime || "").trim() && !exitTime) {
-    return { error: "Exit time must look like 09:45 or 9:45 AM." };
+    return { error: tText(lang, "exitTimeInvalid") };
   }
   const contractsRaw = Number(String(form.contracts || "1").replace(",", "."));
   if (!Number.isFinite(contractsRaw) || contractsRaw <= 0 || contractsRaw > MAX_CONTRACTS) {
-    return { error: "Contracts must be between 1 and 1000." };
+    return { error: tText(lang, "contractsInvalid") };
   }
 
-  const entry = optionalPositiveNumber(form.entry, "Entry price");
+  const entry = optionalPositiveNumber(form.entry, tText(lang, "entryPrice"), lang);
   if (entry.error) return { error: entry.error };
-  const exit = optionalPositiveNumber(form.exit, "Exit price");
+  const exit = optionalPositiveNumber(form.exit, tText(lang, "exitPrice"), lang);
   if (exit.error) return { error: exit.error };
-  const stopLoss = optionalPositiveNumber(form.stopLoss, "Stop loss");
+  const stopLoss = optionalPositiveNumber(form.stopLoss, tText(lang, "stopLossPrice"), lang);
   if (stopLoss.error) return { error: stopLoss.error };
-  const takeProfit = optionalPositiveNumber(form.takeProfit, "Take profit");
+  const takeProfit = optionalPositiveNumber(form.takeProfit, tText(lang, "takeProfitPrice"), lang);
   if (takeProfit.error) return { error: takeProfit.error };
 
   const manualPnl = String(form.pnl || "").trim();
@@ -1148,16 +1508,16 @@ function validateTradeForm(
   if (manualPnl) {
     const amount = Math.abs(Number(manualPnl.replace(",", ".")));
     if (!Number.isFinite(amount) || amount > MAX_ABS_PNL) {
-      return { error: "P&L is outside the safe range." };
+      return { error: tText(lang, "pnlOutsideSafeRange") };
     }
     pnl = Number((pnlSide === "minus" ? -amount : amount).toFixed(2));
   } else {
     if (entry.value == null || exit.value == null) {
-      return { error: "Add P&L or entry/exit prices." };
+      return { error: tText(lang, "addPnlOrEntryExit") };
     }
     const instrument = INSTRUMENTS[symbol];
     if (!instrument) {
-      return { error: "Manual P&L is required for custom symbols." };
+      return { error: tText(lang, "manualPnlRequired") };
     }
     const diff =
       form.direction === "LONG"
@@ -1165,7 +1525,7 @@ function validateTradeForm(
         : entry.value - exit.value;
     pnl = Number(((diff / instrument.tickSize) * instrument.tickValue * contractsRaw).toFixed(2));
     if (!Number.isFinite(pnl) || Math.abs(pnl) > MAX_ABS_PNL) {
-      return { error: "Calculated P&L is outside the safe range." };
+      return { error: tText(lang, "calculatedPnlOutsideSafeRange") };
     }
   }
 
@@ -1434,9 +1794,26 @@ function formatCompactMoney(n: number) {
   }
   return `${sign}$${Math.round(a)}`;
 }
-function moodLabel(key: string) {
+function moodTranslationKey(key: string) {
+  const normalized = String(key || "").toLowerCase();
+  if (normalized === "focused") return "moodFocused";
+  if (normalized === "angry") return "moodAngry";
+  if (normalized === "fomo") return "moodFomo";
+  if (normalized === "foggy") return "moodFoggy";
+  if (normalized === "sick") return "moodSick";
+  if (normalized === "tired") return "moodTired";
+  if (normalized === "oops") return "moodOops";
+  if (normalized === "reckless") return "moodReckless";
+  if (normalized === "gambling") return "moodGambling";
+  if (normalized === "patient") return "moodPatient";
+  if (normalized === "greedy") return "moodGreedy";
+  return null;
+}
+function moodLabel(key: string, lang: Lang = "en") {
   const m = MOODS.find((x) => x.key === key);
-  return m ? `${m.emoji} ${m.key}` : key;
+  const translationKey = moodTranslationKey(key);
+  const label = translationKey ? tText(lang, translationKey) : key;
+  return m ? `${m.emoji} ${label}` : label;
 }
 
 function billingDebugLog(message: string, details?: Record<string, unknown>) {
@@ -4414,6 +4791,7 @@ type ProValueModalContent = {
 };
 
 function ProValueModal({
+  lang,
   content,
   packages,
   storeProducts,
@@ -4424,6 +4802,7 @@ function ProValueModal({
   onRestore,
   onClose,
 }: {
+  lang: Lang;
   content: ProValueModalContent;
   packages: PurchasesPackage[];
   storeProducts: PurchasesStoreProduct[];
@@ -4456,34 +4835,34 @@ function ProValueModal({
           </View>
           <Text style={styles.valueModalTitle}>{content.title}</Text>
           <Text style={styles.valueModalText}>{content.message}</Text>
-          {(content.bullets || ["Unlimited trades and media notes", "Hidden Leaks, Revenge Alerts, Pattern Detective", "Prop Firm Coach, exports, sync, and monthly reports"]).slice(0, 4).map((item) => (
+          {(content.bullets || [tText(lang, "unlimitedTradesMedia"), tText(lang, "hiddenLeaksBenefit"), tText(lang, "proToolsBenefit")]).slice(0, 4).map((item) => (
             <Text key={item} style={styles.valueModalBullet}>✓ {item}</Text>
           ))}
           {content.primaryTrial ? (
             <Pressable disabled={purchaseBusy} onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)} style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}>
-              <Text style={styles.primaryText}>{purchaseBusy ? "Connecting..." : "Start 3-Day Free Pro"}</Text>
+              <Text style={styles.primaryText}>{purchaseBusy ? tText(lang, "connecting") : tText(lang, "startThreeDayPro")}</Text>
             </Pressable>
           ) : null}
           <View style={styles.valueModalPlanRow}>
             <Pressable disabled={purchaseBusy} onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)} style={[styles.valueModalPlan, purchaseBusy && styles.disabledBtn]}>
-              <Text style={styles.planName}>MONTHLY</Text>
-              <Text style={styles.planPrice}>Upgrade Monthly</Text>
+              <Text style={styles.planName}>{tText(lang, "monthlyPlan")}</Text>
+              <Text style={styles.planPrice}>{tText(lang, "upgradeMonthly")}</Text>
               <Text style={styles.sub}>{monthlyPrice}</Text>
             </Pressable>
             <Pressable disabled={purchaseBusy} onPress={() => onPurchase(yearly, YOU_TRADER_YEARLY_PRODUCT_ID)} style={[styles.valueModalPlan, styles.valueModalYearlyPlan, purchaseBusy && styles.disabledBtn]}>
-              <Text style={styles.planName}>YEARLY</Text>
-              <Text style={styles.planPrice}>Upgrade Yearly</Text>
+              <Text style={styles.planName}>{tText(lang, "yearlyPlan")}</Text>
+              <Text style={styles.planPrice}>{tText(lang, "upgradeYearly")}</Text>
               <Text style={styles.sub}>{yearlyPrice}</Text>
             </Pressable>
           </View>
           <Pressable disabled={purchaseBusy} onPress={onRestore} style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}>
-            <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+            <Text style={styles.secondaryText}>{purchaseBusy ? tText(lang, "checking") : tText(lang, "restorePurchases")}</Text>
           </Pressable>
           <Pressable onPress={onClose} style={styles.valueModalLaterBtn}>
-            <Text style={styles.valueModalLaterText}>Maybe later</Text>
+            <Text style={styles.valueModalLaterText}>{tText(lang, "maybeLater")}</Text>
           </Pressable>
           {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
-          <Text style={styles.newsDisclaimer}>Educational analysis only. Not financial advice.</Text>
+          <Text style={styles.newsDisclaimer}>{tText(lang, "educationalDisclaimer")}</Text>
         </GlassCard>
       </View>
     </Modal>
@@ -4491,6 +4870,7 @@ function ProValueModal({
 }
 
 function PaywallPreview({
+  lang,
   packages,
   storeProducts,
   purchaseBusy,
@@ -4499,6 +4879,7 @@ function PaywallPreview({
   onRestore,
   showRestorePurchases,
 }: {
+  lang: Lang;
   packages: PurchasesPackage[];
   storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
@@ -4515,16 +4896,16 @@ function PaywallPreview({
   }, []);
   return (
     <GlassCard style={styles.paywallPreview} intensity={42}>
-      <Text style={styles.paywallTitle}>Unlock Full Edge Analysis</Text>
+      <Text style={styles.paywallTitle}>{tText(lang, "unlockFullEdgeAnalysis")}</Text>
       <Text style={styles.paywallSub}>
-        Your journal stays free. Pro unlocks AI coaching, prop firm protection, hidden leaks, advanced stats, media notes, import/export, full news, and the full economic calendar.
+        {tText(lang, "paywallPreviewSub")}
       </Text>
       <Pressable
         disabled={purchaseBusy}
         onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
         style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}
       >
-        <Text style={styles.primaryText}>{purchaseBusy ? "Connecting..." : "Unlock Pro"}</Text>
+        <Text style={styles.primaryText}>{purchaseBusy ? tText(lang, "connecting") : tText(lang, "unlockPro")}</Text>
       </Pressable>
       <SubscriptionLegalDisclosure
         monthlyPackage={monthly}
@@ -4536,7 +4917,7 @@ function PaywallPreview({
           onPress={onRestore}
           style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
         >
-          <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+          <Text style={styles.secondaryText}>{purchaseBusy ? tText(lang, "checking") : tText(lang, "restorePurchases")}</Text>
         </Pressable>
       ) : null}
       {paywallError ? (
@@ -6266,6 +6647,7 @@ function Stats({
 
       {!isPremium && (
         <PaywallPreview
+          lang={lang}
           packages={packages}
           storeProducts={storeProducts}
           purchaseBusy={purchaseBusy}
@@ -6379,16 +6761,16 @@ function StatsScreen({
     try {
       const limit = await checkClientRateLimit("export:generate", "stats-local");
       if (!limit.allowed) {
-        Alert.alert("Export", SECURITY_MESSAGES.rateLimited);
+        Alert.alert(tText(lang, "exportTitle"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       if (!isPremium && action === "save") {
         setValueModal({
           visible: true,
           reason: "usage_limit",
-          title: "Save Image is Pro",
-          message: "Free traders can share 5 P&L cards per month. Pro unlocks full Save Image exports and unlimited reports.",
-          bullets: ["Full Share P&L and Save Image exports", "Unlimited monthly PDFs", "Premium branded report design"],
+          title: tText(lang, "saveImageProTitle"),
+          message: tText(lang, "saveImageProMessage"),
+          bullets: [tText(lang, "fullExportsBenefit"), tText(lang, "unlimitedPdfBenefit"), tText(lang, "premiumReportBenefit")],
         });
         return;
       }
@@ -6396,9 +6778,9 @@ function StatsScreen({
         setValueModal({
           visible: true,
           reason: "usage_limit",
-          title: "Share card limit reached",
-          message: "Free includes 5 share cards per month. Pro unlocks more sharing, premium exports, and monthly reports.",
-          bullets: ["15+ share cards per month", "Full image exports", "Monthly PDF reports"],
+          title: tText(lang, "shareCardLimitReached"),
+          message: tText(lang, "shareCardLimitMessage"),
+          bullets: [tText(lang, "moreShareCardsBenefit"), tText(lang, "fullImageExportsBenefit"), tText(lang, "monthlyReportsBenefit")],
         });
         return;
       }
@@ -6406,9 +6788,9 @@ function StatsScreen({
         setValueModal({
           visible: true,
           reason: "usage_limit",
-          title: "Monthly PDF preview used",
-          message: "Free includes 1 watermarked monthly PDF preview per month. Pro unlocks unlimited premium reports.",
-          bullets: ["Unlimited monthly PDF exports", "No watermark", "AI summary and full report history"],
+          title: tText(lang, "monthlyPdfPreviewUsed"),
+          message: tText(lang, "monthlyPdfPreviewMessage"),
+          bullets: [tText(lang, "unlimitedPdfBenefit"), tText(lang, "noWatermarkBenefit"), tText(lang, "aiSummaryReportBenefit")],
         });
         return;
       }
@@ -6430,7 +6812,7 @@ function StatsScreen({
       if (action === "save") {
         await runIdempotentLocal("export:generate", "stats-local", exportKey, () => saveCapturedViewToPhotos(shareCardRef));
         trackEvent("share_card_exported", { action: "save", period, trade_count: periodTrades.length, is_pro: isPremium });
-        Alert.alert("Saved", "P&L card saved to Photos.");
+        Alert.alert(tText(lang, "savedTitle"), tText(lang, "pnlCardSaved"));
         return;
       }
       const monthTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "month"));
@@ -6478,7 +6860,7 @@ function StatsScreen({
       trackEvent("weekly_report_opened", { period: "month", trade_count: monthTrades.length, is_pro: isPremium });
       if (!isPremium) await incrementMonthlyUsageCount("pdf-previews", session?.user.id || null);
     } catch (error) {
-      alertExportError("Export failed", error);
+      alertExportError(tText(lang, "exportFailed"), error);
     } finally {
       setShareCardMounted(false);
       setExportBusy(false);
@@ -6487,14 +6869,14 @@ function StatsScreen({
 
   const runTradeAnalysis = async () => {
     if (!isPremium) {
-      Alert.alert("YouTrader Pro", "AI Trade Analysis is included in YouTrader Pro.", [
-        { text: "OK" },
-        { text: "Unlock Pro", onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
+      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "aiTradeAnalysisPro"), [
+        { text: tText(lang, "ok") },
+        { text: tText(lang, "unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
       ]);
       return;
     }
     if (!periodTrades.length) {
-      Alert.alert("AI Trade Analysis", "Add trades first, then run analysis.");
+      Alert.alert(tText(lang, "aiTradeAnalysis"), tText(lang, "addTradesFirstAnalysis"));
       return;
     }
     try {
@@ -6518,7 +6900,7 @@ function StatsScreen({
       logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
       setTradeAnalysis(fallback);
-      setTradeAnalysisError("Cloud AI is unavailable right now. Generated a local journal analysis instead.");
+      setTradeAnalysisError(tText(lang, "aiUnavailableLocal"));
     } finally {
       setTradeAnalysisBusy(false);
     }
@@ -6527,20 +6909,20 @@ function StatsScreen({
   const aiAnalysisBlock = (
     <>
       <Card>
-        <Text style={styles.h2}>AI Trade Analysis</Text>
-        <Text style={styles.sub}>Generate mistakes, strengths, and recommendations from the selected period.</Text>
+        <Text style={styles.h2}>{tText(lang, "aiTradeAnalysis")}</Text>
+        <Text style={styles.sub}>{tText(lang, "aiTradeAnalysisSub")}</Text>
         <Pressable
           disabled={tradeAnalysisBusy || !isPremium}
           onPress={runTradeAnalysis}
           style={[styles.secondaryBig, styles.purpleAction, (tradeAnalysisBusy || !isPremium) && styles.disabledBtn]}
         >
-          <Text style={styles.secondaryText}>{tradeAnalysisBusy ? "Analyzing..." : "Analyze My Trades"}</Text>
+          <Text style={styles.secondaryText}>{tradeAnalysisBusy ? tText(lang, "analyzing") : tText(lang, "analyzeMyTrades")}</Text>
         </Pressable>
         {tradeAnalysisError ? (
           <Text style={[styles.sub, { color: C.yellow, marginTop: 10 }]}>{tradeAnalysisError}</Text>
         ) : null}
         {tradeAnalysis ? (
-          <Text style={[styles.sub, { color: C.green, marginTop: 10 }]}>Analysis ready below.</Text>
+          <Text style={[styles.sub, { color: C.green, marginTop: 10 }]}>{tText(lang, "analysisReady")}</Text>
         ) : null}
       </Card>
       {tradeAnalysis ? <TradeAnalysisCard result={tradeAnalysis} /> : null}
@@ -6569,7 +6951,7 @@ function StatsScreen({
           style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
         >
           <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            Share P&L card
+            {tText(lang, "sharePnlCard")}
           </Text>
         </Pressable>
         <Pressable
@@ -6578,7 +6960,7 @@ function StatsScreen({
           style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
         >
           <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {isPremium ? "Save image" : "Save image - Pro"}
+            {isPremium ? tText(lang, "saveImage") : tText(lang, "saveImagePro")}
           </Text>
         </Pressable>
         <Pressable
@@ -6587,11 +6969,12 @@ function StatsScreen({
           style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
         >
           <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            Monthly PDF
+            {tText(lang, "monthlyPdf")}
           </Text>
         </Pressable>
       </View>
       <ProValueModal
+        lang={lang}
         content={valueModal}
         packages={packages}
         storeProducts={storeProducts}
@@ -7232,6 +7615,7 @@ function TerminalFundedPanel({
 }
 
 function AiAnalysisScreen({
+  lang,
   trades,
   propTemplates,
   isPremium,
@@ -7244,6 +7628,7 @@ function AiAnalysisScreen({
   onRestore,
   session,
 }: {
+  lang: Lang;
   trades: Trade[];
   propTemplates: RiskTemplate[];
   isPremium: boolean;
@@ -7418,14 +7803,14 @@ function AiAnalysisScreen({
 
   const runTradeAnalysis = async () => {
     if (!isPremium) {
-      Alert.alert("YouTrader Pro", "AI Trade Analysis is included in YouTrader Pro.", [
-        { text: "OK" },
-        { text: "Unlock Pro", onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
+      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "aiTradeAnalysisPro"), [
+        { text: tText(lang, "ok") },
+        { text: tText(lang, "unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
       ]);
       return;
     }
     if (!periodTrades.length) {
-      Alert.alert("AI Trade Analysis", "Add trades first, then run analysis.");
+      Alert.alert(tText(lang, "aiTradeAnalysis"), tText(lang, "addTradesFirstAnalysis"));
       return;
     }
     try {
@@ -7449,7 +7834,7 @@ function AiAnalysisScreen({
       logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
       setTradeAnalysis(fallback);
-      setTradeAnalysisError("Cloud AI is unavailable right now. Generated a local journal analysis instead.");
+      setTradeAnalysisError(tText(lang, "aiUnavailableLocal"));
     } finally {
       setTradeAnalysisBusy(false);
     }
@@ -7457,7 +7842,7 @@ function AiAnalysisScreen({
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
-      <MarketIntelligencePanel />
+      <MarketIntelligencePanel lang={lang} />
 
       <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
         <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
@@ -7482,7 +7867,7 @@ function AiAnalysisScreen({
         {!isPremium ? (
           <View style={styles.analysisLockPinned}>
             <PremiumLockOverlay
-              title="Unlock AI Analytics"
+              title={tText(lang, "unlockAiAnalytics")}
               subtitle="Reveal AI Coach, pass probability, hidden leaks, revenge trading alerts, prop firm insights and risk coaching."
               cta="Upgrade to Pro"
               secondary="See all features"
@@ -7509,6 +7894,7 @@ function AiAnalysisScreen({
 
       {!isPremium && (
         <PaywallPreview
+          lang={lang}
           packages={packages}
           storeProducts={storeProducts}
           purchaseBusy={purchaseBusy}
@@ -7875,14 +8261,14 @@ function JournalScreen({
       const now = Date.now();
       if (now - lastSaveAtRef.current < TRADE_SAVE_DEBOUNCE_MS) return;
       lastSaveAtRef.current = now;
-      const validated = validateTradeForm(form, pnlSide);
+      const validated = validateTradeForm(form, pnlSide, lang);
       if ("error" in validated) {
-        Alert.alert("Could not save trade", validated.error || "Check the trade details and try again.");
+        Alert.alert(t("couldNotSaveTrade"), validated.error || t("checkTradeDetails"));
         return;
       }
       const safe = validated.value;
       if (!safe) {
-        Alert.alert("Could not save trade", "Check the trade details and try again.");
+        Alert.alert(t("couldNotSaveTrade"), t("checkTradeDetails"));
         return;
       }
       const securityTrade = validateTradeInput({
@@ -7924,7 +8310,7 @@ function JournalScreen({
       voiceUri: isPremium ? safe.voiceUri || null : null,
       photoCloudUri: previousTrade?.photoUri === safe.photoUri ? previousTrade?.photoCloudUri || null : null,
       voiceCloudUri: isPremium && previousTrade?.voiceUri === safe.voiceUri ? previousTrade?.voiceCloudUri || null : null,
-      voiceName: isPremium && safe.voiceUri ? safeText(form.voiceName || "Voice note", 128) : null,
+      voiceName: isPremium && safe.voiceUri ? safeText(form.voiceName || t("voiceNoteName"), 128) : null,
       createdAt: editId ? (previousTrade?.createdAt || now) : now,
       updatedAt: now,
     };
@@ -7974,16 +8360,16 @@ function JournalScreen({
     if (!isPremium) {
       const usedScreenshots = await getMonthlyUsageCount("screenshots", null);
       if (form.photoUri) {
-        Alert.alert("YouTrader", "Free plan allows one screenshot on this trade. Replace the current image by removing it first.");
+        Alert.alert("YouTrader", t("screenshotLimitTrade"));
         return;
       }
       if (usedScreenshots >= FREE_MONTHLY_SCREENSHOT_LIMIT) {
         setValueModal({
           visible: true,
           reason: "usage_limit",
-          title: "Screenshot limit reached",
-          message: "Free includes 3 screenshots per month. Pro unlocks media notes for every setup.",
-          bullets: ["Unlimited or high-limit screenshots", "Voice notes for trade review", "Cloud sync and monthly reports"],
+          title: t("screenshotLimitReached"),
+          message: t("screenshotLimitMessage"),
+          bullets: [t("unlimitedScreenshots"), t("voiceNotesReview"), t("cloudSyncReports")],
         });
         return;
       }
@@ -7991,7 +8377,7 @@ function JournalScreen({
     try {
       if (camera) {
         const p = await ImagePicker.requestCameraPermissionsAsync();
-        if (!p.granted) return Alert.alert("Camera permission needed");
+        if (!p.granted) return Alert.alert(t("cameraPermissionNeeded"));
         const r = await ImagePicker.launchCameraAsync({
           quality: 0.75,
           allowsEditing: false,
@@ -8022,7 +8408,7 @@ function JournalScreen({
         }
       } else {
         const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!p.granted) return Alert.alert("Photo permission needed");
+        if (!p.granted) return Alert.alert(t("photoPermissionNeeded"));
         const r = await ImagePicker.launchImageLibraryAsync({
           quality: 0.8,
           allowsEditing: false,
@@ -8053,19 +8439,19 @@ function JournalScreen({
         }
       }
     } catch {
-      Alert.alert("Photo upload failed", "Your existing trade data was preserved. Please try again.");
+      Alert.alert(t("photoUploadFailed"), t("mediaPreservedRetry"));
     }
   };
   const pickAudio = async () => {
     if (!isPremium) {
-      showProGate("Voice notes");
+      showProGate(t("voiceNotes"));
       return;
     }
     try {
       if (recorderState.isRecording) {
         await audioRecorder.stop();
         const uri = audioRecorder.uri;
-        if (!uri) return Alert.alert("Recording failed");
+        if (!uri) return Alert.alert(t("recordingFailed"));
         const limit = await checkClientRateLimit("upload:voice", "journal-local");
         const uploadCheck = await validateSecureUploadInput({
           uri,
@@ -8089,14 +8475,14 @@ function JournalScreen({
       }
       if (!audioReady) {
         const status = await AudioModule.requestRecordingPermissionsAsync();
-        if (!status.granted) return Alert.alert("Microphone permission needed");
+        if (!status.granted) return Alert.alert(t("microphonePermissionNeeded"));
         await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
         setAudioReady(true);
       }
       await audioRecorder.prepareToRecordAsync();
       await audioRecorder.record();
     } catch {
-      Alert.alert("Audio recording failed", "Your existing trade data was preserved. Please try again.");
+      Alert.alert(t("audioRecordingFailed"), t("mediaPreservedRetry"));
     }
   };
   return (
@@ -8111,7 +8497,7 @@ function JournalScreen({
       <View style={[styles.calendarCard, { width: calendarWidth }]}>
         <View style={styles.monthControlRow}>
           <Pressable
-            accessibilityLabel="Previous month"
+            accessibilityLabel={t("previousMonth")}
             accessibilityRole="button"
             hitSlop={10}
             onPress={() => setViewMonth(addMonths(viewMonth, -1))}
@@ -8120,7 +8506,7 @@ function JournalScreen({
             <Text style={styles.monthNavText}>‹</Text>
           </Pressable>
           <Pressable
-            accessibilityLabel="Select month"
+            accessibilityLabel={t("selectMonth")}
             accessibilityRole="button"
             onPress={() => setMonthPickerOpen(true)}
             style={styles.monthTitlePill}
@@ -8132,7 +8518,7 @@ function JournalScreen({
             <Text style={styles.monthChevron}>⌄</Text>
           </Pressable>
           <Pressable
-            accessibilityLabel="Next month"
+            accessibilityLabel={t("nextMonth")}
             accessibilityRole="button"
             hitSlop={10}
             onPress={() => setViewMonth(addMonths(viewMonth, 1))}
@@ -8203,7 +8589,7 @@ function JournalScreen({
       </View>
       {!isTabletLayout ? (
         <View style={styles.journalScrollCue}>
-          <Text style={styles.journalScrollCueLabel}>Scroll to view trades</Text>
+          <Text style={styles.journalScrollCueLabel}>{t("scrollToViewTrades")}</Text>
           <View style={styles.journalScrollCueGlass}>
             <Text style={styles.journalScrollCueChevron}>⌄</Text>
           </View>
@@ -8212,7 +8598,7 @@ function JournalScreen({
       <Modal visible={monthPickerOpen} transparent animationType="fade">
         <Pressable style={styles.monthPickerBackdrop} onPress={() => setMonthPickerOpen(false)}>
           <Pressable style={styles.monthPickerCard}>
-            <Text style={styles.monthPickerTitle}>Select Month</Text>
+            <Text style={styles.monthPickerTitle}>{t("selectMonth")}</Text>
             <View style={styles.monthPickerYears}>
               {years.map((year) => (
                 <Pressable
@@ -8244,7 +8630,7 @@ function JournalScreen({
         </Pressable>
       </Modal>
       <Text style={styles.tradesTodayTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
-        TRADES TODAY • {eventDateLabel(selectedDate)}
+        {t("tradesToday")} • {eventDateLabel(selectedDate)}
       </Text>
       {filtered.map((tr) => (
         <Pressable key={tr.id} onPress={() => openEdit(tr)} onLongPress={() => openDeleteDayConfirm(tr.date)} delayLongPress={3000}>
@@ -8277,7 +8663,7 @@ function JournalScreen({
               </Value>
             </View>
             <Text style={styles.sub}>
-              {t("mood")}: {moodLabel(tr.mood)}
+              {t("mood")}: {moodLabel(tr.mood, lang)}
             </Text>
             {tr.photoUri ? (
               <Pressable onPress={() => setPhotoView(tr.photoUri || null)}>
@@ -8293,7 +8679,7 @@ function JournalScreen({
                 <Text style={styles.tapHint}>🎙 {t("openAudio")}</Text>
               </Pressable>
             ) : null}
-            <Text style={styles.tapHint}>Tap to view / edit</Text>
+            <Text style={styles.tapHint}>{t("tapToViewEdit")}</Text>
           </Card>
         </Pressable>
       ))}
@@ -8302,23 +8688,23 @@ function JournalScreen({
           <View style={styles.rowBetween}>
             <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
             <Pressable onPress={dismissFirstInsight}>
-              <Text style={styles.valueModalLaterText}>Dismiss</Text>
+              <Text style={styles.valueModalLaterText}>{t("dismiss")}</Text>
             </Pressable>
           </View>
           <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
-          <Text style={styles.freeInsightCta}>Pro unlocks Hidden Leaks, Revenge Alerts, Pattern Detective, and Prop Firm Coach.</Text>
+          <Text style={styles.freeInsightCta}>{t("firstInsightProCta")}</Text>
         </GlassCard>
       ) : null}
       {lockedInsightVisible ? (
         <GlassCard style={styles.lockedInsightCard} intensity={36}>
-          <Text style={styles.freeInsightTitle}>Your journal found 3 hidden leaks.</Text>
-          <Text style={styles.freeInsightText}>Unlock Pro to see exactly which session, setup, and behavior is costing you money.</Text>
+          <Text style={styles.freeInsightTitle}>{t("lockedInsightTitle")}</Text>
+          <Text style={styles.freeInsightText}>{t("lockedInsightBody")}</Text>
           <View style={styles.valueInlineActions}>
             <Pressable onPress={openLockedInsightModal} style={[styles.secondaryBig, styles.purpleAction, styles.valueInlineButton]}>
-              <Text style={styles.secondaryText}>Start 3-Day Free Pro</Text>
+              <Text style={styles.secondaryText}>{t("startThreeDayPro")}</Text>
             </Pressable>
             <Pressable onPress={dismissLockedInsight} style={[styles.secondaryBig, styles.valueInlineButton]}>
-              <Text style={styles.secondaryText}>Maybe later</Text>
+              <Text style={styles.secondaryText}>{t("maybeLater")}</Text>
             </Pressable>
           </View>
         </GlassCard>
@@ -8326,21 +8712,22 @@ function JournalScreen({
       <Modal visible={!!deleteDayDate} transparent animationType="fade">
         <View style={styles.deleteDayBackdrop}>
           <View style={styles.deleteDayCard}>
-            <Text style={styles.deleteDayEyebrow}>Journal safety</Text>
-            <Text style={styles.deleteDayTitle}>Delete this trading day?</Text>
-            <Text style={styles.deleteDayBody}>This will permanently delete every trade logged for this day. This action cannot be undone.</Text>
+            <Text style={styles.deleteDayEyebrow}>{t("journalSafety")}</Text>
+            <Text style={styles.deleteDayTitle}>{t("deleteThisTradingDay")}</Text>
+            <Text style={styles.deleteDayBody}>{t("deleteTradingDayBody")}</Text>
             <View style={styles.deleteDayActions}>
               <Pressable disabled={deleteDayBusy} onPress={() => setDeleteDayDate(null)} style={styles.deleteDayCancel}>
-                <Text style={styles.deleteDayCancelText}>Cancel</Text>
+                <Text style={styles.deleteDayCancelText}>{t("cancel")}</Text>
               </Pressable>
               <Pressable disabled={deleteDayBusy} onPress={confirmDeleteDay} style={[styles.deleteDayConfirm, deleteDayBusy && styles.disabledBtn]}>
-                <Text style={styles.deleteDayConfirmText}>{deleteDayBusy ? "Deleting..." : "Delete Day"}</Text>
+                <Text style={styles.deleteDayConfirmText}>{deleteDayBusy ? t("deleting") : t("deleteDay")}</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
       <ProValueModal
+        lang={lang}
         content={valueModal}
         packages={packages}
         storeProducts={storeProducts}
@@ -8415,7 +8802,7 @@ function JournalScreen({
               <View style={styles.formTwoCol}>
                 <View style={styles.formTwoColItem}>
                   <Input
-                    label="Entry time"
+                    label={t("entryTime")}
                     value={form.entryTime}
                     onChangeText={(v: string) => setForm({ ...form, entryTime: v })}
                     placeholder="09:30"
@@ -8424,7 +8811,7 @@ function JournalScreen({
                 </View>
                 <View style={styles.formTwoColItem}>
                   <Input
-                    label="Exit time"
+                    label={t("exitTime")}
                     value={form.exitTime}
                     onChangeText={(v: string) => setForm({ ...form, exitTime: v })}
                     placeholder="10:15"
@@ -8432,7 +8819,7 @@ function JournalScreen({
                   />
                 </View>
               </View>
-              <Text style={styles.label}>Tags</Text>
+              <Text style={styles.label}>{t("tags")}</Text>
               <View style={styles.tagChipGrid}>
                 {COMMON_TRADE_TAGS.map((tag) => {
                   const currentTags = parseTagsInput(form.tags);
@@ -8454,7 +8841,7 @@ function JournalScreen({
                 })}
               </View>
               <Input
-                label="Custom tags"
+                label={t("customTags")}
                 value={form.tags}
                 onChangeText={(v: string) => setForm({ ...form, tags: v })}
                 placeholder="#ORB #APlus #NYOpen"
@@ -8503,7 +8890,7 @@ function JournalScreen({
                     ]}
                   >
                     <Text style={styles.moodEmoji}>{m.emoji}</Text>
-                    <Text style={styles.moodText}>{m.key}</Text>
+                    <Text style={styles.moodText}>{moodLabel(m.key, lang).replace(`${m.emoji} `, "")}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -8659,7 +9046,7 @@ function MarketEmpty({ text }: { text: string }) {
   return <Text style={styles.marketEmptyText}>{text}</Text>;
 }
 
-function MarketIntelligencePanel() {
+function MarketIntelligencePanel({ lang }: { lang: Lang }) {
   const [intel, setIntel] = useState<MarketIntelData | null>(null);
   const [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
@@ -8678,30 +9065,30 @@ function MarketIntelligencePanel() {
   const data = intel || { brief: null, watchlist: [], summary: null, events: [], propUpdates: [], headlines: [] };
   return (
     <View style={styles.terminalScreenStack}>
-      <MarketSection title="Daily Brief">
+      <MarketSection title={tText(lang, "dailyBrief")}>
         {loading && !intel ? <ActivityIndicator color={C.purple} /> : data.brief ? (
           <GlassCard style={styles.marketHeroCard} intensity={30}>
             <View style={styles.rowBetween}>
               <Pill text={data.brief.marketRegime} tone="med" />
-              <Text style={styles.sub}>{data.brief.generatedAt ? new Date(data.brief.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Cached"}</Text>
+              <Text style={styles.sub}>{data.brief.generatedAt ? new Date(data.brief.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : tText(lang, "cached")}</Text>
             </View>
             <Text style={styles.newsTitle}>{data.brief.title}</Text>
             <Text style={styles.newsSummary}>{data.brief.summary}</Text>
-            {!!data.brief.whatNotToDo && <Text style={styles.marketCaution}>Do not: {data.brief.whatNotToDo}</Text>}
+            {!!data.brief.whatNotToDo && <Text style={styles.marketCaution}>{tText(lang, "doNot")} {data.brief.whatNotToDo}</Text>}
           </GlassCard>
-        ) : <MarketEmpty text="Daily brief will appear after the worker publishes cached data." />}
+        ) : <MarketEmpty text={tText(lang, "dailyBriefEmpty")} />}
       </MarketSection>
 
-      <MarketSection title="Market Summary">
+      <MarketSection title={tText(lang, "marketSummary")}>
         {data.summary ? (
           <GlassCard style={styles.marketCard} intensity={24}>
             <View style={styles.marketSummaryRow}>
-              <SmallMetric l="Macro" v={data.summary.macroTone} />
-              <SmallMetric l="Risk" v={data.summary.riskMode} />
+              <SmallMetric l={tText(lang, "macro")} v={data.summary.macroTone} />
+              <SmallMetric l={tText(lang, "risk")} v={data.summary.riskMode} />
             </View>
             {data.summary.strongestHeadlines.slice(0, 3).map((item) => <Text key={item} style={styles.marketListText}>• {item}</Text>)}
           </GlassCard>
-        ) : <MarketEmpty text="Market summary cache is empty." />}
+        ) : <MarketEmpty text={tText(lang, "marketSummaryEmpty")} />}
       </MarketSection>
     </View>
   );
@@ -9126,7 +9513,7 @@ function PremiumScreen({
           style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}
         >
           <Text style={styles.primaryText}>
-            {purchaseBusy ? "Connecting..." : `Unlock Pro • ${packagePrice(monthly)}`}
+            {purchaseBusy ? t("connecting") : `${t("unlockPro")} • ${packagePrice(monthly)}`}
           </Text>
         </Pressable>
         <SubscriptionLegalDisclosure
@@ -9141,7 +9528,7 @@ function PremiumScreen({
             onPress={onRestore}
             style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
           >
-            <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+            <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
           </Pressable>
         ) : null}
         {paywallError ? (
@@ -9234,14 +9621,14 @@ function SettingsScreen({
     }
     const id = await scheduleLocalReminder({
       idKey: PROP_RISK_ALERT_ID_KEY,
-      title: "YouTrader Risk Coach",
-      body: "Review your prop firm risk status before trading.",
+      title: t("youTraderRiskCoach"),
+      body: t("riskCoachReminderBody"),
       hour: 8,
       minute: 15,
       preference: "propDailyBufferAtRisk",
     });
     if (!id) {
-      Alert.alert("Notifications", "Allow notifications to receive risk alerts.");
+      Alert.alert(t("notifications"), t("notificationsRiskPermission"));
       return;
     }
     await AsyncStorage.setItem("prop-risk-alerts-v1", "on");
@@ -9259,21 +9646,21 @@ function SettingsScreen({
 
       const id = await scheduleLocalReminder({
         idKey: CALENDAR_ALERT_ID_KEY,
-        title: "YouTrader Economic Calendar",
-        body: "Check today's high-impact events before trading.",
+        title: t("youTraderEconomicCalendar"),
+        body: t("economicCalendarReminderBody"),
         hour: 7,
         minute: 45,
         preference: "dailyBriefReady",
       });
       if (!id) {
         setCalendarAlertsEnabled(false);
-        Alert.alert("Notifications", "Allow notifications to receive economic calendar alerts.");
+        Alert.alert(t("notifications"), t("notificationsCalendarPermission"));
         return;
       }
       await AsyncStorage.setItem("calendar-alerts-v1", "on");
     } catch (error) {
       setCalendarAlertsEnabled(!enabled);
-      Alert.alert("Calendar alerts", "Could not update economic calendar alerts. Please try again.");
+      Alert.alert(t("calendarAlertsTitle"), t("calendarAlertsUpdateFailed"));
       captureAppError(error, { feature: "settings", action: "toggle_calendar_alerts" });
     }
   };
@@ -9321,11 +9708,11 @@ YouTrader does not knowingly collect data from or market to individuals under th
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { flexGrow: 1, justifyContent: "space-between", paddingBottom: 36 }]}>
       <View>
         <Card>
-          <Text style={styles.h2}>Notifications</Text>
+          <Text style={styles.h2}>{t("notifications")}</Text>
           <View style={styles.settingsSwitchRow}>
             <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>Daily prop firm reminder</Text>
-              <Text style={styles.sub}>Morning notification with your daily buffer and risk status.</Text>
+              <Text style={styles.settingsSwitchTitle}>{t("dailyPropReminder")}</Text>
+              <Text style={styles.sub}>{t("dailyPropReminderBody")}</Text>
             </View>
             <Switch
               value={lockScreenBufferEnabled}
@@ -9337,8 +9724,8 @@ YouTrader does not knowingly collect data from or market to individuals under th
           <View style={styles.settingsSwitchDivider} />
           <View style={styles.settingsSwitchRow}>
             <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>Risk alerts</Text>
-              <Text style={styles.sub}>Daily risk coach reminder before trading.</Text>
+              <Text style={styles.settingsSwitchTitle}>{t("riskAlerts")}</Text>
+              <Text style={styles.sub}>{t("riskAlertsBody")}</Text>
             </View>
             <Switch
               value={propRiskAlertsEnabled}
@@ -9350,8 +9737,8 @@ YouTrader does not knowingly collect data from or market to individuals under th
           <View style={styles.settingsSwitchDivider} />
           <View style={styles.settingsSwitchRow}>
             <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>Economic calendar alerts</Text>
-              <Text style={styles.sub}>Morning reminder to check high-impact events.</Text>
+              <Text style={styles.settingsSwitchTitle}>{t("economicCalendarAlerts")}</Text>
+              <Text style={styles.sub}>{t("economicCalendarAlertsBody")}</Text>
             </View>
             <Switch
               value={calendarAlertsEnabled}
@@ -9363,20 +9750,20 @@ YouTrader does not knowingly collect data from or market to individuals under th
         </Card>
 
         <Card>
-          <Text style={styles.h2}>Import trades</Text>
+          <Text style={styles.h2}>{t("importTrades")}</Text>
           <Text style={styles.sub}>
-            Import a CSV journal from another platform. Pro feature.
+            {t("importTradesBody")}
           </Text>
           <Pressable
             onPress={() =>
               isPremium
                 ? onImportTradesCsv()
-                : Alert.alert("YouTrader Pro", "CSV import is available in YouTrader Pro.")
+                : Alert.alert(t("premiumAccess"), t("csvImportPro"))
             }
             style={[styles.secondaryBig, { marginTop: 14 }, !isPremium && styles.disabledBtn]}
           >
             <Text style={styles.secondaryText}>
-              {isPremium ? "Import trades (CSV)" : "Import trades (CSV) — Pro"}
+              {isPremium ? t("importTradesCsv") : t("importTradesCsvPro")}
             </Text>
           </Pressable>
         </Card>
@@ -9389,10 +9776,10 @@ YouTrader does not knowingly collect data from or market to individuals under th
             </View>
             <View style={styles.proStatusCopy}>
               <Text style={[styles.proStatusTitle, isPremium ? styles.proStatusTitleActive : styles.proStatusTitleLocked]}>
-                {isPremium ? "Your Pro subscription is active" : "YouTrader Pro is locked"}
+                {isPremium ? t("proActiveTitle") : t("proLockedTitle")}
               </Text>
               <Text style={styles.proStatusText}>
-                {isPremium ? "All premium analytics, AI tools, news, calendar, import, and export features are unlocked." : "Unlock AI analysis, full analytics, Market Pulse news, CSV import, and premium journal tools."}
+                {isPremium ? t("proActiveBody") : t("proLockedBody")}
               </Text>
             </View>
           </View>
@@ -9438,7 +9825,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
                 }
                 style={[styles.secondaryBig, styles.purpleAction, { flex: 1 }, purchaseBusy && styles.disabledBtn]}
               >
-                <Text style={styles.secondaryText}>Monthly • $12.99</Text>
+                <Text style={styles.secondaryText}>{t("monthlyPrice")}</Text>
               </Pressable>
               <Pressable
                 disabled={purchaseBusy}
@@ -9450,7 +9837,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
                 }
                 style={[styles.secondaryBig, styles.greenProAction, { flex: 1 }, purchaseBusy && styles.disabledBtn]}
               >
-                <Text style={[styles.secondaryText, styles.greenActionText]}>Yearly • $99.99</Text>
+                <Text style={[styles.secondaryText, styles.greenActionText]}>{t("yearlyPrice")}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -9460,7 +9847,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
               onPress={onRestore}
               style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
             >
-              <Text style={styles.secondaryText}>{purchaseBusy ? "Checking..." : "Restore Purchases"}</Text>
+              <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
             </Pressable>
           ) : null}
           {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
@@ -9903,7 +10290,7 @@ function App() {
     try {
       const limit = await checkClientRateLimit("csv:import", session?.user.id || "local");
       if (!limit.allowed) {
-        Alert.alert("Import trades", SECURITY_MESSAGES.rateLimited);
+        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       trackEvent("csv_import_started", { source: "settings" });
@@ -9928,7 +10315,7 @@ function App() {
       });
       if (!csvUploadCheck.ok) {
         await recordSecurityEvent("invalid_csv_import", "csv:import", session?.user.id || "local");
-        Alert.alert("Import trades", SECURITY_MESSAGES.invalidUpload);
+        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.invalidUpload);
         return;
       }
       const text = await readCsvFileAsText(asset.uri);
@@ -9938,7 +10325,7 @@ function App() {
       if (!importCheck.ok) {
         await recordSecurityEvent("invalid_csv_import", "csv:import", session?.user.id || "local");
         Alert.alert(
-          "Import trades",
+          tText(lang, "importTrades"),
           importCheck.reason === "too_large" ? SECURITY_MESSAGES.csvTooLarge : SECURITY_MESSAGES.csvTooManyRows,
         );
         return;
@@ -9946,8 +10333,8 @@ function App() {
       const rows = parseTradesCsvText(text);
       if (!rows.length) {
         Alert.alert(
-          "Import trades",
-          "No trades found. Use header row: date, symbol, direction, pnl (optional: entry, exit, contracts, notes).",
+          tText(lang, "importTrades"),
+          tText(lang, "noTradesFoundCsv"),
         );
         return;
       }
@@ -9956,7 +10343,7 @@ function App() {
           ...row,
           stopLoss: null,
           takeProfit: null,
-          notes: row.notes || "Imported from CSV",
+          notes: row.notes || tText(lang, "importedFromCsv"),
         });
         if (!validated.ok) return [];
         return [{
@@ -9969,14 +10356,14 @@ function App() {
           contracts: validated.value.contracts,
           pnl: validated.value.pnl,
           mood: validated.value.mood,
-          notes: validated.value.notes || "Imported from CSV",
+          notes: validated.value.notes || tText(lang, "importedFromCsv"),
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }];
       });
       if (!imported.length) {
         await recordSecurityEvent("invalid_csv_rows", "csv:import", session?.user.id || "local");
-        Alert.alert("Import trades", SECURITY_MESSAGES.invalidTrade);
+        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.invalidTrade);
         return;
       }
       const claimed = await claimRemoteIdempotency("csv:import", session?.user.id, {
@@ -9984,16 +10371,16 @@ function App() {
         rowCount: imported.length,
       });
       if (!claimed) {
-        Alert.alert("Import trades", SECURITY_MESSAGES.duplicateRequest);
+        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.duplicateRequest);
         return;
       }
       setTrades((prev) => [...imported, ...prev]);
       trackEvent("csv_import_completed", { row_count: imported.length });
-      Alert.alert("Import complete", `${imported.length} trades added to your journal.`);
+      Alert.alert(tText(lang, "importComplete"), interpolateI18n(tText(lang, "tradesAddedJournal"), { count: imported.length }));
     } catch (error) {
-      alertExportError("CSV import failed", error);
+      alertExportError(tText(lang, "csvImportFailed"), error);
     }
-  }, [session?.user.id]);
+  }, [lang, session?.user.id]);
 
   const toggleLockScreenBuffer = useCallback(
     async (enabled: boolean) => {
@@ -10355,11 +10742,11 @@ function App() {
     });
 
     if (resultProductId && !YOU_TRADER_PRO_PRODUCT_IDS.includes(resultProductId)) {
-      const message = "Purchase completed for a different product. Please contact support.";
+      const message = tText(lang, "purchaseDifferentProduct");
       setPaywallError(message);
       setShowRestorePurchases(true);
       trackEvent("purchase_failed", { reason: "wrong_product" });
-      Alert.alert("Purchase issue", message);
+      Alert.alert(tText(lang, "purchaseIssue"), message);
       return;
     }
 
@@ -10367,7 +10754,7 @@ function App() {
       logger.info("RevenueCat purchase unlocked Pro", { feature: "revenuecat", action: "purchase_success", reason });
       trackEvent("purchase_success", { reason });
       trackEvent("pro_purchased", { reason });
-      Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
+      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "proUnlocked"));
       return;
     }
 
@@ -10376,19 +10763,19 @@ function App() {
       logger.info("RevenueCat entitlement refresh unlocked Pro", { feature: "revenuecat", action: "purchase_success_after_refresh", reason });
       trackEvent("purchase_success", { reason });
       trackEvent("pro_purchased", { reason });
-      Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
+      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "proUnlocked"));
       return;
     }
 
     setShowRestorePurchases(true);
-    setPaywallError("Purchase completed, but the subscription is not readable yet. Tap Restore Purchases.");
+    setPaywallError(tText(lang, "purchaseUnreadable"));
     logger.warn("RevenueCat purchase completed without readable entitlement", { feature: "revenuecat", action: "entitlement_unreadable" });
     trackEvent("purchase_failed", { reason: "entitlement_unreadable" });
     Alert.alert(
-      "Purchase complete",
-      "The purchase completed, but the subscription is not readable yet. Tap Restore Purchases.",
+      tText(lang, "purchaseComplete"),
+      tText(lang, "purchaseUnreadable"),
     );
-  }, [applyCustomerInfo, refreshCurrentEntitlements, session?.user.id]);
+  }, [applyCustomerInfo, lang, refreshCurrentEntitlements, session?.user.id]);
 
   const purchasePackage = useCallback(async (pkg?: PurchasesPackage | null, productId = YOU_TRADER_MONTHLY_PRODUCT_ID) => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
@@ -10479,7 +10866,7 @@ function App() {
         const message = userFacingBillingError(error?.message || "Purchase failed. Please try again.");
         setPaywallError(message);
         trackEvent("purchase_failed", { reason: "purchase_error" });
-        Alert.alert("Purchase failed", message);
+        Alert.alert(tText(lang, "purchaseFailed"), message);
       }
       await refreshRevenueCat();
     } finally {
@@ -10490,8 +10877,8 @@ function App() {
   const restorePurchases = useCallback(async () => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
       Alert.alert(
-        "Restore Purchases",
-        "Subscriptions are not available in this build. Please update the app from the App Store.",
+        tText(lang, "restorePurchases"),
+        tText(lang, "restoreUnavailable"),
       );
       return;
     }
@@ -10500,7 +10887,7 @@ function App() {
     try {
       const limit = await checkClientRateLimit("restore", session?.user.id || "local");
       if (!limit.allowed) {
-        Alert.alert("Restore Purchases", SECURITY_MESSAGES.rateLimited);
+        Alert.alert(tText(lang, "restorePurchases"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       billingDebugLog("restore started", { productId: YOU_TRADER_MONTHLY_PRODUCT_ID });
@@ -10518,18 +10905,18 @@ function App() {
         setPaywallError("");
         setShowRestorePurchases(false);
         trackEvent("pro_restored", { source: "restore_purchases" });
-        Alert.alert("YouTrader Pro", "YouTrader Pro unlocked.");
+        Alert.alert(tText(lang, "premiumAccess"), tText(lang, "proUnlocked"));
       } else {
         logger.warn("RevenueCat restore found no active subscription", { feature: "revenuecat", action: "restore_no_active_subscription" });
         setShowRestorePurchases(true);
-        Alert.alert("Restore Purchases", "No active subscription found.");
+        Alert.alert(tText(lang, "restorePurchases"), tText(lang, "noActiveSubscription"));
       }
     } catch (error: any) {
       logger.error(error, { feature: "revenuecat", action: "restore" });
       billingDebugLog("restore failed", { message: error?.message });
-      const message = "Could not restore purchases. Please try again.";
+      const message = tText(lang, "restoreFailedTryAgain");
       setPaywallError(message);
-      Alert.alert("Restore Purchases", message);
+      Alert.alert(tText(lang, "restorePurchases"), tText(lang, "restoreFailedTryAgain"));
     } finally {
       setPurchaseBusy(false);
     }
@@ -10545,7 +10932,7 @@ function App() {
           <View style={styles.lockScreen}>
             <Text style={styles.h1}>YouTrader</Text>
             <ActivityIndicator color={C.green} style={{ marginTop: 18 }} />
-            <Text style={[styles.sub, { marginTop: 12 }]}>Loading your journal…</Text>
+            <Text style={[styles.sub, { marginTop: 12 }]}>{tText(lang, "loadingJournal")}</Text>
           </View>
         </SafeAreaView>
       </SafeAreaProvider>
@@ -10556,7 +10943,7 @@ function App() {
     { id: "journal", label: tText(lang, "journal") },
     { id: "stats", label: tText(lang, "stats") },
     { id: "calc", label: tText(lang, "calc") },
-    { id: "ai", label: "AI Analytics" },
+    { id: "ai", label: tText(lang, "aiAnalytics") },
     { id: "news", label: tText(lang, "news") },
     { id: "calendar", label: tText(lang, "calendar") },
     { id: "settings", label: tText(lang, "settings") },
@@ -10618,6 +11005,7 @@ function App() {
             />
           ) : tab === "ai" ? (
             <AiAnalysisScreen
+              lang={lang}
               trades={trades}
               propTemplates={propTemplates}
               isPremium={isPremium}
