@@ -5624,8 +5624,10 @@ function TerminalTraderStatus({
       winRate: stats.wr,
       totalPnl: stats.pnl,
       profitFactor: stats.pf,
+      avgWinLoss: stats.avgWinLoss,
       riskControl: stats.drawdownControl,
       consistency: stats.consistency,
+      maxDrawdown: stats.maxDd,
       tradingScore: score,
       bestSession: stats.session[0]?.label || "N/A",
       dateLabel: achievementShareDateLabel(selectedDate),
@@ -6173,8 +6175,10 @@ type AchievementShareStats = {
   winRate: number;
   totalPnl: number;
   profitFactor: number;
+  avgWinLoss: number;
   riskControl: number;
   consistency: number;
+  maxDrawdown: number;
   tradingScore: number;
   bestSession: string;
   dateLabel: string;
@@ -6361,8 +6365,11 @@ function AchievementShareCard({
           <Text style={styles.shareUnlockedText}>{item.status === "unlocked" ? "STATUS UNLOCKED" : "MILESTONE UNLOCKED"}</Text>
           <View style={[styles.shareBadgeStage, { borderColor: rarityAccent }]}>
             <View style={[styles.shareBadgeHalo, { backgroundColor: `${rarityAccent}26` }]} />
-            <Text style={styles.shareScoreNumber}>{Math.round(stats.tradingScore)}</Text>
-            <Text style={styles.shareScoreLabel}>TRADING SCORE</Text>
+            <View style={styles.shareScoreCorner}>
+              <Text style={styles.shareScoreCornerNumber}>{Math.round(stats.tradingScore)}</Text>
+              <Text style={styles.shareScoreCornerLabel}>TRD</Text>
+            </View>
+            <Image source={YOU_TRADER_BULL_LOGO} style={styles.shareLogoImage} resizeMode="contain" />
             <Text style={[styles.shareRarityText, { color: rarityAccent }]}>{rarity}</Text>
           </View>
           <Text style={styles.shareBadgeTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.62}>{title}</Text>
@@ -6380,8 +6387,16 @@ function AchievementShareCard({
               <Text style={styles.shareMetricValue}>{stats.winRate.toFixed(0)}%</Text>
             </View>
             <View style={styles.shareStatGlass}>
+              <Text style={styles.shareMetricLabel}>TRADING SCORE</Text>
+              <Text style={styles.shareMetricValue}>{Math.round(stats.tradingScore)}</Text>
+            </View>
+            <View style={styles.shareStatGlass}>
               <Text style={styles.shareMetricLabel}>PROFIT FACTOR</Text>
               <Text style={styles.shareMetricValue}>{stats.profitFactor ? stats.profitFactor.toFixed(2) : "N/A"}</Text>
+            </View>
+            <View style={styles.shareStatGlass}>
+              <Text style={styles.shareMetricLabel}>AVG WIN/LOSS</Text>
+              <Text style={styles.shareMetricValue}>{stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "N/A"}</Text>
             </View>
             <View style={styles.shareStatGlass}>
               <Text style={styles.shareMetricLabel}>RISK CONTROL</Text>
@@ -6394,6 +6409,10 @@ function AchievementShareCard({
             <View style={styles.shareStatGlass}>
               <Text style={styles.shareMetricLabel}>NET P&L</Text>
               <Text style={[styles.shareMetricValue, { color: positive ? "#9CFF00" : "#FF3B5F" }]}>{money(stats.totalPnl)}</Text>
+            </View>
+            <View style={styles.shareStatGlass}>
+              <Text style={styles.shareMetricLabel}>MAX DD</Text>
+              <Text style={[styles.shareMetricValue, { color: stats.maxDrawdown < 0 ? "#FF3B5F" : "#B8FF00" }]}>{money(stats.maxDrawdown)}</Text>
             </View>
             <View style={styles.shareStatGlass}>
               <Text style={styles.shareMetricLabel}>TRADES LOGGED</Text>
@@ -6479,8 +6498,10 @@ function AchievementSection({
       winRate: stats.wr,
       totalPnl: stats.pnl,
       profitFactor: stats.pf,
+      avgWinLoss: stats.avgWinLoss,
       riskControl: stats.drawdownControl,
       consistency: stats.consistency,
+      maxDrawdown: stats.maxDd,
       tradingScore: score,
       bestSession: stats.session[0]?.label || "N/A",
       dateLabel: achievementShareDateLabel(selectedDate),
@@ -6777,10 +6798,15 @@ function StatsScreen({
       netPnl: periodStats.pnl,
       winRate: periodStats.wr,
       profitFactor: periodStats.pf,
+      avgWinLoss: periodStats.avgWinLoss,
+      consistency: periodStats.consistency,
+      maxDrawdown: periodStats.maxDd,
+      riskControl: periodStats.drawdownControl,
       tradingScore: tradingScoreForTrades(periodTrades).score,
       dateLabel: achievementShareDateLabel(selectedDate),
       weekPnl,
       trades: periodStats.count,
+      bestSession: periodStats.session[0]?.label || "N/A",
       dailyBuffer: moneyCompact(propSnapshot.dailyRemaining),
       propStatus: `${propSnapshot.template.label} • ${propSnapshot.status}`,
     }),
@@ -12686,7 +12712,7 @@ const styles = StyleSheet.create({
     width: 1080,
     height: 1920,
     backgroundColor: "#030507",
-    padding: 42,
+    padding: 40,
     overflow: "hidden",
   },
   shareGlowGreen: {
@@ -12694,7 +12720,7 @@ const styles = StyleSheet.create({
     width: 760,
     height: 760,
     borderRadius: 380,
-    backgroundColor: "rgba(156,255,0,0.18)",
+    backgroundColor: "rgba(156,255,0,0.22)",
     left: -220,
     top: -170,
   },
@@ -12703,7 +12729,7 @@ const styles = StyleSheet.create({
     width: 820,
     height: 820,
     borderRadius: 410,
-    backgroundColor: "rgba(138,43,226,0.24)",
+    backgroundColor: "rgba(138,43,226,0.30)",
     right: -260,
     bottom: -190,
   },
@@ -12733,18 +12759,18 @@ const styles = StyleSheet.create({
   },
   shareCardFrame: {
     flex: 1,
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.22)",
+    borderWidth: 4,
+    borderColor: "rgba(244,201,93,0.68)",
     borderRadius: 46,
-    backgroundColor: "rgba(8,6,15,0.94)",
-    paddingHorizontal: 54,
-    paddingTop: 56,
-    paddingBottom: 46,
+    backgroundColor: "rgba(8,6,15,0.96)",
+    paddingHorizontal: 50,
+    paddingTop: 50,
+    paddingBottom: 42,
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#B84DFF",
-    shadowOpacity: 0.34,
-    shadowRadius: 34,
+    shadowColor: "#F4C95D",
+    shadowOpacity: 0.46,
+    shadowRadius: 38,
   },
   shareBrandRow: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: 6, width: "100%" },
   shareBrandLogo: { width: 76, height: 76 },
@@ -12771,19 +12797,19 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontWeight: "900",
     letterSpacing: 9,
-    marginTop: 24,
+    marginTop: 18,
     textShadowColor: "rgba(156,255,0,0.78)",
     textShadowRadius: 18,
   },
-  shareHeroBlock: { width: "100%", alignItems: "center", marginTop: 26 },
+  shareHeroBlock: { width: "100%", alignItems: "center", marginTop: 20 },
   shareBadgeStage: {
-    width: 330,
-    height: 330,
-    borderRadius: 165,
+    width: 390,
+    height: 390,
+    borderRadius: 195,
     borderWidth: 4,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 24,
+    marginTop: 20,
     backgroundColor: "rgba(0,0,0,0.45)",
     shadowColor: "#B84DFF",
     shadowOpacity: 0.8,
@@ -12794,9 +12820,9 @@ const styles = StyleSheet.create({
   },
   shareBadgeHalo: {
     position: "absolute",
-    width: 380,
-    height: 380,
-    borderRadius: 190,
+    width: 450,
+    height: 450,
+    borderRadius: 225,
     backgroundColor: "rgba(138,43,226,0.2)",
     shadowColor: "#8A2BE2",
     shadowOpacity: 0.95,
@@ -12844,8 +12870,35 @@ const styles = StyleSheet.create({
     shadowColor: "#8A2BE2",
   },
   shareLogoImage: {
-    width: 250,
-    height: 250,
+    width: 310,
+    height: 310,
+  },
+  shareScoreCorner: {
+    position: "absolute",
+    left: 28,
+    top: 26,
+    minWidth: 82,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: "rgba(244,201,93,0.74)",
+    backgroundColor: "rgba(0,0,0,0.48)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+    zIndex: 3,
+  },
+  shareScoreCornerNumber: {
+    color: C.text,
+    fontSize: 42,
+    lineHeight: 46,
+    fontWeight: "900",
+  },
+  shareScoreCornerLabel: {
+    color: "#F4C95D",
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    letterSpacing: 1.8,
   },
   shareScoreNumber: {
     color: C.text,
@@ -12921,46 +12974,46 @@ const styles = StyleSheet.create({
   },
   shareBadgeTitle: {
     color: C.text,
-    fontSize: 72,
-    lineHeight: 82,
+    fontSize: 66,
+    lineHeight: 75,
     fontWeight: "900",
     textAlign: "center",
     marginTop: 18,
-    minHeight: 96,
+    minHeight: 88,
     textShadowColor: "rgba(184,77,255,0.72)",
     textShadowRadius: 24,
   },
   sharePrestigeText: {
     color: "rgba(245,247,250,0.88)",
-    fontSize: 23,
-    lineHeight: 32,
+    fontSize: 21,
+    lineHeight: 29,
     fontWeight: "800",
     textAlign: "center",
     marginTop: 2,
   },
   shareMetricPanel: {
     width: "100%",
-    marginTop: 24,
+    marginTop: 18,
   },
   shareStatsGrid: {
     width: "100%",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14,
+    gap: 10,
   },
   shareStatGlass: {
-    width: "48.7%",
+    width: "48.6%",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    borderColor: "rgba(244,201,93,0.32)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 17,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    minHeight: 104,
+    paddingHorizontal: 17,
+    paddingVertical: 12,
+    minHeight: 84,
     justifyContent: "center",
   },
-  shareMetricLabel: { color: C.sub, fontSize: 13, lineHeight: 18, fontWeight: "900", letterSpacing: 2.2 },
-  shareMetricValue: { color: "#B8FF00", fontSize: 32, lineHeight: 39, fontWeight: "900", marginTop: 7 },
+  shareMetricLabel: { color: C.text, fontSize: 12, lineHeight: 16, fontWeight: "900", letterSpacing: 1.6 },
+  shareMetricValue: { color: "#B8FF00", fontSize: 28, lineHeight: 34, fontWeight: "900", marginTop: 5 },
   shareMetricSub: { color: C.text, fontSize: 17, fontWeight: "900", letterSpacing: 2 },
   shareMiniGrid: { width: "100%", flexDirection: "row", gap: 12, marginTop: 16 },
   shareMiniMetric: {
@@ -12983,7 +13036,7 @@ const styles = StyleSheet.create({
   },
   shareRarityText: {
     position: "absolute",
-    bottom: 38,
+    bottom: 30,
     fontSize: 17,
     lineHeight: 23,
     fontWeight: "900",
@@ -12991,9 +13044,9 @@ const styles = StyleSheet.create({
   },
   sharePhrase: { color: C.text, fontSize: 17, lineHeight: 24, fontWeight: "800", textAlign: "center", marginTop: 24 },
   shareMadeBy: { color: "#B8FF00", fontSize: 17, lineHeight: 24, fontWeight: "900", letterSpacing: 4, marginTop: "auto" },
-  shareFooterBlock: { width: "100%", alignItems: "center", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.14)", paddingTop: 22 },
-  shareAppStoreCta: { color: C.text, fontSize: 24, lineHeight: 32, fontWeight: "900", textAlign: "center" },
-  shareDisclaimer: { color: C.sub, fontSize: 16, lineHeight: 23, fontWeight: "800", marginTop: 7, textAlign: "center" },
+  shareFooterBlock: { width: "100%", alignItems: "center", borderTopWidth: 1, borderTopColor: "rgba(244,201,93,0.28)", paddingTop: 18 },
+  shareAppStoreCta: { color: C.text, fontSize: 23, lineHeight: 30, fontWeight: "900", textAlign: "center" },
+  shareDisclaimer: { color: C.sub, fontSize: 15, lineHeight: 21, fontWeight: "800", marginTop: 6, textAlign: "center" },
   shareHashtag: { color: C.purple, fontSize: 22, lineHeight: 30, fontWeight: "900", marginTop: 10, letterSpacing: 1.2 },
   youTraderBadge: {
     color: C.green,
