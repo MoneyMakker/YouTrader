@@ -13,47 +13,49 @@ const SOFT = "#F5F7FA";
 const MUTED = "#6F7887";
 
 export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
-  const title = textValue(stats.title, "Monthly Performance Report");
+  const copy = reportCopy(textValue(stats.lang, "en"));
+  const rawTitle = textValue(stats.title, "");
+  const title = rawTitle && rawTitle !== "Monthly Performance Report" ? rawTitle : copy.title;
   const rangeLabel = textValue(stats.rangeLabel, "");
   const tradeCount = numberValue(stats.trades);
   const equityCurve = numberArray(stats.equityCurve);
   const netPnl = numberValue(stats.netPnl);
   const tradingScore = textValue(stats.tradingScore, "N/A");
   const grade = textValue(stats.grade, "N/A");
-  const performanceSummary = buildPerformanceSummary(stats);
-  const nextFocus = buildNextFocus(stats);
+  const performanceSummary = buildPerformanceSummary(stats, copy);
+  const nextFocus = buildNextFocus(stats, copy);
   const logoHtml = logoDataUri
     ? `<img class="logo" src="${logoDataUri}" alt="YouTrader"/>`
-    : `<div class="text-logo">YouTrader</div>`;
+    : `<div class="text-logo">${copy.brand}</div>`;
 
   const kpiRows = [
     [
-      kpi("Total Trades", tradeCount ? String(tradeCount) : "N/A"),
-      kpi("Win Rate", tradeCount ? percent(stats.winRate) : "N/A"),
-      kpi("Wins / Losses", tradeCount ? `${numberValue(stats.wins)} / ${numberValue(stats.losses)}` : "N/A"),
-      kpi("Profit Factor", tradeCount ? fixedOrNA(stats.profitFactor) : "N/A"),
+      kpi(copy.totalTrades, tradeCount ? String(tradeCount) : copy.na),
+      kpi(copy.winRate, tradeCount ? percent(stats.winRate) : copy.na),
+      kpi(copy.winsLosses, tradeCount ? `${numberValue(stats.wins)} / ${numberValue(stats.losses)}` : copy.na),
+      kpi(copy.profitFactor, tradeCount ? fixedOrNA(stats.profitFactor) : copy.na),
     ],
     [
-      kpi("Expectancy", tradeCount ? money(numberValue(stats.expectancy)) : "N/A", toneForSigned(numberValue(stats.expectancy))),
-      kpi("Max Drawdown", tradeCount ? money(numberValue(stats.drawdown)) : "N/A", "loss"),
-      kpi("Best Day", textValue(stats.bestDay, "N/A")),
-      kpi("Worst Day", textValue(stats.worstDay, "N/A"), "loss"),
+      kpi(copy.expectancy, tradeCount ? money(numberValue(stats.expectancy)) : copy.na, toneForSigned(numberValue(stats.expectancy))),
+      kpi(copy.maxDrawdown, tradeCount ? money(numberValue(stats.drawdown)) : copy.na, "loss"),
+      kpi(copy.bestDay, textValue(stats.bestDay, copy.na)),
+      kpi(copy.worstDay, textValue(stats.worstDay, copy.na), "loss"),
     ],
     [
-      kpi("Average Win", tradeCount ? money(numberValue(stats.avgWin)) : "N/A", "good"),
-      kpi("Average Loss", tradeCount ? money(-Math.abs(numberValue(stats.avgLoss))) : "N/A", "loss"),
-      kpi("Average R/R", tradeCount ? fixedOrNA(stats.avgWinLoss) : "N/A"),
-      kpi("Trading Score", tradeCount ? textValue(stats.tradingScore, "N/A") : "N/A", "accent"),
+      kpi(copy.averageWin, tradeCount ? money(numberValue(stats.avgWin)) : copy.na, "good"),
+      kpi(copy.averageLoss, tradeCount ? money(-Math.abs(numberValue(stats.avgLoss))) : copy.na, "loss"),
+      kpi(copy.averageRR, tradeCount ? fixedOrNA(stats.avgWinLoss) : copy.na),
+      kpi(copy.tradingScore, tradeCount ? textValue(stats.tradingScore, copy.na) : copy.na, "accent"),
     ],
     [
-      kpi("Risk Control", tradeCount ? percent(stats.riskControl) : "N/A"),
-      kpi("Consistency", tradeCount ? percent(stats.consistency) : "N/A"),
-      kpi("Recovery Factor", tradeCount ? fixedOrNA(stats.recoveryFactor) : "N/A"),
-      kpi("Grade", tradeCount ? textValue(stats.grade, "N/A") : "N/A", "accent"),
+      kpi(copy.riskControl, tradeCount ? percent(stats.riskControl) : copy.na),
+      kpi(copy.consistency, tradeCount ? percent(stats.consistency) : copy.na),
+      kpi(copy.recoveryFactor, tradeCount ? fixedOrNA(stats.recoveryFactor) : copy.na),
+      kpi(copy.grade, tradeCount ? textValue(stats.grade, copy.na) : copy.na, "accent"),
     ],
     [
-      kpi("Best Session", textValue(stats.bestSession, "N/A"), "good"),
-      kpi("Worst Session", textValue(stats.worstSession, "N/A"), "loss"),
+      kpi(copy.bestSession, textValue(stats.bestSession, copy.na), "good"),
+      kpi(copy.worstSession, textValue(stats.worstSession, copy.na), "loss"),
     ],
   ];
 
@@ -62,49 +64,50 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
 <head>
   <meta charset="utf-8"/>
   <style>
-    @page { size: A4; margin: 12mm 11mm; }
+    @page { size: A4; margin: 11mm 10mm; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { margin: 0; background: ${PAPER}; color: ${INK}; font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", "Segoe UI", sans-serif; }
-    .page { width: 100%; max-width: 188mm; margin: 0 auto; }
-    .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 2px solid ${INK}; }
-    .brand-block { display: flex; align-items: center; gap: 14px; min-width: 0; }
-    .logo { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; }
-    .text-logo { font-size: 24px; font-weight: 900; color: ${PURPLE}; letter-spacing: -0.4px; line-height: 1; }
+    .page { width: 100%; max-width: 190mm; margin: 0 auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 0 13px; border-bottom: 2px solid ${INK}; }
+    .brand-block { display: flex; align-items: center; gap: 16px; min-width: 0; }
+    .logo { width: 58px; height: 58px; object-fit: contain; flex-shrink: 0; }
+    .text-logo { font-size: 26px; font-weight: 900; color: ${PURPLE}; letter-spacing: -0.4px; line-height: 1; }
     .brand-copy { min-width: 0; }
-    .brand-name { font-size: 21px; font-weight: 900; color: ${INK}; line-height: 1.1; }
-    .brand-tagline { margin-top: 4px; color: ${SUB}; font-size: 10px; font-weight: 800; letter-spacing: 2.4px; text-transform: uppercase; }
+    .brand-name { font-size: 24px; font-weight: 900; color: ${INK}; line-height: 1.05; }
+    .brand-tagline { margin-top: 5px; color: ${SUB}; font-size: 9px; font-weight: 900; letter-spacing: 2.2px; text-transform: uppercase; }
     .period-block { text-align: right; flex-shrink: 0; max-width: 42%; }
-    .period-label { color: ${MUTED}; font-size: 9px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; }
-    .period-value { margin-top: 4px; color: ${INK}; font-size: 12px; font-weight: 800; line-height: 1.35; }
-    .report-title { margin: 16px 0 0; font-size: 27px; font-weight: 900; letter-spacing: -0.3px; color: ${INK}; line-height: 1.1; }
-    .hero { margin-top: 16px; padding: 20px; border-radius: 18px; border: 1px solid ${LINE}; background: linear-gradient(135deg, ${SOFT} 0%, ${PAPER} 58%, rgba(176,38,255,0.045) 100%); break-inside: avoid; display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 18px; align-items: stretch; }
+    .period-label { color: ${MUTED}; font-size: 8px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; }
+    .period-value { margin-top: 5px; color: ${INK}; font-size: 12px; font-weight: 850; line-height: 1.35; }
+    .report-title { margin: 14px 0 0; font-size: 29px; font-weight: 900; letter-spacing: -0.45px; color: ${INK}; line-height: 1.06; }
+    .hero { margin-top: 13px; padding: 17px 18px; border-radius: 16px; border: 1px solid ${LINE}; background: linear-gradient(135deg, ${SOFT} 0%, ${PAPER} 68%, rgba(176,38,255,0.035) 100%); break-inside: avoid; display: grid; grid-template-columns: 1.18fr 0.82fr; gap: 16px; align-items: stretch; }
     .hero-label { color: ${SUB}; font-size: 10px; font-weight: 900; letter-spacing: 1.8px; text-transform: uppercase; }
-    .hero-value { margin-top: 8px; font-size: 50px; line-height: 1; font-weight: 900; color: ${netPnl >= 0 ? GREEN : RED}; }
+    .hero-value { margin-top: 7px; font-size: 49px; line-height: 0.98; font-weight: 900; color: ${netPnl >= 0 ? GREEN : RED}; }
     .hero-sub { margin-top: 8px; color: ${MUTED}; font-size: 12px; font-weight: 700; line-height: 1.4; }
-    .hero-side { border-left: 1px solid ${LINE}; padding-left: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: center; }
-    .hero-mini { border: 1px solid ${LINE}; border-radius: 12px; background: ${PAPER}; padding: 10px; min-height: 58px; }
+    .hero-side { border-left: 1px solid ${LINE}; padding-left: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: center; }
+    .hero-mini { border: 1px solid ${LINE}; border-radius: 11px; background: ${PAPER}; padding: 9px; min-height: 55px; }
     .hero-mini-label { color: ${SUB}; font-size: 8px; font-weight: 900; letter-spacing: 1.1px; text-transform: uppercase; }
     .hero-mini-value { color: ${INK}; font-size: 18px; font-weight: 900; margin-top: 5px; }
     .hero-mini.accent .hero-mini-value { color: ${PURPLE}; }
-    .section-title { margin: 16px 0 9px; color: ${INK}; font-size: 11px; font-weight: 900; letter-spacing: 1.6px; text-transform: uppercase; }
-    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; break-inside: avoid; }
-    .kpi-grid.compact { grid-template-columns: repeat(2, 1fr); margin-top: 8px; }
-    .kpi { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: 12px; padding: 10px 11px; min-height: 68px; break-inside: avoid; }
+    .section-title { margin: 13px 0 8px; color: ${INK}; font-size: 10px; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; break-inside: avoid; }
+    .kpi-grid.compact { grid-template-columns: repeat(2, 1fr); margin-top: 7px; }
+    .kpi { background: ${PAPER}; border: 1px solid ${LINE}; border-radius: 11px; padding: 9px 10px; min-height: 63px; break-inside: avoid; }
     .kpi.good .kpi-value { color: ${GREEN}; }
     .kpi.loss .kpi-value { color: ${RED}; }
     .kpi.accent .kpi-value { color: ${PURPLE}; }
     .kpi-label { color: ${SUB}; font-size: 9px; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; line-height: 1.25; }
-    .kpi-value { margin-top: 6px; color: ${INK}; font-size: 17px; line-height: 1.15; font-weight: 900; word-break: break-word; }
-    .chart-panel { margin-top: 6px; padding: 13px 14px 9px; border: 1px solid ${LINE}; border-radius: 16px; background: ${PAPER}; break-inside: avoid; }
-    .chart-panel svg { width: 100%; height: 124px; display: block; overflow: visible; }
-    .insights { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 10px; margin-top: 15px; break-inside: avoid; page-break-inside: avoid; }
-    .insight-card { border: 1px solid ${LINE}; border-radius: 16px; background: ${SOFT}; padding: 14px 15px; min-height: 118px; }
+    .kpi-value { margin-top: 5px; color: ${INK}; font-size: 16px; line-height: 1.14; font-weight: 900; word-break: break-word; }
+    .chart-panel { margin-top: 5px; padding: 10px 12px 8px; border: 1px solid ${LINE}; border-radius: 15px; background: ${PAPER}; break-inside: avoid; }
+    .chart-panel svg { width: 100%; height: 118px; display: block; overflow: visible; }
+    .insights { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 9px; margin-top: 13px; break-inside: avoid; page-break-inside: avoid; }
+    .insight-card { border: 1px solid ${LINE}; border-radius: 15px; background: ${SOFT}; padding: 12px 13px; min-height: 104px; }
     .insight-card.focus { border-color: rgba(176,38,255,0.28); background: rgba(176,38,255,0.05); }
     .insight-title { color: ${INK}; font-size: 10px; font-weight: 900; letter-spacing: 1.4px; text-transform: uppercase; }
-    .insight-body { margin-top: 10px; color: ${INK}; font-size: 12px; line-height: 1.55; font-weight: 650; }
-    .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid ${LINE}; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; break-inside: avoid; }
+    .insight-body { margin-top: 8px; color: ${INK}; font-size: 11px; line-height: 1.48; font-weight: 650; }
+    .footer { margin-top: 13px; padding-top: 10px; border-top: 1px solid ${LINE}; display: flex; align-items: center; justify-content: space-between; gap: 12px; break-inside: avoid; }
+    .footer-logo { width: 24px; height: 24px; object-fit: contain; margin-right: 8px; vertical-align: middle; }
     .footer-left { flex: 1; min-width: 0; }
-    .footer-brand { color: ${INK}; font-size: 11px; font-weight: 900; }
+    .footer-brand { color: ${INK}; font-size: 11px; font-weight: 900; display: flex; align-items: center; }
     .footer-disclaimer { margin-top: 4px; color: ${MUTED}; font-size: 10px; font-weight: 700; line-height: 1.4; }
     .footer-cta { color: ${PURPLE}; font-size: 10px; font-weight: 900; text-align: right; white-space: nowrap; }
     .page-break { page-break-before: always; break-before: page; }
@@ -116,13 +119,13 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
       <div class="brand-block">
         ${logoHtml}
         <div class="brand-copy">
-          <div class="brand-name">${EXPORT_BRAND.name}</div>
-          <div class="brand-tagline">${EXPORT_BRAND.tagline}</div>
+          <div class="brand-name">${copy.brand}</div>
+          <div class="brand-tagline">${copy.tagline}</div>
         </div>
       </div>
       <div class="period-block">
-        <div class="period-label">Reporting Period</div>
-        <div class="period-value">${escapeHtml(rangeLabel || "Current month")}</div>
+        <div class="period-label">${copy.reportingPeriod}</div>
+        <div class="period-value">${escapeHtml(rangeLabel || copy.currentMonth)}</div>
       </div>
     </header>
 
@@ -130,19 +133,19 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
 
     <section class="hero">
       <div>
-        <div class="hero-label">Net P&amp;L</div>
-        <div class="hero-value">${tradeCount ? money(netPnl) : "N/A"}</div>
-        <div class="hero-sub">${tradeCount ? `${tradeCount} logged trade${tradeCount === 1 ? "" : "s"} in this period` : "No trades logged during this reporting period"}</div>
+        <div class="hero-label">${copy.netPnl}</div>
+        <div class="hero-value">${tradeCount ? money(netPnl) : copy.na}</div>
+        <div class="hero-sub">${tradeCount ? copy.loggedTrades(tradeCount) : copy.noTrades}</div>
       </div>
       <div class="hero-side">
-        <div class="hero-mini accent"><div class="hero-mini-label">Trading Score</div><div class="hero-mini-value">${escapeHtml(tradingScore)}</div></div>
-        <div class="hero-mini"><div class="hero-mini-label">Grade</div><div class="hero-mini-value">${escapeHtml(grade)}</div></div>
-        <div class="hero-mini"><div class="hero-mini-label">Win Rate</div><div class="hero-mini-value">${tradeCount ? percent(stats.winRate) : "N/A"}</div></div>
-        <div class="hero-mini"><div class="hero-mini-label">Profit Factor</div><div class="hero-mini-value">${tradeCount ? fixedOrNA(stats.profitFactor) : "N/A"}</div></div>
+        <div class="hero-mini accent"><div class="hero-mini-label">${copy.tradingScore}</div><div class="hero-mini-value">${escapeHtml(tradingScore)}</div></div>
+        <div class="hero-mini"><div class="hero-mini-label">${copy.grade}</div><div class="hero-mini-value">${escapeHtml(grade)}</div></div>
+        <div class="hero-mini"><div class="hero-mini-label">${copy.winRate}</div><div class="hero-mini-value">${tradeCount ? percent(stats.winRate) : copy.na}</div></div>
+        <div class="hero-mini"><div class="hero-mini-label">${copy.profitFactor}</div><div class="hero-mini-value">${tradeCount ? fixedOrNA(stats.profitFactor) : copy.na}</div></div>
       </div>
     </section>
 
-    <div class="section-title">Core Performance</div>
+    <div class="section-title">${copy.corePerformance}</div>
     <div class="kpi-grid">
       ${kpiRows[0].join("")}
     </div>
@@ -150,12 +153,12 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
       ${kpiRows[1].join("")}
     </div>
 
-    <div class="section-title">Equity Curve</div>
+    <div class="section-title">${copy.equityCurve}</div>
     <div class="chart-panel">
       ${buildEquityChart(equityCurve, tradeCount)}
     </div>
 
-    <div class="section-title">Advanced Metrics</div>
+    <div class="section-title">${copy.advancedMetrics}</div>
     <div class="kpi-grid">
       ${kpiRows[2].join("")}
     </div>
@@ -168,21 +171,21 @@ export function buildWeeklyReportHtml(stats: ReportStats, logoDataUri = "") {
 
     <div class="insights">
       <div class="insight-card">
-        <div class="insight-title">Performance Summary</div>
+        <div class="insight-title">${copy.performanceSummary}</div>
         <div class="insight-body">${escapeHtml(performanceSummary)}</div>
       </div>
       <div class="insight-card focus">
-        <div class="insight-title">Next Focus</div>
+        <div class="insight-title">${copy.nextFocus}</div>
         <div class="insight-body">${escapeHtml(nextFocus)}</div>
       </div>
     </div>
 
     <footer class="footer">
       <div class="footer-left">
-        <div class="footer-brand">YouTrader professional trading journal</div>
-        <div class="footer-disclaimer">${EXPORT_BRAND.disclaimer}</div>
+        <div class="footer-brand">${logoDataUri ? `<img class="footer-logo" src="${logoDataUri}" alt=""/>` : ""}${copy.footerBrand}</div>
+        <div class="footer-disclaimer">${copy.disclaimer}</div>
       </div>
-      <div class="footer-cta">${EXPORT_BRAND.appStoreHint}</div>
+      <div class="footer-cta">${copy.footerCta}</div>
     </footer>
   </div>
 </body>
@@ -196,13 +199,13 @@ function kpi(label: string, value: string, tone = "") {
 function buildEquityChart(values: number[], tradeCount: number) {
   if (!tradeCount) {
     return `<svg viewBox="0 0 680 132" preserveAspectRatio="xMidYMid meet">
-      <line x1="24" y1="98" x2="656" y2="98" stroke="${LINE}" stroke-width="1.5"/>
+      ${chartGrid(680, 132, 24, 18, 22)}
+      <line x1="24" y1="82" x2="656" y2="82" stroke="${MUTED}" stroke-width="1.8" stroke-linecap="round"/>
       <text x="340" y="58" text-anchor="middle" fill="${MUTED}" font-size="13" font-weight="700" font-family="-apple-system, sans-serif">Log trades to generate an equity curve</text>
     </svg>`;
   }
 
   const series = values.length ? values : [0];
-  const normalized = series.length === 1 ? [series[0], series[0]] : series;
   const width = 680;
   const height = 132;
   const padX = 24;
@@ -210,6 +213,20 @@ function buildEquityChart(values: number[], tradeCount: number) {
   const padBottom = 22;
   const chartW = width - padX * 2;
   const chartH = height - padTop - padBottom;
+
+  if (series.length <= 1 || tradeCount <= 1) {
+    const y = padTop + chartH / 2;
+    const value = series[0] || 0;
+    const stroke = value >= 0 ? GREEN : RED;
+    return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+      ${chartGrid(width, height, padX, padTop, padBottom)}
+      <line x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}" stroke="${stroke}" stroke-width="3.2" stroke-linecap="round"/>
+      <circle cx="${width - padX}" cy="${y}" r="4.8" fill="${PAPER}" stroke="${stroke}" stroke-width="2.5"/>
+      <text x="${padX}" y="${height - 5}" fill="${MUTED}" font-size="10" font-weight="700" font-family="-apple-system, sans-serif">Single-trade sample. Curve will develop as more trades are logged.</text>
+    </svg>`;
+  }
+
+  const normalized = series;
   const min = Math.min(0, ...normalized);
   const max = Math.max(0, ...normalized);
   const spread = Math.max(1, max - min);
@@ -221,28 +238,178 @@ function buildEquityChart(values: number[], tradeCount: number) {
   });
 
   const linePoints = coords.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
-  const baselineY = padTop + chartH;
-  const areaPoints = `${coords[0].x.toFixed(1)},${baselineY} ${linePoints} ${coords[coords.length - 1].x.toFixed(1)},${baselineY}`;
   const zeroY = padTop + chartH - ((0 - min) / spread) * chartH;
   const stroke = normalized[normalized.length - 1] >= 0 ? GREEN : RED;
+  const start = coords[0];
+  const end = coords[coords.length - 1];
 
   return `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
     <defs>
-      <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${stroke}" stop-opacity="0.18"/>
-        <stop offset="100%" stop-color="${stroke}" stop-opacity="0"/>
+      <filter id="softLineShadow" x="-8%" y="-40%" width="116%" height="180%">
+        <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="${stroke}" flood-opacity="0.16"/>
+      </filter>
+      <linearGradient id="equityStroke" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="${PURPLE}" stop-opacity="0.78"/>
+        <stop offset="100%" stop-color="${stroke}" stop-opacity="1"/>
       </linearGradient>
     </defs>
-    <line x1="${padX}" y1="${zeroY.toFixed(1)}" x2="${width - padX}" y2="${zeroY.toFixed(1)}" stroke="${LINE}" stroke-width="1.5" stroke-dasharray="4 4"/>
-    <polygon points="${areaPoints}" fill="url(#equityFill)"/>
-    <polyline points="${linePoints}" fill="none" stroke="${stroke}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    ${chartGrid(width, height, padX, padTop, padBottom)}
+    <line x1="${padX}" y1="${zeroY.toFixed(1)}" x2="${width - padX}" y2="${zeroY.toFixed(1)}" stroke="${MUTED}" stroke-width="1.25" stroke-dasharray="4 5" opacity="0.45"/>
+    <polyline points="${linePoints}" fill="none" stroke="url(#equityStroke)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#softLineShadow)"/>
+    <circle cx="${start.x.toFixed(1)}" cy="${start.y.toFixed(1)}" r="3.8" fill="${PAPER}" stroke="${PURPLE}" stroke-width="2"/>
+    <circle cx="${end.x.toFixed(1)}" cy="${end.y.toFixed(1)}" r="5.2" fill="${PAPER}" stroke="${stroke}" stroke-width="2.6"/>
   </svg>`;
 }
 
-function buildPerformanceSummary(stats: ReportStats): string {
+function chartGrid(width: number, height: number, padX: number, padTop: number, padBottom: number) {
+  const right = width - padX;
+  const bottom = height - padBottom;
+  const rows = [padTop, padTop + (bottom - padTop) / 2, bottom];
+  const cols = [padX, padX + (right - padX) / 3, padX + ((right - padX) * 2) / 3, right];
+  return `
+    <rect x="${padX}" y="${padTop}" width="${right - padX}" height="${bottom - padTop}" rx="8" fill="#FBFCFE" stroke="${LINE}" stroke-width="1"/>
+    ${rows.map((y) => `<line x1="${padX}" y1="${y.toFixed(1)}" x2="${right}" y2="${y.toFixed(1)}" stroke="${LINE}" stroke-width="0.9" opacity="0.72"/>`).join("")}
+    ${cols.map((x) => `<line x1="${x.toFixed(1)}" y1="${padTop}" x2="${x.toFixed(1)}" y2="${bottom}" stroke="${LINE}" stroke-width="0.9" opacity="0.42"/>`).join("")}
+  `;
+}
+
+function reportCopy(langValue: string) {
+  const lang = String(langValue || "en").toLowerCase();
+  const base = {
+    brand: "YouTrader",
+    tagline: "Professional trading performance report",
+    title: "Monthly Performance Report",
+    reportingPeriod: "Reporting Period",
+    currentMonth: "Current month",
+    netPnl: "Net P&L",
+    totalTrades: "Total Trades",
+    winRate: "Win Rate",
+    winsLosses: "Wins / Losses",
+    profitFactor: "Profit Factor",
+    expectancy: "Expectancy",
+    maxDrawdown: "Max Drawdown",
+    averageWin: "Average Win",
+    averageLoss: "Average Loss",
+    averageRR: "Average R/R",
+    tradingScore: "Trading Score",
+    grade: "Grade",
+    riskControl: "Risk Control",
+    consistency: "Consistency",
+    recoveryFactor: "Recovery Factor",
+    bestDay: "Best Day",
+    worstDay: "Worst Day",
+    bestSession: "Best Session",
+    worstSession: "Worst Session",
+    corePerformance: "Core Performance",
+    equityCurve: "Equity Curve",
+    advancedMetrics: "Advanced Metrics",
+    performanceSummary: "Performance Summary",
+    nextFocus: "Next Focus",
+    noTrades: "No trades logged during this reporting period",
+    noTradesSummary: "No trades were logged during this reporting period. Continue journaling to build a monthly performance record.",
+    noTradesFocus: "Start logging trades consistently to unlock meaningful monthly insights.",
+    loggedTrades: (count: number) => `${count} logged trade${count === 1 ? "" : "s"} in this period`,
+    footerBrand: "Professional trading journal",
+    footerCta: "YouTrader Available on the App Store",
+    disclaimer: "Educational journal. Not financial advice.",
+    na: "N/A",
+  };
+
+  const localized: Record<string, Partial<typeof base>> = {
+    ru: {
+      tagline: "Профессиональный отчёт по торговой эффективности",
+      title: "Месячный отчёт по эффективности",
+      reportingPeriod: "Отчётный период",
+      currentMonth: "Текущий месяц",
+      netPnl: "Итоговый P&L",
+      totalTrades: "Всего сделок",
+      winRate: "Процент побед",
+      winsLosses: "Победы / лоссы",
+      profitFactor: "Профит-фактор",
+      expectancy: "Ожидание",
+      maxDrawdown: "Макс. просадка",
+      averageWin: "Средняя победа",
+      averageLoss: "Средний лосс",
+      averageRR: "Средний R/R",
+      tradingScore: "Trading Score",
+      grade: "Оценка",
+      riskControl: "Контроль риска",
+      consistency: "Стабильность",
+      recoveryFactor: "Recovery Factor",
+      bestDay: "Лучший день",
+      worstDay: "Худший день",
+      bestSession: "Лучшая сессия",
+      worstSession: "Худшая сессия",
+      corePerformance: "Основные показатели",
+      equityCurve: "Кривая капитала",
+      advancedMetrics: "Продвинутые метрики",
+      performanceSummary: "Сводка эффективности",
+      nextFocus: "Следующий фокус",
+      noTrades: "За этот период сделок нет",
+      noTradesSummary: "За этот отчётный период сделок не было. Продолжай вести журнал, чтобы построить месячную статистику.",
+      noTradesFocus: "Начни стабильно логировать сделки, чтобы открыть полезные месячные выводы.",
+      loggedTrades: (count: number) => `${count} сделок в этом периоде`,
+      footerBrand: "Профессиональный торговый журнал",
+      footerCta: "YouTrader Available on the App Store",
+      disclaimer: "Образовательный журнал. Не финансовый совет.",
+    },
+    es: {
+      title: "Informe mensual de rendimiento",
+      reportingPeriod: "Periodo del informe",
+      netPnl: "P&L neto",
+      totalTrades: "Total de trades",
+      winRate: "Tasa de acierto",
+      winsLosses: "Ganadas / Perdidas",
+      profitFactor: "Factor de beneficio",
+      expectancy: "Expectativa",
+      maxDrawdown: "Drawdown máximo",
+      averageWin: "Ganancia media",
+      averageLoss: "Pérdida media",
+      averageRR: "R/R medio",
+      riskControl: "Control de riesgo",
+      consistency: "Consistencia",
+      bestDay: "Mejor día",
+      worstDay: "Peor día",
+      bestSession: "Mejor sesión",
+      worstSession: "Peor sesión",
+      performanceSummary: "Resumen de rendimiento",
+      nextFocus: "Próximo foco",
+      footerBrand: "Diario profesional de trading",
+      disclaimer: "Diario educativo. No es asesoramiento financiero.",
+    },
+    de: {
+      title: "Monatlicher Performance-Bericht",
+      reportingPeriod: "Berichtszeitraum",
+      netPnl: "Netto P&L",
+      totalTrades: "Trades gesamt",
+      winRate: "Win Rate",
+      winsLosses: "Gewinne / Verluste",
+      profitFactor: "Profit Factor",
+      expectancy: "Erwartungswert",
+      maxDrawdown: "Max. Drawdown",
+      averageWin: "Durchschn. Gewinn",
+      averageLoss: "Durchschn. Verlust",
+      averageRR: "Durchschn. R/R",
+      riskControl: "Risikokontrolle",
+      consistency: "Konsistenz",
+      bestDay: "Bester Tag",
+      worstDay: "Schlechtester Tag",
+      bestSession: "Beste Session",
+      worstSession: "Schlechteste Session",
+      performanceSummary: "Performance-Zusammenfassung",
+      nextFocus: "Nächster Fokus",
+      footerBrand: "Professionelles Trading-Journal",
+      disclaimer: "Bildungsjournal. Keine Finanzberatung.",
+    },
+  };
+
+  return { ...base, ...(localized[lang] || {}) };
+}
+
+function buildPerformanceSummary(stats: ReportStats, copy: ReturnType<typeof reportCopy>): string {
   const trades = numberValue(stats.trades);
   if (!trades) {
-    return "No trades were logged during this reporting period. Continue journaling to build a monthly performance record.";
+    return copy.noTradesSummary;
   }
 
   const netPnl = numberValue(stats.netPnl);
@@ -267,9 +434,9 @@ function buildPerformanceSummary(stats: ReportStats): string {
   return `You logged ${trades} trade${trades === 1 ? "" : "s"} with a ${Math.round(winRate)}% win rate and ${resultPhrase} at ${money(netPnl)}.${qualityText} Expectancy registered ${money(expectancy)} with a Trading Score of ${score}.`;
 }
 
-function buildNextFocus(stats: ReportStats): string {
+function buildNextFocus(stats: ReportStats, copy: ReturnType<typeof reportCopy>): string {
   const trades = numberValue(stats.trades);
-  if (!trades) return "Start logging trades consistently to unlock meaningful monthly insights.";
+  if (!trades) return copy.noTradesFocus;
 
   const drawdown = Math.abs(numberValue(stats.drawdown));
   const netPnl = numberValue(stats.netPnl);

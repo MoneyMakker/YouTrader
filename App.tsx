@@ -6902,6 +6902,7 @@ function StatsScreen({
       const start = periodStart(safeDateFromISO(selectedDate), "month");
       const end = addDays(addMonths(start, 1), -1);
       await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
+        lang,
         title: "Monthly Performance Report",
         rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
         netPnl: monthStats.pnl,
