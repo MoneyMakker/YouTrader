@@ -169,8 +169,20 @@ Keep it manual for now to avoid flaky release blockers.
 - Native permission flows, Photos, camera, microphone, share sheet, and RevenueCat purchases still need real iPhone/TestFlight QA.
 - Maestro does not replace App Store release manual QA.
 
+## Manual Attachment QA
+
+Run these on a real iPhone/TestFlight build before release:
+
+1. Create a trade with Upload Photo.
+2. Create a trade with Take Picture.
+3. Create a Pro trade with Record Voice.
+4. Save each trade and confirm the media appears in the trade card.
+5. Force close and reopen the app; confirm the media still appears.
+6. Edit each trade; confirm the existing media remains attached after Save Trade.
+7. With Pro cloud sync enabled, sign in on a second device and run sync; confirm screenshots and voice notes restore from private Supabase Storage.
+8. Temporarily block network during sync; confirm the trade still saves locally and the app reports that cloud sync will retry attachments.
+
 ## References
 
 - Maestro QuickStart: https://docs.maestro.dev/get-started/quickstart
 - Maestro commands: https://docs.maestro.dev/reference/commands-available
-

@@ -125,7 +125,7 @@ import {
 } from "./src/security/clientSecurity";
 import { SECURITY_LIMITS, SECURITY_MESSAGES } from "./src/security/securityConfig";
 import { validateImportedRows, validateTradeInput } from "./src/security/tradeValidation";
-import { validateSecureUploadInput } from "./src/security/uploadSecurity";
+import { secureUploadFile, validateSecureUploadInput } from "./src/security/uploadSecurity";
 import { GlassCard } from "./src/components/ui/GlassCard";
 import { AnimatedEquityCurve } from "./src/components/charts/AnimatedEquityCurve";
 import { PremiumGlassCard } from "./src/components/ui/PremiumGlassCard";
@@ -186,6 +186,8 @@ type Trade = {
   tags?: string[];
   photoUri?: string | null;
   voiceUri?: string | null;
+  photoCloudUri?: string | null;
+  voiceCloudUri?: string | null;
   voiceName?: string | null;
   createdAt?: number;
   updatedAt?: number;
@@ -1236,14 +1238,71 @@ async function persistJournalMediaAsset({
   }
   return destination;
 }
+function isLocalMediaUri(uri?: string | null) {
+  return !!uri && (uri.startsWith("file://") || uri.startsWith("content://") || uri.startsWith("ph://"));
+}
+function inferUploadMimeType(uri?: string | null, fallback?: string) {
+  const ext = String(uri || "").split("?")[0].split("#")[0].split(".").pop()?.toLowerCase() || "";
+  if (["jpg", "jpeg"].includes(ext)) return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (["m4a", "mp4"].includes(ext)) return "audio/x-m4a";
+  if (ext === "mp3" || ext === "mpeg") return "audio/mpeg";
+  if (ext === "wav") return "audio/wav";
+  if (ext === "aac") return "audio/aac";
+  return fallback || "application/octet-stream";
+}
+function filenameFromUri(uri?: string | null, fallback = "upload.bin") {
+  const raw = String(uri || "").split("?")[0].split("#")[0].split("/").pop() || fallback;
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  })();
+  return /^[A-Za-z0-9_.-]{1,100}$/.test(decoded) ? decoded : fallback;
+}
+function storageRef(bucket: string, path: string) {
+  return `supabase://${bucket}/${path}`;
+}
+function parseStorageRef(uri?: string | null) {
+  const value = String(uri || "");
+  if (!value.startsWith("supabase://")) return null;
+  const rest = value.slice("supabase://".length);
+  const slash = rest.indexOf("/");
+  if (slash <= 0) return null;
+  const bucket = rest.slice(0, slash);
+  const path = rest.slice(slash + 1);
+  if (!bucket || !path || path.includes("..") || /[\u0000-\u001f\u007f]/.test(path)) return null;
+  return { bucket, path };
+}
+async function signedStorageUrl(ref?: string | null) {
+  if (!supabase) return null;
+  const parsed = parseStorageRef(ref);
+  if (!parsed) return null;
+  const { data, error } = await supabase.storage.from(parsed.bucket).createSignedUrl(parsed.path, 60 * 60 * 24 * 7);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
 function cloudSafeAssetUrl(uri?: string | null) {
   if (!uri) return null;
+  if (parseStorageRef(uri)) return uri;
   try {
     const parsed = new URL(uri);
     return parsed.protocol === "https:" ? uri : null;
   } catch {
     return null;
   }
+}
+function cloudSafeAssetUrlForUser(uri: string | null | undefined, userId: string, kind: "photo" | "voice") {
+  if (!uri) return null;
+  const parsed = parseStorageRef(uri);
+  if (parsed) {
+    const expectedBucket = kind === "photo" ? "user-screenshots" : "user-voice-notes";
+    return parsed.bucket === expectedBucket && parsed.path.startsWith(`${userId}/`) ? uri : null;
+  }
+  return cloudSafeAssetUrl(uri);
 }
 
 async function claimRemoteIdempotency(action: string, userId: string | undefined, payload: unknown) {
@@ -1547,6 +1606,8 @@ function normalizeTrade(trade: Trade): Trade {
     tags: Array.isArray(trade.tags) ? parseTagsInput(trade.tags.join(" ")) : [],
     photoUri: trade.photoUri ? safeText(trade.photoUri, 2048) : null,
     voiceUri: trade.voiceUri ? safeText(trade.voiceUri, 2048) : null,
+    photoCloudUri: trade.photoCloudUri ? safeText(trade.photoCloudUri, 2048) : null,
+    voiceCloudUri: trade.voiceCloudUri ? safeText(trade.voiceCloudUri, 2048) : null,
     voiceName: trade.voiceName ? safeText(trade.voiceName, 128) : null,
     createdAt: entryTime ? tradeTimestampFromClock(trade.date || todayISO(), entryTime) : typeof trade.createdAt === "number" ? trade.createdAt : fallbackTime,
     updatedAt: typeof trade.updatedAt === "number" ? trade.updatedAt : fallbackTime,
@@ -1591,8 +1652,8 @@ function tradeToCloudRow(trade: Trade, userId: string): TradeJournalRow {
     pnl: normalized.pnl,
     mood: normalized.mood || null,
     notes: normalized.notes || null,
-    screenshot_url: cloudSafeAssetUrl(normalized.photoUri),
-    voice_url: cloudSafeAssetUrl(normalized.voiceUri),
+    screenshot_url: cloudSafeAssetUrlForUser(normalized.photoCloudUri || normalized.photoUri, userId, "photo"),
+    voice_url: cloudSafeAssetUrlForUser(normalized.voiceCloudUri || normalized.voiceUri, userId, "voice"),
     tags: normalized.tags || [],
     created_at: createdAt,
     updated_at: updatedAt,
@@ -1621,33 +1682,69 @@ function cloudRowToTrade(row: TradeJournalRow): Trade {
     tags: row.tags || [],
     photoUri: row.screenshot_url || null,
     voiceUri: row.voice_url || null,
+    photoCloudUri: row.screenshot_url || null,
+    voiceCloudUri: row.voice_url || null,
     voiceName: row.voice_url ? "Voice note" : null,
     createdAt,
     updatedAt,
   });
 }
 
-function mergeLocalAndCloudTrades(localTrades: Trade[], cloudRows: TradeJournalRow[]) {
+async function resolveCloudTradeAssets(trade: Trade): Promise<Trade> {
+  const photoRef = trade.photoCloudUri || trade.photoUri;
+  const voiceRef = trade.voiceCloudUri || trade.voiceUri;
+  const [photoSigned, voiceSigned] = await Promise.all([
+    parseStorageRef(photoRef) ? signedStorageUrl(photoRef) : Promise.resolve(null),
+    parseStorageRef(voiceRef) ? signedStorageUrl(voiceRef) : Promise.resolve(null),
+  ]);
+  return normalizeTrade({
+    ...trade,
+    photoUri: photoSigned || trade.photoUri || null,
+    voiceUri: voiceSigned || trade.voiceUri || null,
+    photoCloudUri: trade.photoCloudUri || (parseStorageRef(trade.photoUri) ? trade.photoUri : null),
+    voiceCloudUri: trade.voiceCloudUri || (parseStorageRef(trade.voiceUri) ? trade.voiceUri : null),
+  });
+}
+
+async function mergeLocalAndCloudTrades(localTrades: Trade[], cloudRows: TradeJournalRow[]) {
   const merged = new Map<string, Trade>();
   normalizeTrades(localTrades).forEach((trade) => merged.set(trade.id, trade));
 
-  cloudRows.forEach((row) => {
+  for (const row of cloudRows) {
     const clientId = String(row.client_id || row.id || "");
-    if (!clientId) return;
+    if (!clientId) continue;
     const deletedAt = row.deleted_at ? Date.parse(row.deleted_at) : 0;
     if (deletedAt) {
       const local = merged.get(clientId);
       if (!local || deletedAt >= (local.updatedAt || 0)) merged.delete(clientId);
-      return;
+      continue;
     }
-    const cloudTrade = cloudRowToTrade(row);
+    const cloudTrade = await resolveCloudTradeAssets(cloudRowToTrade(row));
     const local = merged.get(cloudTrade.id);
     if (!local || (cloudTrade.updatedAt || 0) > (local.updatedAt || 0)) {
       merged.set(cloudTrade.id, cloudTrade);
+    } else if (local) {
+      const refreshPhoto = !!cloudTrade.photoCloudUri && !isLocalMediaUri(local.photoUri);
+      const refreshVoice = !!cloudTrade.voiceCloudUri && !isLocalMediaUri(local.voiceUri);
+      if (refreshPhoto || refreshVoice) {
+        merged.set(cloudTrade.id, normalizeTrade({
+          ...local,
+          photoUri: refreshPhoto ? cloudTrade.photoUri : local.photoUri || null,
+          voiceUri: refreshVoice ? cloudTrade.voiceUri : local.voiceUri || null,
+          photoCloudUri: cloudTrade.photoCloudUri || local.photoCloudUri || null,
+          voiceCloudUri: cloudTrade.voiceCloudUri || local.voiceCloudUri || null,
+        }));
+      }
     }
-  });
+  }
 
   return sortTrades([...merged.values()]);
+}
+
+function attachmentSignatureUri(trade: Trade, kind: "photo" | "voice") {
+  return kind === "photo"
+    ? trade.photoCloudUri || trade.photoUri || null
+    : trade.voiceCloudUri || trade.voiceUri || null;
 }
 
 function tradesSignature(trades: Trade[]) {
@@ -1665,11 +1762,52 @@ function tradesSignature(trades: Trade[]) {
       pnl: trade.pnl,
       mood: trade.mood,
       notes: trade.notes,
-      photoUri: trade.photoUri ?? null,
-      voiceUri: trade.voiceUri ?? null,
+      photoUri: attachmentSignatureUri(trade, "photo"),
+      voiceUri: attachmentSignatureUri(trade, "voice"),
       updatedAt: trade.updatedAt || 0,
     })),
   );
+}
+
+async function uploadTradeAttachmentForCloud(
+  trade: Trade,
+  kind: "photo" | "voice",
+): Promise<{ trade: Trade; failed: boolean }> {
+  const uri = kind === "photo" ? trade.photoUri : trade.voiceUri;
+  const existingCloudRef = kind === "photo" ? trade.photoCloudUri : trade.voiceCloudUri;
+  if (!uri || existingCloudRef || !isLocalMediaUri(uri)) return { trade, failed: false };
+
+  try {
+    const category = kind === "photo" ? "screenshot" : "voice-note";
+    const fallbackName = kind === "photo" ? "trade-screenshot.jpg" : "voice-note.m4a";
+    const mimeType = inferUploadMimeType(uri, kind === "photo" ? "image/jpeg" : "audio/x-m4a");
+    const result = await secureUploadFile({
+      uri,
+      category,
+      originalName: filenameFromUri(uri, fallbackName),
+      mimeType,
+    });
+    const ref = storageRef(result.bucket, result.path);
+    return {
+      trade: normalizeTrade({
+        ...trade,
+        photoCloudUri: kind === "photo" ? ref : trade.photoCloudUri || null,
+        voiceCloudUri: kind === "voice" ? ref : trade.voiceCloudUri || null,
+      }),
+      failed: false,
+    };
+  } catch {
+    return { trade, failed: true };
+  }
+}
+
+async function uploadTradeAttachmentsForCloud(trade: Trade) {
+  const photo = await uploadTradeAttachmentForCloud(trade, "photo");
+  const voice = await uploadTradeAttachmentForCloud(photo.trade, "voice");
+  return {
+    trade: voice.trade,
+    failed: photo.failed || voice.failed,
+  };
 }
 
 function estimateBias(text: string): Record<Asset, Bias> {
@@ -7784,6 +7922,8 @@ function JournalScreen({
       tags: safe.tags,
       photoUri: safe.photoUri || null,
       voiceUri: isPremium ? safe.voiceUri || null : null,
+      photoCloudUri: previousTrade?.photoUri === safe.photoUri ? previousTrade?.photoCloudUri || null : null,
+      voiceCloudUri: isPremium && previousTrade?.voiceUri === safe.voiceUri ? previousTrade?.voiceCloudUri || null : null,
       voiceName: isPremium && safe.voiceUri ? safeText(form.voiceName || "Voice note", 128) : null,
       createdAt: editId ? (previousTrade?.createdAt || now) : now,
       updatedAt: now,
@@ -9957,12 +10097,13 @@ function App() {
       const activeCloudSignature = tradesSignature(
         cloudRows.filter((row) => !row.deleted_at).map(cloudRowToTrade),
       );
-      const merged = mergeLocalAndCloudTrades(trades, cloudRows);
+      const merged = await mergeLocalAndCloudTrades(trades, cloudRows);
       const mergedSignature = tradesSignature(merged);
       if (mergedSignature !== currentTradeSignature) {
         setTrades(merged);
       }
 
+      let finalSyncedTrades = merged;
       if (merged.length && mergedSignature !== activeCloudSignature) {
         const safeTrades = merged.filter((trade) =>
           validateTradeInput({
@@ -9982,7 +10123,17 @@ function App() {
         if (safeTrades.length !== merged.length) {
           await recordSecurityEvent("invalid_trade_blocked_cloud_sync", "trade:update", session.user.id);
         }
-        const rows = safeTrades.map((trade) => tradeToCloudRow(trade, session.user.id));
+        const uploadedTrades: Trade[] = [];
+        for (const trade of safeTrades) {
+          const result = await uploadTradeAttachmentsForCloud(trade);
+          uploadedTrades.push(result.trade);
+        }
+        const uploadedSignature = tradesSignature(uploadedTrades);
+        if (uploadedSignature !== mergedSignature) {
+          setTrades(uploadedTrades);
+        }
+        finalSyncedTrades = uploadedTrades;
+        const rows = uploadedTrades.map((trade) => tradeToCloudRow(trade, session.user.id));
         if (rows.length) {
           const claimed = await claimRemoteIdempotency("trade:cloud-upsert", session.user.id, rows);
           if (claimed) {
@@ -9996,8 +10147,17 @@ function App() {
 
       const syncedAt = new Date().toISOString();
       setLastCloudSyncAt(syncedAt);
-      setCloudSyncStatus("synced");
-      setCloudSyncMessage(`Synced ${merged.length} trades across devices.`);
+      const savedCount = finalSyncedTrades.length;
+      const attachmentRetryNeeded = finalSyncedTrades.some((trade) =>
+        (isLocalMediaUri(trade.photoUri) && !trade.photoCloudUri) ||
+        (isLocalMediaUri(trade.voiceUri) && !trade.voiceCloudUri),
+      );
+      setCloudSyncStatus(attachmentRetryNeeded ? "error" : "synced");
+      setCloudSyncMessage(
+        attachmentRetryNeeded
+          ? "Saved locally. Cloud sync will retry attachments."
+          : `Synced ${savedCount} trades across devices.`,
+      );
     } catch (error: any) {
       logger.error(error, { feature: "supabase", action: "sync_trades", table: "trade_journal", userId: session?.user.id });
       setCloudSyncStatus("error");

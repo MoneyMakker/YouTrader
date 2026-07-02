@@ -218,3 +218,11 @@ Possible later extraction targets:
 - Langfuse metadata is limited to provider/model/feature/tier/latency/success/fallback/rough token estimate. It does not send raw prompts, notes, screenshots, voice notes, full trade entries, tokens, or PII.
 - Added Promptfoo readiness with `promptfoo.config.yaml`, `scripts/promptfoo-local-provider.mjs`, `docs/AI_SAFETY_TESTS.md`, and npm script `test:ai-safety`.
 - Default Promptfoo safety tests use a local deterministic provider and do not require paid AI keys.
+
+## Trade Attachments Cloud Sync Fix (2026-07-02)
+
+- Fixed Journal media sync so locally saved screenshots/photos and Pro voice notes keep local `file://` persistence and upload through the existing `secure-upload` Edge Function during Pro cloud sync.
+- Cloud rows now store private Storage refs as `supabase://bucket/path`; restored trades create signed URLs at sync time instead of relying on public buckets.
+- Edit trade flow preserves existing cloud media refs when the user does not replace the attachment.
+- If cloud upload fails, trade save remains local and cloud sync reports: `Saved locally. Cloud sync will retry attachments.`
+- Manual QA required on iPhone: Upload Photo, Take Picture, Record Voice, restart app, edit trade, second-device Pro cloud restore.

@@ -159,6 +159,13 @@ Rules:
 - GitHub Actions QA passes.
 - Expo Doctor may show the known non-CNG/native-folder warning; review it before native config changes.
 - Free user basic journal add/edit/delete.
+- Journal attachment persistence:
+  - save trade with screenshot/photo
+  - save trade with voice note
+  - restart app and verify media still opens
+  - edit the same trade and verify media is preserved
+  - Pro cloud sync restores screenshot/voice on another signed-in device
+  - if cloud upload fails, local media remains and sync shows retry messaging
 - Pro user unlocked flows.
 - Trial user entitlement flow.
 - 31 trades/month free limit.

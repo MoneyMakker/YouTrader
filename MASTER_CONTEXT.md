@@ -80,6 +80,7 @@ For every future UI task, agents must run frontend-design thinking, compare agai
 - Maestro smoke-test readiness is documented in `docs/MAESTRO_SMOKE_TESTS.md` with local `.maestro/` flows. Maestro is manual/local for now and must not replace real iPhone/TestFlight QA.
 - Langfuse AI observability is optional, server-side only, and disabled without Supabase Edge Function secrets. It must log safe metadata only, never raw prompts or private journal data.
 - Promptfoo AI safety readiness is documented in `docs/AI_SAFETY_TESTS.md`; default tests use a local deterministic provider and require no paid AI keys.
+- Journal attachments use local file persistence first and Pro cloud sync uploads media through `secure-upload` into private Supabase Storage. Cloud trade rows store `supabase://bucket/path` refs and clients create signed URLs during restore.
 
 ## 2. Current Repository Structure
 
