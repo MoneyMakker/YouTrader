@@ -30,6 +30,22 @@ Supported env:
 
 Autocapture and session replay are disabled. YouTrader only sends explicit safe events with metadata/counts. Do not track notes, screenshots, voice notes, full trade data, tokens, or sensitive payloads.
 
+Recommended funnel setup lives in `docs/POSTHOG_FUNNELS.md`. Key production funnels:
+
+- Activation: `app_opened` -> `trade_added` -> `first_insight_seen`.
+- Monetization: `first_insight_seen` -> `locked_insight_seen` -> `paywall_viewed` -> `trial_started` / `pro_purchased`.
+- Retention: `app_opened` -> `trade_added` -> `weekly_report_opened`.
+- Export virality: `share_card_exported` / `pdf_exported`.
+- News engagement: `news_opened` -> `market_intel_viewed`.
+
+Do not enable mobile session replay/autocapture without a dedicated privacy review.
+
+## TestFlight QA
+
+Sentry TestFlight verification steps live in `docs/SENTRY_TESTFLIGHT_QA.md`.
+
+Runtime crash reporting needs only `EXPO_PUBLIC_SENTRY_DSN` or `SENTRY_DSN`. Source map upload must remain optional and should only run when `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are all available as CI/EAS secrets.
+
 ## Microsoft Clarity Evaluation
 
 Microsoft Clarity has an official React Native SDK, but it depends on native code, requires a new EAS/native build, and does not run in Expo Go. Because YouTrader is a sensitive trading journal with notes, screenshots, voice notes, and trade records, Clarity is not installed in the Expo app at this time.

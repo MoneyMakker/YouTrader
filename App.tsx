@@ -4302,6 +4302,10 @@ function ProValueModal({
   const yearlyProduct = storeProducts.find((product) => product.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) || null;
   const monthlyPrice = monthly ? packagePrice(monthly) : monthlyProduct?.priceString || PREMIUM_PRICE;
   const yearlyPrice = yearly ? packagePrice(yearly) : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
+  useEffect(() => {
+    if (!content.visible) return;
+    trackEvent("paywall_viewed", { screen: "value_modal", reason: content.reason });
+  }, [content.reason, content.visible]);
   return (
     <Modal visible={content.visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.valueModalBackdrop}>
@@ -7522,6 +7526,8 @@ function JournalScreen({
   const [deleteDayDate, setDeleteDayDate] = useState<string | null>(null);
   const [deleteDayBusy, setDeleteDayBusy] = useState(false);
   const lastSaveAtRef = useRef(0);
+  const firstInsightSeenRef = useRef(false);
+  const lockedInsightSeenRef = useRef(false);
   const emptyForm = {
     symbol: "MES",
     direction: "LONG" as Direction,
@@ -7562,10 +7568,22 @@ function JournalScreen({
   const journalStats = useMemo(() => calcStats(trades), [trades]);
   const firstInsight = useMemo(() => buildFirstInsight(trades, journalStats), [trades, journalStats]);
   const lockedInsightKey = `locked-insight-dismissed:${usageMonthKey()}`;
+  const firstInsightVisible = !firstInsightDismissed && !!firstInsight;
+  const lockedInsightVisible = !isPremium && !lockedInsightDismissed && trades.length >= 7 && trades.length <= 10;
   useEffect(() => {
     AsyncStorage.getItem("first-insight-dismissed:5").then((value) => setFirstInsightDismissed(value === "true")).catch(() => {});
     AsyncStorage.getItem(lockedInsightKey).then((value) => setLockedInsightDismissed(value === "true")).catch(() => {});
   }, [lockedInsightKey]);
+  useEffect(() => {
+    if (!firstInsightVisible || firstInsightSeenRef.current) return;
+    firstInsightSeenRef.current = true;
+    trackEvent("first_insight_seen", { trade_count: trades.length, is_pro: isPremium });
+  }, [firstInsightVisible, isPremium, trades.length]);
+  useEffect(() => {
+    if (!lockedInsightVisible || lockedInsightSeenRef.current) return;
+    lockedInsightSeenRef.current = true;
+    trackEvent("locked_insight_seen", { trade_count: trades.length, is_pro: isPremium });
+  }, [isPremium, lockedInsightVisible, trades.length]);
   const dismissFirstInsight = useCallback(() => {
     setFirstInsightDismissed(true);
     AsyncStorage.setItem("first-insight-dismissed:5", "true").catch(() => {});
@@ -8139,7 +8157,7 @@ function JournalScreen({
           </Card>
         </Pressable>
       ))}
-      {!firstInsightDismissed && firstInsight ? (
+      {firstInsightVisible && firstInsight ? (
         <GlassCard style={styles.freeInsightCard} intensity={34}>
           <View style={styles.rowBetween}>
             <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
@@ -8151,7 +8169,7 @@ function JournalScreen({
           <Text style={styles.freeInsightCta}>Pro unlocks Hidden Leaks, Revenge Alerts, Pattern Detective, and Prop Firm Coach.</Text>
         </GlassCard>
       ) : null}
-      {!isPremium && !lockedInsightDismissed && trades.length >= 7 && trades.length <= 10 ? (
+      {lockedInsightVisible ? (
         <GlassCard style={styles.lockedInsightCard} intensity={36}>
           <Text style={styles.freeInsightTitle}>Your journal found 3 hidden leaks.</Text>
           <Text style={styles.freeInsightText}>Unlock Pro to see exactly which session, setup, and behavior is costing you money.</Text>

@@ -186,3 +186,12 @@ Possible later extraction targets:
 - Added `docs/APP_STORE_SERVER_NOTIFICATIONS.md`; subscription backend readiness should prefer RevenueCat webhooks with authorization/HMAC signing, sandbox/production separation, idempotency, and canonical RevenueCat subscriber sync. Direct Apple notifications require signedPayload/JWS verification before state changes.
 - Added `docs/AI_PROVIDER_SETUP.md`; AI provider keys remain server-side only in Supabase Edge Function secrets. Client AI goes through `supabase.functions.invoke("ai-coach")` with local fallback when unavailable.
 - AI audit found no direct Expo/mobile calls to OpenRouter, Gemini, Anthropic, NVIDIA, or OpenAI provider APIs. `src/api/tradeAnalysis.ts` is deterministic local analysis, not paid AI.
+
+## PostHog Funnels And Sentry QA Follow-Up (2026-07-02)
+
+- PostHog funnel events are wired from real app flows: app open, trade add/delete, day delete, First Insight seen, locked insight seen, paywall viewed, trial/purchase/restore, AI analysis opened, share/PDF exports, news opened, Market Intelligence viewed, and report opened.
+- `first_insight_seen` and `locked_insight_seen` fire only when those Journal cards are actually visible; metadata is limited to safe counts/state.
+- `paywall_viewed` now also fires for the reusable Pro value modal with safe `screen` and `reason` metadata.
+- Added `docs/POSTHOG_FUNNELS.md` with recommended Activation, Monetization, Retention, Export Virality, and News Engagement funnels.
+- Added `docs/SENTRY_TESTFLIGHT_QA.md` with DSN/env setup, safe development-only test error guidance, and source-map upload guardrails.
+- Keep PostHog autocapture/session replay disabled unless a future privacy review explicitly approves them.

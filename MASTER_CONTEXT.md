@@ -1,6 +1,6 @@
 # YouTrader Master Context
 
-Last updated: 2026-06-30
+Last updated: 2026-07-02
 
 This file is the permanent source of truth for YouTrader. Future Cursor chats must read this file first before changing code. Also read `PRODUCT_VISION.md` for long-term product direction. Older files such as `PROJECT_HANDOFF.md`, `CONTINUATION.md`, `KNOWLEDGE.md`, `ARCHITECTURE.md`, and `.cursor/project-memory.md` are historical context, but this file supersedes them when there is a conflict.
 
@@ -73,6 +73,8 @@ For every future UI task, agents must run frontend-design thinking, compare agai
 - Subscription server notification strategy should prefer RevenueCat webhooks. Direct Apple App Store Server Notifications require signedPayload/JWS verification, environment separation, idempotency, and must never let sandbox/test events modify production subscriptions.
 - AI provider setup is documented in `docs/AI_PROVIDER_SETUP.md`. Private AI keys must stay server-side in Supabase Edge Function secrets; Expo public env must never contain OpenRouter/Gemini/Anthropic/NVIDIA/OpenAI private keys.
 - Client AI uses Supabase Edge Function `ai-coach` with deterministic local fallback. Free users must not trigger paid provider generation; Pro AI remains quota/cooldown protected.
+- PostHog funnels are documented in `docs/POSTHOG_FUNNELS.md`. Use explicit safe events only; mobile autocapture/session replay remain disabled.
+- Sentry TestFlight QA is documented in `docs/SENTRY_TESTFLIGHT_QA.md`. Runtime Sentry needs only a DSN; source map upload requires `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` as CI/EAS secrets.
 
 ## 2. Current Repository Structure
 
