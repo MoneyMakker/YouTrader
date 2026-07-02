@@ -203,3 +203,10 @@ Possible later extraction targets:
 - OTA updates must be JavaScript/asset/copy/styling safe and must not change native dependencies, permissions, RevenueCat IDs, Supabase schema, or App Store privacy behavior.
 - Context7 is already project-configured in `.cursor/mcp.json` as a developer-only MCP command and is not bundled into the mobile app.
 - Future Codex/Cursor prompts should say: "Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs."
+
+## Maestro Smoke Test Readiness Follow-Up (2026-07-02)
+
+- Added `.maestro/` smoke flows for app launch, Journal add/edit visibility, Stats/exports/Heatmap, locked Pro paywall surface, and News/AI Analytics crash-free navigation.
+- Added `docs/MAESTRO_SMOKE_TESTS.md` with local setup, test plan, flow inventory, CI safety rules, limitations, and manual iPhone QA boundaries.
+- Added npm scripts `test:maestro` and `test:maestro:launch`; they require a locally installed Maestro CLI and a running simulator/device.
+- Maestro is not installed as an app dependency, is not bundled into Expo runtime, and is not added to GitHub Actions yet to avoid flaky simulator CI.

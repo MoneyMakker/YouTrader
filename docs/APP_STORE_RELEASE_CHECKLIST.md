@@ -143,6 +143,10 @@ Rules:
 
 ## Manual QA Matrix
 
+- Maestro local smoke suite runs or is reviewed:
+  - `npm run test:maestro:launch`
+  - `npm run test:maestro`
+  - See `docs/MAESTRO_SMOKE_TESTS.md`.
 - App runs with Firebase config missing.
 - Growth flags use safe local defaults.
 - Remote Config variants do not change prices/product IDs.

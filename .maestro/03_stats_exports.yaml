@@ -1,0 +1,20 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Stats"
+    timeout: 20000
+- tapOn: "Stats"
+- assertVisible: "DAY"
+- assertVisible: "WEEK"
+- assertVisible: "MONTH"
+- assertVisible: "YEAR"
+- assertVisible: "Share P&L card"
+- assertVisible: "Monthly PDF"
+- scrollUntilVisible:
+    element: "Heatmap"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Heatmap"
+

@@ -1,0 +1,16 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "AI Analytics"
+    timeout: 20000
+- tapOn: "AI Analytics"
+- extendedWaitUntil:
+    visible: "Unlock AI Analytics"
+    timeout: 15000
+- assertVisible: "Upgrade to Pro"
+- tapOn: "See all features"
+- assertVisible: "YouTrader Pro features"
+- tapOn: "OK"
+

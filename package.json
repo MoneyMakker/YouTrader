@@ -19,7 +19,9 @@
     "market-intel:prop-firms": "node scripts/market-intel-worker/index.mjs prop-firms",
     "market-intel:calendar": "node scripts/market-intel-worker/index.mjs calendar",
     "market-intel:daily-brief": "node scripts/market-intel-worker/index.mjs daily-brief",
-    "security:check": "node scripts/security-check.mjs"
+    "security:check": "node scripts/security-check.mjs",
+    "test:maestro": "maestro test .maestro",
+    "test:maestro:launch": "maestro test .maestro/01_app_launch.yaml"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

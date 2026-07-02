@@ -62,6 +62,7 @@ Version sources checked:
 - Firebase/A-B flags may control only safe copy and UI flags. They must never control secrets, RevenueCat product IDs, entitlement IDs, prices, Supabase rules, or security behavior.
 - EAS Update readiness uses `runtimeVersion.policy = appVersion`, `updates.url`, and `preview`/`production` EAS channels. Process documentation lives in `docs/EAS_UPDATE_PLAYBOOK.md`.
 - GitHub Actions QA workflow lives in `.github/workflows/qa.yml` and does not replace manual TestFlight/iPhone QA.
+- Maestro smoke-test readiness lives in `.maestro/` and `docs/MAESTRO_SMOKE_TESTS.md`; it is local/manual for now and not a required GitHub Actions job.
 
 ## Analytics, Subscriptions, And AI Readiness
 
@@ -125,11 +126,12 @@ Safe next tasks after this checkpoint:
 6. Verify PDF/share card exports on real iPhone Photos/share sheet.
 7. Verify News and Market Intelligence cached read-only screens.
 8. Verify growth defaults and Remote Config/A-B docs before enabling Firebase.
-9. Verify Clarity remains disabled/not installed unless explicitly approved.
-10. Verify RevenueCat webhook strategy before adding direct Apple notification endpoints.
-11. Verify AI provider keys are server-side only before deploying Edge Functions.
-12. Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
-13. Run release checks before any next upload:
+9. Run local Maestro smoke tests on a simulator or preview build when available.
+10. Verify Clarity remains disabled/not installed unless explicitly approved.
+11. Verify RevenueCat webhook strategy before adding direct Apple notification endpoints.
+12. Verify AI provider keys are server-side only before deploying Edge Functions.
+13. Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
+14. Run release checks before any next upload:
    - `npm run typecheck`
    - `npm run security:check`
    - `npm audit`
@@ -187,6 +189,7 @@ Local validation:
 npm run typecheck
 npm run security:check
 npx expo-doctor
+npm run test:maestro:launch
 ```
 
 EAS iOS build:

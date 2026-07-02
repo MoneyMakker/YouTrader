@@ -77,6 +77,7 @@ For every future UI task, agents must run frontend-design thinking, compare agai
 - Sentry TestFlight QA is documented in `docs/SENTRY_TESTFLIGHT_QA.md`. Runtime Sentry needs only a DSN; source map upload requires `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` as CI/EAS secrets.
 - EAS Update readiness is documented in `docs/EAS_UPDATE_PLAYBOOK.md`. `appVersion` runtime policy and preview/production channels are used; publish preview OTA first and never ship native/store/security changes via OTA.
 - Context7 is a developer-only MCP workflow tool. Use it before changing Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple API integrations.
+- Maestro smoke-test readiness is documented in `docs/MAESTRO_SMOKE_TESTS.md` with local `.maestro/` flows. Maestro is manual/local for now and must not replace real iPhone/TestFlight QA.
 
 ## 2. Current Repository Structure
 
