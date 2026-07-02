@@ -231,3 +231,9 @@ Possible later extraction targets:
 - Edit trade flow preserves existing cloud media refs when the user does not replace the attachment.
 - If cloud upload fails, trade save remains local and cloud sync reports: `Saved locally. Cloud sync will retry attachments.`
 - Manual QA required on iPhone: Upload Photo, Take Picture, Record Voice, restart app, edit trade, second-device Pro cloud restore.
+
+## AI Analytics Architecture Checkpoint
+
+- Added `src/ai/aiInsightEngine.ts` as the central deterministic insight layer for AI Analytics. It reads trade history, existing stats, prop-firm risk snapshot, pattern detector output, and revenge-risk signals.
+- AI Analytics now renders the requested unified sections: AI Weekly Report, Daily Mission, Achievement System, Personal Trading DNA, Compare Yourself, You Are Improving, AI Advice / Coach, and Prop Firm Risk Assistant. Existing Prop Firm Coach, Trading Coach, Pattern Detective, and Performance Intelligence blocks are preserved and grouped under the new architecture.
+- Added `docs/automation-stack.md` documenting n8n, Windmill, Activepieces, and Huginn as server-side/local automation options only; no heavy mobile runtime dependencies were added.

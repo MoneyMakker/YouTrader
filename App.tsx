@@ -141,6 +141,7 @@ import { buildUnifiedTradeAnalytics, drawdownControlFromMetrics, infinitySafeMet
 import { calculatePassProbability, type PassProbabilityResult } from "./src/ai/passProbabilityEngine";
 import { detectRevengeTrading, type RevengeTradingResult } from "./src/ai/revengeTradingDetector";
 import { detectHiddenLeaks, type HiddenLeak } from "./src/ai/hiddenLeakDetector";
+import { buildAiInsights, type AiInsight } from "./src/ai/aiInsightEngine";
 
 WebBrowser.maybeCompleteAuthSession();
 initializeMonitoring();
@@ -7447,6 +7448,58 @@ function buildPropCoachRecommendation({
   return { headline, action, rules, reason };
 }
 
+
+function UnifiedAiInsightSection({
+  title,
+  subtitle,
+  insights,
+  emptyText,
+}: {
+  title: string;
+  subtitle: string;
+  insights: AiInsight[];
+  emptyText: string;
+}) {
+  const visible = insights.slice(0, 3);
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>{title}</Text>
+      <Text style={styles.terminalSub}>{subtitle}</Text>
+      <View style={{ gap: 10, marginTop: 14 }}>
+        {visible.length ? visible.map((insight) => {
+          const tone = insight.priority === "high" ? C.red : insight.priority === "medium" ? C.purple : C.sub;
+          return (
+            <View
+              key={insight.id}
+              style={{
+                borderWidth: 1,
+                borderColor: "rgba(177, 66, 255, 0.22)",
+                backgroundColor: "rgba(255,255,255,0.035)",
+                borderRadius: 18,
+                padding: 14,
+                gap: 8,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={[styles.terminalSmallLabel, { color: tone }]}>{insight.priority.toUpperCase()}</Text>
+                <Text style={[styles.terminalSmallLabel, { flex: 1, textAlign: "right" }]}>{insight.visualType.replace("_", " ").toUpperCase()}</Text>
+              </View>
+              <Text style={styles.propCoachHeadline}>{insight.title}</Text>
+              <Text style={styles.terminalSub}>{insight.summary}</Text>
+              {insight.evidence.slice(0, 2).map((item) => (
+                <Text key={`${insight.id}-${item}`} style={styles.aiBulletText}>• {item}</Text>
+              ))}
+              <Text style={[styles.terminalSub, { color: C.text }]}>{insight.recommendation}</Text>
+            </View>
+          );
+        }) : (
+          <Text style={styles.terminalSub}>{emptyText}</Text>
+        )}
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
 function PropFirmCoachSection({
   templates,
   value,
@@ -7842,6 +7895,36 @@ function AiAnalysisScreen({
     [passProbability.probability, periodStats, periodTrades, propSnapshot, selectedDate, tradingScore.score],
   );
   const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
+  const unifiedInsights = useMemo(
+    () =>
+      buildAiInsights({
+        trades: periodTrades,
+        stats: periodStats,
+        prop: {
+          mode: propMode,
+          status: selectedPropSnapshot.status,
+          templateLabel: selectedPropSnapshot.template.label,
+          dailyRemaining: selectedPropSnapshot.dailyRemaining,
+          accountRemaining: selectedPropSnapshot.accountRemaining,
+          remainingToPass: selectedPropSnapshot.remainingToPass,
+          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
+          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
+          passProbability: passProbability.probability,
+          bufferPct: selectedPropSnapshot.bufferPct,
+        },
+        patterns,
+        revengeRisk: revengeTrading,
+      }),
+    [passProbability.probability, patterns, periodStats, periodTrades, propMode, revengeTrading, selectedPropSnapshot],
+  );
+  const weeklyReportInsights = unifiedInsights.primary.slice(0, 3);
+  const dailyMissionInsights = unifiedInsights.insights.filter((insight) => insight.priority === "high").slice(0, 1);
+  const dnaInsights = [
+    ...unifiedInsights.groups.discipline,
+    ...unifiedInsights.groups.timing,
+    ...unifiedInsights.groups.consistency,
+  ].slice(0, 3);
+  const comparisonInsights = unifiedInsights.insights.filter((insight) => insight.visualType === "comparison").slice(0, 2);
 
   const runCoachFeature = async (key: keyof AIResultMap) => {
     if (!isPremium) {
@@ -7919,18 +8002,60 @@ function AiAnalysisScreen({
       <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
         <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
           <View style={styles.terminalScreenStack}>
-            <PropFirmCoachSection
-              templates={safeAnalysisTemplates}
-              value={activeTemplate.key}
-              mode={propMode}
-              snapshot={selectedPropSnapshot}
-              stats={periodStats}
-              passProbability={passProbability}
-              revengeTrading={revengeTrading}
-              onTemplateChange={changeAnalysisTemplate}
-              onModeChange={changePropMode}
+            <UnifiedAiInsightSection
+              title="AI Weekly Report"
+              subtitle="One deduplicated view of risk, execution and progress for the current month."
+              insights={weeklyReportInsights}
+              emptyText="Log trades this week to build a useful AI report."
             />
-            <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
+            <UnifiedAiInsightSection
+              title="Daily Mission"
+              subtitle="The single next action that protects the trader before the next session."
+              insights={dailyMissionInsights.length ? dailyMissionInsights : unifiedInsights.primary.slice(0, 1)}
+              emptyText="No urgent mission yet. Keep logging clean trades."
+            />
+            <UnifiedAiInsightSection
+              title="Achievement System"
+              subtitle="Local progress milestones based on your own journal evidence."
+              insights={unifiedInsights.groups.achievement}
+              emptyText="Achievements unlock as the trade sample becomes meaningful."
+            />
+            <UnifiedAiInsightSection
+              title="Personal Trading DNA"
+              subtitle="Discipline, timing and consistency patterns without duplicated advice."
+              insights={dnaInsights}
+              emptyText="Add more trades with sessions and tags to reveal your trading DNA."
+            />
+            <UnifiedAiInsightSection
+              title="Compare Yourself"
+              subtitle="Compare your current sample against prop-firm survival standards, not other traders."
+              insights={comparisonInsights.length ? comparisonInsights : unifiedInsights.groups.risk.slice(0, 2)}
+              emptyText="Comparison appears after the journal has enough wins, losses and session data."
+            />
+            <UnifiedAiInsightSection
+              title="You Are Improving"
+              subtitle="Progress signals that are safe to reinforce without increasing risk."
+              insights={unifiedInsights.groups.improvement}
+              emptyText="Improvement signals appear after your next clean journal sample."
+            />
+            <View style={{ gap: 10 }}>
+              <Text style={styles.terminalSectionTitle}>AI Advice / Coach</Text>
+              <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
+            </View>
+            <View style={{ gap: 10 }}>
+              <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
+              <PropFirmCoachSection
+                templates={safeAnalysisTemplates}
+                value={activeTemplate.key}
+                mode={propMode}
+                snapshot={selectedPropSnapshot}
+                stats={periodStats}
+                passProbability={passProbability}
+                revengeTrading={revengeTrading}
+                onTemplateChange={changeAnalysisTemplate}
+                onModeChange={changePropMode}
+              />
+            </View>
             <TerminalPatternDetective stats={periodStats} />
             <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
             {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
