@@ -19,6 +19,7 @@
     "market-intel:prop-firms": "node scripts/market-intel-worker/index.mjs prop-firms",
     "market-intel:calendar": "node scripts/market-intel-worker/index.mjs calendar",
     "market-intel:daily-brief": "node scripts/market-intel-worker/index.mjs daily-brief",
+    "rag:import": "node scripts/rag/import-knowledge.mjs",
     "security:check": "node scripts/security-check.mjs",
     "translations:check": "node scripts/check-translations.mjs",
     "test:maestro": "maestro test .maestro",

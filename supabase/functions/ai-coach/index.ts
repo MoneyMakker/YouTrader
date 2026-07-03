@@ -86,6 +86,11 @@ Deno.serve(async (req) => {
       providerStatus: "free_preview",
       usedFallback: true,
       message: "Upgrade to Pro to run cloud AI coaching. This preview uses local analysis.",
+      rag: result.retrieval ? {
+        sources: result.retrieval.sources,
+        confidence: result.retrieval.confidence,
+        lowConfidence: result.retrieval.lowConfidence,
+      } : undefined,
     }, 200, req);
   }
 
@@ -106,6 +111,11 @@ Deno.serve(async (req) => {
         providerStatus: "quota_exceeded",
         usedFallback: true,
         message: "Your monthly AI allowance has been used. AI features will automatically reset after your next billing cycle.",
+        rag: result.retrieval ? {
+          sources: result.retrieval.sources,
+          confidence: result.retrieval.confidence,
+          lowConfidence: result.retrieval.lowConfidence,
+        } : undefined,
         quota: {
           remaining: 0,
           limit: quota.limit,
@@ -147,6 +157,11 @@ Deno.serve(async (req) => {
     providerStatus: result.provider === "local" ? "local_fallback" : result.provider,
     usedFallback: result.usedFallback,
     message: result.message,
+    rag: result.retrieval ? {
+      sources: result.retrieval.sources,
+      confidence: result.retrieval.confidence,
+      lowConfidence: result.retrieval.lowConfidence,
+    } : undefined,
     quota: {
       remaining: Math.max(0, quota.remaining - 1),
       limit: quota.limit,

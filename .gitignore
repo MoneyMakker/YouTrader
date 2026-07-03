@@ -33,6 +33,7 @@ bundle-check/
 recovery-backups/
 review-fix-backups/
 supabase/.temp/
+knowledge/sources/.last-import.json
 
 # Logs
 *.log

@@ -27,6 +27,7 @@ Supabase Edge Functions:
 - Pro users are checked against server-side entitlement state before paid cloud AI.
 - AI quota and cooldown are enforced in `supabase/functions/_shared/aiQuota.ts`.
 - Provider routing is implemented in `supabase/functions/_shared/aiProvider.ts`.
+- RAG context retrieval is implemented in `supabase/functions/_shared/retrievalService.ts` and uses Supabase `pgvector` plus OpenAI embeddings.
 - Optional Langfuse tracing is implemented in `supabase/functions/_shared/langfuse.ts` and is disabled unless Langfuse env vars are set.
 
 Provider routing:
@@ -42,6 +43,8 @@ Provider routing:
 Store these only in Supabase Edge Function secrets or another server secret manager:
 
 - `AI_PROVIDER`
+- `OPENAI_API_KEY`
+- `OPENAI_EMBEDDING_MODEL`
 - `OPENROUTER_API_KEY`
 - `GEMINI_API_KEY`
 - `ANTHROPIC_API_KEY`
@@ -68,6 +71,27 @@ Never use:
 - Missing provider keys must return safe local fallback.
 - Provider errors must not expose keys, raw prompts, screenshots, voice notes, private notes, or full journal payloads.
 - Media fields are stripped before cloud provider calls.
+
+## RAG Knowledge Grounding
+
+YouTrader AI answers can be grounded in verified prop firm, CME, economic calendar, risk-management, and journaling documents stored in Supabase Postgres with `pgvector`.
+
+Reference docs:
+
+- `docs/RAG_KNOWLEDGE_BASE.md`
+- `knowledge/README.md`
+- `scripts/rag/import-knowledge.mjs`
+- `supabase/migrations/20260703025327_add_rag_knowledge_base.sql`
+
+RAG behavior:
+
+- Pinecone is not used.
+- Knowledge tables are server-only and deny-by-default.
+- Documents are imported from Markdown, text, and PDF files.
+- Embeddings are generated with OpenAI server-side.
+- Before cloud AI generation, `aiProvider.ts` injects only relevant context as `knowledge_context`.
+- Responses include `rag.sources`, `rag.confidence`, and `rag.lowConfidence`.
+- If confidence is low, AI must not invent prop firm or exchange rules.
 
 ## Langfuse Observability
 

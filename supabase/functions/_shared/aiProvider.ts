@@ -5,6 +5,7 @@ import {
   type AICoachAction,
 } from "./aiSchemas.ts";
 import { traceAIEvent } from "./langfuse.ts";
+import { retrieveKnowledgeContext, type RetrievalContext } from "./retrievalService.ts";
 
 type GenerateInput = {
   action: AICoachAction;
@@ -20,6 +21,7 @@ type ProviderResult = {
   provider: ProviderName;
   usedFallback: boolean;
   message?: string;
+  retrieval?: RetrievalContext;
 };
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -47,6 +49,22 @@ function compactPayload(payload: Record<string, unknown>) {
   delete safe.screenshots;
   delete safe.images;
   return safe;
+}
+
+function withKnowledgeContext(input: GenerateInput, retrieval: RetrievalContext | null): GenerateInput {
+  if (!retrieval) return input;
+  return {
+    ...input,
+    payload: {
+      ...input.payload,
+      knowledge_context: {
+        confidence: retrieval.confidence,
+        lowConfidence: retrieval.lowConfidence,
+        sources: retrieval.sources,
+        context: retrieval.contextText,
+      },
+    },
+  };
 }
 
 function modelTier(action: AICoachAction): ModelTier {
@@ -86,7 +104,9 @@ function systemPrompt(action: AICoachAction) {
   return [
     "You are YouTrader AI Coach for a fintech trading journal.",
     "Return only strict JSON. No markdown. No prose outside JSON.",
-    "Use only the user's journal/stat/news payload.",
+    "Use only the user's journal/stat/news payload and knowledge_context when present.",
+    "If knowledge_context.lowConfidence is true or context is empty, say the source confidence is too low inside the relevant JSON field and do not invent prop firm rules.",
+    "When discussing prop firm, exchange, economic calendar, risk-management, or journaling rules, ground the answer in knowledge_context only.",
     "Do not provide financial advice. Do not provide buy/sell/hold signals.",
     "Focus on discipline, risk, consistency, journaling behavior, and execution process.",
     `JSON schema: ${schemaInstruction(action)}`,
@@ -313,8 +333,16 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
   const startedAt = Date.now();
   const tier = modelTier(input.action);
   const userTier = allowNvidia ? "pro" : "free";
+  let retrieval: RetrievalContext | null = null;
+  let groundedInput = input;
+  try {
+    retrieval = await retrieveKnowledgeContext(input);
+    groundedInput = withKnowledgeContext(input, retrieval);
+  } catch (error) {
+    console.warn("rag_retrieval_unavailable", { message: error instanceof Error ? error.message : "unknown" });
+  }
   if (!allowNvidia) {
-    const data = fallbackBase(input.action, input.payload);
+    const data = fallbackBase(groundedInput.action, groundedInput.payload);
     await traceAIEvent({
       action: input.action,
       period: input.period,
@@ -331,11 +359,12 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
       provider: "local",
       usedFallback: true,
       message: "AI preview uses local analysis for free users.",
+      retrieval: retrieval || undefined,
     };
   }
 
   try {
-    const result = await callConfiguredProvider(input);
+    const result = await callConfiguredProvider(groundedInput);
     await traceAIEvent({
       action: input.action,
       period: input.period,
@@ -351,13 +380,15 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
       data: result.data,
       provider: result.provider,
       usedFallback: false,
+      message: retrieval?.lowConfidence ? "Knowledge source confidence is low. Verify current prop firm rules before acting." : undefined,
+      retrieval: retrieval || undefined,
     };
   } catch (error) {
     console.error("cloud_ai_fallback", {
       action: input.action,
       message: error instanceof Error ? error.message : "unknown",
     });
-    const data = fallbackBase(input.action, input.payload);
+    const data = fallbackBase(groundedInput.action, groundedInput.payload);
     await traceAIEvent({
       action: input.action,
       period: input.period,
@@ -375,6 +406,7 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
       provider: "local",
       usedFallback: true,
       message: "Cloud AI is unavailable right now, so YouTrader used safe local analysis.",
+      retrieval: retrieval || undefined,
     };
   }
 }

@@ -8,6 +8,11 @@ export type AIResponse<T> = {
   usedFallback: boolean;
   message?: string;
   quota?: { remaining: number; limit: number; warning?: string };
+  rag?: {
+    sources: { source: string; document: string; lastUpdated: string; confidence: number; sourceUrl?: string | null }[];
+    confidence: number;
+    lowConfidence: boolean;
+  };
   generatedAt: string;
 };
 
@@ -207,6 +212,7 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
       usedFallback: !!data.usedFallback,
       message: data.quota?.warning || data.message,
       quota: data.quota,
+      rag: data.rag,
       generatedAt: now(),
     };
   } catch {

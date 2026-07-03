@@ -2,6 +2,15 @@
 
 This is the short takeover checklist for the next senior engineer.
 
+## RAG Knowledge Base Follow-Up (2026-07-03)
+
+- Added Supabase `pgvector` RAG schema for `knowledge_documents`, `knowledge_chunks`, and `knowledge_embeddings`.
+- Added server-side retrieval in `supabase/functions/_shared/retrievalService.ts`; Expo never receives OpenAI or service-role keys.
+- `ai-coach` now injects retrieved `knowledge_context` before AI generation and returns `rag.sources`, `rag.confidence`, and `rag.lowConfidence`.
+- Added `scripts/rag/import-knowledge.mjs` plus `npm run rag:import` for Markdown, text, and PDF ingestion.
+- Knowledge source folders live under `knowledge/sources/`; use verified official source summaries only and do not invent prop firm rules.
+- Manual deployment required: `supabase db push`, set `OPENAI_API_KEY` / optional `OPENAI_EMBEDDING_MODEL` as Supabase Edge Function secrets, redeploy `ai-coach`, then run the importer from a secure environment.
+
 ## Recently Completed (2026-06-28)
 
 - Completed translation hardening for the current `App.tsx` i18n layer: core tabs, Journal/Add/Edit Trade, mood labels, validation alerts, Stats exports, AI Analytics cached blocks, Settings notifications, CSV import, and key RevenueCat alerts now read from `I18N`.

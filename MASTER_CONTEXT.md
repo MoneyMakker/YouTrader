@@ -82,6 +82,17 @@ For every future UI task, agents must run frontend-design thinking, compare agai
 - Promptfoo AI safety readiness is documented in `docs/AI_SAFETY_TESTS.md`; default tests use a local deterministic provider and require no paid AI keys.
 - Journal attachments use local file persistence first and Pro cloud sync uploads media through `secure-upload` into private Supabase Storage. Cloud trade rows store `supabase://bucket/path` refs and clients create signed URLs during restore.
 
+## RAG Knowledge Grounding (2026-07-03)
+
+- YouTrader now uses Supabase Postgres `pgvector` for Retrieval Augmented Generation. Pinecone is not used.
+- RAG schema lives in `supabase/migrations/20260703025327_add_rag_knowledge_base.sql`.
+- Knowledge documents are stored in `knowledge_documents`, semantic chunks in `knowledge_chunks`, and OpenAI embeddings in `knowledge_embeddings`.
+- Source ingestion lives in `scripts/rag/import-knowledge.mjs` and supports Markdown, text, and PDF files from `knowledge/sources/`.
+- `supabase/functions/_shared/retrievalService.ts` runs server-side embedding/vector retrieval before `ai-coach` AI generation.
+- AI responses expose source metadata through `rag.sources`, including source/provider, document, last updated date, confidence, and source URL where available.
+- If retrieval confidence is low, AI must say confidence is too low and must not invent prop firm, CME, economic-calendar, risk, or journaling rules.
+- Private keys remain server-side only: `OPENAI_API_KEY`, `OPENAI_EMBEDDING_MODEL`, AI provider keys, and `SUPABASE_SERVICE_ROLE_KEY` must never be exposed to Expo public env.
+
 ## 2. Current Repository Structure
 
 High-level structure:

@@ -1,0 +1,19 @@
+---
+provider: topstep
+title: Topstep Official Rule Summary
+slug: topstep-official-rule-summary
+source_url: https://example.com/source
+last_updated: 2026-07-03
+---
+
+# Verified Source Summary
+
+Paste verified source text or an internal summary here.
+
+Rules:
+
+- Do not invent prop firm rules.
+- Include the official source URL in frontmatter.
+- Update `last_updated` whenever the source is refreshed.
+- Keep one source document focused on one firm or topic.
+
