@@ -33,6 +33,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Linking,
+  LogBox,
   Modal,
   PanResponder,
   Platform,
@@ -105,6 +106,7 @@ import { logger } from "./src/lib/logger";
 import {
   enableCloudSignIn,
   enableNativeAppleSignIn,
+  isExpoGo,
   isRevenueCatConfigured,
   isSupabaseConfigured,
   REVENUECAT_API_KEY,
@@ -158,6 +160,36 @@ import {
   type AiTradingDNAProfile,
   type AiWeeklyReport,
 } from "./src/ai/aiInsightEngine";
+import {
+  applyUserOverrides,
+  buildAiPropContextFromEngine,
+  buildPropRiskEngine,
+  computePropRiskSnapshot,
+  loadLocalPropSettings,
+  mapLegacyFirmMode,
+  mapPhaseToLegacyMode,
+  normalizeRemoteTemplate,
+  persistPropPhase,
+  persistPropTemplateSlug,
+  PROP_FIRM_SELECT_COLUMNS,
+  PROP_RULES_CACHE_KEY,
+  type PropFirmPhase,
+  type PropFirmTemplate,
+  type RiskTemplate,
+  propSnapshotShareMeta,
+  resolvePropTemplateKey,
+  tryComputePropRiskSnapshot,
+} from "./src/propFirm";
+import { PropFirmRiskDashboard } from "./src/components/propFirm/PropFirmRiskDashboard";
+import { PropFirmRiskCoachScreen } from "./src/components/propFirm/PropFirmRiskCoachScreen";
+
+if (isExpoGo && __DEV__) {
+  LogBox.ignoreLogs([
+    /RevenueCat/i,
+    /react-native-purchases/i,
+    /\[Purchases\]/i,
+  ]);
+}
 
 WebBrowser.maybeCompleteAuthSession();
 initializeMonitoring();
@@ -339,7 +371,6 @@ const LANG_STORAGE_KEY = "lang-v1";
 const LOCK_SCREEN_BUFFER_KEY = "prop-lock-screen-v1";
 /** @deprecated Journal day limit removed — free users log unlimited days; Pro unlocks media/sync/analytics. */
 const FREE_JOURNAL_DAYS = 10;
-const PROP_RULES_CACHE_KEY = "prop-risk-templates-cache-v1";
 const PROP_RISK_ALERT_ID_KEY = "prop-risk-alert-notification-id-v1";
 const CALENDAR_ALERT_ID_KEY = "calendar-alert-notification-id-v1";
 const MAX_SYMBOL_LENGTH = 12;
@@ -3159,148 +3190,6 @@ type PerformanceGroup = {
   wr: number;
 };
 
-type RiskTemplate = {
-  key: string;
-  label: string;
-  firm: string;
-  accountName: string;
-  accountSize: number;
-  evaluationTarget: number;
-  dailyLossLimit: number;
-  maxLossLimit: number;
-  evaluationContracts: number;
-  liveContracts: number;
-  evaluationRiskPct: number;
-  liveRiskPct: number;
-  trailingDrawdown: boolean;
-  sourceUrl?: string;
-  lastUpdated?: string;
-};
-
-const PROP_RISK_TEMPLATES: RiskTemplate[] = [
-  {
-    key: "eval25k",
-    label: "Eval 25K",
-    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
-    accountName: "25K Evaluation",
-    accountSize: 25000,
-    evaluationTarget: 1500,
-    dailyLossLimit: 550,
-    maxLossLimit: 1500,
-    evaluationContracts: 3,
-    liveContracts: 2,
-    evaluationRiskPct: 0.12,
-    liveRiskPct: 0.08,
-    trailingDrawdown: true,
-    sourceUrl: "https://www.topstep.com",
-    lastUpdated: "2026-05-29",
-  },
-  {
-    key: "eval50k",
-    label: "Eval 50K",
-    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
-    accountName: "50K Evaluation",
-    accountSize: 50000,
-    evaluationTarget: 3000,
-    dailyLossLimit: 1200,
-    maxLossLimit: 2500,
-    evaluationContracts: 6,
-    liveContracts: 4,
-    evaluationRiskPct: 0.12,
-    liveRiskPct: 0.08,
-    trailingDrawdown: true,
-    sourceUrl: "https://apextraderfunding.com",
-    lastUpdated: "2026-05-29",
-  },
-  {
-    key: "eval100k",
-    label: "Eval 100K",
-    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
-    accountName: "100K Evaluation",
-    accountSize: 100000,
-    evaluationTarget: 6000,
-    dailyLossLimit: 2000,
-    maxLossLimit: 3500,
-    evaluationContracts: 8,
-    liveContracts: 6,
-    evaluationRiskPct: 0.1,
-    liveRiskPct: 0.075,
-    trailingDrawdown: true,
-    sourceUrl: "https://lucidtrading.com",
-    lastUpdated: "2026-05-29",
-  },
-  {
-    key: "eval150k",
-    label: "Eval 150K",
-    firm: "Topstep/Apex/Lucid/Take Profit (baseline)",
-    accountName: "150K Evaluation",
-    accountSize: 150000,
-    evaluationTarget: 9000,
-    dailyLossLimit: 2500,
-    maxLossLimit: 4500,
-    evaluationContracts: 10,
-    liveContracts: 7,
-    evaluationRiskPct: 0.095,
-    liveRiskPct: 0.08,
-    trailingDrawdown: true,
-    sourceUrl: "https://takeprofittrader.com",
-    lastUpdated: "2026-05-29",
-  },
-];
-
-const FALLBACK_PROP_RULES = PROP_RISK_TEMPLATES;
-
-function normalizeRemoteTemplate(row: any): RiskTemplate | null {
-  if (!row) return null;
-  const key = String(row.slug || row.key || "").trim();
-  if (!key) return null;
-  const accountSize = Number(row.account_size ?? row.accountSize);
-  const dailyLossLimit = Number(row.daily_loss_limit ?? row.dailyLossLimit);
-  const maxLossLimit = Number(row.max_loss_limit ?? row.maxLossLimit);
-  const evaluationContracts = Number(row.evaluation_contracts ?? row.evaluationContracts);
-  const liveContracts = Number(row.live_contracts ?? row.liveContracts);
-  const evaluationTargetRaw = row.evaluation_target ?? row.evaluationTarget;
-  const evaluationTarget = Number(
-    evaluationTargetRaw != null ? evaluationTargetRaw : Math.round(accountSize * 0.06),
-  );
-  if (
-    !Number.isFinite(accountSize) ||
-    !Number.isFinite(dailyLossLimit) ||
-    !Number.isFinite(maxLossLimit) ||
-    !Number.isFinite(evaluationContracts) ||
-    !Number.isFinite(liveContracts)
-  ) {
-    return null;
-  }
-  const rules = typeof row.rules === "object" && row.rules ? row.rules : {};
-  const evaluationRiskPct = Number(rules.evaluationRiskPct ?? rules.evaluation_risk_pct ?? 0.1);
-  const liveRiskPct = Number(rules.liveRiskPct ?? rules.live_risk_pct ?? 0.08);
-  return {
-    key,
-    label: String(row.label || `${Math.round(accountSize / 1000)}K`),
-    firm: String(row.name || row.firm || "Unknown"),
-    accountName: String(row.account_name || row.accountName || "Evaluation"),
-    accountSize,
-    evaluationTarget,
-    dailyLossLimit,
-    maxLossLimit,
-    evaluationContracts,
-    liveContracts,
-    evaluationRiskPct: Number.isFinite(evaluationRiskPct) ? evaluationRiskPct : 0.1,
-    liveRiskPct: Number.isFinite(liveRiskPct) ? liveRiskPct : 0.08,
-    trailingDrawdown: Boolean(
-      row.trailing_drawdown ?? row.trailingDrawdown ?? rules.trailingDrawdown ?? false,
-    ),
-    sourceUrl: typeof rules.sourceUrl === "string" ? rules.sourceUrl : undefined,
-    lastUpdated:
-      typeof row.updated_at === "string"
-        ? row.updated_at.slice(0, 10)
-        : typeof row.created_at === "string"
-          ? row.created_at.slice(0, 10)
-          : undefined,
-  };
-}
-
 function groupPerformance(trades: Trade[], keyFn: (t: Trade) => string) {
   const map: Record<string, { pnl: number; count: number; wins: number }> = {};
   trades.forEach((t) => {
@@ -3938,69 +3827,6 @@ function bestStrategyTagFromTrades(trades: Trade[]) {
     .sort((a, b) => b.pnl - a.pnl || b.winRate - a.winRate)[0] || null;
 }
 
-function computePropRiskSnapshot({
-  trades,
-  selectedDate,
-  templateKey,
-  mode,
-  templates,
-}: {
-  trades: Trade[];
-  selectedDate: string;
-  templateKey: string;
-  mode: FirmMode;
-  templates: RiskTemplate[];
-}) {
-  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
-  const template =
-    safeTemplates.find((item) => item.key === templateKey) || safeTemplates[0];
-  const dayTrades = trades.filter((trade) => trade.date === selectedDate);
-  const stats = calcStats(trades);
-  const dayPnl = dayTrades.reduce((total, trade) => total + trade.pnl, 0);
-  const totalPnl = trades.reduce((total, trade) => total + trade.pnl, 0);
-  const remainingToPass = Math.max(0, template.evaluationTarget - Math.max(0, totalPnl));
-  const dailyRemaining = Math.max(0, template.dailyLossLimit + Math.min(dayPnl, 0));
-  const accountRemaining = Math.max(0, template.maxLossLimit + Math.min(totalPnl, 0));
-  const recentTrades = [...trades]
-    .sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id))
-    .slice(0, 8);
-  let lossStreak = 0;
-  for (const trade of recentTrades) {
-    if (trade.pnl < 0) lossStreak += 1;
-    else break;
-  }
-  const expectancy = stats.exp;
-  const hardStop = dailyRemaining <= 0 || accountRemaining <= 0;
-  const caution =
-    !hardStop &&
-    (dailyRemaining <= template.dailyLossLimit * 0.35 ||
-      accountRemaining <= template.maxLossLimit * 0.35 ||
-      lossStreak >= 2 ||
-      expectancy <= 0 ||
-      dayPnl < 0);
-  const status: RiskStatus = hardStop ? "STOP" : caution ? "CAUTION" : "CLEAR";
-  const statusColor = hardStop ? C.red : caution ? C.yellow : C.green;
-  const statusSoft = hardStop ? C.redSoft : caution ? C.yellowSoft : C.greenSoft;
-  const bufferPct = Math.max(
-    0,
-    Math.min(100, (dailyRemaining / Math.max(1, template.dailyLossLimit)) * 100),
-  );
-  return {
-    template,
-    status,
-    statusColor,
-    statusSoft,
-    dayPnl,
-    totalPnl,
-    remainingToPass,
-    dailyRemaining,
-    accountRemaining,
-    bufferPct,
-    mode,
-    selectedDate,
-  };
-}
-
 function PropRiskEntryCard({
   title = "Prop risk today",
   trades,
@@ -4014,8 +3840,8 @@ function PropRiskEntryCard({
   templates: RiskTemplate[];
   onPress: () => void;
 }) {
-  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
-  const [templateKey, setTemplateKey] = useState(safeTemplates[0].key);
+  const safeTemplates = templates;
+  const [templateKey, setTemplateKey] = useState("");
   const [mode, setMode] = useState<FirmMode>("evaluation");
 
   useEffect(() => {
@@ -4023,17 +3849,30 @@ function PropRiskEntryCard({
       AsyncStorage.getItem("prop-risk-template-v1"),
       AsyncStorage.getItem("prop-risk-mode-v1"),
     ]).then(([savedTemplate, savedMode]) => {
-      if (savedTemplate && safeTemplates.some((template) => template.key === savedTemplate)) {
-        setTemplateKey(savedTemplate);
-      }
+      const nextKey = resolvePropTemplateKey(savedTemplate || "", safeTemplates);
+      if (nextKey) setTemplateKey(nextKey);
       if (savedMode === "evaluation" || savedMode === "funded") setMode(savedMode);
     });
   }, [safeTemplates]);
 
   const snapshot = useMemo(
-    () => computePropRiskSnapshot({ trades, selectedDate, templateKey, mode, templates: safeTemplates }),
+    () =>
+      templateKey && safeTemplates.length
+        ? tryComputePropRiskSnapshot({ trades, selectedDate, templateKey, mode, templates: safeTemplates })
+        : null,
     [trades, selectedDate, templateKey, mode, safeTemplates],
   );
+
+  if (!snapshot) {
+    return (
+      <Pressable onPress={onPress}>
+        <GlassCard style={styles.propEntryCard} intensity={32}>
+          <Text style={styles.propEntryTitle}>{title}</Text>
+          <Text style={styles.sub}>Sync firm rules from Supabase to activate the Prop Firm Risk Assistant.</Text>
+        </GlassCard>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable onPress={onPress}>
@@ -4112,474 +3951,26 @@ function PropFirmRiskCoach({
   trades,
   selectedDate,
   templates,
+  isPremium,
+  onUpgrade,
 }: {
   trades: Trade[];
   selectedDate: string;
   templates: RiskTemplate[];
+  isPremium: boolean;
+  onUpgrade?: () => void;
 }) {
-  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
-  const [templateKey, setTemplateKey] = useState(safeTemplates[0].key);
-  const [mode, setMode] = useState<FirmMode>("evaluation");
-  const [evalStrategy, setEvalStrategy] = useState<EvalStrategy>("steady");
-  const [riskInstrument, setRiskInstrument] = useState<RiskInstrument>("MES");
-  const [stopTicksInput, setStopTicksInput] = useState("16");
-
-  useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem("prop-risk-template-v1"),
-      AsyncStorage.getItem("prop-risk-mode-v1"),
-      AsyncStorage.getItem("prop-risk-eval-strategy-v1"),
-      AsyncStorage.getItem("prop-risk-instrument-v1"),
-      AsyncStorage.getItem("prop-risk-stop-ticks-v1"),
-    ]).then(([savedTemplate, savedMode, savedStrategy, savedInstrument, savedStopTicks]) => {
-      if (savedTemplate && safeTemplates.some((template) => template.key === savedTemplate)) {
-        setTemplateKey(savedTemplate);
-      }
-      if (savedMode === "evaluation" || savedMode === "funded") setMode(savedMode);
-      if (savedStrategy === "steady" || savedStrategy === "balanced" || savedStrategy === "allIn") {
-        setEvalStrategy(savedStrategy);
-      }
-      if (savedInstrument && INSTRUMENTS[savedInstrument]) {
-        setRiskInstrument(savedInstrument as RiskInstrument);
-      }
-      if (savedStopTicks && Number(savedStopTicks) > 0) {
-        setStopTicksInput(savedStopTicks);
-      }
-    });
-  }, [safeTemplates]);
-
-  useEffect(() => {
-    AsyncStorage.setItem("prop-risk-template-v1", templateKey);
-  }, [templateKey]);
-
-  useEffect(() => {
-    AsyncStorage.setItem("prop-risk-mode-v1", mode);
-  }, [mode]);
-
-  useEffect(() => {
-    AsyncStorage.setItem("prop-risk-eval-strategy-v1", evalStrategy);
-  }, [evalStrategy]);
-
-  useEffect(() => {
-    AsyncStorage.setItem("prop-risk-instrument-v1", riskInstrument);
-  }, [riskInstrument]);
-
-  useEffect(() => {
-    AsyncStorage.setItem("prop-risk-stop-ticks-v1", stopTicksInput);
-  }, [stopTicksInput]);
-
-  const template =
-    safeTemplates.find((item) => item.key === templateKey) || safeTemplates[0];
-  const hasJournalData = trades.length > 0;
-  const bestStrategy = useMemo(() => bestStrategyTagFromTrades(trades), [trades]);
-  const dayTrades = trades.filter((trade) => trade.date === selectedDate);
-  const stats = calcStats(trades);
-  const dailySeries = buildDailySeries(trades);
-  const dayIndex = safeDateFromISO(selectedDate).getUTCDay();
-  const selected = safeDateFromISO(selectedDate);
-  const weekStart = addDays(selected, -dayIndex);
-  const monthStart = new Date(Date.UTC(selected.getUTCFullYear(), selected.getUTCMonth(), 1, 12));
-  const weekPnl = dailySeries
-    .filter((day) => safeDateFromISO(day.label) >= weekStart)
-    .reduce((sum, day) => sum + day.value, 0);
-  const monthPnl = dailySeries
-    .filter((day) => safeDateFromISO(day.label) >= monthStart)
-    .reduce((sum, day) => sum + day.value, 0);
-  const dayPnl = dayTrades.reduce((total, trade) => total + trade.pnl, 0);
-  const totalPnl = trades.reduce((total, trade) => total + trade.pnl, 0);
-  const remainingToPass = Math.max(0, template.evaluationTarget - Math.max(0, totalPnl));
-  const dailyRemaining = Math.max(0, template.dailyLossLimit + Math.min(dayPnl, 0));
-  const accountRemaining = Math.max(0, template.maxLossLimit + Math.min(totalPnl, 0));
-  const nearDailyLimit = dailyRemaining <= template.dailyLossLimit * 0.35;
-  const nearAccountLimit = accountRemaining <= template.maxLossLimit * 0.35;
-  const nearPass =
-    mode === "evaluation" &&
-    hasJournalData &&
-    remainingToPass > 0 &&
-    remainingToPass <= Math.max(template.evaluationTarget * 0.18, template.dailyLossLimit * 0.6);
-  const recentTrades = [...trades].sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).slice(0, 8);
-  let lossStreak = 0;
-  for (const trade of recentTrades) {
-    if (trade.pnl < 0) lossStreak += 1;
-    else break;
-  }
-  const consistency = stats.consistency;
-  const expectancy = stats.exp;
-  const sharpe = stats.sharpeRatio;
-  const avgLoss = Math.max(35, stats.avgLoss || Math.max(50, Math.abs(expectancy || 0) * 1.7));
-  const baseRiskPct = mode === "funded" ? template.liveRiskPct : template.evaluationRiskPct;
-  const qualityMultiplier =
-    !hasJournalData || expectancy <= 0 || sharpe < 0
-      ? 0.42
-      : consistency >= 72 && sharpe >= 0.8
-        ? 1
-        : consistency >= 55
-          ? 0.72
-          : 0.55;
-  const streakPenalty = lossStreak >= 3 ? 0.28 : lossStreak === 2 ? 0.48 : lossStreak === 1 ? 0.72 : 1;
-  const modeMultiplier = mode === "funded" ? 0.72 : 1;
-  const redDay = dayPnl <= -template.dailyLossLimit * 0.55 || lossStreak >= 3 || nearDailyLimit || nearAccountLimit;
-  const yellowDay =
-    !redDay &&
-    (dayPnl < 0 || lossStreak >= 2 || expectancy <= 0 || accountRemaining <= template.maxLossLimit * 0.45 || nearPass);
-  const dayMode = redDay ? "RED" : yellowDay ? "YELLOW" : "GREEN";
-  const dayModeMultiplier = redDay ? 0.32 : yellowDay ? 0.62 : 1;
-  const riskBudget = Math.floor(
-    Math.max(
-      0,
-      Math.min(dailyRemaining, accountRemaining) *
-        baseRiskPct *
-        qualityMultiplier *
-        streakPenalty *
-        modeMultiplier *
-        dayModeMultiplier,
-    ),
-  );
-  const maxFirmContracts = mode === "funded" ? template.liveContracts : template.evaluationContracts;
-  const selectedInstrument = INSTRUMENTS[riskInstrument] || INSTRUMENTS.MES;
-  const normalizedStopTicks = Math.max(4, Math.min(200, Number(stopTicksInput) || 16));
-  const selectedRiskPerContract = Math.max(
-    selectedInstrument.tickValue * 2,
-    normalizedStopTicks * selectedInstrument.tickValue,
-  );
-  const selectedContractCap =
-    MICRO_INSTRUMENTS.includes(riskInstrument)
-      ? maxFirmContracts * 10
-      : maxFirmContracts;
-  const microSymbol = MICRO_INSTRUMENTS.includes(riskInstrument)
-    ? riskInstrument
-    : MINI_TO_MICRO_MAP[riskInstrument] || "MES";
-  const microInstrument = INSTRUMENTS[microSymbol] || INSTRUMENTS.MES;
-  const microRiskUnit = Math.max(18, normalizedStopTicks * microInstrument.tickValue);
-  const eminiRiskUnit = Math.max(90, normalizedStopTicks * selectedInstrument.tickValue);
-  const microContracts = Math.max(0, Math.min(maxFirmContracts * 10, Math.floor(riskBudget / microRiskUnit)));
-  const eminiContracts = Math.max(0, Math.min(maxFirmContracts, Math.floor(riskBudget / eminiRiskUnit)));
-  const family: ContractFamily =
-    mode === "funded" || nearPass || dailyRemaining < template.dailyLossLimit * 0.55 || accountRemaining < template.maxLossLimit * 0.5 || lossStreak >= 2 || expectancy <= 0
-      ? "micro"
-      : eminiContracts >= 1
-        ? "emini"
-        : "micro";
-  const fallbackContracts = family === "emini" ? Math.min(1, maxFirmContracts) : Math.min(1, maxFirmContracts * 10);
-  let suggestedContracts = family === "emini"
-    ? eminiContracts
-    : microContracts || fallbackContracts;
-  let suggestedRiskUsd = Math.max(0, riskBudget);
-
-  const strategyMeta: Record<EvalStrategy, { label: string; risk: number; targetDays: [number, number]; tone: "green" | "purple" | "red" }> = {
-    steady: { label: "Steady", risk: 200, targetDays: [10, 25], tone: "green" },
-    balanced: { label: "Balanced", risk: 500, targetDays: [5, 12], tone: "purple" },
-    allIn: { label: "Accelerated", risk: 650, targetDays: [4, 9], tone: "red" },
-  };
-
-  if (mode === "evaluation") {
-    const chosenRisk = strategyMeta[evalStrategy].risk;
-    suggestedRiskUsd = Math.min(riskBudget, chosenRisk, nearPass ? Math.max(50, remainingToPass * 0.25) : chosenRisk);
-    const riskUnit = family === "emini" ? eminiRiskUnit : microRiskUnit;
-    const cap = family === "emini" ? maxFirmContracts : maxFirmContracts * 10;
-    suggestedContracts = Math.min(cap, Math.floor(suggestedRiskUsd / Math.max(1, riskUnit)));
-  }
-  const protectivePause =
-    !hasJournalData ||
-    nearDailyLimit ||
-    nearAccountLimit ||
-    lossStreak >= 2 ||
-    expectancy <= 0;
-  if (protectivePause) {
-    suggestedRiskUsd = 0;
-    suggestedContracts = 0;
-  }
-  const instrumentContracts = Math.min(
-    selectedContractCap,
-    Math.floor(suggestedRiskUsd / Math.max(1, selectedRiskPerContract)),
-  );
-  suggestedContracts = Math.min(suggestedContracts, instrumentContracts);
-  const avgWinningDay = Math.max(50, weekPnl > 0 ? weekPnl / Math.max(1, dayIndex + 1) : stats.avgWin || 120);
-  const evalDailyCapture = Math.max(50, Math.min(suggestedRiskUsd * 1.3, avgWinningDay));
-  const projectedEvalDays = Math.max(1, Math.ceil(remainingToPass / Math.max(1, evalDailyCapture)));
-  const hardStop = dailyRemaining <= 0 || accountRemaining <= 0;
-  const caution =
-    !hardStop &&
-    (!hasJournalData ||
-      nearDailyLimit ||
-      nearAccountLimit ||
-      nearPass ||
-      lossStreak >= 2 ||
-      expectancy <= 0 ||
-      dayPnl < 0);
-  const status = hardStop ? "STOP" : caution ? "CAUTION" : "CLEAR";
-  const statusColor = hardStop ? C.red : caution ? C.yellow : C.green;
-  const sizeLabel = suggestedContracts > 0 ? `${suggestedContracts} ${family === "emini" ? "E-mini" : "Micro"}` : "review mode";
-  const coachLine = !hasJournalData
-    ? "Add journal data first. Use simulator or smallest-size practice until the coach has a real sample."
-    : hardStop
-      ? "Stop trading today. Protect the account and reset tomorrow."
-      : nearAccountLimit
-        ? "You are close to max loss / trailing drawdown. Stop live trading and protect the account."
-        : nearDailyLimit
-          ? "Daily loss buffer is thin. Stop for the day or switch to review-only mode."
-          : lossStreak >= 2
-            ? "Two losses in a row. Pause now; do not add size to win it back."
-            : nearPass
-              ? `You are close to passing. Protect the result; max plan is ${sizeLabel} only if the setup is A+.`
-              : expectancy <= 0
-                ? "Negative expectancy. Do not scale live risk; review setups until expectancy improves."
-                : caution
-                  ? `Reduce size. Max plan is ${sizeLabel} and only for A+ setups.`
-                  : `Conditions are clear. Keep size fixed at ${sizeLabel} with strict stop discipline.`;
-  const fundedRiskBand = accountRemaining <= template.maxLossLimit * 0.25
-    ? "Low"
-    : accountRemaining <= template.maxLossLimit * 0.55
-      ? "Medium"
-      : "High";
-  const evalDays = strategyMeta[evalStrategy].targetDays;
-  const estDays = mode === "evaluation"
-    ? `${Math.max(evalDays[0], projectedEvalDays)}-${Math.max(evalDays[1], projectedEvalDays + 3)}`
-    : fundedRiskBand === "High"
-      ? "15+"
-      : fundedRiskBand === "Medium"
-        ? "8-15"
-        : "5-10";
-  const currentRiskLabel =
-    hardStop
-      ? "STOP"
-      : mode === "evaluation"
-        ? evalStrategy === "steady"
-          ? "LOW"
-          : evalStrategy === "balanced"
-            ? "MEDIUM"
-            : "ELEVATED"
-        : fundedRiskBand.toUpperCase();
-  const strategyName = mode === "evaluation" ? strategyMeta[evalStrategy].label : "Funded";
-  const strategyRiskText =
-    mode === "evaluation"
-      ? `${strategyName} • ${moneyCompact(strategyMeta[evalStrategy].risk)} risk / trade • ${moneyCompact(remainingToPass)} to pass`
-      : `Funded safety mode • ${currentRiskLabel} risk`;
-  const reviewReady = selected.getUTCDay() === 0;
-  const strategyReviewText = bestStrategy
-    ? `Best tagged strategy: #${bestStrategy.tag} (${bestStrategy.count} trades, ${moneyCompact(bestStrategy.pnl)}, ${bestStrategy.winRate.toFixed(0)}% WR).`
-    : "Add strategy tags like #ORB or #Pullback in notes to reveal your best-performing setup.";
-  const reviewLine = reviewReady
-    ? `Weekly Review ready: week ${moneyCompact(weekPnl)}, month ${moneyCompact(monthPnl)}, expectancy ${moneyCompact(expectancy)}, Sharpe ${sharpe ? sharpe.toFixed(2) : "0.00"}.`
-    : `Next weekly review on Sunday. Current week: ${moneyCompact(weekPnl)}.`;
-  const survival = calculatePropSurvival({
-    consistency,
-    drawdown: stats.maxDd,
-    dailyRemaining,
-    dailyLossLimit: template.dailyLossLimit,
-    accountRemaining,
-    maxLossLimit: template.maxLossLimit,
-    expectancy,
-    avgLoss,
-    lossStreak,
-    dayPnl,
-  });
-
   return (
-    <GlassCard style={styles.riskCoachCard} intensity={34}>
-      <View style={styles.survivalCard}>
-        <View style={styles.rowBetween}>
-          <View>
-            <Text style={styles.edgeMiniLabel}>Prop Firm Survival Score</Text>
-            <Text style={styles.survivalValue}>{survival.probability}%</Text>
-          </View>
-          <Text style={[styles.aiAnalysisSource, { color: survival.probability >= 75 ? C.green : survival.probability >= 50 ? C.yellow : C.red }]}>
-            {mode === "evaluation" ? "PASS PROBABILITY" : "SURVIVAL SCORE"}
-          </Text>
-        </View>
-        <Text style={styles.weeklyReviewText}>Top Risk: {survival.topRisk}</Text>
-        <Text style={styles.weeklyReviewText}>Biggest Advantage: {survival.biggestAdvantage}</Text>
-        <Text style={styles.weeklyReviewText}>Recommended Action: {survival.recommendedAction}</Text>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.riskTemplateRail}>
-        {safeTemplates.map((item) => {
-          const active = item.key === templateKey;
-          return (
-            <Pressable
-              key={item.key}
-              onPress={() => setTemplateKey(item.key)}
-              style={[styles.riskTemplateBtn, active && styles.riskTemplateActive]}
-            >
-              <Text style={[styles.riskTemplateLabel, active && { color: C.green }]} numberOfLines={1}>
-                {item.label}
-              </Text>
-              <Text style={styles.riskTemplateSub} numberOfLines={1}>
-                {item.trailingDrawdown ? "Trailing DD" : "Static DD"} • ${item.accountSize / 1000}K
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      <View style={styles.riskModeRow}>
-        {(["evaluation", "funded"] as FirmMode[]).map((item) => (
-          <Pressable
-            key={item}
-            onPress={() => setMode(item)}
-            style={[styles.riskModeBtn, mode === item && styles.riskModeActive]}
-          >
-            <Text style={[styles.riskModeText, mode === item && { color: C.bg }]}>
-              {item === "funded" ? "FUNDED" : "EVALUATION"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {mode === "evaluation" && (
-        <View style={styles.riskModeRow}>
-          {(["steady", "balanced", "allIn"] as EvalStrategy[]).map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => setEvalStrategy(item)}
-              style={[styles.riskModeBtn, evalStrategy === item && styles.riskModeActive]}
-            >
-              <Text style={[styles.riskModeText, evalStrategy === item && { color: C.bg }]}>
-                {item === "steady" ? "STEADY" : item === "balanced" ? "BALANCED" : "ACCEL"}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      <View style={styles.riskModeRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {(["MES", "MNQ", "MGC", "MCL", "ES", "NQ", "GC", "CL"] as RiskInstrument[]).map((item) => {
-            const active = riskInstrument === item;
-            return (
-              <Pressable
-                key={item}
-                onPress={() => setRiskInstrument(item as RiskInstrument)}
-                style={[styles.riskTemplateBtn, { width: 86, minHeight: 46, marginRight: 8 }, active && styles.riskTemplateActive]}
-              >
-                <Text style={[styles.riskTemplateLabel, styles.riskInstrumentSymbol, active && { color: C.orange }]}>{item}</Text>
-                <Text style={styles.riskTemplateSub}>{moneyCompact((INSTRUMENTS[item]?.tickValue || 0) * normalizedStopTicks)}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      <View style={styles.rowBetween}>
-        <Text style={styles.riskBarLabel}>Stop (ticks)</Text>
-        <View style={styles.riskStopTicksInputWrap}>
-          <TextInput
-            value={stopTicksInput}
-            onChangeText={setStopTicksInput}
-            keyboardType="number-pad"
-            style={styles.riskStopTicksInput}
-          />
-        </View>
-      </View>
-
-      <View style={styles.coachCallout}>
-        <Text style={[styles.edgeMiniLabel, { color: statusColor }]}>Today's coach</Text>
-        <Text style={styles.coachCalloutText}>{coachLine}</Text>
-      </View>
-
-      <RiskBufferBar
-        label="Daily loss buffer"
-        remaining={dailyRemaining}
-        limit={template.dailyLossLimit}
-        tone={hardStop && dailyRemaining <= 0 ? "red" : caution ? "purple" : "green"}
-      />
-      <RiskBufferBar
-        label="Account buffer"
-        remaining={accountRemaining}
-        limit={template.maxLossLimit}
-        tone={hardStop && accountRemaining <= 0 ? "red" : "purple"}
-      />
-
-      <View style={styles.riskMetricGrid}>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Day P&L</Text>
-          <Text style={[styles.riskMetricValue, { color: dayPnl >= 0 ? C.green : C.red }]}>
-            {moneyCompact(dayPnl)}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Risk budget</Text>
-          <Text style={styles.riskMetricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {moneyCompact(suggestedRiskUsd)}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>{mode === "evaluation" ? "To pass eval" : "Safety buffer"}</Text>
-          <Text style={[styles.riskMetricValue, { color: mode === "evaluation" ? (remainingToPass > 0 ? C.yellow : C.green) : accountRemaining <= template.maxLossLimit * 0.35 ? C.red : C.green }]}>
-            {mode === "evaluation" ? moneyCompact(remainingToPass) : moneyCompact(accountRemaining)}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Smart size</Text>
-          <Text style={[styles.riskMetricValue, { color: suggestedContracts > 0 ? C.green : C.yellow }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {suggestedContracts > 0 ? `${suggestedContracts} ${family === "emini" ? "E-mini" : "Micro"}` : "Review"}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Contract plan</Text>
-          <Text style={styles.riskMetricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {suggestedContracts > 0 ? `${suggestedContracts}x ${riskInstrument}` : "Paused"}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Risk / contract</Text>
-          <Text style={styles.riskMetricValue}>{moneyCompact(selectedRiskPerContract)}</Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Day mode</Text>
-          <Text style={[styles.riskMetricValue, { color: dayMode === "RED" ? C.red : dayMode === "YELLOW" ? C.yellow : C.green }]}>
-            {dayMode}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Risk level</Text>
-          <Text style={[styles.riskMetricValue, { color: currentRiskLabel === "STOP" || currentRiskLabel === "ELEVATED" ? C.red : currentRiskLabel === "MEDIUM" ? C.yellow : C.green }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-            {currentRiskLabel}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Estimated days</Text>
-          <Text style={styles.riskMetricValue}>{estDays}</Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Loss streak</Text>
-          <Text style={[styles.riskMetricValue, { color: lossStreak >= 2 ? C.red : C.text }]}>{lossStreak}</Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Expectancy</Text>
-          <Text style={[styles.riskMetricValue, { color: expectancy >= 0 ? C.green : C.red }]}>
-            {moneyCompact(expectancy)}
-          </Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Sharpe</Text>
-          <Text style={styles.riskMetricValue}>{sharpe ? sharpe.toFixed(2) : "0.00"}</Text>
-        </View>
-        <View style={styles.riskMetricBox}>
-          <Text style={styles.edgeMiniLabel}>Best strategy</Text>
-          <Text style={[styles.riskMetricValue, { color: bestStrategy ? C.green : C.sub }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
-            {bestStrategy ? `#${bestStrategy.tag}` : "Add tags"}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.weeklyReviewBox}>
-        <Text style={styles.edgeMiniLabel}>Weekly / Monthly Review</Text>
-        <Text style={styles.weeklyReviewText}>{reviewLine}</Text>
-        <Text style={[styles.weeklyReviewText, { marginTop: 8 }]}>
-          {strategyRiskText}
-        </Text>
-        <Text style={[styles.weeklyReviewText, { marginTop: 8 }]}>
-          {strategyReviewText}
-        </Text>
-      </View>
-
-      <Text style={[styles.sub, { marginTop: 10 }]}>
-        This coach uses calculations from Topstep rule source: https://www.topstep.com • (2026-05-29).
-      </Text>
-    </GlassCard>
+    <PropFirmRiskCoachScreen
+      trades={trades}
+      selectedDate={selectedDate}
+      templates={templates}
+      isPremium={isPremium}
+      onUpgrade={onUpgrade}
+    />
   );
 }
+
 function MetricGauge({ label, value, helper, tone = "green" }: { label: string; value: string; helper?: string; tone?: "green" | "purple" | "red" | "white" }) {
   const color = tone === "purple" ? C.purple : tone === "red" ? C.red : tone === "white" ? C.text : C.green;
   return (
@@ -5009,7 +4400,7 @@ function PropTemplateSelector({
   onChange: (key: string) => void;
   onModeChange?: (mode: FirmMode) => void;
 }) {
-  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
+  const safeTemplates = templates;
   return (
     <View style={styles.propTemplateSelector}>
       <View style={styles.propTemplateHeader}>
@@ -6783,23 +6174,22 @@ function StatsScreen({
   const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
   const weekPnl = periodPnlFromTrades(trades, selectedDate, "week");
-  const safePropTemplates = propTemplates.length ? propTemplates : FALLBACK_PROP_RULES;
-  const [propTemplateKey, setPropTemplateKey] = useState(FALLBACK_PROP_RULES[0].key);
+  const safePropTemplates = propTemplates;
+  const [propTemplateKey, setPropTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
   useEffect(() => {
     Promise.all([
       AsyncStorage.getItem("prop-risk-template-v1"),
       AsyncStorage.getItem("prop-risk-mode-v1"),
     ]).then(([savedTemplate, savedMode]) => {
-      if (savedTemplate && safePropTemplates.some((template) => template.key === savedTemplate)) {
-        setPropTemplateKey(savedTemplate);
-      }
+      const nextKey = resolvePropTemplateKey(savedTemplate || "", safePropTemplates);
+      if (nextKey) setPropTemplateKey(nextKey);
       if (savedMode === "evaluation" || savedMode === "funded") setPropMode(savedMode);
     });
   }, [safePropTemplates]);
   const propSnapshot = useMemo(
     () =>
-      computePropRiskSnapshot({
+      tryComputePropRiskSnapshot({
         trades,
         selectedDate,
         templateKey: propTemplateKey,
@@ -6810,7 +6200,9 @@ function StatsScreen({
   );
 
   const shareCardData = useMemo(
-    () => ({
+    () => {
+      const propMeta = propSnapshotShareMeta(propSnapshot);
+      return {
       periodLabel: `${period.toUpperCase()} • ${selectedDate}`,
       netPnl: periodStats.pnl,
       winRate: periodStats.wr,
@@ -6824,9 +6216,10 @@ function StatsScreen({
       weekPnl,
       trades: periodStats.count,
       bestSession: periodStats.session[0]?.label || "N/A",
-      dailyBuffer: moneyCompact(propSnapshot.dailyRemaining),
-      propStatus: `${propSnapshot.template.label} • ${propSnapshot.status}`,
-    }),
+      dailyBuffer: propMeta.dailyBuffer,
+      propStatus: propMeta.propStatus,
+    };
+    },
     [period, selectedDate, periodStats, periodTrades, weekPnl, propSnapshot],
   );
 
@@ -7109,7 +6502,7 @@ function buildAiCommandCenter({
   hiddenLeaks,
 }: {
   trades: Trade[];
-  propSnapshot: ReturnType<typeof computePropRiskSnapshot>;
+  propSnapshot: ReturnType<typeof computePropRiskSnapshot> | null;
   passProbability: PassProbabilityResult;
   revengeTrading: RevengeTradingResult;
   hiddenLeaks: HiddenLeak[];
@@ -7121,6 +6514,16 @@ function buildAiCommandCenter({
       color: C.purple,
       softColor: C.purpleSoft,
       action: "Log each trade with entry time, exit time, symbol, result, and tags. The coach becomes useful once your journal has enough clean data.",
+    };
+  }
+
+  if (!propSnapshot) {
+    return {
+      title: "Connect a prop firm template",
+      status: "SETUP",
+      color: C.purple,
+      softColor: C.purpleSoft,
+      action: "Sync firm rules from Supabase, then select your evaluation account to unlock prop-aware coaching.",
     };
   }
 
@@ -7441,12 +6844,20 @@ function buildPropCoachRecommendation({
   passProbability,
   revengeTrading,
 }: {
-  snapshot: ReturnType<typeof computePropRiskSnapshot>;
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
   stats: ReturnType<typeof calcStats>;
   passProbability: PassProbabilityResult;
   revengeTrading: RevengeTradingResult;
 }) {
   const revengeRiskScore = revengeTrading.severity === "HIGH" ? 85 : revengeTrading.severity === "MEDIUM" ? 60 : 20;
+  if (!snapshot) {
+    return {
+      headline: "Sync a prop firm template to unlock risk coaching.",
+      action: "Select Firm",
+      rules: ["Open Prop Firm Risk Assistant and choose your evaluation account.", "Firm rules load from Supabase — no hardcoded limits in the app."],
+      reason: `Based on ${stats.count} trades and ${stats.wr.toFixed(0)}% win rate. Prop-specific buffer coaching activates after a template is selected.`,
+    };
+  }
   const danger = snapshot.status === "STOP" || snapshot.dailyRemaining <= snapshot.template.dailyLossLimit * 0.15;
   const caution = snapshot.status === "CAUTION" || passProbability.probability < 55 || stats.maxDd < 0 || revengeRiskScore >= 60;
   const headline = danger
@@ -7878,28 +7289,70 @@ function PropFirmCoachSection({
   templates: RiskTemplate[];
   value: string;
   mode: FirmMode;
-  snapshot: ReturnType<typeof computePropRiskSnapshot>;
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
   stats: ReturnType<typeof calcStats>;
   passProbability: PassProbabilityResult;
   revengeTrading: RevengeTradingResult;
   onTemplateChange: (key: string) => void;
   onModeChange: (mode: FirmMode) => void;
 }) {
-  const safeTemplates = templates.length ? templates : FALLBACK_PROP_RULES;
+  const safeTemplates = templates;
+  if (!snapshot) {
+    return (
+      <TerminalGlassCard>
+        <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
+        <Text style={styles.terminalSub}>
+          {safeTemplates.length
+            ? "Select your evaluation account to unlock prop-aware risk coaching."
+            : "Firm templates load from Supabase. Connect and reopen AI Analytics to sync rules."}
+        </Text>
+        {safeTemplates.length ? (
+          <>
+            <View style={styles.propModeRail}>
+              {(["evaluation", "funded"] as FirmMode[]).map((item) => {
+                const active = item === mode;
+                return (
+                  <Pressable key={item} onPress={() => onModeChange(item)} style={[styles.propModeChip, active && styles.propModeChipActive]}>
+                    <Text style={[styles.propModeChipText, active && styles.propModeChipTextActive]}>
+                      {item === "evaluation" ? "Evaluation" : "Funded"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+              {safeTemplates.map((template) => {
+                const active = template.key === value;
+                return (
+                  <Pressable key={template.key} onPress={() => onTemplateChange(template.key)} style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}>
+                    <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>{template.accountSize / 1000}K</Text>
+                    <Text style={styles.propTemplateChipSub}>{template.evaluationContracts} eval / {template.liveContracts} live</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </>
+        ) : null}
+      </TerminalGlassCard>
+    );
+  }
+  const engine = snapshot.engine;
   const isFunded = mode === "funded";
   const maxContracts = isFunded ? snapshot.template.liveContracts : snapshot.template.evaluationContracts;
   const riskPct = isFunded ? snapshot.template.liveRiskPct : snapshot.template.evaluationRiskPct;
   const coach = buildPropCoachRecommendation({ snapshot, stats, passProbability, revengeTrading });
   const revengeRiskScore = revengeTrading.severity === "HIGH" ? 85 : revengeTrading.severity === "MEDIUM" ? 60 : 20;
-  const safetyScore = Math.max(0, Math.min(100, Math.round((passProbability.probability * 0.45) + (snapshot.bufferPct * 0.35) + (stats.drawdownControl * 0.2) - (revengeRiskScore * 0.15))));
+  const safetyScore = engine?.accountHealthScore ?? Math.max(0, Math.min(100, Math.round((passProbability.probability * 0.45) + (snapshot.bufferPct * 0.35) + (stats.drawdownControl * 0.2) - (revengeRiskScore * 0.15))));
+  const headline = engine?.coachMessage || coach.headline;
+  const action = engine?.primaryAction || coach.action;
   return (
     <TerminalGlassCard>
       <View style={styles.terminalHeaderRow}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.terminalSectionTitle}>Prop Firm Coach</Text>
-          <Text style={styles.terminalSub}>Discipline, risk and buffer coaching from your journal metrics.</Text>
+          <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
+          <Text style={styles.terminalSub}>Unified risk engine fed into Weekly Report, Daily Mission, DNA, Coach and achievements.</Text>
         </View>
-        <AppleRing label={isFunded ? "SAFE" : "PASS"} value={isFunded ? safetyScore : passProbability.probability} display={`${isFunded ? safetyScore : passProbability.probability}%`} size={112} color={snapshot.statusColor} />
+        <AppleRing label={isFunded ? "HEALTH" : "PASS"} value={isFunded ? safetyScore : passProbability.probability} display={`${isFunded ? safetyScore : passProbability.probability}%`} size={112} color={snapshot.statusColor} />
       </View>
       <View style={styles.propModeRail}>
         {(["evaluation", "funded"] as FirmMode[]).map((item) => {
@@ -7929,23 +7382,21 @@ function PropFirmCoachSection({
           <Text style={styles.terminalSmallLabel}>Status</Text>
           <Text style={[styles.propCoachStatus, { color: snapshot.statusColor }]}>{snapshot.status}</Text>
         </View>
-        <Text style={[styles.propCoachAction, { color: snapshot.statusColor }]}>{coach.action}</Text>
+        <Text style={[styles.propCoachAction, { color: snapshot.statusColor }]}>{action}</Text>
       </View>
       <MetricPillRow
         items={[
           { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
           { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
-          { label: isFunded ? "Safety Score" : "To Pass", value: isFunded ? `${safetyScore}%` : moneyCompact(snapshot.remainingToPass), tone: isFunded ? "purple" : snapshot.remainingToPass <= 0 ? "green" : "purple" },
-          { label: "Max Loss", value: moneyCompact(snapshot.template.maxLossLimit), tone: "grey" },
-          { label: "Daily Limit", value: moneyCompact(snapshot.template.dailyLossLimit), tone: "grey" },
-          { label: "Contracts", value: `${maxContracts} max`, tone: "purple" },
-          { label: "Risk / Trade", value: `${Math.round(riskPct * 100)}%`, tone: "grey" },
+          { label: isFunded ? "Health Score" : "To Pass", value: isFunded ? `${safetyScore}%` : moneyCompact(snapshot.remainingToPass), tone: isFunded ? "purple" : snapshot.remainingToPass <= 0 ? "green" : "purple" },
+          { label: "Contracts Rec.", value: engine ? `${engine.contractRecommendation.recommended}/${engine.contractRecommendation.maxAllowed}` : `${maxContracts} max`, tone: "purple" },
+          { label: "Payout Ready", value: engine?.payoutReadiness.ready ? "YES" : `${engine?.payoutReadiness.pct ?? 0}%`, tone: engine?.payoutReadiness.ready ? "green" : "grey" },
           { label: "Revenge Risk", value: `${revengeRiskScore}%`, tone: revengeRiskScore >= 60 ? "red" : "grey" },
         ]}
       />
       <View style={styles.propCoachAdviceCard}>
-        <Text style={styles.propCoachHeadline}>{coach.headline}</Text>
-        <BulletList items={coach.rules} />
+        <Text style={styles.propCoachHeadline}>{headline}</Text>
+        <BulletList items={engine?.ruleWarnings.slice(0, 3).map((w) => w.title) || coach.rules} />
         <Text style={styles.terminalSub}>{coach.reason}</Text>
       </View>
       <Text style={styles.newsDisclaimer}>Educational analysis only. Not financial advice.</Text>
@@ -7957,10 +7408,18 @@ function TerminalPropFirmMission({
   propSnapshot,
   passProbability,
 }: {
-  propSnapshot: ReturnType<typeof computePropRiskSnapshot>;
+  propSnapshot: ReturnType<typeof computePropRiskSnapshot> | null;
   passProbability: PassProbabilityResult;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  if (!propSnapshot) {
+    return (
+      <TerminalGlassCard>
+        <Text style={styles.terminalSectionTitle}>Eval</Text>
+        <Text style={styles.terminalSub}>Select a prop firm template to unlock pass-path coaching.</Text>
+      </TerminalGlassCard>
+    );
+  }
   const maxContracts = propSnapshot.mode === "funded" ? propSnapshot.template.liveContracts : propSnapshot.template.evaluationContracts;
   const bufferRatio = propSnapshot.accountRemaining / Math.max(1, propSnapshot.template.maxLossLimit);
   const contractPlan =
@@ -8052,11 +7511,19 @@ function TerminalFundedPanel({
   mode,
   onModeChange,
 }: {
-  snapshot: ReturnType<typeof computePropRiskSnapshot>;
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
   mode: FirmMode;
   onModeChange: (mode: FirmMode) => void;
 }) {
   const isFunded = mode === "funded";
+  if (!snapshot) {
+    return (
+      <TerminalGlassCard>
+        <Text style={styles.terminalSectionTitle}>{isFunded ? "Funded" : "Evaluation"}</Text>
+        <Text style={styles.terminalSub}>Select a prop firm template to unlock funded/evaluation risk planning.</Text>
+      </TerminalGlassCard>
+    );
+  }
   const maxContracts = isFunded ? snapshot.template.liveContracts : snapshot.template.evaluationContracts;
   const riskPct = isFunded ? snapshot.template.liveRiskPct : snapshot.template.evaluationRiskPct;
   const modeLabel = isFunded ? "Funded" : "Evaluation";
@@ -8151,8 +7618,8 @@ function AiAnalysisScreen({
   });
   const [dailyMissionStatus, setDailyMissionStatus] = useState<AiDailyMissionStatus>("active");
   const [dailyMissionChecked, setDailyMissionChecked] = useState<Record<string, boolean>>({});
-  const safeAnalysisTemplates = propTemplates.length ? propTemplates : FALLBACK_PROP_RULES;
-  const [analysisTemplateKey, setAnalysisTemplateKey] = useState(FALLBACK_PROP_RULES[0].key);
+  const safeAnalysisTemplates = propTemplates;
+  const [analysisTemplateKey, setAnalysisTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
 
   useEffect(() => {
@@ -8160,9 +7627,8 @@ function AiAnalysisScreen({
       AsyncStorage.getItem("prop-risk-template-v1"),
       AsyncStorage.getItem("prop-risk-mode-v1"),
     ]).then(([savedTemplate, savedMode]) => {
-      if (savedTemplate && safeAnalysisTemplates.some((template) => template.key === savedTemplate)) {
-        setAnalysisTemplateKey(savedTemplate);
-      }
+      const nextKey = resolvePropTemplateKey(savedTemplate || "", safeAnalysisTemplates);
+      if (nextKey) setAnalysisTemplateKey(nextKey);
       if (savedMode === "evaluation" || savedMode === "funded") setPropMode(savedMode);
     });
   }, [safeAnalysisTemplates]);
@@ -8183,35 +7649,64 @@ function AiAnalysisScreen({
   const patterns = useMemo(() => detectTradingPatterns(periodTrades), [periodTrades]);
   const weekPatterns = useMemo(() => detectTradingPatterns(weekTrades), [weekTrades]);
   const activeTemplate =
-    safeAnalysisTemplates.find((template) => template.key === analysisTemplateKey) ||
-    safeAnalysisTemplates[0] ||
-    FALLBACK_PROP_RULES[0];
+    analysisTemplateKey
+      ? safeAnalysisTemplates.find((template) => template.key === analysisTemplateKey) || null
+      : null;
   const propSnapshot = useMemo(
     () =>
-      computePropRiskSnapshot({
-        trades,
-        selectedDate,
-        templateKey: activeTemplate.key,
-        mode: "evaluation",
-        templates: safeAnalysisTemplates,
-      }),
-    [trades, selectedDate, activeTemplate.key, safeAnalysisTemplates],
+      activeTemplate
+        ? tryComputePropRiskSnapshot({
+            trades,
+            selectedDate,
+            templateKey: activeTemplate.key,
+            mode: "evaluation",
+            templates: safeAnalysisTemplates,
+            phase: mapLegacyFirmMode("evaluation"),
+          })
+        : null,
+    [trades, selectedDate, activeTemplate, safeAnalysisTemplates],
   );
   const fundedSnapshot = useMemo(
     () =>
-      computePropRiskSnapshot({
-        trades,
-        selectedDate,
-        templateKey: activeTemplate.key,
-        mode: "funded",
-        templates: safeAnalysisTemplates,
-      }),
-    [trades, selectedDate, activeTemplate.key, safeAnalysisTemplates],
+      activeTemplate
+        ? tryComputePropRiskSnapshot({
+            trades,
+            selectedDate,
+            templateKey: activeTemplate.key,
+            mode: "funded",
+            templates: safeAnalysisTemplates,
+            phase: "funded",
+          })
+        : null,
+    [trades, selectedDate, activeTemplate, safeAnalysisTemplates],
   );
   const selectedPropSnapshot = propMode === "funded" ? fundedSnapshot : propSnapshot;
   const passProbability = useMemo(
-    () => calculatePassProbability({ trades, selectedDate, template: activeTemplate }),
+    () =>
+      activeTemplate
+        ? calculatePassProbability({ trades, selectedDate, template: activeTemplate })
+        : { probability: 0, status: "DANGER" as const, explanation: "Select a prop firm template synced from Supabase.", confidence: "low" as const },
     [trades, selectedDate, activeTemplate],
+  );
+  const aiPropContext = useMemo(
+    () =>
+      selectedPropSnapshot?.engine
+        ? buildAiPropContextFromEngine(selectedPropSnapshot.engine, passProbability.probability)
+        : selectedPropSnapshot
+          ? {
+              mode: propMode,
+              status: selectedPropSnapshot.status,
+              templateLabel: selectedPropSnapshot.template.label,
+              dailyRemaining: selectedPropSnapshot.dailyRemaining,
+              accountRemaining: selectedPropSnapshot.accountRemaining,
+              remainingToPass: selectedPropSnapshot.remainingToPass,
+              dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
+              maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
+              passProbability: passProbability.probability,
+              bufferPct: selectedPropSnapshot.bufferPct,
+            }
+          : undefined,
+    [passProbability.probability, propMode, selectedPropSnapshot],
   );
   const revengeTrading = useMemo(
     () => detectRevengeTrading({ trades, selectedDate, dangerMode: passProbability.status === "DANGER" }),
@@ -8254,12 +7749,12 @@ function AiAnalysisScreen({
         riskControl: periodStats.drawdownControl,
         propSurvivalScore: passProbability.probability,
         propTargetRemainingPct:
-          propSnapshot.template.evaluationTarget > 0
+          propSnapshot && propSnapshot.template.evaluationTarget > 0
             ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
             : 100,
         monthlyPnl: periodStats.pnl,
         bestMonthPnl: Math.max(0, periodStats.pnl),
-        dailyLossLimit: propSnapshot.template.dailyLossLimit,
+        dailyLossLimit: propSnapshot?.template.dailyLossLimit ?? 0,
       }),
     [passProbability.probability, periodStats, periodTrades, propSnapshot, selectedDate, tradingScore.score],
   );
@@ -8269,89 +7764,46 @@ function AiAnalysisScreen({
       buildAiInsights({
         trades: periodTrades,
         stats: periodStats,
-        prop: {
-          mode: propMode,
-          status: selectedPropSnapshot.status,
-          templateLabel: selectedPropSnapshot.template.label,
-          dailyRemaining: selectedPropSnapshot.dailyRemaining,
-          accountRemaining: selectedPropSnapshot.accountRemaining,
-          remainingToPass: selectedPropSnapshot.remainingToPass,
-          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
-          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
-          passProbability: passProbability.probability,
-          bufferPct: selectedPropSnapshot.bufferPct,
-        },
+        prop: aiPropContext,
         patterns,
         revengeRisk: revengeTrading,
       }),
-    [passProbability.probability, patterns, periodStats, periodTrades, propMode, revengeTrading, selectedPropSnapshot],
+    [aiPropContext, patterns, periodStats, periodTrades, revengeTrading],
   );
   const weeklyReport = useMemo(
     () =>
       buildAiWeeklyReport({
         trades: weekTrades,
         stats: weekStats,
-        prop: {
-          mode: propMode,
-          status: selectedPropSnapshot.status,
-          templateLabel: selectedPropSnapshot.template.label,
-          dailyRemaining: selectedPropSnapshot.dailyRemaining,
-          accountRemaining: selectedPropSnapshot.accountRemaining,
-          remainingToPass: selectedPropSnapshot.remainingToPass,
-          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
-          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
-          passProbability: passProbability.probability,
-          bufferPct: selectedPropSnapshot.bufferPct,
-        },
+        prop: aiPropContext,
         patterns: weekPatterns,
         revengeRisk: revengeTrading,
         createdAt: `${selectedDate}T00:00:00.000Z`,
       }),
-    [passProbability.probability, propMode, revengeTrading, selectedDate, selectedPropSnapshot, weekPatterns, weekStats, weekTrades],
+    [aiPropContext, revengeTrading, selectedDate, weekPatterns, weekStats, weekTrades],
   );
   const dailyMission = useMemo(
     () =>
       buildAiDailyMission({
         trades: periodTrades,
         stats: periodStats,
-        prop: {
-          mode: propMode,
-          status: selectedPropSnapshot.status,
-          templateLabel: selectedPropSnapshot.template.label,
-          dailyRemaining: selectedPropSnapshot.dailyRemaining,
-          accountRemaining: selectedPropSnapshot.accountRemaining,
-          remainingToPass: selectedPropSnapshot.remainingToPass,
-          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
-          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
-          passProbability: passProbability.probability,
-          bufferPct: selectedPropSnapshot.bufferPct,
-        },
+        prop: aiPropContext,
         patterns,
         revengeRisk: revengeTrading,
         createdAt: `${selectedDate}T00:00:00.000Z`,
       }),
-    [passProbability.probability, patterns, periodStats, periodTrades, propMode, revengeTrading, selectedDate, selectedPropSnapshot],
+    [aiPropContext, patterns, periodStats, periodTrades, revengeTrading, selectedDate],
   );
   const aiAchievements = useMemo(
     () =>
       buildAiAchievements({
         trades: periodTrades,
         stats: periodStats,
-        prop: {
-          mode: propMode,
-          status: selectedPropSnapshot.status,
-          dailyRemaining: selectedPropSnapshot.dailyRemaining,
-          accountRemaining: selectedPropSnapshot.accountRemaining,
-          remainingToPass: selectedPropSnapshot.remainingToPass,
-          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
-          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
-          passProbability: passProbability.probability,
-          bufferPct: selectedPropSnapshot.bufferPct,
-        },
+        prop: aiPropContext,
         patterns,
         revengeRisk: revengeTrading,
       }),
-    [passProbability.probability, patterns, periodStats, periodTrades, propMode, revengeTrading, selectedPropSnapshot],
+    [aiPropContext, patterns, periodStats, periodTrades, revengeTrading],
   );
   const tradingDna = useMemo(
     () => buildTradingDNAProfile({ trades: periodTrades, stats: periodStats, patterns, revengeRisk: revengeTrading }),
@@ -8503,9 +7955,10 @@ function AiAnalysisScreen({
             </TerminalGlassCard>
             <View style={{ gap: 10 }}>
               <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
+              {safeAnalysisTemplates.length ? (
               <PropFirmCoachSection
                 templates={safeAnalysisTemplates}
-                value={activeTemplate.key}
+                value={analysisTemplateKey || activeTemplate?.key || ""}
                 mode={propMode}
                 snapshot={selectedPropSnapshot}
                 stats={periodStats}
@@ -8514,6 +7967,11 @@ function AiAnalysisScreen({
                 onTemplateChange={changeAnalysisTemplate}
                 onModeChange={changePropMode}
               />
+              ) : (
+                <TerminalGlassCard>
+                  <Text style={styles.terminalSub}>Sync firm templates from Supabase to activate prop-firm-aware coaching.</Text>
+                </TerminalGlassCard>
+              )}
             </View>
             <TerminalPatternDetective stats={periodStats} />
             <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
@@ -10692,7 +10150,7 @@ function App() {
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
   const [propRiskOpen, setPropRiskOpen] = useState(false);
   const [propRiskDate, setPropRiskDate] = useState(todayISO());
-  const [propTemplates, setPropTemplates] = useState<RiskTemplate[]>(FALLBACK_PROP_RULES);
+  const [propTemplates, setPropTemplates] = useState<RiskTemplate[]>([]);
   const [propRulesMeta, setPropRulesMeta] = useState<{ source: "remote" | "cache" | "fallback"; updatedAt?: string }>({
     source: "fallback",
   });
@@ -10744,7 +10202,8 @@ function App() {
       try {
         const { data, error } = await supabase
           .from("prop_firms")
-          .select("slug,name,account_name,account_size,daily_loss_limit,max_loss_limit,evaluation_contracts,live_contracts,trailing_drawdown,rules,created_at")
+          .select(PROP_FIRM_SELECT_COLUMNS)
+          .eq("is_active", true)
           .order("account_size", { ascending: true });
         if (error) throw error;
         const normalized = (data || [])
@@ -10865,7 +10324,9 @@ function App() {
       );
       return { packages: [] as PurchasesPackage[], storeProducts: products };
     } catch (error: any) {
-      logger.error(error, { feature: "revenuecat", action: "refresh_catalog" });
+      if (!isExpoGo) {
+        logger.error(error, { feature: "revenuecat", action: "refresh_catalog" });
+      }
       const message = userFacingBillingError(error?.message || "RevenueCat connection failed.");
       setPaywallError(message);
       return { packages: [] as PurchasesPackage[], storeProducts: [] as PurchasesStoreProduct[] };
@@ -10888,7 +10349,9 @@ function App() {
         Purchases.removeCustomerInfoUpdateListener(listener);
       };
     } catch (error: any) {
-      logger.error(error, { feature: "revenuecat", action: "configure" });
+      if (!isExpoGo) {
+        logger.error(error, { feature: "revenuecat", action: "configure" });
+      }
       setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
     }
   }, [refreshRevenueCat, revenueCatConfigured]);
@@ -10915,15 +10378,19 @@ function App() {
       await scheduleDailyPropRiskNotification({ enabled: false, title: "", body: "" });
       return;
     }
-    const templateKey = templateKeyRaw || propTemplates[0]?.key || FALLBACK_PROP_RULES[0].key;
+    const templateKey = resolvePropTemplateKey(templateKeyRaw || "", propTemplates);
     const mode: FirmMode = modeRaw === "funded" ? "funded" : "evaluation";
-    const snapshot = computePropRiskSnapshot({
+    const snapshot = tryComputePropRiskSnapshot({
       trades,
       selectedDate: todayISO(),
       templateKey,
       mode,
       templates: propTemplates,
     });
+    if (!snapshot) {
+      await scheduleDailyPropRiskNotification({ enabled: false, title: "", body: "" });
+      return;
+    }
     await scheduleDailyPropRiskNotification({
       enabled: true,
       title: `YouTrader • ${snapshot.template.label}`,
@@ -11721,7 +11188,18 @@ function App() {
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={[styles.content, styles.propModalScroll]}>
-              <PropFirmRiskCoach trades={trades} selectedDate={propRiskDate} templates={propTemplates} />
+              <PropFirmRiskCoach
+                trades={trades}
+                selectedDate={propRiskDate}
+                templates={propTemplates}
+                isPremium={isPremium}
+                onUpgrade={() =>
+                  purchasePackage(
+                    packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null,
+                    YOU_TRADER_MONTHLY_PRODUCT_ID,
+                  )
+                }
+              />
             </ScrollView>
           </SafeAreaView>
         </Modal>

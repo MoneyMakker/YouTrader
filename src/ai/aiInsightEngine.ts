@@ -73,11 +73,12 @@ type StatsLike = {
 
 type PatternLike = { title: string; detail?: string; tone?: "green" | "purple" | "red" };
 
-type PropContext = {
+export type PropContext = {
   mode?: string;
   status?: string;
   statusColor?: string;
   templateLabel?: string;
+  company?: string;
   dailyRemaining?: number;
   accountRemaining?: number;
   remainingToPass?: number;
@@ -85,6 +86,21 @@ type PropContext = {
   maxLossLimit?: number;
   passProbability?: number;
   bufferPct?: number;
+  accountHealthScore?: number;
+  primaryAction?: string;
+  coachMessage?: string;
+  contractRecommendation?: {
+    currentAvg: number;
+    recommended: number;
+    maxAllowed: number;
+    reduceFrom?: number;
+    reason: string;
+  };
+  payoutReady?: boolean;
+  trailingDrawdownTightening?: boolean;
+  topWarningTitle?: string;
+  topWarningBody?: string;
+  engineWarningIds?: string[];
 };
 
 type RevengeContext = {
@@ -337,7 +353,9 @@ export function buildAiWeeklyReport(input: AiInsightEngineInput): AiWeeklyReport
     (revengeRisk?.severity === "HIGH" ? 12 : revengeRisk?.severity === "MEDIUM" ? 6 : 0),
   );
   const mainRiskWarning =
-    revengeRisk?.severity === "HIGH"
+    prop?.topWarningBody ||
+    prop?.coachMessage ||
+    (revengeRisk?.severity === "HIGH"
       ? "Revenge-trading risk is high. Cooldown beats one more entry."
       : prop?.status === "STOP"
         ? "Prop-firm buffer is breached. Stop trading and protect the account."
@@ -345,15 +363,16 @@ export function buildAiWeeklyReport(input: AiInsightEngineInput): AiWeeklyReport
           ? "Prop-firm buffer is in caution mode. Reduce size."
           : stats.maxDd < 0
             ? `Drawdown reached ${money(stats.maxDd)}. Protect downside first.`
-            : "No urgent risk warning. Keep size stable.";
+            : "No urgent risk warning. Keep size stable.");
   const nextWeekFocus =
-    worstSession && worstSession.pnl < 0
+    prop?.primaryAction ||
+    (worstSession && worstSession.pnl < 0
       ? `Avoid forcing trades in ${worstSession.label}; trade only your best session.`
       : stats.avgWinLoss && stats.avgWinLoss < 1
         ? "Improve average win/loss by cutting failed trades faster."
         : prop?.status === "CAUTION"
           ? "Rebuild daily and account buffer before chasing the target."
-          : "Repeat the cleanest behavior and keep the sample disciplined.";
+          : "Repeat the cleanest behavior and keep the sample disciplined.");
   const takeaways = [
     stats.pnl >= 0 ? `Week finished positive at ${money(stats.pnl)}.` : `Week needs defense at ${money(stats.pnl)}.`,
     bestSession ? `${bestSession.label} is the best session.` : "Best session needs more data.",
@@ -395,11 +414,15 @@ export function buildAiDailyMission(input: AiInsightEngineInput): AiDailyMission
         : "low";
   const stopAmount = Math.max(100, Math.round(Math.abs(prop?.dailyRemaining || stats.avgLoss || 300) * 0.35 / 50) * 50);
   const title =
-    riskLevel === "high"
+    prop?.primaryAction === "Stop Trading Today"
       ? `Stop after -$${stopAmount}`
-      : bestSession
-        ? `Only trade ${bestSession.label}`
-        : "Max 2 trades today";
+      : prop?.contractRecommendation?.reduceFrom && prop.contractRecommendation.recommended > 0
+        ? `Cap at ${prop.contractRecommendation.recommended} contracts`
+        : riskLevel === "high"
+          ? `Stop after -$${stopAmount}`
+          : bestSession
+            ? `Only trade ${bestSession.label}`
+            : "Max 2 trades today";
   const checklist = [
     {
       id: "trade-count",
@@ -788,17 +811,30 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
     const status = prop.status || "CLEAR";
     const passProbability = Math.round(prop.passProbability || 0);
     const priority: AiInsightPriority = status === "STOP" || passProbability < 45 ? "high" : status === "CAUTION" || passProbability < 65 ? "medium" : "low";
-    insights.push(createInsight({
-      category: "prop_firm",
-      priority,
-      title: status === "STOP" ? "Prop account needs protection now" : status === "CAUTION" ? "Buffer is in caution mode" : "Pass path is intact",
-      summary: `${prop.templateLabel || "Selected account"}: ${passProbability}% pass/safety score, ${money(prop.dailyRemaining)} daily buffer, ${money(prop.accountRemaining)} account buffer.`,
-      evidence: [`Status ${status}`, `Daily buffer ${money(prop.dailyRemaining)}`, `Account buffer ${money(prop.accountRemaining)}`, `Remaining to pass ${money(prop.remainingToPass)}`],
-      recommendation: status === "STOP"
+    const propTitle =
+      prop.topWarningTitle ||
+      (status === "STOP" ? "Prop account needs protection now" : status === "CAUTION" ? "Buffer is in caution mode" : "Pass path is intact");
+    const propRecommendation =
+      prop.coachMessage ||
+      (status === "STOP"
         ? "Stop trading today and review the last sequence before the next session."
         : status === "CAUTION"
           ? "Reduce size and trade only one A+ setup until the buffer recovers."
-          : "Protect the buffer; do not increase contracts after one green sequence.",
+          : "Protect the buffer; do not increase contracts after one green sequence.");
+    insights.push(createInsight({
+      category: "prop_firm",
+      priority,
+      title: propTitle,
+      summary: `${prop.company || prop.templateLabel || "Selected account"}: ${passProbability}% pass/safety score, ${money(prop.dailyRemaining)} daily buffer, ${money(prop.accountRemaining)} account buffer.`,
+      evidence: [
+        `Status ${status}`,
+        `Daily buffer ${money(prop.dailyRemaining)}`,
+        `Account buffer ${money(prop.accountRemaining)}`,
+        prop.contractRecommendation
+          ? `Contracts ${prop.contractRecommendation.recommended}/${prop.contractRecommendation.maxAllowed}`
+          : `Remaining to pass ${money(prop.remainingToPass)}`,
+      ],
+      recommendation: propRecommendation,
       visualType: "warning",
       sourceMetrics: ["prop_status", "daily_buffer", "account_buffer", "pass_probability"],
       createdAt,

@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 
@@ -84,7 +85,11 @@ export const REVENUECAT_IOS_PRODUCT_ID =
   process.env.EXPO_PUBLIC_REVENUECAT_IOS_PRODUCT_ID || "youtrader_pro_monthly";
 export const REVENUECAT_IOS_YEARLY_PRODUCT_ID =
   process.env.EXPO_PUBLIC_REVENUECAT_IOS_YEARLY_PRODUCT_ID || "youtrader_pro_yearly";
-export const isRevenueCatConfigured = !!REVENUECAT_API_KEY && Platform.OS !== "web";
+export const isExpoGo =
+  Constants.appOwnership === "expo" || Constants.executionEnvironment === "storeClient";
+
+export const isRevenueCatConfigured =
+  !!REVENUECAT_API_KEY && Platform.OS !== "web" && !isExpoGo;
 
 export const enableCloudSignIn =
   process.env.EXPO_PUBLIC_ENABLE_CLOUD_SIGN_IN === "true";
@@ -118,6 +123,7 @@ export function releaseConfigSummary() {
   return {
     supabase: isSupabaseConfigured,
     revenueCat: isRevenueCatConfigured,
+    expoGo: isExpoGo,
     finnhub: !!(process.env.EXPO_PUBLIC_FINNHUB_API_KEY || "").trim() && !looksLikePlaceholder(process.env.EXPO_PUBLIC_FINNHUB_API_KEY || ""),
     cloudSignIn: enableCloudSignIn,
     nativeApple: enableNativeAppleSignIn,
