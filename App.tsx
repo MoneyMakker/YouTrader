@@ -68,7 +68,7 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
-import { SharePnLCard } from "./src/components/insights/SharePnLCard";
+import { SharePnLCard, SHARE_CARD_HEIGHT, SHARE_CARD_WIDTH } from "./src/components/insights/SharePnLCard";
 import { AchievementShareCard } from "./src/components/insights/shareCard";
 import { alertExportError } from "./src/utils/alertExportError";
 import { parseTradesCsvText } from "./src/utils/importTradesCsv";
@@ -5058,7 +5058,7 @@ function TerminalTraderStatus({
       setShareTarget(item);
       await waitForCard();
       const { shareCapturedView } = await import("./src/components/insights/shareExport");
-      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card", { width: 1080, height: 1920 });
+      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card");
       trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
     } catch (error) {
       alertExportError("Achievement share failed", error);
@@ -5765,7 +5765,7 @@ function AchievementSection({
       setShareTarget(item);
       await waitForCard();
       const { shareCapturedView } = await import("./src/components/insights/shareExport");
-      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card", { width: 1080, height: 1920 });
+      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card");
       trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
     } catch (error) {
       alertExportError("Achievement share failed", error);
@@ -11405,15 +11405,15 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: -1400,
     top: 0,
-    width: 1080,
-    height: 1920,
+    width: SHARE_CARD_WIDTH,
+    height: SHARE_CARD_HEIGHT,
     opacity: 1,
     zIndex: -1,
     pointerEvents: "none",
   },
   achievementShareCaptureFrame: {
-    width: 1080,
-    height: 1920,
+    width: SHARE_CARD_WIDTH,
+    height: SHARE_CARD_HEIGHT,
     backgroundColor: "#000000",
   },
   propTemplateRailCompact: {
