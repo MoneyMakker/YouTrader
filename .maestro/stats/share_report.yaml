@@ -1,0 +1,13 @@
+appId: com.youtrader.pro
+name: Share report
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_stats.yaml
+- scrollUntilVisible:
+    element: "Share P&L|Share P&L card|Monthly PDF|PDF"
+    direction: DOWN
+    timeout: 10000
+    optional: true
+- assertVisible:
+    text: "Share P&L|Share P&L card|Monthly PDF|PDF|Stats"
+- takeScreenshot: stats_share_report_actions

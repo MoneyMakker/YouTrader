@@ -1,0 +1,19 @@
+appId: com.youtrader.pro
+name: Open Achievement detail
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_ai_analytics.yaml
+- scrollUntilVisible:
+    element: "Achievement System"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Achievement System"
+- tapOn:
+    text: "7 Day Journal Streak|10 Trades Respecting Risk|Positive Profit Factor|No Revenge Trades This Week"
+    optional: true
+- assertVisible:
+    text: "Why it matters|Achievement System|Progress|Unlocked|Locked"
+- takeScreenshot: ai_achievement_detail
+- tapOn:
+    text: "Close"
+    optional: true

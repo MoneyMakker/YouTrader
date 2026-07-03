@@ -2,187 +2,156 @@
 
 Last updated: 2026-07-02
 
-YouTrader has Maestro smoke-test readiness for critical App Store flows. These tests are local/device readiness checks and do not require paid Maestro Cloud.
+YouTrader now has an organized Maestro suite under `.maestro/`. Maestro is developer tooling only and is not bundled into the Expo mobile app.
 
-## Current Status
+## Installation Status
 
-- Maestro runtime is not bundled into the Expo app.
-- No npm dependency was added.
-- Smoke flows live in `.maestro/`.
-- npm scripts call a locally installed Maestro CLI:
-  - `npm run test:maestro`
-  - `npm run test:maestro:launch`
-- GitHub Actions does not run Maestro yet because the repo does not have a stable simulator/device job. Keep it manual until simulator setup is deliberate.
+Installed locally:
 
-## Manual Setup
+- Homebrew cask `maestro` for Maestro desktop app.
+- Maestro CLI via official installer at `$HOME/.maestro/bin/maestro`.
+- OpenJDK via Homebrew because Maestro CLI requires Java.
 
-Install Maestro CLI on macOS:
+Use this PATH in terminals that have not loaded the new shell profile yet:
 
 ```bash
-curl -Ls "https://get.maestro.mobile.dev" | bash
+export PATH="/opt/homebrew/opt/openjdk/bin:$HOME/.maestro/bin:$PATH"
 ```
 
-Restart the terminal if needed, then verify:
+Verify:
 
 ```bash
+java -version
 maestro --version
 ```
 
-Start an iOS Simulator or connect a device with YouTrader installed:
+## Folder Structure
 
-```bash
-open -a Simulator
+```text
+.maestro/
+  config.yaml
+  _shared/
+  login/
+  trades/
+  stats/
+  analytics/
+  calendar/
+  news/
+  subscriptions/
+  settings/
+  screenshots/
 ```
 
-Build/install a safe test build first:
+- `_shared/` contains reusable launch/navigation commands.
+- `login/` covers Login and Logout smoke checks.
+- `trades/` covers Create/Edit/Delete trade navigation and no-crash checks.
+- `stats/` covers Statistics and Share Report actions.
+- `analytics/` covers AI Analytics, scroll all sections, Achievement detail, Trading DNA, Daily Mission, Weekly Report.
+- `calendar/` covers Calendar navigation.
+- `news/` covers News navigation.
+- `subscriptions/` covers Pro sandbox entry, Restore Purchases, locked/unlocked Pro surfaces.
+- `settings/` covers Settings navigation and critical labels.
 
-```bash
-npx eas build --profile preview --platform ios
-```
-
-or run locally:
-
-```bash
-npx expo run:ios
-```
-
-## Run Tests
+## Run
 
 Run all flows:
 
 ```bash
-npm run test:maestro
+export PATH="/opt/homebrew/opt/openjdk/bin:$HOME/.maestro/bin:$PATH"
+maestro test .maestro
 ```
 
-Run launch-only smoke:
+Run one area:
 
 ```bash
-npm run test:maestro:launch
+maestro test .maestro/analytics
+maestro test .maestro/trades
 ```
 
-Run one file:
+Run one flow:
 
 ```bash
-maestro test .maestro/03_stats_exports.yaml
+maestro test .maestro/analytics/scroll_sections.yaml
 ```
 
-## Flow Inventory
+## Current Flows
 
-### 1. App Launch
+### Login
 
-File: `.maestro/01_app_launch.yaml`
+- `.maestro/login/login.yaml`
+- `.maestro/login/logout.yaml`
 
-Checks:
+### Trades
 
-- Launch app.
-- Verify main bottom navigation appears.
-- Verify Journal, Stats, Calculator, AI Analytics, News, Calendar, and Settings labels are visible.
+- `.maestro/trades/create_trade.yaml`
+- `.maestro/trades/edit_trade.yaml`
+- `.maestro/trades/delete_trade.yaml`
 
-### 2. Journal
+### Stats
 
-File: `.maestro/02_journal_add_trade.yaml`
+- `.maestro/stats/open_statistics.yaml`
+- `.maestro/stats/share_report.yaml`
 
-Checks:
+### Calendar / News
 
-- Open Journal.
-- Open trade modal from the calendar.
-- Save a simple MES test trade.
-- Verify trade appears.
-- Open trade details/edit.
-- Close edit modal.
+- `.maestro/calendar/open_calendar.yaml`
+- `.maestro/news/open_news.yaml`
 
-Safety:
+### AI Analytics
 
-- The flow does not delete trades automatically.
-- Run only on a simulator, preview build, or test device data.
-- If you need to verify delete manually, open the created trade and tap Delete Trade only on test data.
+- `.maestro/analytics/open_ai_analytics.yaml`
+- `.maestro/analytics/scroll_sections.yaml`
+- `.maestro/analytics/open_achievement_detail.yaml`
+- `.maestro/analytics/open_trading_dna.yaml`
+- `.maestro/analytics/open_daily_mission.yaml`
+- `.maestro/analytics/open_weekly_report.yaml`
 
-### 3. Stats And Exports
+### Subscriptions
 
-File: `.maestro/03_stats_exports.yaml`
+- `.maestro/subscriptions/purchase_pro_sandbox.yaml`
+- `.maestro/subscriptions/restore_purchases.yaml`
+- `.maestro/subscriptions/locked_pro_screens.yaml`
+- `.maestro/subscriptions/unlocked_pro_screens.yaml`
 
-Checks:
+### Settings
 
-- Open Stats.
-- Verify period selector renders.
-- Verify Share P&L card and Monthly PDF actions appear.
-- Scroll to Heatmap and verify it renders.
+- `.maestro/settings/open_settings.yaml`
 
-Safety:
+## Screenshot Policy
 
-- The flow does not complete a real share sheet or Photos write.
-- Manual QA is still required for iOS share sheet, Photos permission, and PDF preview.
+Each flow calls `takeScreenshot` after the main navigation/assertion checkpoint. Maestro stores screenshots in its run output location.
 
-### 4. Paywall
+## Safety
 
-File: `.maestro/04_paywall_locked_feature.yaml`
+- Purchase flow stops before confirming App Store sandbox payment.
+- Delete trade flow is a safe smoke check and does not intentionally confirm destructive deletion.
+- Camera, microphone, Photos, share sheet and real purchase confirmation remain manual iPhone QA unless dedicated test fixtures are added.
+- Flows currently use visible text selectors because production code was not modified to add `testID` selectors.
 
-Checks:
+## Last Local Run
 
-- Open AI Analytics as a free user.
-- Verify locked Pro surface appears.
-- Tap See all features.
-- Verify feature explainer alert appears.
+Command executed:
 
-Safety:
-
-- The flow does not tap purchase buttons.
-- Real RevenueCat sandbox purchase/restore remains manual QA.
-
-### 5. News / AI Analytics
-
-File: `.maestro/05_news_ai_analytics.yaml`
-
-Checks:
-
-- Open News.
-- Wait for readable news or empty state without crash.
-- Open AI Analytics.
-- Verify cached/intelligence or locked state appears without crash.
-
-## CI Safety
-
-Do not add Maestro to GitHub Actions until all of these are true:
-
-- A macOS runner and iOS Simulator strategy are selected.
-- A deterministic preview build is available to install.
-- Test data is isolated from production/private journals.
-- The flow can run without real purchases, real sharing, camera, microphone, or Photos writes.
-- The job is stable locally at least 5 times in a row.
-
-Potential future CI shape:
-
-```yaml
-- name: Install Maestro
-  run: curl -Ls "https://get.maestro.mobile.dev" | bash
-
-- name: Run Maestro smoke tests
-  run: maestro test .maestro
+```bash
+maestro test .maestro
 ```
 
-Keep it manual for now to avoid flaky release blockers.
+Result:
 
-## Known Limitations
+```text
+You have 0 devices connected, which is not enough to run 1 shards.
+```
 
-- Some flows depend on visible text labels because the current app does not expose dedicated `testID` selectors everywhere.
-- Journal add flow assumes the first visible calendar day can open the trade modal.
-- Native permission flows, Photos, camera, microphone, share sheet, and RevenueCat purchases still need real iPhone/TestFlight QA.
-- Maestro does not replace App Store release manual QA.
+The suite is configured and Maestro starts, but a Simulator or physical iPhone with YouTrader installed is required to complete execution.
 
-## Manual Attachment QA
+## Recommended Next Step
 
-Run these on a real iPhone/TestFlight build before release:
+Start Simulator and install a preview build:
 
-1. Create a trade with Upload Photo.
-2. Create a trade with Take Picture.
-3. Create a Pro trade with Record Voice.
-4. Save each trade and confirm the media appears in the trade card.
-5. Force close and reopen the app; confirm the media still appears.
-6. Edit each trade; confirm the existing media remains attached after Save Trade.
-7. With Pro cloud sync enabled, sign in on a second device and run sync; confirm screenshots and voice notes restore from private Supabase Storage.
-8. Temporarily block network during sync; confirm the trade still saves locally and the app reports that cloud sync will retry attachments.
+```bash
+open -a Simulator
+npx expo run:ios
+maestro test .maestro
+```
 
-## References
-
-- Maestro QuickStart: https://docs.maestro.dev/get-started/quickstart
-- Maestro commands: https://docs.maestro.dev/reference/commands-available
+For TestFlight/device QA, install the latest preview/TestFlight build on the iPhone, connect it, then run the same command.

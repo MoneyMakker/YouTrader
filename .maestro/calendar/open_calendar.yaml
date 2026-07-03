@@ -1,0 +1,10 @@
+appId: com.youtrader.pro
+name: Open Calendar
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "Calendar"
+- extendedWaitUntil:
+    visible: "Calendar"
+    timeout: 10000
+- assertVisible: "Calendar"
+- takeScreenshot: calendar_opened

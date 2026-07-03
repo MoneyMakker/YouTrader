@@ -1,0 +1,7 @@
+appId: com.youtrader.pro
+---
+- tapOn: "AI Analytics"
+- extendedWaitUntil:
+    visible: "AI Weekly Report"
+    timeout: 10000
+- assertVisible: "AI Weekly Report"

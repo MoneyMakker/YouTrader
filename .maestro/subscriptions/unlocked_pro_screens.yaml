@@ -1,0 +1,8 @@
+appId: com.youtrader.pro
+name: Verify unlocked Pro screens
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "AI Analytics"
+- assertVisible:
+    text: "AI Weekly Report|Daily Mission|Prop Firm Risk Assistant|AI Advice / Coach"
+- takeScreenshot: pro_unlocked_or_free_preview

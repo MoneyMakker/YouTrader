@@ -1,0 +1,13 @@
+appId: com.youtrader.pro
+name: Open Trading DNA
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_ai_analytics.yaml
+- scrollUntilVisible:
+    element: "Personal Trading DNA"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Personal Trading DNA"
+- assertVisible:
+    text: "Trader Type|Strengths|Weaknesses|Best Conditions|Danger Zones|Personal Rules|Growth Potential"
+- takeScreenshot: ai_trading_dna_detail

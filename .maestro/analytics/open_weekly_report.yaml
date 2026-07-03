@@ -1,0 +1,9 @@
+appId: com.youtrader.pro
+name: Open Weekly Report
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_ai_analytics.yaml
+- assertVisible: "AI Weekly Report"
+- assertVisible:
+    text: "Weekly P&L|Win Rate|Profit Factor|Expectancy|Next week focus"
+- takeScreenshot: ai_weekly_report_detail

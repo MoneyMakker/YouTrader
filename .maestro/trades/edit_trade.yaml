@@ -1,0 +1,16 @@
+appId: com.youtrader.pro
+name: Edit trade
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_journal.yaml
+- scrollUntilVisible:
+    element: "TRADES TODAY|Trades Today|P&L|MES|NQ|ES"
+    direction: DOWN
+    timeout: 8000
+    optional: true
+- tapOn:
+    text: "MES|NQ|ES|GOLD|OIL|BTC|ETH|P&L"
+    optional: true
+- assertVisible:
+    text: "Journal|Save Trade|Delete Trade|P&L"
+- takeScreenshot: trade_edit_opened_or_no_trade

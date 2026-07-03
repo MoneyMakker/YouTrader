@@ -239,3 +239,10 @@ Possible later extraction targets:
 - Added `docs/automation-stack.md` documenting n8n, Windmill, Activepieces, and Huginn as server-side/local automation options only; no heavy mobile runtime dependencies were added.
 - Phase 3/4 complete: AI Weekly Report now has a visual score card, weekly P&L mini chart, best/worst blocks, three takeaways, and next-week focus. Daily Mission now generates one prop-firm-aware mission with checklist progress, completed/failed/skipped state persisted in AsyncStorage, related stats, and a clear reason.
 - Phase 5-9 complete: AI Analytics now has behavior-based achievements with detail modal/progress, Personal Trading DNA, anonymous benchmark placeholder architecture, real improvement timeline, and reusable visual evidence components (`AIInsightCard`, `EvidenceChart`, `ImprovementCard`, `BenchmarkCard`, `TradingDNACard`, `RiskMeter`, `WarningCard`, `RuleImpactCard`, `SessionHeatmap`, `CalendarImpact`, `MiniPerformanceChart`). `expo-doctor` still reports the existing non-CNG warning that native folders are present while app.json contains native config fields; do not change this without a release build review.
+
+## Maestro QA Checkpoint
+
+- Maestro integrated under `.maestro/` with organized suites for login, trades, stats, analytics, calendar, news, subscriptions, and settings.
+- Reusable commands live in `.maestro/_shared/`; suite inclusion patterns live in `.maestro/config.yaml`, so `maestro test .maestro` runs nested flows.
+- Maestro CLI installed at `$HOME/.maestro/bin/maestro`; OpenJDK installed via Homebrew. Use `export PATH="/opt/homebrew/opt/openjdk/bin:$HOME/.maestro/bin:$PATH"` in terminals where PATH has not reloaded.
+- Local `maestro test .maestro` reached device precondition and stopped because 0 devices/simulators were connected. Start Simulator or connect iPhone with YouTrader installed before rerunning.

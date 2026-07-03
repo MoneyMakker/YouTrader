@@ -1,0 +1,13 @@
+appId: com.youtrader.pro
+name: Open Daily Mission
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_ai_analytics.yaml
+- scrollUntilVisible:
+    element: "Daily Mission"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Daily Mission"
+- assertVisible:
+    text: "View related stats|COMPLETED|FAILED|SKIPPED|LIVE|DONE"
+- takeScreenshot: ai_daily_mission_detail

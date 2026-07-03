@@ -1,0 +1,7 @@
+appId: com.youtrader.pro
+name: Open AI Analytics
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_ai_analytics.yaml
+- assertVisible: "AI Weekly Report"
+- takeScreenshot: ai_analytics_opened

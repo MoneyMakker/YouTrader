@@ -1,0 +1,10 @@
+appId: com.youtrader.pro
+name: Open News
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "News"
+- extendedWaitUntil:
+    visible: "News"
+    timeout: 10000
+- assertVisible: "News"
+- takeScreenshot: news_opened

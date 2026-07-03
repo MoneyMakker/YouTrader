@@ -1,0 +1,12 @@
+appId: com.youtrader.pro
+name: Logout smoke
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- scrollUntilVisible:
+    element: "Sign out"
+    direction: DOWN
+    timeout: 6000
+    optional: true
+- takeScreenshot: logout_available_or_not_signed_in

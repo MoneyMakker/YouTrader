@@ -1,0 +1,8 @@
+appId: com.youtrader.pro
+name: Open Statistics
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_stats.yaml
+- assertVisible:
+    text: "Stats|Stats Dashboard|Trading Radar|Heatmap"
+- takeScreenshot: stats_opened

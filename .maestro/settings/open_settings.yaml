@@ -1,0 +1,9 @@
+appId: com.youtrader.pro
+name: Open Settings
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- assertVisible:
+    text: "Restore|Pro|Privacy|Terms|Language|Notifications|Settings"
+- takeScreenshot: settings_opened

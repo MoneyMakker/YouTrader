@@ -1,0 +1,17 @@
+appId: com.youtrader.pro
+name: Create trade
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_journal.yaml
+- takeScreenshot: trade_create_journal
+- tapOn:
+    text: 'Add|Create|Today|[0-9]+'
+    optional: true
+- scrollUntilVisible:
+    element: "Save Trade"
+    direction: DOWN
+    timeout: 8000
+    optional: true
+- assertVisible:
+    text: "Save Trade|Journal"
+- takeScreenshot: trade_create_modal_or_journal

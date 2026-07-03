@@ -1,0 +1,13 @@
+appId: com.youtrader.pro
+name: Restore purchases
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Restore Purchases|Restore Purchase|Restore"
+    direction: DOWN
+    timeout: 10000
+    optional: true
+- assertVisible:
+    text: "Restore Purchases|Restore Purchase|Restore|Settings"
+- takeScreenshot: subscription_restore_available

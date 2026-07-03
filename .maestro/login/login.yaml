@@ -1,0 +1,13 @@
+appId: com.youtrader.pro
+name: Login smoke
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- takeScreenshot: login_settings_entry
+- scrollUntilVisible:
+    element: "Sign in"
+    direction: DOWN
+    timeout: 6000
+    optional: true
+- takeScreenshot: login_available_or_signed_in

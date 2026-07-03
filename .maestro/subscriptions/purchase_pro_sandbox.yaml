@@ -1,0 +1,14 @@
+appId: com.youtrader.pro
+name: Purchase Pro sandbox smoke
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Upgrade Monthly|Upgrade Yearly|Upgrade to Pro|Start 3-Day Free Pro"
+    direction: DOWN
+    timeout: 10000
+    optional: true
+- assertVisible:
+    text: "Upgrade Monthly|Upgrade Yearly|Upgrade to Pro|Pro"
+- takeScreenshot: subscription_purchase_sandbox_entry
+# Intentionally stops before confirming App Store sandbox purchase.

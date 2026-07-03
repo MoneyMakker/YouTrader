@@ -1,0 +1,7 @@
+appId: com.youtrader.pro
+---
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- assertVisible: "Settings"

@@ -1,0 +1,7 @@
+appId: com.youtrader.pro
+---
+- tapOn: "Journal"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 10000
+- assertVisible: "Journal"

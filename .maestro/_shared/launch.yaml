@@ -1,0 +1,12 @@
+appId: com.youtrader.pro
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 15000
+- assertVisible: "Journal"
+- assertVisible: "Stats"
+- assertVisible: "AI Analytics"
+- assertVisible: "News"
+- assertVisible: "Calendar"
+- assertVisible: "Settings"

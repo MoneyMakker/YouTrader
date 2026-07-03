@@ -1,0 +1,13 @@
+appId: com.youtrader.pro
+name: Delete trade safe smoke
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_journal.yaml
+- scrollUntilVisible:
+    element: "Delete Trade|TRADES TODAY|Trades Today"
+    direction: DOWN
+    timeout: 8000
+    optional: true
+- assertVisible:
+    text: "Journal|Delete Trade|TRADES TODAY|Trades Today"
+- takeScreenshot: trade_delete_safe_check

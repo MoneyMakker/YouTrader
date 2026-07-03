@@ -1,0 +1,49 @@
+appId: com.youtrader.pro
+name: Scroll AI Analytics sections
+---
+- runFlow: ../_shared/launch.yaml
+- runFlow: ../_shared/open_ai_analytics.yaml
+- assertVisible: "AI Weekly Report"
+- takeScreenshot: ai_weekly_report
+- scrollUntilVisible:
+    element: "Daily Mission"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Daily Mission"
+- takeScreenshot: ai_daily_mission
+- scrollUntilVisible:
+    element: "Achievement System"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Achievement System"
+- takeScreenshot: ai_achievements
+- scrollUntilVisible:
+    element: "Personal Trading DNA"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Personal Trading DNA"
+- takeScreenshot: ai_trading_dna
+- scrollUntilVisible:
+    element: "Compare Yourself"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Compare Yourself"
+- takeScreenshot: ai_compare_yourself
+- scrollUntilVisible:
+    element: "You Are Improving"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "You Are Improving"
+- takeScreenshot: ai_improving
+- scrollUntilVisible:
+    element: "AI Advice / Coach"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "AI Advice / Coach"
+- takeScreenshot: ai_advice_coach
+- scrollUntilVisible:
+    element: "Prop Firm Risk Assistant"
+    direction: DOWN
+    timeout: 8000
+- assertVisible: "Prop Firm Risk Assistant"
+- takeScreenshot: ai_prop_firm_risk

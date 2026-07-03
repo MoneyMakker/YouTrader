@@ -1,10 +1,5 @@
 appId: com.youtrader.pro
 ---
-- launchApp:
-    clearState: false
-- extendedWaitUntil:
-    visible: "Journal"
-    timeout: 20000
 - assertVisible: "Journal"
 - assertVisible: "Stats"
 - assertVisible: "Calculator"
@@ -12,4 +7,3 @@ appId: com.youtrader.pro
 - assertVisible: "News"
 - assertVisible: "Calendar"
 - assertVisible: "Settings"
-

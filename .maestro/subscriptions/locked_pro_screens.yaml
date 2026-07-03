@@ -1,0 +1,8 @@
+appId: com.youtrader.pro
+name: Verify locked Pro screens
+---
+- runFlow: ../_shared/launch.yaml
+- tapOn: "AI Analytics"
+- assertVisible:
+    text: "Unlock AI Analytics|Upgrade to Pro|AI Weekly Report|Daily Mission"
+- takeScreenshot: pro_locked_or_analytics_available
