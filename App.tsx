@@ -141,7 +141,23 @@ import { buildUnifiedTradeAnalytics, drawdownControlFromMetrics, infinitySafeMet
 import { calculatePassProbability, type PassProbabilityResult } from "./src/ai/passProbabilityEngine";
 import { detectRevengeTrading, type RevengeTradingResult } from "./src/ai/revengeTradingDetector";
 import { detectHiddenLeaks, type HiddenLeak } from "./src/ai/hiddenLeakDetector";
-import { buildAiInsights, type AiInsight } from "./src/ai/aiInsightEngine";
+import {
+  buildAiDailyMission,
+  buildAiAchievements,
+  buildBenchmarkProfile,
+  buildAiInsights,
+  buildImprovementTimeline,
+  buildTradingDNAProfile,
+  buildAiWeeklyReport,
+  type AiDailyMission,
+  type AiDailyMissionStatus,
+  type AiBenchmarkProfile,
+  type AiImprovementTimeline,
+  type AiInsight,
+  type AiTradingAchievement,
+  type AiTradingDNAProfile,
+  type AiWeeklyReport,
+} from "./src/ai/aiInsightEngine";
 
 WebBrowser.maybeCompleteAuthSession();
 initializeMonitoring();
@@ -7500,6 +7516,354 @@ function UnifiedAiInsightSection({
   );
 }
 
+function WeeklyPnlMiniChart({ points }: { points: AiWeeklyReport["chartPoints"] }) {
+  const width = 284;
+  const height = 92;
+  const data = points.length ? points : [{ label: "", value: 0, cumulative: 0 }];
+  const values = data.map((point) => point.cumulative);
+  const min = Math.min(0, ...values);
+  const max = Math.max(0, ...values);
+  const range = Math.max(1, max - min);
+  const coords = data.map((point, index) => ({
+    ...point,
+    x: data.length === 1 ? width / 2 : (index / (data.length - 1)) * width,
+    y: height - ((point.cumulative - min) / range) * height,
+  }));
+  const path = coords.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const zeroY = height - ((0 - min) / range) * height;
+  const positive = (coords[coords.length - 1]?.cumulative || 0) >= 0;
+  return (
+    <View style={{ marginTop: 14, borderRadius: 22, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.035)", padding: 12 }}>
+      <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+        <Line x1="0" y1={zeroY} x2={width} y2={zeroY} stroke="rgba(255,255,255,0.16)" strokeWidth="1" />
+        <Path d={path || `M0 ${height / 2} L${width} ${height / 2}`} stroke={positive ? C.green : C.red} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        {coords.map((point, index) => (
+          <Circle key={`${point.label}-${index}`} cx={point.x} cy={point.y} r="3.5" fill={point.cumulative >= 0 ? C.green : C.red} />
+        ))}
+      </Svg>
+      <Text style={[styles.terminalSmallLabel, { marginTop: 8 }]}>{points.length > 1 ? "Weekly cumulative P&L" : "Add more trades to build the weekly curve"}</Text>
+    </View>
+  );
+}
+
+function AIWeeklyReportCard({ report }: { report: AiWeeklyReport }) {
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSectionTitle}>AI Weekly Report</Text>
+          <Text style={styles.terminalSub}>A compact weekly read on P&L, risk, behavior and next focus.</Text>
+        </View>
+        <AppleRing label={report.grade} value={report.score} display={`${report.score}`} size={104} color={report.score >= 68 ? C.green : report.score >= 52 ? C.purple : C.red} />
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Weekly P&L", value: moneyCompact(report.pnl), tone: report.pnl >= 0 ? "green" : "red" },
+          { label: "Win Rate", value: `${report.winRate.toFixed(0)}%`, tone: report.winRate >= 50 ? "green" : "purple" },
+          { label: "Profit Factor", value: report.profitFactor.toFixed(2), tone: report.profitFactor >= 1 ? "green" : "red" },
+          { label: "Expectancy", value: moneyCompact(report.expectancy), tone: report.expectancy >= 0 ? "green" : "red" },
+          { label: "Trades", value: String(report.tradeCount), tone: "grey" },
+        ]}
+      />
+      <WeeklyPnlMiniChart points={report.chartPoints} />
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+        <View style={{ flex: 1, borderRadius: 18, borderWidth: 1, borderColor: "rgba(150,255,0,0.18)", padding: 12, backgroundColor: "rgba(150,255,0,0.045)" }}>
+          <Text style={styles.terminalSmallLabel}>Best</Text>
+          <Text style={styles.monthlyTimelineValue}>{report.bestDay}</Text>
+          <Text style={styles.terminalSub}>{report.bestSession}</Text>
+          <Text style={styles.terminalSub}>{report.bestSymbol}</Text>
+        </View>
+        <View style={{ flex: 1, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,69,105,0.22)", padding: 12, backgroundColor: "rgba(255,69,105,0.045)" }}>
+          <Text style={styles.terminalSmallLabel}>Worst</Text>
+          <Text style={styles.monthlyTimelineValue}>{report.worstDay}</Text>
+          <Text style={styles.terminalSub}>{report.worstSession}</Text>
+          <Text style={styles.terminalSub}>{report.biggestMistake}</Text>
+        </View>
+      </View>
+      <View style={{ gap: 10, marginTop: 12 }}>
+        <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(177,66,255,0.22)", padding: 12, backgroundColor: "rgba(177,66,255,0.055)" }}>
+          <Text style={styles.terminalSmallLabel}>Best Behavior</Text>
+          <Text style={styles.monthlyTimelineValue}>{report.bestBehavior}</Text>
+        </View>
+        <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", padding: 12, backgroundColor: "rgba(255,255,255,0.035)" }}>
+          <Text style={styles.terminalSmallLabel}>Main Risk Warning</Text>
+          <Text style={styles.monthlyTimelineValue}>{report.mainRiskWarning}</Text>
+        </View>
+      </View>
+      <Text style={[styles.terminalSmallLabel, { marginTop: 14 }]}>3 AI Takeaways</Text>
+      <BulletList items={report.takeaways.slice(0, 3)} />
+      <View style={styles.propCoachAdviceCard}>
+        <Text style={styles.propCoachHeadline}>Next week focus</Text>
+        <Text style={styles.terminalSub}>{report.nextWeekFocus}</Text>
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+function DailyMissionCard({
+  mission,
+  status,
+  checked,
+  onToggle,
+  onStatusChange,
+}: {
+  mission: AiDailyMission;
+  status: AiDailyMissionStatus;
+  checked: Record<string, boolean>;
+  onToggle: (id: string) => void;
+  onStatusChange: (status: AiDailyMissionStatus) => void;
+}) {
+  const completed = mission.checklist.filter((item) => checked[item.id]).length;
+  const progress = mission.checklist.length ? Math.round((completed / mission.checklist.length) * 100) : 0;
+  const tone = mission.riskLevel === "high" ? C.red : mission.riskLevel === "medium" ? C.purple : C.green;
+  const statusLabel = status === "completed" ? "DONE" : status === "failed" ? "FAIL" : status === "skipped" ? "SKIP" : "LIVE";
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSectionTitle}>Daily Mission</Text>
+          <Text style={[styles.propCoachHeadline, { color: tone }]}>{mission.title}</Text>
+          <Text style={styles.terminalSub}>{mission.reason}</Text>
+        </View>
+        <AppleRing label={statusLabel} value={status === "completed" ? 100 : progress} display={`${status === "completed" ? 100 : progress}%`} size={104} color={status === "failed" ? C.red : status === "skipped" ? C.sub : tone} />
+      </View>
+      <View style={{ gap: 10, marginTop: 14 }}>
+        {mission.checklist.map((item) => {
+          const active = !!checked[item.id];
+          return (
+            <Pressable key={item.id} onPress={() => onToggle(item.id)} style={{ flexDirection: "row", gap: 10, alignItems: "center", borderWidth: 1, borderColor: active ? "rgba(150,255,0,0.34)" : "rgba(255,255,255,0.10)", backgroundColor: active ? "rgba(150,255,0,0.07)" : "rgba(255,255,255,0.035)", borderRadius: 16, padding: 12 }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: active ? C.green : C.sub, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: active ? C.green : "transparent", fontWeight: "900" }}>✓</Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.monthlyTimelineValue}>{item.text}</Text>
+                <Text style={styles.terminalSmallLabel}>Related: {item.sourceMetric.replace("_", " ")}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Pressable onPress={() => Alert.alert("Related stats", mission.relatedStats.join("\n"))} style={{ marginTop: 12, borderRadius: 999, borderWidth: 1, borderColor: "rgba(177,66,255,0.28)", paddingHorizontal: 14, paddingVertical: 10, alignSelf: "flex-start" }}>
+        <Text style={[styles.terminalSmallLabel, { color: C.purple }]}>View related stats</Text>
+      </Pressable>
+      <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
+        {(["completed", "failed", "skipped"] as AiDailyMissionStatus[]).map((item) => (
+          <Pressable key={item} onPress={() => onStatusChange(item)} style={{ flex: 1, borderRadius: 999, paddingVertical: 11, alignItems: "center", borderWidth: 1, borderColor: status === item ? tone : "rgba(255,255,255,0.12)", backgroundColor: status === item ? "rgba(177,66,255,0.12)" : "rgba(255,255,255,0.035)" }}>
+            <Text style={[styles.terminalSmallLabel, { color: status === item ? tone : C.sub }]}>{item.toUpperCase()}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+function MiniPerformanceChart({ values }: { values: number[] }) {
+  const width = 260;
+  const height = 72;
+  const data = values.length ? values : [0];
+  const min = Math.min(0, ...data);
+  const max = Math.max(0, ...data);
+  const range = Math.max(1, max - min);
+  const coords = data.map((value, index) => ({
+    x: data.length === 1 ? width / 2 : (index / (data.length - 1)) * width,
+    y: height - ((value - min) / range) * height,
+    value,
+  }));
+  const path = coords.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const positive = data[data.length - 1] >= data[0];
+  return (
+    <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+      <Line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <Path d={path || `M0 ${height / 2} L${width} ${height / 2}`} stroke={positive ? C.green : C.red} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+function RiskMeter({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(value)));
+  const color = danger ? C.red : clamped >= 70 ? C.green : clamped >= 45 ? C.purple : C.red;
+  return (
+    <View style={{ gap: 7 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
+        <Text style={styles.terminalSmallLabel}>{label}</Text>
+        <Text style={[styles.terminalSmallLabel, { color }]}>{clamped}%</Text>
+      </View>
+      <View style={{ height: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+        <View style={{ width: `${clamped}%`, height: 8, borderRadius: 999, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
+
+function EvidenceChart({ label, values }: { label: string; values: { name: string; value: number; tone?: "green" | "red" | "purple" }[] }) {
+  const max = Math.max(1, ...values.map((item) => Math.abs(item.value)));
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={styles.terminalSmallLabel}>{label}</Text>
+      {values.map((item) => {
+        const color = item.tone === "red" ? C.red : item.tone === "purple" ? C.purple : item.value >= 0 ? C.green : C.red;
+        return (
+          <View key={item.name} style={{ gap: 5 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
+              <Text style={styles.terminalSub}>{item.name}</Text>
+              <Text style={[styles.terminalSub, { color }]}>{Number.isInteger(item.value) ? item.value : item.value.toFixed(1)}</Text>
+            </View>
+            <View style={{ height: 7, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+              <View style={{ width: `${Math.max(6, Math.min(100, (Math.abs(item.value) / max) * 100))}%`, height: 7, borderRadius: 999, backgroundColor: color }} />
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function WarningCard({ title, body }: { title: string; body: string }) {
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,69,105,0.25)", backgroundColor: "rgba(255,69,105,0.06)", padding: 13, gap: 6 }}>
+      <Text style={[styles.terminalSmallLabel, { color: C.red }]}>{title}</Text>
+      <Text style={styles.terminalSub}>{body}</Text>
+    </View>
+  );
+}
+
+function RuleImpactCard({ title, rule, evidence }: { title: string; rule: string; evidence: string }) {
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(177,66,255,0.24)", backgroundColor: "rgba(177,66,255,0.055)", padding: 13, gap: 6 }}>
+      <Text style={styles.terminalSmallLabel}>{title}</Text>
+      <Text style={styles.propCoachHeadline}>{rule}</Text>
+      <Text style={styles.terminalSub}>{evidence}</Text>
+    </View>
+  );
+}
+
+function AIInsightCard({ insight }: { insight: AiInsight }) {
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 8 }}>
+      <Text style={styles.terminalSmallLabel}>{insight.category.toUpperCase()} · {insight.priority.toUpperCase()}</Text>
+      <Text style={styles.propCoachHeadline}>{insight.title}</Text>
+      <EvidenceChart label="Evidence" values={insight.evidence.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: insight.priority === "high" ? "red" : "purple" }))} />
+      <RuleImpactCard title="Recommendation" rule={insight.recommendation} evidence={insight.sourceMetrics.join(" · ")} />
+    </View>
+  );
+}
+
+function AchievementDetailModal({ achievement, onClose }: { achievement: AiTradingAchievement | null; onClose: () => void }) {
+  if (!achievement) return null;
+  const pctDone = Math.round((achievement.progress / Math.max(1, achievement.target)) * 100);
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.72)", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <View style={[styles.terminalCard, { width: "100%", maxWidth: 420, gap: 14 }]}>
+          <Text style={styles.terminalSmallLabel}>{achievement.rarity.toUpperCase()} · {achievement.category.toUpperCase()}</Text>
+          <Text style={styles.terminalSectionTitle}>{achievement.icon} {achievement.title}</Text>
+          <RiskMeter label={achievement.unlocked ? "Unlocked" : "Progress"} value={pctDone} />
+          <Text style={styles.terminalSub}>{achievement.explanation}</Text>
+          <WarningCard title="Why it matters" body={achievement.whyItMatters} />
+          <EvidenceChart label="Connected statistics" values={achievement.connectedStats.map((item, index) => ({ name: item, value: achievement.connectedStats.length - index, tone: achievement.unlocked ? "green" : "purple" }))} />
+          <Pressable onPress={onClose} style={styles.primaryBig}>
+            <Text style={styles.primaryText}>Close</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function AchievementSystemCard({ achievements }: { achievements: AiTradingAchievement[] }) {
+  const [selected, setSelected] = useState<AiTradingAchievement | null>(null);
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>Achievement System</Text>
+      <Text style={styles.terminalSub}>Behavior-based milestones. No fake rankings, no vanity badges.</Text>
+      <View style={{ gap: 10, marginTop: 14 }}>
+        {achievements.map((achievement) => {
+          const pctDone = Math.round((achievement.progress / Math.max(1, achievement.target)) * 100);
+          return (
+            <Pressable key={achievement.id} onPress={() => setSelected(achievement)} style={{ borderRadius: 18, borderWidth: 1, borderColor: achievement.unlocked ? "rgba(150,255,0,0.30)" : "rgba(255,255,255,0.10)", backgroundColor: achievement.unlocked ? "rgba(150,255,0,0.055)" : "rgba(255,255,255,0.035)", padding: 13, gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Text style={[styles.propCoachHeadline, { color: achievement.unlocked ? C.green : C.sub }]}>{achievement.icon}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.monthlyTimelineValue}>{achievement.title}</Text>
+                  <Text style={styles.terminalSmallLabel}>{achievement.rarity.toUpperCase()} · {achievement.unlocked ? "UNLOCKED" : "LOCKED"}</Text>
+                </View>
+                <Text style={[styles.terminalSmallLabel, { color: achievement.unlocked ? C.green : C.purple }]}>{pctDone}%</Text>
+              </View>
+              <RiskMeter label={`${achievement.progress.toFixed(0)} / ${achievement.target}`} value={pctDone} />
+            </Pressable>
+          );
+        })}
+      </View>
+      <AchievementDetailModal achievement={selected} onClose={() => setSelected(null)} />
+    </TerminalGlassCard>
+  );
+}
+
+function TradingDNACard({ profile }: { profile: AiTradingDNAProfile }) {
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>Personal Trading DNA</Text>
+      <Text style={styles.terminalSub}>{profile.summary}</Text>
+      <View style={{ gap: 10, marginTop: 14 }}>
+        <RuleImpactCard title="Trader Type" rule={profile.traderType} evidence={profile.enoughData ? "Built from your journal sample." : "Requires at least 10 trades."} />
+        <MetricPillRow items={[
+          { label: "Best Symbol", value: profile.metrics.bestSymbol, tone: "purple" },
+          { label: "Best Session", value: profile.metrics.bestSession, tone: "purple" },
+          { label: "Avg RR", value: profile.metrics.averageRR.toFixed(2), tone: profile.metrics.averageRR >= 1 ? "green" : "grey" },
+          { label: "Hold", value: profile.metrics.averageHoldingMinutes ? `${profile.metrics.averageHoldingMinutes}m` : "N/A", tone: "grey" },
+        ]} />
+        <EvidenceChart label="Strengths" values={profile.strengths.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: "green" }))} />
+        <EvidenceChart label="Weaknesses" values={profile.weaknesses.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: "red" }))} />
+        <RuleImpactCard title="Best Conditions" rule={profile.bestConditions.join(" · ")} evidence={profile.metrics.bestSetup} />
+        <WarningCard title="Danger Zones" body={profile.dangerZones.join(" · ")} />
+        <RuleImpactCard title="Personal Rules" rule={profile.personalRules.join(" · ")} evidence={profile.growthPotential} />
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+function BenchmarkCard({ benchmark }: { benchmark: AiBenchmarkProfile }) {
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>Compare Yourself</Text>
+      <Text style={styles.terminalSub}>Anonymous benchmark architecture. User data stays private.</Text>
+      {!benchmark.available ? (
+        <WarningCard title="Benchmark locked" body={benchmark.message} />
+      ) : (
+        <EvidenceChart label="Percentiles" values={Object.entries(benchmark.percentiles).map(([name, value]) => ({ name, value: value || 0, tone: "purple" }))} />
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+function ImprovementCard({ timeline }: { timeline: AiImprovementTimeline }) {
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSectionTitle}>You Are Improving</Text>
+      <Text style={styles.terminalSub}>Real comparison only. If performance declines, the card says so.</Text>
+      <View style={{ gap: 10, marginTop: 14 }}>
+        {timeline.windows.map((window) => (
+          <View key={window.label} style={{ borderRadius: 18, borderWidth: 1, borderColor: window.improved ? "rgba(150,255,0,0.22)" : "rgba(255,69,105,0.22)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 8 }}>
+            <Text style={styles.monthlyTimelineValue}>{window.label}</Text>
+            <MiniPerformanceChart values={[window.previous, window.current]} />
+            <Text style={[styles.terminalSmallLabel, { color: window.improved ? C.green : C.red }]}>{window.improved ? "+" : ""}{window.delta}</Text>
+            <Text style={styles.terminalSub}>{window.explanation}</Text>
+          </View>
+        ))}
+        <RuleImpactCard title="Next improvement" rule={timeline.nextFocus} evidence={[...timeline.whatImproved, ...timeline.whatDeclined].slice(0, 3).join(" · ") || "Need more comparable history."} />
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+function SessionHeatmap({ stats }: { stats: ReturnType<typeof calcStats> }) {
+  return <EvidenceChart label="Session Impact" values={stats.session.slice(0, 3).map((row) => ({ name: row.label, value: row.pnl, tone: row.pnl >= 0 ? "green" : "red" }))} />;
+}
+
+function CalendarImpact({ stats }: { stats: ReturnType<typeof calcStats> }) {
+  return <EvidenceChart label="Calendar Impact" values={stats.weekday.slice(0, 3).map((row) => ({ name: row.label, value: row.pnl, tone: row.pnl >= 0 ? "green" : "red" }))} />;
+}
+
 function PropFirmCoachSection({
   templates,
   value,
@@ -7785,6 +8149,8 @@ function AiAnalysisScreen({
     journalSummary: false,
     dailyChallenge: false,
   });
+  const [dailyMissionStatus, setDailyMissionStatus] = useState<AiDailyMissionStatus>("active");
+  const [dailyMissionChecked, setDailyMissionChecked] = useState<Record<string, boolean>>({});
   const safeAnalysisTemplates = propTemplates.length ? propTemplates : FALLBACK_PROP_RULES;
   const [analysisTemplateKey, setAnalysisTemplateKey] = useState(FALLBACK_PROP_RULES[0].key);
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
@@ -7810,9 +8176,12 @@ function AiAnalysisScreen({
   }, []);
 
   const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
+  const weekTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "week"));
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
+  const weekStats = useMemo(() => calcStats(weekTrades), [weekTrades]);
   const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
   const patterns = useMemo(() => detectTradingPatterns(periodTrades), [periodTrades]);
+  const weekPatterns = useMemo(() => detectTradingPatterns(weekTrades), [weekTrades]);
   const activeTemplate =
     safeAnalysisTemplates.find((template) => template.key === analysisTemplateKey) ||
     safeAnalysisTemplates[0] ||
@@ -7917,14 +8286,117 @@ function AiAnalysisScreen({
       }),
     [passProbability.probability, patterns, periodStats, periodTrades, propMode, revengeTrading, selectedPropSnapshot],
   );
-  const weeklyReportInsights = unifiedInsights.primary.slice(0, 3);
-  const dailyMissionInsights = unifiedInsights.insights.filter((insight) => insight.priority === "high").slice(0, 1);
-  const dnaInsights = [
-    ...unifiedInsights.groups.discipline,
-    ...unifiedInsights.groups.timing,
-    ...unifiedInsights.groups.consistency,
-  ].slice(0, 3);
-  const comparisonInsights = unifiedInsights.insights.filter((insight) => insight.visualType === "comparison").slice(0, 2);
+  const weeklyReport = useMemo(
+    () =>
+      buildAiWeeklyReport({
+        trades: weekTrades,
+        stats: weekStats,
+        prop: {
+          mode: propMode,
+          status: selectedPropSnapshot.status,
+          templateLabel: selectedPropSnapshot.template.label,
+          dailyRemaining: selectedPropSnapshot.dailyRemaining,
+          accountRemaining: selectedPropSnapshot.accountRemaining,
+          remainingToPass: selectedPropSnapshot.remainingToPass,
+          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
+          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
+          passProbability: passProbability.probability,
+          bufferPct: selectedPropSnapshot.bufferPct,
+        },
+        patterns: weekPatterns,
+        revengeRisk: revengeTrading,
+        createdAt: `${selectedDate}T00:00:00.000Z`,
+      }),
+    [passProbability.probability, propMode, revengeTrading, selectedDate, selectedPropSnapshot, weekPatterns, weekStats, weekTrades],
+  );
+  const dailyMission = useMemo(
+    () =>
+      buildAiDailyMission({
+        trades: periodTrades,
+        stats: periodStats,
+        prop: {
+          mode: propMode,
+          status: selectedPropSnapshot.status,
+          templateLabel: selectedPropSnapshot.template.label,
+          dailyRemaining: selectedPropSnapshot.dailyRemaining,
+          accountRemaining: selectedPropSnapshot.accountRemaining,
+          remainingToPass: selectedPropSnapshot.remainingToPass,
+          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
+          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
+          passProbability: passProbability.probability,
+          bufferPct: selectedPropSnapshot.bufferPct,
+        },
+        patterns,
+        revengeRisk: revengeTrading,
+        createdAt: `${selectedDate}T00:00:00.000Z`,
+      }),
+    [passProbability.probability, patterns, periodStats, periodTrades, propMode, revengeTrading, selectedDate, selectedPropSnapshot],
+  );
+  const aiAchievements = useMemo(
+    () =>
+      buildAiAchievements({
+        trades: periodTrades,
+        stats: periodStats,
+        prop: {
+          mode: propMode,
+          status: selectedPropSnapshot.status,
+          dailyRemaining: selectedPropSnapshot.dailyRemaining,
+          accountRemaining: selectedPropSnapshot.accountRemaining,
+          remainingToPass: selectedPropSnapshot.remainingToPass,
+          dailyLossLimit: selectedPropSnapshot.template.dailyLossLimit,
+          maxLossLimit: selectedPropSnapshot.template.maxLossLimit,
+          passProbability: passProbability.probability,
+          bufferPct: selectedPropSnapshot.bufferPct,
+        },
+        patterns,
+        revengeRisk: revengeTrading,
+      }),
+    [passProbability.probability, patterns, periodStats, periodTrades, propMode, revengeTrading, selectedPropSnapshot],
+  );
+  const tradingDna = useMemo(
+    () => buildTradingDNAProfile({ trades: periodTrades, stats: periodStats, patterns, revengeRisk: revengeTrading }),
+    [patterns, periodStats, periodTrades, revengeTrading],
+  );
+  const benchmarkProfile = useMemo(() => buildBenchmarkProfile(), []);
+  const improvementTimeline = useMemo(
+    () => buildImprovementTimeline({ trades, stats: periodStats, patterns, revengeRisk: revengeTrading, createdAt: `${selectedDate}T00:00:00.000Z` }),
+    [patterns, periodStats, revengeTrading, selectedDate, trades],
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(`ai-daily-mission-v1-${dailyMission.id}`).then((raw) => {
+      if (!mounted) return;
+      if (!raw) {
+        setDailyMissionStatus("active");
+        setDailyMissionChecked({});
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw) as { status?: AiDailyMissionStatus; checked?: Record<string, boolean> };
+        setDailyMissionStatus(parsed.status || "active");
+        setDailyMissionChecked(parsed.checked || {});
+      } catch {
+        setDailyMissionStatus("active");
+        setDailyMissionChecked({});
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [dailyMission.id]);
+
+  const persistDailyMission = useCallback((status: AiDailyMissionStatus, checked: Record<string, boolean>) => {
+    setDailyMissionStatus(status);
+    setDailyMissionChecked(checked);
+    AsyncStorage.setItem(`ai-daily-mission-v1-${dailyMission.id}`, JSON.stringify({ status, checked })).catch(() => {});
+  }, [dailyMission.id]);
+
+  const toggleDailyMissionItem = useCallback((id: string) => {
+    const next = { ...dailyMissionChecked, [id]: !dailyMissionChecked[id] };
+    const done = dailyMission.checklist.length > 0 && dailyMission.checklist.every((item) => next[item.id]);
+    persistDailyMission(done ? "completed" : dailyMissionStatus === "completed" ? "active" : dailyMissionStatus, next);
+  }, [dailyMission.checklist, dailyMissionChecked, dailyMissionStatus, persistDailyMission]);
 
   const runCoachFeature = async (key: keyof AIResultMap) => {
     if (!isPremium) {
@@ -8002,46 +8474,33 @@ function AiAnalysisScreen({
       <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
         <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
           <View style={styles.terminalScreenStack}>
-            <UnifiedAiInsightSection
-              title="AI Weekly Report"
-              subtitle="One deduplicated view of risk, execution and progress for the current month."
-              insights={weeklyReportInsights}
-              emptyText="Log trades this week to build a useful AI report."
+            <AIWeeklyReportCard report={weeklyReport} />
+            <DailyMissionCard
+              mission={dailyMission}
+              status={dailyMissionStatus}
+              checked={dailyMissionChecked}
+              onToggle={toggleDailyMissionItem}
+              onStatusChange={(status) => persistDailyMission(status, dailyMissionChecked)}
             />
-            <UnifiedAiInsightSection
-              title="Daily Mission"
-              subtitle="The single next action that protects the trader before the next session."
-              insights={dailyMissionInsights.length ? dailyMissionInsights : unifiedInsights.primary.slice(0, 1)}
-              emptyText="No urgent mission yet. Keep logging clean trades."
-            />
-            <UnifiedAiInsightSection
-              title="Achievement System"
-              subtitle="Local progress milestones based on your own journal evidence."
-              insights={unifiedInsights.groups.achievement}
-              emptyText="Achievements unlock as the trade sample becomes meaningful."
-            />
-            <UnifiedAiInsightSection
-              title="Personal Trading DNA"
-              subtitle="Discipline, timing and consistency patterns without duplicated advice."
-              insights={dnaInsights}
-              emptyText="Add more trades with sessions and tags to reveal your trading DNA."
-            />
-            <UnifiedAiInsightSection
-              title="Compare Yourself"
-              subtitle="Compare your current sample against prop-firm survival standards, not other traders."
-              insights={comparisonInsights.length ? comparisonInsights : unifiedInsights.groups.risk.slice(0, 2)}
-              emptyText="Comparison appears after the journal has enough wins, losses and session data."
-            />
-            <UnifiedAiInsightSection
-              title="You Are Improving"
-              subtitle="Progress signals that are safe to reinforce without increasing risk."
-              insights={unifiedInsights.groups.improvement}
-              emptyText="Improvement signals appear after your next clean journal sample."
-            />
+            <AchievementSystemCard achievements={aiAchievements} />
+            <TradingDNACard profile={tradingDna} />
+            <BenchmarkCard benchmark={benchmarkProfile} />
+            <ImprovementCard timeline={improvementTimeline} />
             <View style={{ gap: 10 }}>
               <Text style={styles.terminalSectionTitle}>AI Advice / Coach</Text>
+              {unifiedInsights.primary.slice(0, 2).map((insight) => (
+                <AIInsightCard key={insight.id} insight={insight} />
+              ))}
               <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
             </View>
+            <TerminalGlassCard>
+              <Text style={styles.terminalSectionTitle}>Evidence Map</Text>
+              <Text style={styles.terminalSub}>Every recommendation is tied back to session and calendar behavior.</Text>
+              <View style={{ gap: 12, marginTop: 14 }}>
+                <SessionHeatmap stats={periodStats} />
+                <CalendarImpact stats={periodStats} />
+              </View>
+            </TerminalGlassCard>
             <View style={{ gap: 10 }}>
               <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
               <PropFirmCoachSection
