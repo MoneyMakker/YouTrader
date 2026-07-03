@@ -54,4 +54,5 @@ export const CARD_TEXT = {
   red: "#FF4D8D",
   gold: "#F4C95D",
   shadow: "#000000",
+  sub: "rgba(247,248,250,0.72)",
 };

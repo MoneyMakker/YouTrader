@@ -355,7 +355,8 @@ const AUTH_REDIRECT_TO = makeRedirectUri({ scheme: "com.youtrader.pro", path: "a
 const PREMIUM_PRICE = "$12.99/mo";
 const PREMIUM_PRICE_YEARLY = "$99.99/yr";
 const FREE_MONTHLY_TRADE_LIMIT = 31;
-const FREE_MONTHLY_SHARE_CARD_LIMIT = 5;
+const FREE_MONTHLY_SHARE_CARD_LIMIT = 15;
+const PRO_MONTHLY_SHARE_CARD_LIMIT = 90;
 const FREE_MONTHLY_PDF_PREVIEW_LIMIT = 1;
 const FREE_MONTHLY_SCREENSHOT_LIMIT = 3;
 // RevenueCat product ids. Both must exist in App Store Connect AND be added to the
@@ -1064,13 +1065,13 @@ const I18N_ADDITIONS: Record<Lang, Record<string, string>> = {
     pnlCardSaved: "P&L card saved to Photos.",
     exportFailed: "Export failed",
     saveImageProTitle: "Save Image is Pro",
-    saveImageProMessage: "Free traders can share 5 P&L cards per month. Pro unlocks full Save Image exports and unlimited reports.",
+    saveImageProMessage: "Free includes 15 saved or shared cards per month. Pro unlocks Save Image exports and up to 90 cards per month.",
     fullExportsBenefit: "Full Share P&L and Save Image exports",
     unlimitedPdfBenefit: "Unlimited monthly PDFs",
     premiumReportBenefit: "Premium branded report design",
     shareCardLimitReached: "Share card limit reached",
-    shareCardLimitMessage: "Free includes 5 share cards per month. Pro unlocks more sharing, premium exports, and monthly reports.",
-    moreShareCardsBenefit: "15+ share cards per month",
+    shareCardLimitMessage: "Free includes 15 share cards per month. Pro unlocks 90 saved cards per month, premium exports, and monthly reports.",
+    moreShareCardsBenefit: "90 saved cards per month",
     fullImageExportsBenefit: "Full image exports",
     monthlyReportsBenefit: "Monthly PDF reports",
     monthlyPdfPreviewUsed: "Monthly PDF preview used",
@@ -1237,13 +1238,13 @@ const I18N_ADDITIONS: Record<Lang, Record<string, string>> = {
     pnlCardSaved: "P&L карточка сохранена в Фото.",
     exportFailed: "Экспорт не удался",
     saveImageProTitle: "Save Image доступен в Pro",
-    saveImageProMessage: "Бесплатно можно делиться 5 P&L карточками в месяц. Pro открывает Save Image и безлимитные отчёты.",
+    saveImageProMessage: "Бесплатно — 15 сохранённых или shared cards в месяц. Pro открывает Save Image и до 90 cards в месяц.",
     fullExportsBenefit: "Полный Share P&L и Save Image экспорт",
     unlimitedPdfBenefit: "Безлимитные monthly PDF",
     premiumReportBenefit: "Премиальный дизайн отчётов",
     shareCardLimitReached: "Лимит share card достигнут",
-    shareCardLimitMessage: "Бесплатно доступно 5 share cards в месяц. Pro открывает больше шаринга, premium exports и отчёты.",
-    moreShareCardsBenefit: "15+ share cards в месяц",
+    shareCardLimitMessage: "Бесплатно — 15 share cards в месяц. Pro открывает 90 saved cards в месяц, premium exports и отчёты.",
+    moreShareCardsBenefit: "90 saved cards в месяц",
     fullImageExportsBenefit: "Полный экспорт изображений",
     monthlyReportsBenefit: "Monthly PDF reports",
     monthlyPdfPreviewUsed: "Monthly PDF preview использован",
@@ -5630,7 +5631,11 @@ async function checkAndRecordLocalAchievementShareUsage(limit: number, userId: s
   const raw = await AsyncStorage.getItem(key);
   const used = Number(raw || "0");
   if (Number.isFinite(used) && used >= limit) {
-    throw new Error(limit > 5 ? "Your monthly achievement sharing allowance has been used." : "Free users can unlock and share 5 achievement cards. Upgrade to Pro.");
+    throw new Error(
+      limit >= PRO_MONTHLY_SHARE_CARD_LIMIT
+        ? "Your monthly card sharing allowance has been used."
+        : `Free includes ${FREE_MONTHLY_SHARE_CARD_LIMIT} saved or shared cards per month. Upgrade to Pro for ${PRO_MONTHLY_SHARE_CARD_LIMIT}.`,
+    );
   }
   await AsyncStorage.setItem(key, String((Number.isFinite(used) ? used : 0) + 1));
 }
@@ -5644,7 +5649,7 @@ async function checkAndRecordAchievementShareUsage({
   isPremium: boolean;
   achievement: Achievement;
 }) {
-  const limit = isPremium ? 15 : 5;
+  const limit = isPremium ? PRO_MONTHLY_SHARE_CARD_LIMIT : FREE_MONTHLY_SHARE_CARD_LIMIT;
   if (!supabase || !session?.user.id) {
     await checkAndRecordLocalAchievementShareUsage(limit, session?.user.id || null);
     return;
@@ -5662,7 +5667,11 @@ async function checkAndRecordAchievementShareUsage({
     return;
   }
   if ((count || 0) >= limit) {
-    throw new Error(isPremium ? "Your monthly achievement sharing allowance has been used." : "Free users can unlock and share 5 achievement cards. Upgrade to Pro.");
+    throw new Error(
+      isPremium
+        ? "Your monthly card sharing allowance has been used."
+        : `Free includes ${FREE_MONTHLY_SHARE_CARD_LIMIT} saved or shared cards per month. Upgrade to Pro for ${PRO_MONTHLY_SHARE_CARD_LIMIT}.`,
+    );
   }
   const { error: insertError } = await supabase.from("achievement_share_usage").insert({
     user_id: session.user.id,
@@ -5807,7 +5816,7 @@ function AchievementSection({
             {unlocked.map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={shareAchievement} />)}
           </View>
           {freeUnlockLimitReached ? (
-            <Text style={styles.breakdownEmptyText}>Free users can unlock and share 5 achievement cards. Upgrade to Pro.</Text>
+            <Text style={styles.breakdownEmptyText}>Free includes {FREE_MONTHLY_SHARE_CARD_LIMIT} saved or shared cards per month. Upgrade to Pro for {PRO_MONTHLY_SHARE_CARD_LIMIT}.</Text>
           ) : null}
         </>
       ) : (
