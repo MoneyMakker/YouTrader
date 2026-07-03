@@ -17,7 +17,7 @@ async function loadShareModules() {
   return { captureRef: viewShot.captureRef, Sharing: sharing, Print: print, MediaLibrary: mediaLibrary };
 }
 
-export async function shareCapturedView(ref: RefObject<View | null>, dialogTitle = 'Share P&L card', options?: { width?: number; height?: number }) {
+export async function shareCapturedView(ref: RefObject<View | null>, dialogTitle = 'Share trader card', options?: { width?: number; height?: number }) {
   const { captureRef, Sharing } = await loadShareModules();
   if (!ref.current) throw new Error('Share card is not ready');
   const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'tmpfile', width: options?.width || SHARE_CARD_WIDTH, height: options?.height || SHARE_CARD_HEIGHT });

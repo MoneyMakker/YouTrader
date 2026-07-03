@@ -69,6 +69,7 @@ import Svg, {
 } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
 import { SharePnLCard } from "./src/components/insights/SharePnLCard";
+import { AchievementShareCard } from "./src/components/insights/shareCard";
 import { alertExportError } from "./src/utils/alertExportError";
 import { parseTradesCsvText } from "./src/utils/importTradesCsv";
 import { readCsvFileAsText } from "./src/utils/readCsvFile";
@@ -1054,9 +1055,9 @@ const I18N_ADDITIONS: Record<Lang, Record<string, string>> = {
     selectMonth: "Select Month",
     previousMonth: "Previous month",
     nextMonth: "Next month",
-    sharePnlCard: "Share P&L card",
-    saveImage: "Save image",
-    saveImagePro: "Save image - Pro",
+    sharePnlCard: "Share Card",
+    saveImage: "Save Image",
+    saveImagePro: "Save Image",
     monthlyPdf: "Monthly PDF",
     exportTitle: "Export",
     savedTitle: "Saved",
@@ -1227,9 +1228,9 @@ const I18N_ADDITIONS: Record<Lang, Record<string, string>> = {
     selectMonth: "Выбрать месяц",
     previousMonth: "Предыдущий месяц",
     nextMonth: "Следующий месяц",
-    sharePnlCard: "Поделиться P&L",
-    saveImage: "Сохранить изображение",
-    saveImagePro: "Сохранить — Pro",
+    sharePnlCard: "Share Card",
+    saveImage: "Save Image",
+    saveImagePro: "Save Image",
     monthlyPdf: "Monthly PDF",
     exportTitle: "Экспорт",
     savedTitle: "Сохранено",
@@ -5057,7 +5058,7 @@ function TerminalTraderStatus({
       setShareTarget(item);
       await waitForCard();
       const { shareCapturedView } = await import("./src/components/insights/shareExport");
-      await shareCapturedView(achievementShareRef, "Share YouTrader achievement", { width: 1080, height: 1920 });
+      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card", { width: 1080, height: 1920 });
       trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
     } catch (error) {
       alertExportError("Achievement share failed", error);
@@ -5578,53 +5579,6 @@ function HiddenLeaksCard({ leaks }: { leaks: HiddenLeak[] }) {
   );
 }
 
-type AchievementShareStats = {
-  tradesLogged: number;
-  winRate: number;
-  totalPnl: number;
-  profitFactor: number;
-  avgWinLoss: number;
-  riskControl: number;
-  consistency: number;
-  maxDrawdown: number;
-  tradingScore: number;
-  bestSession: string;
-  dateLabel: string;
-};
-
-function achievementRarity(item: Achievement, level: TraderLevel): "COMMON" | "RARE" | "EPIC" | "LEGENDARY" {
-  const title = item.title.toLowerCase();
-  if (
-    title.includes("apex") ||
-    title.includes("five figure") ||
-    title.includes("$10k") ||
-    title.includes("funding hunter") ||
-    level.score >= 95
-  ) {
-    return "LEGENDARY";
-  }
-  if (
-    title.includes("elite") ||
-    title.includes("risk master") ||
-    title.includes("quant") ||
-    title.includes("funded") ||
-    level.score >= 90
-  ) {
-    return "EPIC";
-  }
-  if (title.includes("10 trades") || title.includes("$1k") || title.includes("sniper") || level.score >= 75) {
-    return "RARE";
-  }
-  return "COMMON";
-}
-
-function localTraderTier(score: number) {
-  if (score >= 90) return "APEX";
-  if (score >= 75) return "ELITE";
-  if (score >= 60) return "CONSISTENT";
-  return "ROOKIE";
-}
-
 function achievementShareDateLabel(selectedDate: string) {
   const d = safeDateFromISO(selectedDate);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase();
@@ -5722,126 +5676,6 @@ async function checkAndRecordAchievementShareUsage({
   }
 }
 
-function rarityColor(rarity: ReturnType<typeof achievementRarity>) {
-  if (rarity === "LEGENDARY") return "#FFD447";
-  if (rarity === "EPIC") return "#B84DFF";
-  if (rarity === "RARE") return "#5AD7FF";
-  return "#B8FF00";
-}
-
-function prestigeStatement(item: Achievement) {
-  const title = item.title.toLowerCase();
-  if (title.includes("risk") || title.includes("discipline") || title.includes("rule")) return "Discipline over emotion.";
-  if (title.includes("fund") || title.includes("evaluation")) return "Protect the account. Earn the next level.";
-  if (title.includes("month") || title.includes("figure")) return "Consistency compounds when it is tracked.";
-  return "Discipline creates consistency.";
-}
-
-function AchievementShareCard({
-  item,
-  level,
-  stats,
-}: {
-  item: Achievement;
-  level: TraderLevel;
-  stats: AchievementShareStats;
-}) {
-  const rarity = achievementRarity(item, level);
-  const rarityAccent = rarityColor(rarity);
-  const title = item.title.toUpperCase();
-  const metricResult = item.progressLabel || `${Math.round(item.progress)} / ${Math.round(item.target)}`;
-  const tier = localTraderTier(stats.tradingScore);
-  const positive = stats.totalPnl >= 0;
-  return (
-    <View style={styles.achievementShareCard}>
-      <View style={styles.shareGlowGreen} />
-      <View style={styles.shareGlowPurple} />
-      <View style={styles.shareGlowTopLine} />
-      <View style={styles.shareCardFrame}>
-        <View style={styles.shareBrandRow}>
-          <Image source={YOU_TRADER_BULL_LOGO} style={styles.shareBrandLogo} resizeMode="contain" />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.shareBrandText}>YouTrader</Text>
-            <Text style={styles.shareBrandSub}>TRADER STATUS CARD</Text>
-          </View>
-          <View style={[styles.shareTierPill, { borderColor: rarityAccent }]}>
-            <Text style={[styles.shareTierPillText, { color: rarityAccent }]}>{tier}</Text>
-          </View>
-        </View>
-
-        <View style={styles.shareHeroBlock}>
-          <Text style={styles.shareUnlockedText}>{item.status === "unlocked" ? "STATUS UNLOCKED" : "MILESTONE UNLOCKED"}</Text>
-          <View style={[styles.shareBadgeStage, { borderColor: rarityAccent }]}>
-            <View style={[styles.shareBadgeHalo, { backgroundColor: `${rarityAccent}26` }]} />
-            <View style={styles.shareScoreCorner}>
-              <Text style={styles.shareScoreCornerNumber}>{Math.round(stats.tradingScore)}</Text>
-              <Text style={styles.shareScoreCornerLabel}>TRD</Text>
-            </View>
-            <Image source={YOU_TRADER_BULL_LOGO} style={styles.shareLogoImage} resizeMode="contain" />
-            <Text style={[styles.shareRarityText, { color: rarityAccent }]}>{rarity}</Text>
-          </View>
-          <Text style={styles.shareBadgeTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.62}>{title}</Text>
-          <Text style={styles.sharePrestigeText}>{prestigeStatement(item)}</Text>
-        </View>
-
-        <View style={styles.shareMetricPanel}>
-          <View style={styles.shareStatsGrid}>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>RESULT</Text>
-              <Text style={styles.shareMetricValue} numberOfLines={1} adjustsFontSizeToFit>{metricResult}</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>WIN RATE</Text>
-              <Text style={styles.shareMetricValue}>{stats.winRate.toFixed(0)}%</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>TRADING SCORE</Text>
-              <Text style={styles.shareMetricValue}>{Math.round(stats.tradingScore)}</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>PROFIT FACTOR</Text>
-              <Text style={styles.shareMetricValue}>{stats.profitFactor ? stats.profitFactor.toFixed(2) : "N/A"}</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>AVG WIN/LOSS</Text>
-              <Text style={styles.shareMetricValue}>{stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "N/A"}</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>RISK CONTROL</Text>
-              <Text style={styles.shareMetricValue}>{stats.riskControl.toFixed(0)}%</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>CONSISTENCY</Text>
-              <Text style={styles.shareMetricValue}>{stats.consistency.toFixed(0)}%</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>NET P&L</Text>
-              <Text style={[styles.shareMetricValue, { color: positive ? "#9CFF00" : "#FF3B5F" }]}>{money(stats.totalPnl)}</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>MAX DD</Text>
-              <Text style={[styles.shareMetricValue, { color: stats.maxDrawdown < 0 ? "#FF3B5F" : "#B8FF00" }]}>{money(stats.maxDrawdown)}</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>TRADES LOGGED</Text>
-              <Text style={styles.shareMetricValue}>{stats.tradesLogged}</Text>
-            </View>
-            <View style={styles.shareStatGlass}>
-              <Text style={styles.shareMetricLabel}>BEST SESSION</Text>
-              <Text style={styles.shareMetricValue} numberOfLines={1} adjustsFontSizeToFit>{stats.bestSession}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.shareFooterBlock}>
-          <Text style={styles.shareAppStoreCta}>Find YouTrader on the App Store</Text>
-          <Text style={styles.shareDisclaimer}>Educational journal. Not financial advice. • {stats.dateLabel}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 function AchievementBadgeCard({ item, onShare }: { item: Achievement; onShare: (item: Achievement) => void }) {
   const pct = Math.max(0, Math.min(100, (item.progress / Math.max(1, item.target)) * 100));
   const unlocked = item.status === "unlocked";
@@ -5931,7 +5765,7 @@ function AchievementSection({
       setShareTarget(item);
       await waitForCard();
       const { shareCapturedView } = await import("./src/components/insights/shareExport");
-      await shareCapturedView(achievementShareRef, "Share YouTrader achievement", { width: 1080, height: 1920 });
+      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card", { width: 1080, height: 1920 });
       trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
     } catch (error) {
       alertExportError("Achievement share failed", error);
@@ -6174,6 +6008,7 @@ function StatsScreen({
   const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
   const weekPnl = periodPnlFromTrades(trades, selectedDate, "week");
+  const monthPnl = periodPnlFromTrades(trades, selectedDate, "month");
   const safePropTemplates = propTemplates;
   const [propTemplateKey, setPropTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
@@ -6214,13 +6049,14 @@ function StatsScreen({
       tradingScore: tradingScoreForTrades(periodTrades).score,
       dateLabel: achievementShareDateLabel(selectedDate),
       weekPnl,
+      monthPnl,
       trades: periodStats.count,
       bestSession: periodStats.session[0]?.label || "N/A",
       dailyBuffer: propMeta.dailyBuffer,
       propStatus: propMeta.propStatus,
     };
     },
-    [period, selectedDate, periodStats, periodTrades, weekPnl, propSnapshot],
+    [period, selectedDate, periodStats, periodTrades, weekPnl, monthPnl, propSnapshot],
   );
 
   const waitForShareCardLayout = () =>
@@ -6442,7 +6278,7 @@ function StatsScreen({
           style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
         >
           <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {isPremium ? tText(lang, "saveImage") : tText(lang, "saveImagePro")}
+            {tText(lang, "saveImage")}
           </Text>
         </Pressable>
         <Pressable
