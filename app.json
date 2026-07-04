@@ -2,14 +2,14 @@
   "expo": {
     "name": "YouTrader",
     "slug": "youtrader-pro",
-    "version": "1.5.7",
+    "version": "1.5.8",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/02ed40d6-5ad8-4a6d-9716-5ba40ec714c6"
     },
-    "scheme": "com.youtrader.pro",
+    "scheme": "youtrader",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -24,7 +24,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.youtrader.pro",
-      "buildNumber": "72",
+      "usesAppleSignIn": true,
+      "buildNumber": "83",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "YouTrader lets you attach a screenshot of your trade to your journal.",
@@ -51,6 +52,8 @@
       ]
     },
     "plugins": [
+      "expo-apple-authentication",
+      "expo-localization",
       [
         "expo-audio",
         {

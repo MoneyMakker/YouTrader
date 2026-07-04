@@ -1,6 +1,7 @@
 export const TEMPLATE_NATIVE_WIDTH = 755;
 export const TEMPLATE_NATIVE_HEIGHT = 1024;
-export const EXPORT_CARD_WIDTH = 1080;
+/** High-res export canvas — captured at full size for sharp text when shared. */
+export const EXPORT_CARD_WIDTH = 2048;
 export const EXPORT_CARD_HEIGHT = Math.round((EXPORT_CARD_WIDTH * TEMPLATE_NATIVE_HEIGHT) / TEMPLATE_NATIVE_WIDTH);
 
 export const EXPORT_COLORS = {

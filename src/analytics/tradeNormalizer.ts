@@ -88,14 +88,16 @@ function parseHour(time?: string | null) {
   return hour >= 0 && hour <= 23 ? hour : null;
 }
 
+import { t } from "../i18n";
+
 export function sessionForHour(hour: number | null) {
-  if (hour == null) return "Unknown";
-  if (hour < 8) return "Asia";
-  if (hour < 12) return hour >= 9 ? "New York AM" : "London";
-  if (hour < 14) return "Midday";
-  if (hour >= 15 && hour < 16) return "Power Hour";
-  if (hour >= 16) return "After Hours";
-  return "Afternoon";
+  if (hour == null) return t("sessionUnknown");
+  if (hour < 8) return t("sessionAsia");
+  if (hour < 12) return hour >= 9 ? t("sessionNewYorkAm") : t("sessionLondon");
+  if (hour < 14) return t("sessionMidday");
+  if (hour >= 15 && hour < 16) return t("microPowerHour");
+  if (hour >= 16) return t("sessionAfterHours");
+  return t("sessionAfternoon");
 }
 
 function weekKey(date: Date) {

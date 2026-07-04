@@ -10,9 +10,27 @@ import { StatusBar } from "expo-status-bar";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
-import * as AppleAuthentication from "expo-apple-authentication";
-import { makeRedirectUri } from "expo-auth-session";
-import * as Notifications from "expo-notifications";
+import { signInWithAppleNative } from "./src/auth/appleSignIn";
+import { signInWithGoogle, signOutGoogleNative } from "./src/auth/googleSignIn";
+import {
+  isAuthCancellation,
+  logAuthDev,
+  userFacingAuthError,
+} from "./src/auth/authErrors";
+import { processAuthDeepLink } from "./src/auth/authDeepLinkCoordinator";
+import { ChangeEmailModal } from "./src/auth/ChangeEmailModal";
+import { ChangePasswordModal } from "./src/auth/ChangePasswordModal";
+import {
+  requestPasswordResetEmail,
+  signInWithEmailPassword,
+  signUpWithEmailPassword,
+  updateUserEmail,
+  updateUserPassword,
+  userHasPasswordSet,
+} from "./src/auth/emailPasswordAuth";
+import { EMAIL_PASSWORD_MESSAGES } from "./src/auth/emailPasswordMessages";
+import { buildLocalizedLocalCoachAnalysis } from "./src/i18n/localCoachAnalysis";
+import { changeAppLanguage, getAppLanguage, i18n, initAppI18n, t, type AppLang } from "./src/i18n";
 import * as WebBrowser from "expo-web-browser";
 import type { Session } from "@supabase/supabase-js";
 import Purchases, {
@@ -68,13 +86,20 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
-import { SharePnLCard, SHARE_CARD_HEIGHT, SHARE_CARD_WIDTH } from "./src/components/insights/SharePnLCard";
-import { AchievementShareCard } from "./src/components/insights/shareCard";
+import { StatCardExportHost } from "./src/components/insights/shareCard/StatCardExportHost";
+import { AuthScreen } from "./src/auth/AuthScreen";
+import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./src/auth/types";
+import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "./src/auth/userCache";
+import { clearOfflineJobsForUser, enqueueOfflineJob } from "./src/sync/offlineQueue";
+import { useNetworkReconnect } from "./src/sync/networkReconnect";
+import { pullUserPreferences, pushUserPreferences } from "./src/sync/userPreferencesSync";
 import { alertExportError } from "./src/utils/alertExportError";
 import { parseTradesCsvText } from "./src/utils/importTradesCsv";
 import { readCsvFileAsText } from "./src/utils/readCsvFile";
 import { scheduleDailyPropRiskNotification } from "./src/utils/propRiskNotification";
-import { clearLocalReminder, scheduleLocalReminder } from "./src/notifications/push";
+import { clearLocalReminder, configureNotificationHandler, scheduleLocalReminder } from "./src/notifications/push";
+import { SmartNotificationsSection } from "./src/notifications/SmartNotificationsSection";
+import { evaluateSmartPushConditions, syncSmartPushSchedules } from "./src/notifications/smartAlerts";
 import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "./src/api/finnhubCalendar";
 import {
   analyzeTrades,
@@ -100,13 +125,13 @@ import {
   type AIWeeklyCoach,
 } from "./src/api/aiCoach";
 import { trackEvent, trackScreen } from "./src/observability/analytics";
+import { identifyAnalyticsUser, resetAnalyticsUser } from "./src/lib/analytics";
 import { captureAppError, initializeMonitoring, logCrashlyticsBreadcrumb, wrapAppWithSentry } from "./src/observability/monitoring";
 import { recordMetric } from "./src/observability/metrics";
 import { posthogClient } from "./src/lib/posthog";
 import { logger } from "./src/lib/logger";
 import {
   enableCloudSignIn,
-  enableNativeAppleSignIn,
   isExpoGo,
   isRevenueCatConfigured,
   isSupabaseConfigured,
@@ -116,11 +141,26 @@ import {
   REVENUECAT_IOS_YEARLY_PRODUCT_ID,
   supabase,
   userFacingBillingError,
+  appVersionDisplayLabel,
 } from "./src/config/appConfig";
+import {
+  FEATURE_LIMIT_MESSAGES,
+  FREE_LIMITS,
+  PRO_LIMITS,
+  getLimitsForUser,
+} from "./src/config/featureLimits";
+import {
+  canAttachTradeImage,
+  peekShareCardExportAllowed,
+  recordShareCardExportSuccess,
+} from "./src/config/usageLimits";
 import { openLegalUrl, PRIVACY_POLICY_URL, TERMS_OF_USE_EULA_URL } from "./src/config/legalUrls";
 import { SubscriptionLegalDisclosure } from "./src/components/subscription/SubscriptionLegalDisclosure";
 import {
   checkClientRateLimit,
+  consumeClientRateLimit,
+  logExportRateLimitDebug,
+  peekClientRateLimit,
   recordSecurityEvent,
   runIdempotentLocal,
   stableSecurityHash,
@@ -133,6 +173,15 @@ import { GlassCard } from "./src/components/ui/GlassCard";
 import { AnimatedEquityCurve } from "./src/components/charts/AnimatedEquityCurve";
 import { PremiumGlassCard } from "./src/components/ui/PremiumGlassCard";
 import { PremiumLockOverlay } from "./src/components/ui/PremiumLockOverlay";
+import { AiAnalyticsProScreen } from "./src/components/traderStatus/AiAnalyticsProScreen";
+import { TraderStatusDashboard } from "./src/components/traderStatus/TraderStatusDashboard";
+import { AiNewsSentimentCard } from "./src/components/news/AiNewsSentimentCard";
+import { MarketIntelligenceTools } from "./src/components/ai/MarketIntelligenceTools";
+import {
+  FREE_MONTHLY_PDF_PREVIEW_LIMIT,
+  FREE_MONTHLY_TRADE_LIMIT,
+  TRADE_LIMIT_PAYWALL,
+} from "./src/config/monetization";
 import { lightHaptic, warningHaptic } from "./src/components/ui/haptics";
 import { calculateAchievements, traderLevelFromScore, type Achievement, type TraderLevel } from "./src/analytics/achievements";
 import { detectTradingPatterns, type PatternDetectionResult } from "./src/analytics/patternDetector";
@@ -194,24 +243,14 @@ if (isExpoGo && __DEV__) {
 
 WebBrowser.maybeCompleteAuthSession();
 initializeMonitoring();
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+configureNotificationHandler();
 
 type Tab = "journal" | "stats" | "ai" | "calendar" | "news" | "calc" | "settings";
 type Direction = "LONG" | "SHORT";
 type Asset = "ES" | "NQ" | "GOLD" | "OIL" | "BTC" | "ETH";
 type Bias = "LONG" | "SHORT" | "NEUTRAL";
 type Impact = "HIGH" | "MED" | "LOW";
-type Lang = "en" | "ru" | "es" | "fr" | "it" | "uk" | "de";
-type AuthProvider = "google" | "apple";
+type Lang = AppLang;
 type FirmMode = "evaluation" | "funded";
 type ContractFamily = "micro" | "emini";
 type EvalStrategy = "steady" | "balanced" | "allIn";
@@ -351,14 +390,8 @@ const RAW_FINNHUB = process.env.EXPO_PUBLIC_FINNHUB_API_KEY || "";
 const FINNHUB = /your/i.test(RAW_FINNHUB) ? "" : RAW_FINNHUB;
 const CALENDAR_API_URL = process.env.EXPO_PUBLIC_CALENDAR_API_URL || "";
 const YOU_TRADER_BULL_LOGO = require("./assets/youtrader-bull-mark.png");
-const AUTH_REDIRECT_TO = makeRedirectUri({ scheme: "com.youtrader.pro", path: "auth" });
 const PREMIUM_PRICE = "$12.99/mo";
 const PREMIUM_PRICE_YEARLY = "$99.99/yr";
-const FREE_MONTHLY_TRADE_LIMIT = 31;
-const FREE_MONTHLY_SHARE_CARD_LIMIT = 15;
-const PRO_MONTHLY_SHARE_CARD_LIMIT = 90;
-const FREE_MONTHLY_PDF_PREVIEW_LIMIT = 1;
-const FREE_MONTHLY_SCREENSHOT_LIMIT = 3;
 // RevenueCat product ids. Both must exist in App Store Connect AND be added to the
 // DEFAULT RevenueCat offering as packages. Both unlock the same entitlement
 // (REVENUECAT_ENTITLEMENT_ID, default "YouTrader Pro").
@@ -368,7 +401,7 @@ const YOU_TRADER_YEARLY_PRODUCT_ID = REVENUECAT_IOS_YEARLY_PRODUCT_ID || "youtra
 const YOU_TRADER_PRO_PRODUCT_IDS = [YOU_TRADER_MONTHLY_PRODUCT_ID, YOU_TRADER_YEARLY_PRODUCT_ID];
 const BILLING_DEBUG_LOGS = __DEV__ || process.env.EXPO_PUBLIC_BILLING_DEBUG_LOGS === "true";
 const ENTITLEMENT_RETRY_DELAYS_MS = [0, 900, 1800, 3200];
-const TRADES_STORAGE_KEY = "trades-v6";
+const TRADES_STORAGE_KEY = GUEST_TRADES_STORAGE_KEY;
 const LANG_STORAGE_KEY = "lang-v1";
 const LOCK_SCREEN_BUFFER_KEY = "prop-lock-screen-v1";
 /** @deprecated Journal day limit removed — free users log unlimited days; Pro unlocks media/sync/analytics. */
@@ -408,952 +441,7 @@ const C = {
   white: "#FFFFFF",
 };
 
-const I18N: Record<Lang, Record<string, string>> = {
-  en: {
-    myJournal: "My Journal",
-    journal: "Journal",
-    stats: "Stats",
-    calendar: "Calendar",
-    news: "News",
-    calc: "Calculator",
-    settings: "Settings",
-    addTrade: "+ Add Trade",
-    statistics: "Statistics",
-    today: "Today",
-    trades: "Trades",
-    tapDay: "Tap any day to add a trade",
-    net: "Net P&L",
-    winRate: "Win Rate",
-    profitFactor: "Profit Factor",
-    expectancy: "Expectancy",
-    count: "Trades",
-    avgR: "Avg R",
-    avgWinStreak: "Avg win streak",
-    avgLossStreak: "Avg loss streak",
-    ev: "EV",
-    saveTrade: "Save Trade",
-    updateTrade: "Update Trade",
-    deleteTrade: "Delete Trade",
-    close: "Close",
-    symbol: "Symbol",
-    customSymbol: "Custom Symbol",
-    direction: "Direction",
-    entry: "Entry Price",
-    exit: "Exit Price",
-    contracts: "Contracts",
-    stopLoss: "Stop Loss",
-    takeProfit: "Take Profit",
-    mood: "Mood",
-    notes: "Day Notes",
-    pnl: "P&L",
-    addPnl: "Add P&L or entry/exit prices",
-    deleteQuestion: "Delete trade?",
-    cannotUndo: "This cannot be undone.",
-    liveNews: "Live News",
-    autoRefresh: "auto-refresh every 60 seconds",
-    refresh: "Refresh",
-    economicCalendar: "Economic Calendar",
-    calendarSub: "Market-Events • (Eastern Time)",
-    act: "ACT",
-    fcst: "FCST",
-    prev: "PREV",
-    miniContracts: "E-mini contracts",
-    microContracts: "Micro contracts",
-    customInstrument: "Custom Instrument",
-    ticks: "Ticks",
-    resultInUsd: "Result in $",
-    language: "Language",
-    subscription: "Subscription",
-    premiumAccess: "YouTrader Pro",
-    subscribe: "Unlock Pro • $12.99/mo",
-    restore: "Restore Purchase",
-    premiumLocked: "Premium Feature",
-    premiumLockedText:
-      "Your manual journal stays free. Pro unlocks AI coaching, prop firm protection, advanced analytics, media notes, import/export, full news, and the full economic calendar.",
-    plusPnl: "Profit +",
-    minusPnl: "Loss −",
-    photo: "Trade Screenshot",
-    takePhoto: "Take Photo",
-    uploadPhoto: "Upload Photo",
-    voiceNote: "Voice Note",
-    uploadAudio: "Add Voice Note",
-    openAudio: "Open Audio",
-    noAudio: "No audio note yet",
-    calendarIntel: "Calendar intelligence",
-    calendarIntelText: "High impact events can expand volatility. Check ES/NQ/GOLD/OIL/BTC bias before trading.",
-    premiumBenefit1: "AI Trade Analysis and Prop Firm Coach",
-    premiumBenefit2: "Pass Probability, Revenge Trading alerts, Hidden Leaks, and Pattern Prediction",
-    premiumBenefit3: "Advanced stats: Profit Factor, Expectancy, Drawdown, radar, sessions, symbols, and setups",
-    premiumBenefit4: "CSV import/export, share cards, and monthly PDF reports",
-    premiumBenefit5: "Cloud sync for your journal across devices",
-    premiumBenefit6: "Screenshots, photos, and voice notes for trade reviews",
-    premiumBenefit7: "Full real-time Market Pulse news feed",
-    premiumBenefit8: "Full economic calendar beyond today's preview",
-    percentRiskCalculator: "% Risk Calculator",
-    accountBalance: "Account Balance",
-    riskPercent: "Risk %",
-    maxRisk: "Max SL Risk",
-    acceptTerms: "I read and agree to Terms and Conditions.",
-    termsText: "YouTrader is an educational journaling and market-information tool. It is not financial, investment, legal, tax or trading advice. You are fully responsible for all trading decisions, risk, losses and gains. YouTrader does not guarantee profits, market outcomes, data accuracy or uninterrupted service.",
-    recordVoice: "Record Voice",
-    stopRecording: "Stop Recording",
-    playVoice: "Play Voice",
-    points: "Points",
-    mode: "Mode",
-    rrCalculator: "Risk Reward",
-    slAmount: "SL",
-    tpAmount: "TP",
-    riskReward: "Risk / Reward",
-    dataProtection: "Data Protection",
-    backupNow: "Export Backup",
-    restoreBackup: "Import Backup",
-    backupText: "Save a full backup of your trades and screenshots to iCloud Drive. If the app is deleted, import this file to restore your journal.",
-    cloudSync: "Local backup",
-    cloudSyncText: "Keep your journal on this device and export backups when needed.",
-    backupReady: "Backup ready",
-    backupFailed: "Backup failed",
-    restoreDone: "Backup restored. Restart the app to reload your journal.",
-    restoreFailed: "Restore failed",
-  },
-  ru: {
-    myJournal: "Мой журнал",
-    journal: "Журнал",
-    stats: "Stats",
-    calendar: "Календарь",
-    news: "Новости",
-    calc: "Кальк.",
-    settings: "Настр.",
-    addTrade: "+ Добавить сделку",
-    statistics: "Статистика",
-    today: "Сегодня",
-    trades: "Сделки",
-    tapDay: "Нажми на день, чтобы добавить сделку",
-    net: "Общий P&L",
-    winRate: "Win Rate",
-    profitFactor: "Profit Factor",
-    expectancy: "Expectancy",
-    count: "Сделки",
-    avgR: "Avg R",
-    avgWinStreak: "Avg win streak",
-    avgLossStreak: "Avg loss streak",
-    ev: "EV",
-    saveTrade: "Сохранить сделку",
-    updateTrade: "Обновить сделку",
-    deleteTrade: "Удалить сделку",
-    close: "Закрыть",
-    symbol: "Символ",
-    customSymbol: "Свой символ",
-    direction: "Направление",
-    entry: "Цена входа",
-    exit: "Цена выхода",
-    contracts: "Контракты",
-    stopLoss: "Stop Loss",
-    takeProfit: "Take Profit",
-    mood: "Эмоция",
-    notes: "Заметки дня",
-    pnl: "P&L",
-    addPnl: "Добавь P&L или цены входа/выхода",
-    deleteQuestion: "Удалить сделку?",
-    cannotUndo: "Это действие нельзя отменить.",
-    liveNews: "Живые новости",
-    autoRefresh: "Finnhub live • автообновление каждые 60 секунд",
-    refresh: "Обновить",
-    economicCalendar: "Экономический календарь",
-    calendarSub: "Важные события рынка • Eastern Time",
-    act: "ФАКТ",
-    fcst: "ПРОГ",
-    prev: "ПРЕД",
-    miniContracts: "E-mini контракты",
-    microContracts: "Micro контракты",
-    customInstrument: "Свой инструмент",
-    ticks: "Тики",
-    resultInUsd: "Результат в $",
-    language: "Язык",
-    subscription: "Подписка",
-    premiumAccess: "YouTrader Pro",
-    subscribe: "Оформить Premium • $12.99/мес",
-    restore: "Восстановить покупку",
-    premiumLocked: "Premium функция",
-    premiumLockedText:
-      "Ручной журнал остаётся бесплатным. Pro открывает AI-коучинг, защиту prop firm, продвинутую аналитику, медиа-заметки, импорт/экспорт, полные новости и полный экономический календарь.",
-    plusPnl: "Профит +",
-    minusPnl: "Лосс −",
-    photo: "Скрин сделки",
-    takePhoto: "Сфотографировать",
-    uploadPhoto: "Загрузить фото",
-    voiceNote: "Аудиозаметка",
-    uploadAudio: "Добавить аудио",
-    openAudio: "Открыть аудио",
-    noAudio: "Пока нет аудио",
-    calendarIntel: "Интеллект календаря",
-    calendarIntelText: "High impact события могут резко увеличить волатильность. Проверь bias по ES/NQ/GOLD/OIL/BTC перед торговлей.",
-    premiumBenefit1: "AI-анализ сделок и Prop Firm Coach",
-    premiumBenefit2: "Pass Probability, Revenge Trading alerts, Hidden Leaks и Pattern Prediction",
-    premiumBenefit3: "Продвинутая статистика: Profit Factor, Expectancy, Drawdown, radar, сессии, символы и сетапы",
-    premiumBenefit4: "CSV импорт/экспорт, share cards и monthly PDF reports",
-    premiumBenefit5: "Cloud sync журнала между устройствами",
-    premiumBenefit6: "Скриншоты, фото и голосовые заметки для разбора сделок",
-    premiumBenefit7: "Полная real-time Market Pulse лента новостей",
-    premiumBenefit8: "Полный экономический календарь за пределами сегодняшнего превью",
-    percentRiskCalculator: "% Risk Calculator",
-    accountBalance: "Account Balance",
-    riskPercent: "Risk %",
-    maxRisk: "Max SL Risk",
-    dataProtection: "Защита данных",
-    backupNow: "Экспорт backup",
-    restoreBackup: "Импорт backup",
-    backupText: "Сохраняй полный backup сделок и скриншотов в iCloud Drive. Если приложение удалится, импортируй этот файл и восстанови журнал.",
-    cloudSync: "Local backup",
-    cloudSyncText: "Журнал хранится на устройстве, а backup можно экспортировать при необходимости.",
-    backupReady: "Backup готов",
-    backupFailed: "Backup не удался",
-    restoreDone: "Backup восстановлен. Перезапусти приложение, чтобы журнал обновился.",
-    restoreFailed: "Восстановление не удалось",
-  },
-  es: {
-    myJournal: "Mi diario",
-    journal: "Diario",
-    calendar: "Calend.",
-    news: "Noticias",
-    calc: "Calculadora",
-    settings: "Ajustes",
-    addTrade: "+ Añadir trade",
-    statistics: "Estadísticas",
-    today: "Hoy",
-    trades: "Trades",
-    tapDay: "Toca un día para añadir trade",
-    net: "P&L neto",
-    winRate: "Win Rate",
-    profitFactor: "Profit Factor",
-    expectancy: "Expectancy",
-    count: "Trades",
-    avgR: "Avg R",
-    avgWinStreak: "Avg win streak",
-    avgLossStreak: "Avg loss streak",
-    ev: "EV",
-    saveTrade: "Guardar trade",
-    updateTrade: "Actualizar trade",
-    deleteTrade: "Eliminar trade",
-    close: "Cerrar",
-    symbol: "Símbolo",
-    customSymbol: "Símbolo custom",
-    direction: "Dirección",
-    entry: "Entrada",
-    exit: "Salida",
-    contracts: "Contratos",
-    stopLoss: "Stop Loss",
-    takeProfit: "Take Profit",
-    mood: "Emoción",
-    notes: "Notas",
-    pnl: "P&L",
-    addPnl: "Añade P&L o precios",
-    deleteQuestion: "¿Eliminar trade?",
-    cannotUndo: "No se puede deshacer.",
-    liveNews: "Noticias live",
-    autoRefresh: "Auto-refresh cada 60 segundos",
-    refresh: "Actualizar",
-    economicCalendar: "Calendario económico",
-    calendarSub: "Eventos clave • Eastern Time",
-    act: "ACT",
-    fcst: "FCST",
-    prev: "PREV",
-    miniContracts: "E-mini contracts",
-    microContracts: "Micro contratos",
-    customInstrument: "Instrumento custom",
-    ticks: "Ticks",
-    resultInUsd: "Resultado en $",
-    language: "Idioma",
-    subscription: "Suscripción",
-    premiumAccess: "YouTrader Pro",
-    subscribe: "Premium • $12.99/mes",
-    restore: "Restaurar compra",
-    premiumLocked: "Función Premium",
-    premiumLockedText:
-      "Desbloquea análisis de trades con IA, notas multimedia, importación CSV, exportación, analíticas completas, noticias Market Pulse y calendario económico de varios días.",
-    plusPnl: "Profit +",
-    minusPnl: "Loss −",
-    photo: "Screenshot",
-    takePhoto: "Tomar foto",
-    uploadPhoto: "Subir foto",
-    premiumBenefit1: "Análisis de trades con IA y feedback educativo",
-    premiumBenefit2: "Capturas, fotos y notas de voz para cada setup",
-    premiumBenefit3: "Importación CSV y flujo de backup para el journal a largo plazo",
-    premiumBenefit4: "Analíticas completas: Profit Factor, Expectancy, Win Rate, Drawdown y Recovery",
-    premiumBenefit5: "Performance Profile, radar y seguimiento avanzado del edge",
-    premiumBenefit6: "Estadísticas profundas por símbolo, sesión, día y setup",
-    premiumBenefit7: "Noticias Market Pulse en tiempo real y actualizaciones financieras",
-    premiumBenefit8: "Calendario económico de varios días con CPI, PPI, FOMC, NFP, GDP y más",
-    percentRiskCalculator: "% Risk Calculator",
-    accountBalance: "Account Balance",
-    riskPercent: "Risk %",
-    maxRisk: "Max SL Risk",
-  },
-  fr: {
-    myJournal: "Mon journal",
-    journal: "Journal",
-    calendar: "Calendrier",
-    news: "News",
-    calc: "Calculateur",
-    settings: "Réglages",
-    addTrade: "+ Ajouter trade",
-    statistics: "Statistiques",
-    today: "Aujourd’hui",
-    trades: "Trades",
-    tapDay: "Touchez un jour pour ajouter",
-    net: "P&L net",
-    winRate: "Win Rate",
-    profitFactor: "Profit Factor",
-    expectancy: "Expectancy",
-    count: "Trades",
-    avgR: "Avg R",
-    avgWinStreak: "Avg win streak",
-    avgLossStreak: "Avg loss streak",
-    ev: "EV",
-    saveTrade: "Sauver trade",
-    updateTrade: "Modifier trade",
-    deleteTrade: "Supprimer trade",
-    close: "Fermer",
-    symbol: "Symbole",
-    customSymbol: "Symbole custom",
-    direction: "Direction",
-    entry: "Entrée",
-    exit: "Sortie",
-    contracts: "Contrats",
-    stopLoss: "Stop Loss",
-    takeProfit: "Take Profit",
-    mood: "Émotion",
-    notes: "Notes",
-    pnl: "P&L",
-    addPnl: "Ajoutez P&L ou prix",
-    deleteQuestion: "Supprimer ?",
-    cannotUndo: "Action irréversible.",
-    liveNews: "News live",
-    autoRefresh: "Auto-refresh 60 sec",
-    refresh: "Rafraîchir",
-    economicCalendar: "Calendrier économique",
-    calendarSub: "Événements • Eastern Time",
-    act: "ACT",
-    fcst: "FCST",
-    prev: "PREV",
-    miniContracts: "E-mini contracts",
-    microContracts: "Micro contrats",
-    customInstrument: "Instrument custom",
-    ticks: "Ticks",
-    resultInUsd: "Résultat en $",
-    language: "Langue",
-    subscription: "Abonnement",
-    premiumAccess: "YouTrader Pro",
-    subscribe: "Premium • $12.99/mois",
-    restore: "Restaurer achat",
-    premiumLocked: "Fonction Premium",
-    premiumLockedText:
-      "Débloquez l'analyse IA des trades, les notes multimédias, l'import CSV, l'export, les analytics complets, les news Market Pulse et le calendrier économique sur plusieurs jours.",
-    plusPnl: "Profit +",
-    minusPnl: "Loss −",
-    photo: "Screenshot",
-    takePhoto: "Photo",
-    uploadPhoto: "Importer",
-    premiumBenefit1: "Analyse IA des trades avec feedback éducatif",
-    premiumBenefit2: "Captures, photos et notes vocales pour chaque setup",
-    premiumBenefit3: "Import CSV et workflow de sauvegarde du journal à long terme",
-    premiumBenefit4: "Analytics complets : Profit Factor, Expectancy, Win Rate, Drawdown et Recovery",
-    premiumBenefit5: "Performance Profile, radar et suivi avancé de l'edge",
-    premiumBenefit6: "Statistiques détaillées par symbole, session, jour et setup",
-    premiumBenefit7: "News Market Pulse en temps réel et mises à jour financières",
-    premiumBenefit8: "Calendrier économique multi-jours avec CPI, PPI, FOMC, NFP, GDP et plus",
-    percentRiskCalculator: "% Risk Calculator",
-    accountBalance: "Account Balance",
-    riskPercent: "Risk %",
-    maxRisk: "Max SL Risk",
-  },
-  it: {
-    myJournal: "Il mio diario",
-    journal: "Diario",
-    calendar: "Calendario",
-    news: "Notizie",
-    calc: "Calc.",
-    settings: "Imp.",
-    addTrade: "+ Aggiungi trade",
-    statistics: "Statistiche",
-    today: "Oggi",
-    trades: "Trades",
-    tapDay: "Tocca un giorno per aggiungere",
-    net: "P&L netto",
-    winRate: "Win Rate",
-    profitFactor: "Profit Factor",
-    expectancy: "Expectancy",
-    count: "Trades",
-    avgR: "Avg R",
-    avgWinStreak: "Avg win streak",
-    avgLossStreak: "Avg loss streak",
-    ev: "EV",
-    saveTrade: "Salva trade",
-    updateTrade: "Aggiorna trade",
-    deleteTrade: "Elimina trade",
-    close: "Chiudi",
-    symbol: "Simbolo",
-    customSymbol: "Simbolo custom",
-    direction: "Direzione",
-    entry: "Ingresso",
-    exit: "Uscita",
-    contracts: "Contratti",
-    stopLoss: "Stop Loss",
-    takeProfit: "Take Profit",
-    mood: "Emozione",
-    notes: "Note",
-    pnl: "P&L",
-    addPnl: "Aggiungi P&L o prezzi",
-    deleteQuestion: "Eliminare?",
-    cannotUndo: "Non si può annullare.",
-    liveNews: "News live",
-    autoRefresh: "Auto-refresh ogni 60 sec",
-    refresh: "Aggiorna",
-    economicCalendar: "Calendario economico",
-    calendarSub: "Eventi • Eastern Time",
-    act: "ACT",
-    fcst: "FCST",
-    prev: "PREV",
-    miniContracts: "E-mini contracts",
-    microContracts: "Micro contratti",
-    customInstrument: "Strumento custom",
-    ticks: "Ticks",
-    resultInUsd: "Risultato in $",
-    language: "Lingua",
-    subscription: "Abbonamento",
-    premiumAccess: "YouTrader Pro",
-    subscribe: "Premium • $12.99/mese",
-    restore: "Ripristina",
-    premiumLocked: "Funzione Premium",
-    premiumLockedText:
-      "Sblocca analisi trade con IA, note multimediali, import CSV, export, analytics completi, news Market Pulse e calendario economico multi-giorno.",
-    plusPnl: "Profit +",
-    minusPnl: "Loss −",
-    photo: "Screenshot",
-    takePhoto: "Foto",
-    uploadPhoto: "Carica",
-    premiumBenefit1: "Analisi trade con IA e feedback educativo",
-    premiumBenefit2: "Screenshot, foto e note vocali per ogni setup",
-    premiumBenefit3: "Import CSV e workflow di backup del journal a lungo termine",
-    premiumBenefit4: "Analytics completi: Profit Factor, Expectancy, Win Rate, Drawdown e Recovery",
-    premiumBenefit5: "Performance Profile, radar e tracking avanzato dell'edge",
-    premiumBenefit6: "Statistiche profonde per simbolo, sessione, giorno e setup",
-    premiumBenefit7: "News Market Pulse in tempo reale e aggiornamenti finanziari",
-    premiumBenefit8: "Calendario economico multi-giorno con CPI, PPI, FOMC, NFP, GDP e altro",
-    percentRiskCalculator: "% Risk Calculator",
-    accountBalance: "Account Balance",
-    riskPercent: "Risk %",
-    maxRisk: "Max SL Risk",
-  },
-  uk: {
-    myJournal: "Мій журнал",
-    journal: "Журнал",
-    calendar: "Календар",
-    news: "Новини",
-    calc: "Кальк.",
-    settings: "Налашт.",
-    addTrade: "+ Додати угоду",
-    statistics: "Статистика",
-    today: "Сьогодні",
-    trades: "Угоди",
-    tapDay: "Натисни день, щоб додати",
-    net: "Загальний P&L",
-    winRate: "Win Rate",
-    profitFactor: "Profit Factor",
-    expectancy: "Expectancy",
-    count: "Угоди",
-    avgR: "Avg R",
-    avgWinStreak: "Avg win streak",
-    avgLossStreak: "Avg loss streak",
-    ev: "EV",
-    saveTrade: "Зберегти угоду",
-    updateTrade: "Оновити угоду",
-    deleteTrade: "Видалити угоду",
-    close: "Закрити",
-    symbol: "Символ",
-    customSymbol: "Свій символ",
-    direction: "Напрям",
-    entry: "Вхід",
-    exit: "Вихід",
-    contracts: "Контракти",
-    stopLoss: "Stop Loss",
-    takeProfit: "Take Profit",
-    mood: "Емоція",
-    notes: "Нотатки",
-    pnl: "P&L",
-    addPnl: "Додай P&L або ціни",
-    deleteQuestion: "Видалити?",
-    cannotUndo: "Не можна скасувати.",
-    liveNews: "Live новини",
-    autoRefresh: "Оновлення 60 сек",
-    refresh: "Оновити",
-    economicCalendar: "Економічний календар",
-    calendarSub: "Події • Eastern Time",
-    act: "ФАКТ",
-    fcst: "ПРОГ",
-    prev: "ПОП",
-    miniContracts: "E-mini контракти",
-    microContracts: "Micro контракти",
-    customInstrument: "Свій інструмент",
-    ticks: "Тіки",
-    resultInUsd: "Результат у $",
-    language: "Мова",
-    subscription: "Підписка",
-    premiumAccess: "YouTrader Pro",
-    subscribe: "Premium • $12.99/міс",
-    restore: "Відновити",
-    premiumLocked: "Premium функція",
-    premiumLockedText:
-      "Відкрий AI-аналіз угод, медіа-нотатки, CSV-імпорт, експорт, повну аналітику, Market Pulse новини та календар на кілька днів.",
-    plusPnl: "Профіт +",
-    minusPnl: "Лосс −",
-    photo: "Скрин",
-    takePhoto: "Фото",
-    uploadPhoto: "Завантажити",
-    premiumBenefit1: "AI-аналіз угод з навчальним фідбеком",
-    premiumBenefit2: "Скриншоти, фото та голосові нотатки для кожного сетапу",
-    premiumBenefit3: "CSV-імпорт і довгостроковий backup журналу",
-    premiumBenefit4: "Повна аналітика: Profit Factor, Expectancy, Win Rate, Drawdown і Recovery",
-    premiumBenefit5: "Performance Profile, radar і просунутий аналіз edge",
-    premiumBenefit6: "Глибока статистика за символами, сесіями, днями та сетапами",
-    premiumBenefit7: "Real-time Market Pulse новини та фінансові оновлення",
-    premiumBenefit8: "Календар на кілька днів: CPI, PPI, FOMC, NFP, GDP та інші події",
-    percentRiskCalculator: "% Risk Calculator",
-    accountBalance: "Account Balance",
-    riskPercent: "Risk %",
-    maxRisk: "Max SL Risk",
-  },
-  de: {
-    myJournal: "Mein Journal",
-    journal: "Journal",
-    calendar: "Kalender",
-    news: "News",
-    calc: "Calc.",
-    settings: "Einst.",
-    addTrade: "+ Trade hinzufügen",
-    statistics: "Statistik",
-    today: "Heute",
-    trades: "Trades",
-    tapDay: "Tag antippen zum Hinzufügen",
-    net: "Net P&L",
-    winRate: "Win Rate",
-    profitFactor: "Profit Factor",
-    expectancy: "Expectancy",
-    count: "Trades",
-    avgR: "Avg R",
-    avgWinStreak: "Avg win streak",
-    avgLossStreak: "Avg loss streak",
-    ev: "EV",
-    saveTrade: "Trade speichern",
-    updateTrade: "Trade aktualisieren",
-    deleteTrade: "Trade löschen",
-    close: "Schließen",
-    symbol: "Symbol",
-    customSymbol: "Eigenes Symbol",
-    direction: "Richtung",
-    entry: "Entry",
-    exit: "Exit",
-    contracts: "Kontrakte",
-    stopLoss: "Stop Loss",
-    takeProfit: "Take Profit",
-    mood: "Emotion",
-    notes: "Notizen",
-    pnl: "P&L",
-    addPnl: "P&L oder Preise eingeben",
-    deleteQuestion: "Trade löschen?",
-    cannotUndo: "Nicht rückgängig.",
-    liveNews: "Live News",
-    autoRefresh: "Auto-refresh 60 Sek",
-    refresh: "Aktualisieren",
-    economicCalendar: "Wirtschaftskalender",
-    calendarSub: "Events • Eastern Time",
-    act: "ACT",
-    fcst: "FCST",
-    prev: "PREV",
-    miniContracts: "E-mini / Standard",
-    microContracts: "Micro Kontrakte",
-    customInstrument: "Eigenes Instrument",
-    ticks: "Ticks",
-    resultInUsd: "Ergebnis in $",
-    language: "Sprache",
-    subscription: "Abo",
-    premiumAccess: "YouTrader Pro",
-    subscribe: "Premium • $12.99/Monat",
-    restore: "Kauf wiederherstellen",
-    premiumLocked: "Premium Funktion",
-    premiumLockedText:
-      "Schalte KI-Trade-Analyse, Mediennotizen, CSV-Import, Export, vollständige Analytics, Market-Pulse-News und den mehrtägigen Wirtschaftskalender frei.",
-    plusPnl: "Profit +",
-    minusPnl: "Loss −",
-    photo: "Screenshot",
-    takePhoto: "Foto",
-    uploadPhoto: "Hochladen",
-    premiumBenefit1: "KI-Trade-Analyse mit edukativem Feedback",
-    premiumBenefit2: "Screenshots, Fotos und Sprachnotizen für jedes Setup",
-    premiumBenefit3: "CSV-Import und langfristiger Journal-Backup-Workflow",
-    premiumBenefit4: "Vollständige Analytics: Profit Factor, Expectancy, Win Rate, Drawdown und Recovery",
-    premiumBenefit5: "Performance Profile, Radar und erweitertes Edge-Tracking",
-    premiumBenefit6: "Tiefe Statistiken nach Symbol, Session, Tag und Setup",
-    premiumBenefit7: "Market-Pulse-News in Echtzeit und Finanz-Updates",
-    premiumBenefit8: "Mehrtägiger Wirtschaftskalender mit CPI, PPI, FOMC, NFP, GDP und mehr",
-    percentRiskCalculator: "% Risk Calculator",
-    accountBalance: "Account Balance",
-    riskPercent: "Risk %",
-    maxRisk: "Max SL Risk",
-  },
-};
 
-const I18N_ADDITIONS: Record<Lang, Record<string, string>> = {
-  en: {
-    aiAnalytics: "AI Analytics",
-    entryTime: "Entry time",
-    exitTime: "Exit time",
-    tags: "Tags",
-    customTags: "Custom tags",
-    couldNotSaveTrade: "Could not save trade",
-    checkTradeDetails: "Check the trade details and try again.",
-    entryTimeInvalid: "Entry time must look like 09:30 or 9:30 AM.",
-    exitTimeInvalid: "Exit time must look like 09:45 or 9:45 AM.",
-    contractsInvalid: "Contracts must be between 1 and 1000.",
-    valueOutsideSafeRange: "{label} is outside the safe range.",
-    entryPrice: "Entry price",
-    exitPrice: "Exit price",
-    stopLossPrice: "Stop loss",
-    takeProfitPrice: "Take profit",
-    pnlOutsideSafeRange: "P&L is outside the safe range.",
-    addPnlOrEntryExit: "Add P&L or entry/exit prices.",
-    manualPnlRequired: "Manual P&L is required for custom symbols.",
-    calculatedPnlOutsideSafeRange: "Calculated P&L is outside the safe range.",
-    screenshotLimitTrade: "Free plan allows one screenshot on this trade. Replace the current image by removing it first.",
-    screenshotLimitReached: "Screenshot limit reached",
-    screenshotLimitMessage: "Free includes 3 screenshots per month. Pro unlocks media notes for every setup.",
-    unlimitedScreenshots: "Unlimited or high-limit screenshots",
-    voiceNotesReview: "Voice notes for trade review",
-    cloudSyncReports: "Cloud sync and monthly reports",
-    cameraPermissionNeeded: "Camera permission needed",
-    photoPermissionNeeded: "Photo permission needed",
-    photoUploadFailed: "Photo upload failed",
-    mediaPreservedRetry: "Your existing trade data was preserved. Please try again.",
-    recordingFailed: "Recording failed",
-    microphonePermissionNeeded: "Microphone permission needed",
-    audioRecordingFailed: "Audio recording failed",
-    voiceNotes: "Voice notes",
-    voiceNoteName: "Voice note",
-    journalSafety: "Journal safety",
-    deleteThisTradingDay: "Delete this trading day?",
-    deleteTradingDayBody: "This will permanently delete every trade logged for this day. This action cannot be undone.",
-    cancel: "Cancel",
-    deleteDay: "Delete Day",
-    deleting: "Deleting...",
-    tapToViewEdit: "Tap to view / edit",
-    dismiss: "Dismiss",
-    firstInsightProCta: "Pro unlocks Hidden Leaks, Revenge Alerts, Pattern Detective, and Prop Firm Coach.",
-    lockedInsightTitle: "Your journal found 3 hidden leaks.",
-    lockedInsightBody: "Unlock Pro to see exactly which session, setup, and behavior is costing you money.",
-    startThreeDayPro: "Start 3-Day Free Pro",
-    maybeLater: "Maybe later",
-    scrollToViewTrades: "Scroll to view trades",
-    tradesToday: "TRADES TODAY",
-    selectMonth: "Select Month",
-    previousMonth: "Previous month",
-    nextMonth: "Next month",
-    sharePnlCard: "Share Card",
-    saveImage: "Save Image",
-    saveImagePro: "Save Image",
-    monthlyPdf: "Monthly PDF",
-    exportTitle: "Export",
-    savedTitle: "Saved",
-    pnlCardSaved: "P&L card saved to Photos.",
-    exportFailed: "Export failed",
-    saveImageProTitle: "Save Image is Pro",
-    saveImageProMessage: "Free includes 15 saved or shared cards per month. Pro unlocks Save Image exports and up to 90 cards per month.",
-    fullExportsBenefit: "Full Share P&L and Save Image exports",
-    unlimitedPdfBenefit: "Unlimited monthly PDFs",
-    premiumReportBenefit: "Premium branded report design",
-    shareCardLimitReached: "Share card limit reached",
-    shareCardLimitMessage: "Free includes 15 share cards per month. Pro unlocks 90 saved cards per month, premium exports, and monthly reports.",
-    moreShareCardsBenefit: "90 saved cards per month",
-    fullImageExportsBenefit: "Full image exports",
-    monthlyReportsBenefit: "Monthly PDF reports",
-    monthlyPdfPreviewUsed: "Monthly PDF preview used",
-    monthlyPdfPreviewMessage: "Free includes 1 watermarked monthly PDF preview per month. Pro unlocks unlimited premium reports.",
-    noWatermarkBenefit: "No watermark",
-    aiSummaryReportBenefit: "AI summary and full report history",
-    aiTradeAnalysis: "AI Trade Analysis",
-    unlockAiAnalytics: "Unlock AI Analytics",
-    aiTradeAnalysisSub: "Generate mistakes, strengths, and recommendations from the selected period.",
-    analyzeMyTrades: "Analyze My Trades",
-    analyzing: "Analyzing...",
-    analysisReady: "Analysis ready below.",
-    aiUnavailableLocal: "Cloud AI is unavailable right now. Generated a local journal analysis instead.",
-    addTradesFirstAnalysis: "Add trades first, then run analysis.",
-    aiTradeAnalysisPro: "AI Trade Analysis is included in YouTrader Pro.",
-    ok: "OK",
-    unlockPro: "Unlock Pro",
-    dailyBrief: "Daily Brief",
-    marketSummary: "Market Summary",
-    cached: "Cached",
-    doNot: "Do not:",
-    dailyBriefEmpty: "Daily brief will appear after the worker publishes cached data.",
-    marketSummaryEmpty: "Market summary cache is empty.",
-    macro: "Macro",
-    risk: "Risk",
-    notifications: "Notifications",
-    notificationsRiskPermission: "Allow notifications to receive risk alerts.",
-    notificationsCalendarPermission: "Allow notifications to receive economic calendar alerts.",
-    calendarAlertsTitle: "Calendar alerts",
-    calendarAlertsUpdateFailed: "Could not update economic calendar alerts. Please try again.",
-    dailyPropReminder: "Daily prop firm reminder",
-    dailyPropReminderBody: "Morning notification with your daily buffer and risk status.",
-    riskAlerts: "Risk alerts",
-    riskAlertsBody: "Daily risk coach reminder before trading.",
-    economicCalendarAlerts: "Economic calendar alerts",
-    economicCalendarAlertsBody: "Morning reminder to check high-impact events.",
-    youTraderRiskCoach: "YouTrader Risk Coach",
-    riskCoachReminderBody: "Review your prop firm risk status before trading.",
-    youTraderEconomicCalendar: "YouTrader Economic Calendar",
-    economicCalendarReminderBody: "Check today's high-impact events before trading.",
-    importTrades: "Import trades",
-    importTradesBody: "Import a CSV journal from another platform. Pro feature.",
-    importTradesCsv: "Import trades (CSV)",
-    importTradesCsvPro: "Import trades (CSV) — Pro",
-    csvImportPro: "CSV import is available in YouTrader Pro.",
-    proActiveTitle: "Your Pro subscription is active",
-    proLockedTitle: "YouTrader Pro is locked",
-    proActiveBody: "All premium analytics, AI tools, news, calendar, import, and export features are unlocked.",
-    proLockedBody: "Unlock AI analysis, full analytics, Market Pulse news, CSV import, and premium journal tools.",
-    monthlyPrice: "Monthly • $12.99",
-    yearlyPrice: "Yearly • $99.99",
-    checking: "Checking...",
-    restorePurchases: "Restore Purchases",
-    connecting: "Connecting...",
-    monthlyPlan: "MONTHLY",
-    yearlyPlan: "YEARLY",
-    upgradeMonthly: "Upgrade Monthly",
-    upgradeYearly: "Upgrade Yearly",
-    unlimitedTradesMedia: "Unlimited trades and media notes",
-    hiddenLeaksBenefit: "Hidden Leaks, Revenge Alerts, Pattern Detective",
-    proToolsBenefit: "Prop Firm Coach, exports, sync, and monthly reports",
-    educationalDisclaimer: "Educational analysis only. Not financial advice.",
-    unlockFullEdgeAnalysis: "Unlock Full Edge Analysis",
-    paywallPreviewSub: "Your journal stays free. Pro unlocks AI coaching, prop firm protection, hidden leaks, advanced stats, media notes, import/export, full news, and the full economic calendar.",
-    purchaseFailed: "Purchase failed",
-    purchaseIssue: "Purchase issue",
-    purchaseComplete: "Purchase complete",
-    purchaseDifferentProduct: "Purchase completed for a different product. Please contact support.",
-    purchaseUnreadable: "Purchase completed, but the subscription is not readable yet. Tap Restore Purchases.",
-    restoreUnavailable: "Subscriptions are not available in this build. Please update the app from the App Store.",
-    proUnlocked: "YouTrader Pro unlocked.",
-    noActiveSubscription: "No active subscription found.",
-    restoreFailedTryAgain: "Could not restore purchases. Please try again.",
-    noTradesFoundCsv: "No trades found. Use header row: date, symbol, direction, pnl (optional: entry, exit, contracts, notes).",
-    importedFromCsv: "Imported from CSV",
-    importComplete: "Import complete",
-    tradesAddedJournal: "{count} trades added to your journal.",
-    csvImportFailed: "CSV import failed",
-    loadingJournal: "Loading your journal...",
-    moodFocused: "Focused",
-    moodAngry: "Angry",
-    moodFomo: "FOMO",
-    moodFoggy: "Foggy",
-    moodSick: "Sick",
-    moodTired: "Tired",
-    moodOops: "Oops",
-    moodReckless: "Reckless",
-    moodGambling: "Gambling",
-    moodPatient: "Patient",
-    moodGreedy: "Greedy",
-  },
-  ru: {
-    stats: "Статистика",
-    winRate: "Процент побед",
-    profitFactor: "Профит-фактор",
-    expectancy: "Ожидание",
-    avgWinStreak: "Средняя серия побед",
-    avgLossStreak: "Средняя серия лоссов",
-    stopLoss: "Стоп-лосс",
-    takeProfit: "Тейк-профит",
-    percentRiskCalculator: "% калькулятор риска",
-    accountBalance: "Баланс счёта",
-    riskPercent: "Риск %",
-    maxRisk: "Макс. риск SL",
-    cloudSync: "Локальный backup",
-    aiAnalytics: "AI Аналитика",
-    entryTime: "Время входа",
-    exitTime: "Время выхода",
-    tags: "Теги",
-    customTags: "Свои теги",
-    couldNotSaveTrade: "Не удалось сохранить сделку",
-    checkTradeDetails: "Проверь данные сделки и попробуй ещё раз.",
-    entryTimeInvalid: "Время входа должно быть формата 09:30 или 9:30 AM.",
-    exitTimeInvalid: "Время выхода должно быть формата 09:45 или 9:45 AM.",
-    contractsInvalid: "Контракты должны быть от 1 до 1000.",
-    valueOutsideSafeRange: "{label} вне безопасного диапазона.",
-    entryPrice: "Цена входа",
-    exitPrice: "Цена выхода",
-    stopLossPrice: "Стоп-лосс",
-    takeProfitPrice: "Тейк-профит",
-    pnlOutsideSafeRange: "P&L вне безопасного диапазона.",
-    addPnlOrEntryExit: "Добавь P&L или цены входа/выхода.",
-    manualPnlRequired: "Для своего символа нужно ввести P&L вручную.",
-    calculatedPnlOutsideSafeRange: "Рассчитанный P&L вне безопасного диапазона.",
-    screenshotLimitTrade: "В бесплатном плане доступен один скриншот для этой сделки. Сначала удали текущий, чтобы заменить.",
-    screenshotLimitReached: "Лимит скриншотов достигнут",
-    screenshotLimitMessage: "Бесплатно доступно 3 скриншота в месяц. Pro открывает медиа-заметки для каждого сетапа.",
-    unlimitedScreenshots: "Безлимитные или расширенные скриншоты",
-    voiceNotesReview: "Голосовые заметки для разбора сделок",
-    cloudSyncReports: "Cloud sync и monthly reports",
-    cameraPermissionNeeded: "Нужен доступ к камере",
-    photoPermissionNeeded: "Нужен доступ к фото",
-    photoUploadFailed: "Не удалось добавить фото",
-    mediaPreservedRetry: "Данные сделки сохранены. Попробуй ещё раз.",
-    recordingFailed: "Запись не удалась",
-    microphonePermissionNeeded: "Нужен доступ к микрофону",
-    audioRecordingFailed: "Не удалось записать аудио",
-    voiceNotes: "Голосовые заметки",
-    voiceNoteName: "Голосовая заметка",
-    journalSafety: "Безопасность журнала",
-    deleteThisTradingDay: "Удалить этот торговый день?",
-    deleteTradingDayBody: "Это навсегда удалит все сделки за этот день. Действие нельзя отменить.",
-    cancel: "Отмена",
-    deleteDay: "Удалить день",
-    deleting: "Удаление...",
-    tapToViewEdit: "Нажми, чтобы открыть / редактировать",
-    dismiss: "Скрыть",
-    firstInsightProCta: "Pro открывает Hidden Leaks, Revenge Alerts, Pattern Detective и Prop Firm Coach.",
-    lockedInsightTitle: "Журнал нашёл 3 скрытые утечки.",
-    lockedInsightBody: "Открой Pro, чтобы увидеть, какая сессия, сетап и поведение стоят тебе денег.",
-    startThreeDayPro: "Начать 3-дневный Pro",
-    maybeLater: "Позже",
-    scrollToViewTrades: "Листай вниз, чтобы увидеть сделки",
-    tradesToday: "СДЕЛКИ СЕГОДНЯ",
-    selectMonth: "Выбрать месяц",
-    previousMonth: "Предыдущий месяц",
-    nextMonth: "Следующий месяц",
-    sharePnlCard: "Share Card",
-    saveImage: "Save Image",
-    saveImagePro: "Save Image",
-    monthlyPdf: "Monthly PDF",
-    exportTitle: "Экспорт",
-    savedTitle: "Сохранено",
-    pnlCardSaved: "P&L карточка сохранена в Фото.",
-    exportFailed: "Экспорт не удался",
-    saveImageProTitle: "Save Image доступен в Pro",
-    saveImageProMessage: "Бесплатно — 15 сохранённых или shared cards в месяц. Pro открывает Save Image и до 90 cards в месяц.",
-    fullExportsBenefit: "Полный Share P&L и Save Image экспорт",
-    unlimitedPdfBenefit: "Безлимитные monthly PDF",
-    premiumReportBenefit: "Премиальный дизайн отчётов",
-    shareCardLimitReached: "Лимит share card достигнут",
-    shareCardLimitMessage: "Бесплатно — 15 share cards в месяц. Pro открывает 90 saved cards в месяц, premium exports и отчёты.",
-    moreShareCardsBenefit: "90 saved cards в месяц",
-    fullImageExportsBenefit: "Полный экспорт изображений",
-    monthlyReportsBenefit: "Monthly PDF reports",
-    monthlyPdfPreviewUsed: "Monthly PDF preview использован",
-    monthlyPdfPreviewMessage: "Бесплатно доступен 1 watermarked monthly PDF в месяц. Pro открывает безлимитные premium reports.",
-    noWatermarkBenefit: "Без watermark",
-    aiSummaryReportBenefit: "AI summary и история отчётов",
-    aiTradeAnalysis: "AI-анализ сделок",
-    unlockAiAnalytics: "Открыть AI Analytics",
-    aiTradeAnalysisSub: "Сгенерировать ошибки, сильные стороны и рекомендации за выбранный период.",
-    analyzeMyTrades: "Проанализировать сделки",
-    analyzing: "Анализ...",
-    analysisReady: "Анализ готов ниже.",
-    aiUnavailableLocal: "Cloud AI сейчас недоступен. Создан локальный анализ журнала.",
-    addTradesFirstAnalysis: "Сначала добавь сделки, затем запускай анализ.",
-    aiTradeAnalysisPro: "AI Trade Analysis входит в YouTrader Pro.",
-    ok: "OK",
-    unlockPro: "Открыть Pro",
-    dailyBrief: "Daily Brief",
-    marketSummary: "Market Summary",
-    cached: "Кэш",
-    doNot: "Не делай:",
-    dailyBriefEmpty: "Daily brief появится после публикации кэшированных данных worker.",
-    marketSummaryEmpty: "Market summary cache пуст.",
-    macro: "Macro",
-    risk: "Risk",
-    notifications: "Уведомления",
-    notificationsRiskPermission: "Разреши уведомления, чтобы получать risk alerts.",
-    notificationsCalendarPermission: "Разреши уведомления, чтобы получать calendar alerts.",
-    calendarAlertsTitle: "Calendar alerts",
-    calendarAlertsUpdateFailed: "Не удалось обновить economic calendar alerts. Попробуй ещё раз.",
-    dailyPropReminder: "Ежедневное prop firm напоминание",
-    dailyPropReminderBody: "Утреннее уведомление с daily buffer и risk status.",
-    riskAlerts: "Risk alerts",
-    riskAlertsBody: "Ежедневное напоминание risk coach перед торговлей.",
-    economicCalendarAlerts: "Economic calendar alerts",
-    economicCalendarAlertsBody: "Утреннее напоминание проверить high-impact events.",
-    youTraderRiskCoach: "YouTrader Risk Coach",
-    riskCoachReminderBody: "Проверь prop firm risk status перед торговлей.",
-    youTraderEconomicCalendar: "YouTrader Economic Calendar",
-    economicCalendarReminderBody: "Проверь важные события дня перед торговлей.",
-    importTrades: "Импорт сделок",
-    importTradesBody: "Импортируй CSV journal из другой платформы. Pro функция.",
-    importTradesCsv: "Импорт сделок (CSV)",
-    importTradesCsvPro: "Импорт сделок (CSV) — Pro",
-    csvImportPro: "CSV import доступен в YouTrader Pro.",
-    proActiveTitle: "Подписка Pro активна",
-    proLockedTitle: "YouTrader Pro закрыт",
-    proActiveBody: "Все premium analytics, AI tools, news, calendar, import и export features открыты.",
-    proLockedBody: "Открой AI analysis, full analytics, Market Pulse news, CSV import и premium journal tools.",
-    monthlyPrice: "Monthly • $12.99",
-    yearlyPrice: "Yearly • $99.99",
-    checking: "Проверка...",
-    restorePurchases: "Восстановить покупки",
-    connecting: "Подключение...",
-    monthlyPlan: "MONTHLY",
-    yearlyPlan: "YEARLY",
-    upgradeMonthly: "Upgrade Monthly",
-    upgradeYearly: "Upgrade Yearly",
-    unlimitedTradesMedia: "Безлимитные сделки и медиа-заметки",
-    hiddenLeaksBenefit: "Hidden Leaks, Revenge Alerts, Pattern Detective",
-    proToolsBenefit: "Prop Firm Coach, exports, sync и monthly reports",
-    educationalDisclaimer: "Только образовательный анализ. Не финансовый совет.",
-    unlockFullEdgeAnalysis: "Открыть полный Edge Analysis",
-    paywallPreviewSub: "Журнал остаётся бесплатным. Pro открывает AI coaching, prop firm protection, hidden leaks, advanced stats, media notes, import/export, full news и полный economic calendar.",
-    purchaseFailed: "Покупка не удалась",
-    purchaseIssue: "Проблема с покупкой",
-    purchaseComplete: "Покупка завершена",
-    purchaseDifferentProduct: "Покупка завершена для другого продукта. Обратись в поддержку.",
-    purchaseUnreadable: "Покупка завершена, но подписка пока не читается. Нажми Restore Purchases.",
-    restoreUnavailable: "Подписки недоступны в этой сборке. Обнови приложение из App Store.",
-    proUnlocked: "YouTrader Pro открыт.",
-    noActiveSubscription: "Активная подписка не найдена.",
-    restoreFailedTryAgain: "Не удалось восстановить покупки. Попробуй ещё раз.",
-    noTradesFoundCsv: "Сделки не найдены. Используй заголовки: date, symbol, direction, pnl (опционально: entry, exit, contracts, notes).",
-    importedFromCsv: "Импортировано из CSV",
-    importComplete: "Импорт завершён",
-    tradesAddedJournal: "{count} сделок добавлено в журнал.",
-    csvImportFailed: "CSV import не удался",
-    loadingJournal: "Загружаю журнал...",
-    moodFocused: "Собран",
-    moodAngry: "Злой",
-    moodFomo: "FOMO",
-    moodFoggy: "Туман",
-    moodSick: "Болею",
-    moodTired: "Устал",
-    moodOops: "Ошибка",
-    moodReckless: "Безрассудно",
-    moodGambling: "Азарт",
-    moodPatient: "Терпелив",
-    moodGreedy: "Жадность",
-  },
-  es: {},
-  fr: {},
-  it: {},
-  uk: {},
-  de: {},
-};
-
-for (const langKey of Object.keys(I18N) as Lang[]) {
-  Object.assign(I18N[langKey], I18N_ADDITIONS.en, I18N_ADDITIONS[langKey]);
-}
-for (const langKey of Object.keys(I18N) as Lang[]) {
-  for (const key of Object.keys(I18N.en)) {
-    if (!I18N[langKey][key]) I18N[langKey][key] = I18N.en[key];
-  }
-}
-function tText(lang: Lang, key: string) {
-  return I18N[lang]?.[key] || I18N.en[key] || key;
-}
 
 const INSTRUMENTS: Record<
   string,
@@ -1504,7 +592,7 @@ function optionalPositiveNumber(value: string, label: string, lang: Lang, max = 
   if (!Number.isFinite(n) || n < 0 || n > max) {
     return {
       value: null as number | null,
-      error: interpolateI18n(tText(lang, "valueOutsideSafeRange"), { label }),
+      error: interpolateI18n(t("valueOutsideSafeRange"), { label }),
     };
   }
   return { value: n };
@@ -1534,23 +622,23 @@ function validateTradeForm(
   const entryTime = normalizeTradeClock(form.entryTime);
   const exitTime = normalizeTradeClock(form.exitTime);
   if (String(form.entryTime || "").trim() && !entryTime) {
-    return { error: tText(lang, "entryTimeInvalid") };
+    return { error: t("entryTimeInvalid") };
   }
   if (String(form.exitTime || "").trim() && !exitTime) {
-    return { error: tText(lang, "exitTimeInvalid") };
+    return { error: t("exitTimeInvalid") };
   }
   const contractsRaw = Number(String(form.contracts || "1").replace(",", "."));
   if (!Number.isFinite(contractsRaw) || contractsRaw <= 0 || contractsRaw > MAX_CONTRACTS) {
-    return { error: tText(lang, "contractsInvalid") };
+    return { error: t("contractsInvalid") };
   }
 
-  const entry = optionalPositiveNumber(form.entry, tText(lang, "entryPrice"), lang);
+  const entry = optionalPositiveNumber(form.entry, t("entryPrice"), lang);
   if (entry.error) return { error: entry.error };
-  const exit = optionalPositiveNumber(form.exit, tText(lang, "exitPrice"), lang);
+  const exit = optionalPositiveNumber(form.exit, t("exitPrice"), lang);
   if (exit.error) return { error: exit.error };
-  const stopLoss = optionalPositiveNumber(form.stopLoss, tText(lang, "stopLossPrice"), lang);
+  const stopLoss = optionalPositiveNumber(form.stopLoss, t("stopLossPrice"), lang);
   if (stopLoss.error) return { error: stopLoss.error };
-  const takeProfit = optionalPositiveNumber(form.takeProfit, tText(lang, "takeProfitPrice"), lang);
+  const takeProfit = optionalPositiveNumber(form.takeProfit, t("takeProfitPrice"), lang);
   if (takeProfit.error) return { error: takeProfit.error };
 
   const manualPnl = String(form.pnl || "").trim();
@@ -1558,16 +646,16 @@ function validateTradeForm(
   if (manualPnl) {
     const amount = Math.abs(Number(manualPnl.replace(",", ".")));
     if (!Number.isFinite(amount) || amount > MAX_ABS_PNL) {
-      return { error: tText(lang, "pnlOutsideSafeRange") };
+      return { error: t("pnlOutsideSafeRange") };
     }
     pnl = Number((pnlSide === "minus" ? -amount : amount).toFixed(2));
   } else {
     if (entry.value == null || exit.value == null) {
-      return { error: tText(lang, "addPnlOrEntryExit") };
+      return { error: t("addPnlOrEntryExit") };
     }
     const instrument = INSTRUMENTS[symbol];
     if (!instrument) {
-      return { error: tText(lang, "manualPnlRequired") };
+      return { error: t("manualPnlRequired") };
     }
     const diff =
       form.direction === "LONG"
@@ -1575,7 +663,7 @@ function validateTradeForm(
         : entry.value - exit.value;
     pnl = Number(((diff / instrument.tickSize) * instrument.tickValue * contractsRaw).toFixed(2));
     if (!Number.isFinite(pnl) || Math.abs(pnl) > MAX_ABS_PNL) {
-      return { error: tText(lang, "calculatedPnlOutsideSafeRange") };
+      return { error: t("calculatedPnlOutsideSafeRange") };
     }
   }
 
@@ -1859,10 +947,10 @@ function moodTranslationKey(key: string) {
   if (normalized === "greedy") return "moodGreedy";
   return null;
 }
-function moodLabel(key: string, lang: Lang = "en") {
+function moodLabel(key: string, _lang?: Lang) {
   const m = MOODS.find((x) => x.key === key);
   const translationKey = moodTranslationKey(key);
-  const label = translationKey ? tText(lang, translationKey) : key;
+  const label = translationKey ? t(translationKey) : key;
   return m ? `${m.emoji} ${label}` : label;
 }
 
@@ -2111,7 +1199,7 @@ function cloudRowToTrade(row: TradeJournalRow): Trade {
     voiceUri: row.voice_url || null,
     photoCloudUri: row.screenshot_url || null,
     voiceCloudUri: row.voice_url || null,
-    voiceName: row.voice_url ? "Voice note" : null,
+    voiceName: row.voice_url ? t("voiceNoteLabel") : null,
     createdAt,
     updatedAt,
   });
@@ -2468,7 +1556,7 @@ async function fetchYahooFinanceNews(): Promise<MarketNews[]> {
     const xml = await res.text();
     const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
     return blocks.slice(0, 40).map((block, index) => {
-      const title = stripHtml(rssTag(block, "title") || "Market update");
+      const title = stripHtml(rssTag(block, "title") || t("fallbackMarketUpdate"));
       const summary = stripHtml(rssTag(block, "description"));
       const link = stripHtml(rssTag(block, "link"));
       const pubDate = rssTag(block, "pubDate");
@@ -2520,9 +1608,9 @@ async function loadCachedMarketNews(): Promise<MarketNews[]> {
       const parsed = publishedAt ? Date.parse(publishedAt) / 1000 : Date.now() / 1000;
       return {
         id: String(row.id || uid()),
-        title: String(row.title || "Market update"),
+        title: String(row.title || t("fallbackMarketUpdate")),
         summary: String(row.summary || ""),
-        source: String(row.source || "Market Intel"),
+        source: String(row.source || t("fallbackMarketIntel")),
         time: fmtTime(Number.isFinite(parsed) ? parsed : Date.now() / 1000),
         url: String(row.url || ""),
         bias: normalizeMarketBias(row.bias, text),
@@ -2681,7 +1769,7 @@ async function loadNews(): Promise<MarketNews[]> {
         const text = `${n.headline || ""} ${n.summary || ""}`;
         return {
           id: String(n.id || uid()),
-          title: n.headline || "Market update",
+          title: n.headline || t("fallbackMarketUpdate"),
           summary: n.summary || "",
           source: n.source || "Finnhub",
           time: fmtTime(n.datetime || Date.now() / 1000),
@@ -2711,7 +1799,7 @@ function normalizeEvent(e: any, index: number): EconEvent {
     id: String(e.id || `${e.date || todayISO()}-${index}`),
     date: String(e.date || todayISO()).slice(0, 10),
     time: String(e.time || "08:30 AM"),
-    name: String(e.name || e.event || e.title || "Economic event"),
+    name: String(e.name || e.event || e.title || t("fallbackEconomicEvent")),
     impact: (String(e.impact || "LOW")
       .toUpperCase()
       .startsWith("H")
@@ -2749,7 +1837,7 @@ async function loadCachedEconomicEvents(start: string, end: string): Promise<Eco
         id: String(row.id || `${row.event_date}-${index}`),
         date: String(row.event_date || todayISO()).slice(0, 10),
         time: String(row.event_time || "TBD"),
-        name: String(row.event_name || "Economic event"),
+        name: String(row.event_name || t("fallbackEconomicEvent")),
         impact: ["HIGH", "MED", "LOW"].includes(String(row.importance || "").toUpperCase())
           ? (String(row.importance).toUpperCase() as Impact)
           : impactFromText(text),
@@ -2796,9 +1884,9 @@ async function loadMarketIntelligence(): Promise<MarketIntelData> {
           const parsed = row.published_at ? Date.parse(row.published_at) / 1000 : Date.now() / 1000;
           return {
             id: String(row.id || uid()),
-            title: String(row.title || "Market update"),
+            title: String(row.title || t("fallbackMarketUpdate")),
             summary: String(row.summary || ""),
-            source: String(row.source || "Market Intel"),
+            source: String(row.source || t("fallbackMarketIntel")),
             time: fmtTime(Number.isFinite(parsed) ? parsed : Date.now() / 1000),
             url: String(row.url || ""),
             bias: normalizeMarketBias(row.bias, text),
@@ -2813,7 +1901,7 @@ async function loadMarketIntelligence(): Promise<MarketIntelData> {
             id: String(row.id || `${row.event_date}-${index}`),
             date: String(row.event_date || today).slice(0, 10),
             time: String(row.event_time || "TBD"),
-            name: String(row.event_name || "Economic event"),
+            name: String(row.event_name || t("fallbackEconomicEvent")),
             impact: normalizeImpact(row.importance, text),
             actual: String(row.actual || "—"),
             forecast: String(row.forecast || "—"),
@@ -2824,7 +1912,7 @@ async function loadMarketIntelligence(): Promise<MarketIntelData> {
       : [];
     return {
       brief: briefRow ? {
-        title: String(briefRow.title || "Daily Brief"),
+        title: String(briefRow.title || t("dailyBrief")),
         summary: String(briefRow.summary || ""),
         marketRegime: String(briefRow.market_regime || "Balanced"),
         keyMacroEvents: parseStringArray(briefRow.key_macro_events),
@@ -2839,8 +1927,8 @@ async function loadMarketIntelligence(): Promise<MarketIntelData> {
         asset: String(item.asset || ""),
         bias: normalizeMarketBias({ [String(item.asset || "ES")]: item.bias }, String(item.reason || ""))[String(item.asset || "ES") as Asset] || "NEUTRAL",
         confidence: String(item.confidence || "LOW"),
-        reason: String(item.reason || "No cached reason yet."),
-        caution: String(item.caution || "Educational market context only. Not financial advice."),
+        reason: String(item.reason || t("fallbackNoCachedReason")),
+        caution: String(item.caution || t("fallbackMarketContextCaution")),
       })) : [],
       summary: summaryRow ? {
         macroTone: String(summaryRow.macro_tone || "Mixed"),
@@ -2853,10 +1941,10 @@ async function loadMarketIntelligence(): Promise<MarketIntelData> {
       events,
       propUpdates: Array.isArray(propRes.data) ? propRes.data.map((row: any) => ({
         id: String(row.id || uid()),
-        firm: String(row.firm || "Prop firm"),
+        firm: String(row.firm || t("fallbackPropFirm")),
         category: String(row.category || "rules"),
         keyText: String(row.key_text || ""),
-        detectedChangeSummary: String(row.detected_change_summary || "No change summary."),
+        detectedChangeSummary: String(row.detected_change_summary || t("fallbackNoChangeSummary")),
         changedAt: String(row.changed_at || ""),
         url: String(row.url || ""),
       })) : [],
@@ -2909,7 +1997,7 @@ async function fetchForexFactoryCalendar(): Promise<EconEvent[]> {
         const parsedDate = row.date ? new Date(row.date) : new Date();
         const date = Number.isNaN(parsedDate.getTime()) ? todayISO() : isoFromDate(parsedDate);
         const time = Number.isNaN(parsedDate.getTime()) ? String(row.time || "08:30 AM") : formatEventTime(parsedDate);
-        const name = String(row.title || row.event || row.name || "Economic event");
+        const name = String(row.title || row.event || row.name || t("fallbackEconomicEvent"));
         const currency = String(row.currency || row.country || "").toUpperCase();
         const text = `${name} ${currency}`;
         return applyCalendarBias({
@@ -2997,48 +2085,6 @@ async function loadCalendarEvents(): Promise<EconEvent[]> {
   }
 
   return (cached?.items || makeOfflineCalendarEvents()).map(applyCalendarBias);
-}
-
-function paramsFromUrl(url: string) {
-  const params = new URLSearchParams();
-  try {
-    const parsed = new URL(url);
-    parsed.searchParams.forEach((value, key) => params.set(key, value));
-    if (parsed.hash) {
-      new URLSearchParams(parsed.hash.replace(/^#/, "")).forEach((value, key) =>
-        params.set(key, value),
-      );
-    }
-  } catch {
-    const raw = url.split("?")[1] || url.split("#")[1] || "";
-    new URLSearchParams(raw).forEach((value, key) => params.set(key, value));
-  }
-  return params;
-}
-
-async function createSessionFromAuthUrl(url: string) {
-  if (!supabase) throw new Error("Account sign-in is not configured in this build.");
-  const params = paramsFromUrl(url);
-  const errorCode = params.get("error_code") || params.get("error");
-  if (errorCode) throw new Error(errorCode);
-
-  const code = params.get("code");
-  if (code) {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) throw error;
-    return data.session;
-  }
-
-  const access_token = params.get("access_token");
-  const refresh_token = params.get("refresh_token");
-  if (!access_token || !refresh_token) return null;
-
-  const { data, error } = await supabase.auth.setSession({
-    access_token,
-    refresh_token,
-  });
-  if (error) throw error;
-  return data.session;
 }
 
 function Card({ children, style }: any) {
@@ -3166,20 +2212,20 @@ function maxDrawdownFromTrades(trades: Trade[]) {
 
 function fullWeekdayName(label: string) {
   const map: Record<string, string> = {
-    Sun: "Sunday",
-    Mon: "Monday",
-    Tue: "Tuesday",
-    Wed: "Wednesday",
-    Thu: "Thursday",
-    Fri: "Friday",
-    Sat: "Saturday",
-    Sunday: "Sunday",
-    Monday: "Monday",
-    Tuesday: "Tuesday",
-    Wednesday: "Wednesday",
-    Thursday: "Thursday",
-    Friday: "Friday",
-    Saturday: "Saturday",
+    Sun: t("weekdaySunday"),
+    Mon: t("weekdayMonday"),
+    Tue: t("weekdayTuesday"),
+    Wed: t("weekdayWednesday"),
+    Thu: t("weekdayThursday"),
+    Fri: t("weekdayFriday"),
+    Sat: t("weekdaySaturday"),
+    Sunday: t("weekdaySunday"),
+    Monday: t("weekdayMonday"),
+    Tuesday: t("weekdayTuesday"),
+    Wednesday: t("weekdayWednesday"),
+    Thursday: t("weekdayThursday"),
+    Friday: t("weekdayFriday"),
+    Saturday: t("weekdaySaturday"),
   };
   return map[label] || label;
 }
@@ -3467,9 +2513,9 @@ function buildStreakBehaviorForAnalysis(trades: Trade[]): TradeAnalysisPayload["
 
 function sessionLabelForTrade(trade: Trade) {
   const h = getTradeTime(trade).getHours();
-  if (h < 11) return "Morning";
-  if (h < 14) return "Midday";
-  return "Afternoon";
+  if (h < 11) return t("sessionMorning");
+  if (h < 14) return t("sessionMidday");
+  return t("sessionAfternoon");
 }
 function primarySetupLabel(trade: Trade) {
   const tags = extractStrategyTags(trade);
@@ -3554,134 +2600,7 @@ function buildLocalTradeAnalysisResult(
   stats: ReturnType<typeof calcStats>,
   patterns: ReturnType<typeof buildMistakePatterns>,
 ): TradeAnalysisResult {
-  const weakestSession = lowToHighPerformance(stats.session)[0]?.label || "your weakest session";
-  const bestSession = stats.session[0]?.label || "your best session";
-  const weakestDay = lowToHighPerformance(stats.weekday)[0]?.label || "your weakest day";
-  const sampleConfidence = stats.count >= 20 ? "medium" : "low";
-  const detectiveScore = Math.max(20, Math.min(88, Math.round(50 + stats.wr * 0.18 + Math.min(stats.pf, 4) * 7 + (stats.exp > 0 ? 8 : -8))));
-  const agent = (finding: string, evidence: string, action: string): DetectiveAgentFinding => ({
-    finding,
-    evidence,
-    action,
-  });
-  return {
-    mistakes: [
-      {
-        title: stats.pf < 1 ? "Profit factor is below 1" : "Protect low-quality trades",
-        explanation:
-          stats.pf < 1
-            ? "Losses are currently larger than wins. Reduce size until the edge stabilizes."
-            : "Your data shows room to filter weaker setups before entry.",
-        evidence: `Profit factor is ${stats.pf.toFixed(2)} across ${stats.count} trades.`,
-        fix: "Only take setups that match your written checklist for the next 10 trades.",
-      },
-      {
-        title: stats.exp < 0 ? "Negative expectancy" : `Review ${weakestSession}`,
-        explanation:
-          stats.exp < 0
-            ? "Average result per trade is negative. Focus on risk per trade and stop discipline."
-            : `${weakestSession} has the weakest performance profile in this period.`,
-        evidence: `Expectancy is ${moneyCompact(stats.exp)} and weakest session is ${weakestSession}.`,
-        fix: `Reduce size during ${weakestSession} until the sample improves.`,
-      },
-      {
-        title: patterns.includes("multi_loss_streaks") ? "Loss streak pressure" : `Weak day: ${weakestDay}`,
-        explanation:
-          patterns.includes("multi_loss_streaks")
-            ? "Multiple loss streaks appear in this period. Add a hard pause rule after two losses."
-            : `${weakestDay} deserves reduced size or stricter setup selection.`,
-        evidence: `Average loss streak is ${stats.avgLossStreak.toFixed(1)} and weakest day is ${weakestDay}.`,
-        fix: "Add a hard pause after two losses or after one rule-breaking trade.",
-      },
-    ],
-    strengths: [
-      {
-        title: stats.wr >= 50 ? "Positive win-rate structure" : "Journal sample is building",
-        explanation:
-          stats.wr >= 50
-            ? `Win rate is ${stats.wr.toFixed(0)}%, which gives you a base to refine risk/reward.`
-            : "You have enough data to identify what needs improvement next.",
-        evidence: `${stats.wr.toFixed(0)}% win rate over ${stats.count} trades.`,
-        howToUse: "Keep the same entry quality and improve loss size control.",
-      },
-      {
-        title: stats.exp > 0 ? "Positive expectancy" : "Risk awareness",
-        explanation:
-          stats.exp > 0
-            ? `Average result is ${moneyCompact(stats.exp)} per trade in this period.`
-            : "The journal is already showing where risk needs to be tightened.",
-        evidence: `Expectancy is ${moneyCompact(stats.exp)} per trade.`,
-        howToUse: "Do not increase size until this stays stable across a larger sample.",
-      },
-      {
-        title: `Best session: ${bestSession}`,
-        explanation: `${bestSession} is currently your strongest session by net P&L.`,
-        evidence: `${bestSession} leads your session breakdown by net P&L.`,
-        howToUse: `Prioritize clean setups during ${bestSession}.`,
-      },
-    ],
-    recommendations: [
-      {
-        title: "Add a two-loss pause rule",
-        action: "After two consecutive losses, stop trading or switch to review-only mode.",
-        why: "Loss streaks are where many prop firm rule breaches start.",
-      },
-      {
-        title: "Trade your strongest window",
-        action: `Prioritize ${bestSession} and reduce size during weaker sessions.`,
-        why: `Your session data currently favors ${bestSession}.`,
-      },
-      {
-        title: "Review expectancy weekly",
-        action: "Track expectancy, profit factor, and drawdown every weekend before increasing size.",
-        why: "Scaling should follow stable execution, not one strong day.",
-      },
-    ],
-    summary: "Generated locally from your journal statistics because cloud AI analysis was unavailable.",
-    detectiveScore,
-    mainBlindSpot: {
-      title: stats.exp < 0 ? "Negative expectancy is the main leak" : `${weakestSession} needs stricter filtering`,
-      evidence: `Expectancy ${moneyCompact(stats.exp)} • Profit factor ${stats.pf.toFixed(2)} • ${stats.count} trades analyzed.`,
-      whyItMatters: "This pattern affects consistency and can pressure prop firm drawdown limits if repeated.",
-      action: stats.exp < 0 ? "Cut size and review every loss before the next live session." : `Use smaller size in ${weakestSession} until the data improves.`,
-    },
-    hiddenPatterns: [
-      {
-        title: `${weakestSession} is your weakest session`,
-        evidence: `${weakestSession} has the weakest net P&L in the current period.`,
-        confidence: sampleConfidence,
-        impact: "medium",
-        action: `Reduce activity in ${weakestSession} or require A+ setups only.`,
-      },
-      {
-        title: `${weakestDay} needs tighter rules`,
-        evidence: `${weakestDay} is the weakest day in your current breakdown.`,
-        confidence: sampleConfidence,
-        impact: "medium",
-        action: `Lower risk or stop earlier on ${weakestDay}.`,
-      },
-      {
-        title: stats.exp > 0 ? "Expectancy is supporting progress" : "Expectancy is not supporting progress",
-        evidence: `Average result is ${moneyCompact(stats.exp)} per trade.`,
-        confidence: sampleConfidence,
-        impact: stats.exp > 0 ? "medium" : "high",
-        action: stats.exp > 0 ? "Protect the current process and avoid size jumps." : "Do not scale risk until expectancy turns positive.",
-      },
-    ],
-    agentFindings: {
-      riskAgent: agent("Risk needs evidence-based sizing.", `Max drawdown is ${moneyCompact(stats.maxDd)}.`, "Keep size fixed until drawdown stabilizes."),
-      disciplineAgent: agent("Discipline sample is being measured.", `Average loss streak is ${stats.avgLossStreak.toFixed(1)}.`, "Pause after two losses."),
-      propFirmAgent: agent("Prop firm risk depends on buffer protection.", `Current period P&L is ${moneyCompact(stats.pnl)}.`, "Protect daily and account buffers before chasing targets."),
-      sessionAgent: agent(`${bestSession} is currently strongest.`, `${bestSession} leads session performance.`, `Prioritize ${bestSession} and reduce weak-session trades.`),
-      psychologyAgent: agent("Mood data can improve future analysis.", "Mood is included only when logged with trades.", "Log mood consistently for the next 20 trades."),
-      instrumentAgent: agent("Instrument edge is sample-dependent.", `Best symbol is ${stats.bySetup[0]?.label || "not clear yet"}.`, "Keep symbol tags consistent."),
-      streakAgent: agent("Streak behavior needs a hard rule.", `Average loss streak is ${stats.avgLossStreak.toFixed(1)}.`, "No size increase after a loss."),
-      executionAgent: agent("Execution quality improves with setup tags.", "Strategy tags are analyzed when present.", "Add setup tags like ORB, pullback, breakout, or reversal."),
-      consistencyAgent: agent("Consistency is the core improvement lever.", `Win rate ${stats.wr.toFixed(0)}%, profit factor ${stats.pf.toFixed(2)}.`, "Review the same metrics weekly before changing risk."),
-    },
-    nextTradingRule: "For the next session, take only checklist-perfect setups and stop after two losses.",
-    disclaimer: "Educational trading journal feedback only. This is not financial advice and does not predict market outcomes.",
-  };
+  return buildLocalizedLocalCoachAnalysis(stats, patterns, moneyCompact, lowToHighPerformance) as TradeAnalysisResult;
 }
 
 function toDateStart(value: Date) {
@@ -3737,7 +2656,7 @@ function PerformanceBreakdown({
       </View>
       {items.length === 0 ? (
         <View style={styles.breakdownEmpty}>
-          <Text style={styles.breakdownEmptyText}>Add trades to reveal your edge.</Text>
+          <Text style={styles.breakdownEmptyText}>{t("addTradesRevealEdge")}</Text>
         </View>
       ) : (
         items.map((item, index) => {
@@ -3755,7 +2674,7 @@ function PerformanceBreakdown({
                       {labelFormatter(item.label)}
                     </Text>
                     <Text style={styles.breakdownMeta} numberOfLines={1}>
-                      {item.count} trades • {item.wr.toFixed(0)}% win rate
+                      {t("tradesWinRateMeta", { count: item.count, wr: item.wr.toFixed(0) })}
                     </Text>
                   </View>
                 </View>
@@ -3830,7 +2749,7 @@ function bestStrategyTagFromTrades(trades: Trade[]) {
 }
 
 function PropRiskEntryCard({
-  title = "Prop risk today",
+  title,
   trades,
   selectedDate,
   templates,
@@ -3842,6 +2761,7 @@ function PropRiskEntryCard({
   templates: RiskTemplate[];
   onPress: () => void;
 }) {
+  const cardTitle = title ?? t("propRiskToday");
   const safeTemplates = templates;
   const [templateKey, setTemplateKey] = useState("");
   const [mode, setMode] = useState<FirmMode>("evaluation");
@@ -3869,8 +2789,8 @@ function PropRiskEntryCard({
     return (
       <Pressable onPress={onPress}>
         <GlassCard style={styles.propEntryCard} intensity={32}>
-          <Text style={styles.propEntryTitle}>{title}</Text>
-          <Text style={styles.sub}>Sync firm rules from Supabase to activate the Prop Firm Risk Assistant.</Text>
+          <Text style={styles.propEntryTitle}>{cardTitle}</Text>
+          <Text style={styles.sub}>{t("propSyncActivate")}</Text>
         </GlassCard>
       </Pressable>
     );
@@ -3881,7 +2801,7 @@ function PropRiskEntryCard({
       <GlassCard style={styles.propEntryCard} intensity={32}>
         <View style={styles.rowBetween}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.propEntryTitle}>{title}</Text>
+            <Text style={styles.propEntryTitle}>{cardTitle}</Text>
             <Text style={styles.sub} numberOfLines={1}>
               {snapshot.template.label} • {mode === "funded" ? "Funded" : "Evaluation"}
             </Text>
@@ -3899,7 +2819,7 @@ function PropRiskEntryCard({
         </View>
         <View style={styles.propEntryStatsRow}>
           <View style={styles.propEntryStat}>
-            <Text style={styles.edgeMiniLabel}>Daily buffer</Text>
+            <Text style={styles.edgeMiniLabel}>{t("dailyBuffer")}</Text>
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -3910,7 +2830,7 @@ function PropRiskEntryCard({
             </Text>
           </View>
           <View style={styles.propEntryStat}>
-            <Text style={styles.edgeMiniLabel}>Day P&L</Text>
+            <Text style={styles.edgeMiniLabel}>{t("dayPnl")}</Text>
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -3921,7 +2841,7 @@ function PropRiskEntryCard({
             </Text>
           </View>
           <View style={styles.propEntryStat}>
-            <Text style={styles.edgeMiniLabel}>To pass</Text>
+            <Text style={styles.edgeMiniLabel}>{t("toPass")}</Text>
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
@@ -3943,7 +2863,7 @@ function PropRiskEntryCard({
             ]}
           />
         </View>
-        <Text style={styles.propEntryHint}>Tap for prop firm rules & daily buffer</Text>
+        <Text style={styles.propEntryHint}>{t("propEntryHint")}</Text>
       </GlassCard>
     </Pressable>
   );
@@ -4245,34 +3165,41 @@ function ProValueModal({
           </View>
           <Text style={styles.valueModalTitle}>{content.title}</Text>
           <Text style={styles.valueModalText}>{content.message}</Text>
-          {(content.bullets || [tText(lang, "unlimitedTradesMedia"), tText(lang, "hiddenLeaksBenefit"), tText(lang, "proToolsBenefit")]).slice(0, 4).map((item) => (
+          {(content.bullets || [t("unlimitedTradesMedia"), t("hiddenLeaksBenefit"), t("proToolsBenefit")]).slice(0, 4).map((item) => (
             <Text key={item} style={styles.valueModalBullet}>✓ {item}</Text>
           ))}
-          {content.primaryTrial ? (
+          {content.reason === "trade_limit" ? (
+            <>
+              <Pressable disabled={purchaseBusy} onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)} style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}>
+                <Text style={styles.primaryText}>{purchaseBusy ? t("connecting") : TRADE_LIMIT_PAYWALL.cta}</Text>
+              </Pressable>
+              <Text style={[styles.sub, { textAlign: "center", marginTop: 10, lineHeight: 18 }]}>{TRADE_LIMIT_PAYWALL.priceHint}</Text>
+            </>
+          ) : content.primaryTrial ? (
             <Pressable disabled={purchaseBusy} onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)} style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}>
-              <Text style={styles.primaryText}>{purchaseBusy ? tText(lang, "connecting") : tText(lang, "startThreeDayPro")}</Text>
+              <Text style={styles.primaryText}>{purchaseBusy ? t("connecting") : t("startThreeDayPro")}</Text>
             </Pressable>
           ) : null}
           <View style={styles.valueModalPlanRow}>
             <Pressable disabled={purchaseBusy} onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)} style={[styles.valueModalPlan, purchaseBusy && styles.disabledBtn]}>
-              <Text style={styles.planName}>{tText(lang, "monthlyPlan")}</Text>
-              <Text style={styles.planPrice}>{tText(lang, "upgradeMonthly")}</Text>
+              <Text style={styles.planName}>{t("monthlyPlan")}</Text>
+              <Text style={styles.planPrice}>{t("upgradeMonthly")}</Text>
               <Text style={styles.sub}>{monthlyPrice}</Text>
             </Pressable>
             <Pressable disabled={purchaseBusy} onPress={() => onPurchase(yearly, YOU_TRADER_YEARLY_PRODUCT_ID)} style={[styles.valueModalPlan, styles.valueModalYearlyPlan, purchaseBusy && styles.disabledBtn]}>
-              <Text style={styles.planName}>{tText(lang, "yearlyPlan")}</Text>
-              <Text style={styles.planPrice}>{tText(lang, "upgradeYearly")}</Text>
+              <Text style={styles.planName}>{t("yearlyPlan")}</Text>
+              <Text style={styles.planPrice}>{t("upgradeYearly")}</Text>
               <Text style={styles.sub}>{yearlyPrice}</Text>
             </Pressable>
           </View>
           <Pressable disabled={purchaseBusy} onPress={onRestore} style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}>
-            <Text style={styles.secondaryText}>{purchaseBusy ? tText(lang, "checking") : tText(lang, "restorePurchases")}</Text>
+            <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
           </Pressable>
           <Pressable onPress={onClose} style={styles.valueModalLaterBtn}>
-            <Text style={styles.valueModalLaterText}>{tText(lang, "maybeLater")}</Text>
+            <Text style={styles.valueModalLaterText}>{t("maybeLater")}</Text>
           </Pressable>
           {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
-          <Text style={styles.newsDisclaimer}>{tText(lang, "educationalDisclaimer")}</Text>
+          <Text style={styles.newsDisclaimer}>{t("educationalDisclaimer")}</Text>
         </GlassCard>
       </View>
     </Modal>
@@ -4306,16 +3233,16 @@ function PaywallPreview({
   }, []);
   return (
     <GlassCard style={styles.paywallPreview} intensity={42}>
-      <Text style={styles.paywallTitle}>{tText(lang, "unlockFullEdgeAnalysis")}</Text>
+      <Text style={styles.paywallTitle}>{t("unlockFullEdgeAnalysis")}</Text>
       <Text style={styles.paywallSub}>
-        {tText(lang, "paywallPreviewSub")}
+        {t("paywallPreviewSub")}
       </Text>
       <Pressable
         disabled={purchaseBusy}
         onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
         style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}
       >
-        <Text style={styles.primaryText}>{purchaseBusy ? tText(lang, "connecting") : tText(lang, "unlockPro")}</Text>
+        <Text style={styles.primaryText}>{purchaseBusy ? t("connecting") : t("unlockPro")}</Text>
       </Pressable>
       <SubscriptionLegalDisclosure
         monthlyPackage={monthly}
@@ -4327,7 +3254,7 @@ function PaywallPreview({
           onPress={onRestore}
           style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
         >
-          <Text style={styles.secondaryText}>{purchaseBusy ? tText(lang, "checking") : tText(lang, "restorePurchases")}</Text>
+          <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
         </Pressable>
       ) : null}
       {paywallError ? (
@@ -4406,8 +3333,8 @@ function PropTemplateSelector({
   return (
     <View style={styles.propTemplateSelector}>
       <View style={styles.propTemplateHeader}>
-        <Text style={styles.terminalSmallLabel}>Eval account</Text>
-        <Text style={styles.propTemplateHint}>Rules, buffers and contract plan update live</Text>
+        <Text style={styles.terminalSmallLabel}>{t("evalAccount")}</Text>
+        <Text style={styles.propTemplateHint}>{t("propTemplateHintLive")}</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRail}>
         {safeTemplates.map((template) => {
@@ -4470,25 +3397,25 @@ function StatsMetricDashboard({
   const biggestWin = Math.max(0, ...trades.map((trade) => trade.pnl));
   const biggestLoss = Math.min(0, ...trades.map((trade) => trade.pnl));
   const rows: Array<{ label: string; value: string; tone: "green" | "red" | "purple" | "grey"; pro?: boolean }> = [
-    { label: "Win Rate", value: `${stats.wr.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
-    { label: "Trades", value: String(stats.count), tone: "grey" },
-    { label: "Win / Loss", value: `${wins} / ${losses}`, tone: wins >= losses ? "green" : "red" },
-    { label: "Month P&L", value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
-    { label: "Week P&L", value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
-    { label: "Biggest Win", value: moneyCompact(biggestWin), tone: "green" },
-    { label: "Biggest Loss", value: moneyCompact(biggestLoss), tone: biggestLoss < 0 ? "red" : "grey" },
-    { label: "Profit Factor", value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple", pro: true },
-    { label: "Expectancy", value: moneyCompact(stats.exp), tone: stats.exp >= 0 ? "green" : "red", pro: true },
-    { label: "Avg Win/Loss", value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", tone: stats.avgWinLoss >= 1.5 ? "green" : "purple", pro: true },
-    { label: "Consistency", value: `${consistency.toFixed(0)}%`, tone: consistency >= 65 ? "green" : "purple", pro: true },
-    { label: "Stability Score", value: stats.sharpeRatio ? stats.sharpeRatio.toFixed(2) : "0.00", tone: stats.sharpeRatio >= 0.8 ? "green" : "purple", pro: true },
-    { label: "Max Losing Day Streak", value: String(stats.maxLossDayStreak), tone: stats.maxLossDayStreak >= 2 ? "red" : "grey", pro: true },
-    { label: "Max Winning Day Streak", value: String(stats.maxWinDayStreak), tone: "green", pro: true },
+    { label: t("winRate"), value: `${stats.wr.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
+    { label: t("trades"), value: String(stats.count), tone: "grey" },
+    { label: t("winLoss"), value: `${wins} / ${losses}`, tone: wins >= losses ? "green" : "red" },
+    { label: t("monthPnl"), value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
+    { label: t("weekPnl"), value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
+    { label: t("biggestWin"), value: moneyCompact(biggestWin), tone: "green" },
+    { label: t("biggestLoss"), value: moneyCompact(biggestLoss), tone: biggestLoss < 0 ? "red" : "grey" },
+    { label: t("profitFactor"), value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple", pro: true },
+    { label: t("expectancy"), value: moneyCompact(stats.exp), tone: stats.exp >= 0 ? "green" : "red", pro: true },
+    { label: t("avgWinLoss"), value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", tone: stats.avgWinLoss >= 1.5 ? "green" : "purple", pro: true },
+    { label: t("consistency"), value: `${consistency.toFixed(0)}%`, tone: consistency >= 65 ? "green" : "purple", pro: true },
+    { label: t("stabilityScore"), value: stats.sharpeRatio ? stats.sharpeRatio.toFixed(2) : "0.00", tone: stats.sharpeRatio >= 0.8 ? "green" : "purple", pro: true },
+    { label: t("maxLosingDayStreak"), value: String(stats.maxLossDayStreak), tone: stats.maxLossDayStreak >= 2 ? "red" : "grey", pro: true },
+    { label: t("maxWinningDayStreak"), value: String(stats.maxWinDayStreak), tone: "green", pro: true },
   ];
   return (
     <View style={styles.statsMetricDashboard}>
       <View style={styles.statsMetricHeader}>
-        <Text style={styles.terminalHeroTitle}>Stats Dashboard</Text>
+        <Text style={styles.terminalHeroTitle}>{t("statsDashboard")}</Text>
       </View>
       <View style={styles.statsMetricGrid}>
         {rows.map((row) => {
@@ -4658,8 +3585,8 @@ function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: T
     <TerminalGlassCard style={[styles.terminalHeroCard, styles.terminalEquityCard]}>
       <View style={styles.terminalHeaderRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.terminalHeroTitle}>Equity Curve</Text>
-          <Text style={styles.terminalSub}>Live account story from your journal</Text>
+          <Text style={styles.terminalHeroTitle}>{t("equityCurveTitle")}</Text>
+          <Text style={styles.terminalSub}>{t("equityCurveSub")}</Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={[styles.terminalKpi, { color: stats.pnl >= 0 ? C.green : C.red }]}>{moneyCompact(stats.pnl)}</Text>
@@ -4699,12 +3626,12 @@ function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: T
       </View>
       <MetricPillRow
         items={[
-          { label: "Today", value: moneyCompact(trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0)), tone: trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0) >= 0 ? "green" : "red" },
-          { label: "Weekly", value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
-          { label: "Monthly", value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
-          { label: "Max DD", value: moneyCompact(stats.maxDd), tone: stats.maxDd < 0 ? "red" : "grey" },
-          { label: "Avg Day", value: moneyCompact(buildDailySeries(trades).length ? stats.pnl / buildDailySeries(trades).length : 0), tone: "grey" },
-          { label: "PF", value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple" },
+          { label: t("microToday"), value: moneyCompact(trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0)), tone: trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0) >= 0 ? "green" : "red" },
+          { label: t("microWeekly"), value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
+          { label: t("microMonthly"), value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
+          { label: t("microMaxDd"), value: moneyCompact(stats.maxDd), tone: stats.maxDd < 0 ? "red" : "grey" },
+          { label: t("microAvgDay"), value: moneyCompact(buildDailySeries(trades).length ? stats.pnl / buildDailySeries(trades).length : 0), tone: "grey" },
+          { label: t("microPF"), value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple" },
         ]}
       />
     </TerminalGlassCard>
@@ -4724,12 +3651,12 @@ function TerminalTradingDna({
 }) {
   const [selected, setSelected] = useState<{ title: string; current: string; target: string; explanation: string } | null>(null);
   const rings = [
-    { label: "Win Rate", value: Math.min(100, stats.wr), display: `${stats.wr.toFixed(0)}%`, color: C.green, target: "55%+", explanation: "Percentage of closed trades that finished green." },
-    { label: "Risk", value: drawdownControl, display: `${drawdownControl.toFixed(0)}%`, color: drawdownControl >= 70 ? C.green : C.yellow, target: "70%+", explanation: "How well your drawdown is controlled relative to current profit and buffer." },
-    { label: "Consistency", value: consistency, display: `${consistency.toFixed(0)}%`, color: C.purple, target: "70%+", explanation: "Green day rate plus daily P&L stability." },
-    { label: "Recovery", value: Math.min(100, Math.max(0, recoveryFactor / 4) * 100), display: recoveryFactor ? recoveryFactor.toFixed(1) : "—", color: C.green, target: "3.0+", explanation: "Net P&L divided by max drawdown." },
-    { label: "Profit Factor", value: Math.min(100, (stats.pf / 2.5) * 100), display: stats.pf ? stats.pf.toFixed(2) : "—", color: C.green, target: "1.5+", explanation: "Gross wins divided by gross losses." },
-    { label: "Reward Risk", value: Math.min(100, (stats.avgWinLoss / 2.5) * 100), display: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", color: C.purple, target: "1.5+", explanation: "Average win size divided by average loss size." },
+    { label: t("winRate"), value: Math.min(100, stats.wr), display: `${stats.wr.toFixed(0)}%`, color: C.green, target: "55%+", explanation: t("radarWinRateExp") },
+    { label: t("riskLabel"), value: drawdownControl, display: `${drawdownControl.toFixed(0)}%`, color: drawdownControl >= 70 ? C.green : C.yellow, target: "70%+", explanation: t("radarRiskExp") },
+    { label: t("consistency"), value: consistency, display: `${consistency.toFixed(0)}%`, color: C.purple, target: "70%+", explanation: t("radarConsistencyExp") },
+    { label: t("recovery"), value: Math.min(100, Math.max(0, recoveryFactor / 4) * 100), display: recoveryFactor ? recoveryFactor.toFixed(1) : "—", color: C.green, target: "3.0+", explanation: t("radarRecoveryExp") },
+    { label: t("profitFactor"), value: Math.min(100, (stats.pf / 2.5) * 100), display: stats.pf ? stats.pf.toFixed(2) : "—", color: C.green, target: "1.5+", explanation: t("radarProfitFactorExp") },
+    { label: t("rewardRiskLabel"), value: Math.min(100, (stats.avgWinLoss / 2.5) * 100), display: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", color: C.purple, target: "1.5+", explanation: t("radarRewardRiskExp") },
   ];
   const profileScore = Math.round(rings.reduce((sum, ring) => sum + Math.max(0, Math.min(100, ring.value)), 0) / rings.length);
   const strengths = rings.filter((ring) => ring.value >= 65).slice(0, 3);
@@ -4737,11 +3664,11 @@ function TerminalTradingDna({
 
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalEyebrow}>Trading DNA</Text>
+      <Text style={styles.terminalEyebrow}>{t("tradingDna")}</Text>
       <View style={styles.dnaHero}>
         <View style={styles.dnaScoreCircle}>
           <Text style={styles.dnaScore}>{profileScore}</Text>
-          <Text style={styles.dnaScoreLabel}>DNA Score</Text>
+          <Text style={styles.dnaScoreLabel}>{t("dnaScore")}</Text>
         </View>
         <View style={styles.dnaRingGrid}>
           {rings.map((ring) => (
@@ -4758,7 +3685,7 @@ function TerminalTradingDna({
       </View>
       <View style={styles.dnaInsightRow}>
         <View style={styles.dnaInsightBlock}>
-          <Text style={styles.terminalSmallLabel}>Strengths</Text>
+          <Text style={styles.terminalSmallLabel}>{t("strengths")}</Text>
           <View style={styles.terminalChipRow}>
             {(strengths.length ? strengths : rings.slice(0, 2)).map((ring) => (
               <Text key={ring.label} style={styles.terminalChip}>● {ring.label}</Text>
@@ -4766,17 +3693,17 @@ function TerminalTradingDna({
           </View>
         </View>
         <View style={styles.dnaWeakBlock}>
-          <Text style={styles.terminalSmallLabel}>Weakest Area</Text>
+          <Text style={styles.terminalSmallLabel}>{t("weakestArea")}</Text>
           <Text style={styles.dnaWeakText}>{weakest.label}</Text>
-          <Text style={styles.terminalSub}>Target {weakest.target}</Text>
+          <Text style={styles.terminalSub}>{t("targetPrefix")} {weakest.target}</Text>
         </View>
       </View>
-      <BottomSheetPanel visible={!!selected} title={selected?.title || "Metric"} onClose={() => setSelected(null)}>
+      <BottomSheetPanel visible={!!selected} title={selected?.title || t("metricDefault")} onClose={() => setSelected(null)}>
         {selected ? (
           <>
             <Text style={styles.bottomSheetBig}>{selected.current}</Text>
             <Text style={styles.bottomSheetText}>{selected.explanation}</Text>
-            <Text style={styles.bottomSheetText}>Target: {selected.target}</Text>
+            <Text style={styles.bottomSheetText}>{t("targetPrefix")}: {selected.target}</Text>
           </>
         ) : null}
       </BottomSheetPanel>
@@ -4784,7 +3711,7 @@ function TerminalTradingDna({
   );
 }
 
-const RADAR_PRO_ONLY_LABELS = new Set(["Consistency", "Recovery", "Profit Factor"]);
+const RADAR_PRO_ONLY_KEYS = new Set(["consistency", "recovery", "profitFactor"]);
 
 function PremiumPerformanceRadar({
   stats,
@@ -4806,18 +3733,18 @@ function PremiumPerformanceRadar({
   const center = size / 2;
   const maxR = 102;
   const lockedBaselineR = maxR * 0.22;
-  const isAxisLocked = (label: string) => !isPremium && RADAR_PRO_ONLY_LABELS.has(label);
+  const isAxisLocked = (key: string) => !isPremium && RADAR_PRO_ONLY_KEYS.has(key);
   const axes = [
-    { label: "Win Rate", value: `${stats.wr.toFixed(0)}%`, score: Math.min(100, stats.wr), target: "55%+", explanation: "Percent of trades closed green." },
-    { label: "Risk Ctrl", value: `${drawdownControl.toFixed(0)}%`, score: drawdownControl, target: "70%+", explanation: "Drawdown control relative to total performance and risk buffer." },
-    { label: "Consistency", value: `${consistency.toFixed(0)}%`, score: consistency, target: "70%+", explanation: "Green-day quality plus daily P&L stability." },
-    { label: "Recovery", value: recoveryFactor ? recoveryFactor.toFixed(1) : "—", score: Math.min(100, (recoveryFactor / 4) * 100), target: "3.0+", explanation: "Net P&L divided by max drawdown." },
-    { label: "Profit Factor", value: stats.pf ? stats.pf.toFixed(2) : "—", score: Math.min(100, (stats.pf / 2.5) * 100), target: "1.5+", explanation: "Gross wins divided by gross losses." },
-    { label: "Reward Risk", value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", score: Math.min(100, (stats.avgWinLoss / 2.5) * 100), target: "1.5+", explanation: "Average win size divided by average loss size." },
+    { key: "winRate", label: t("winRate"), value: `${stats.wr.toFixed(0)}%`, score: Math.min(100, stats.wr), target: "55%+", explanation: t("radarWinRateExpShort") },
+    { key: "riskCtrl", label: t("riskCtrl"), value: `${drawdownControl.toFixed(0)}%`, score: drawdownControl, target: "70%+", explanation: t("radarRiskCtrlExp") },
+    { key: "consistency", label: t("consistency"), value: `${consistency.toFixed(0)}%`, score: consistency, target: "70%+", explanation: t("radarConsistencyExpShort") },
+    { key: "recovery", label: t("recovery"), value: recoveryFactor ? recoveryFactor.toFixed(1) : "—", score: Math.min(100, (recoveryFactor / 4) * 100), target: "3.0+", explanation: t("radarRecoveryExp") },
+    { key: "profitFactor", label: t("profitFactor"), value: stats.pf ? stats.pf.toFixed(2) : "—", score: Math.min(100, (stats.pf / 2.5) * 100), target: "1.5+", explanation: t("radarProfitFactorExp") },
+    { key: "rewardRisk", label: t("rewardRiskLabel"), value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", score: Math.min(100, (stats.avgWinLoss / 2.5) * 100), target: "1.5+", explanation: t("radarRewardRiskExp") },
   ];
   const points = axes.map((axis, index) => {
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / axes.length;
-    const locked = isAxisLocked(axis.label);
+    const locked = isAxisLocked(axis.key);
     const r = locked ? lockedBaselineR : (Math.max(18, Math.min(100, axis.score)) / 100) * maxR;
     return {
       ...axis,
@@ -4829,7 +3756,7 @@ function PremiumPerformanceRadar({
     };
   });
   const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
-  const visibleAxes = isPremium ? axes : axes.filter((axis) => !isAxisLocked(axis.label));
+  const visibleAxes = isPremium ? axes : axes.filter((axis) => !isAxisLocked(axis.key));
   const profileScore = Math.round(
     visibleAxes.reduce((sum, axis) => sum + Math.max(0, Math.min(100, axis.score)), 0) / Math.max(1, visibleAxes.length),
   );
@@ -4838,7 +3765,7 @@ function PremiumPerformanceRadar({
 
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Trading Radar</Text>
+      <Text style={styles.terminalSectionTitle}>{t("tradingRadar")}</Text>
       <View style={styles.premiumRadarWrap}>
         <Svg width={size} height={size}>
           <Defs>
@@ -4882,13 +3809,13 @@ function PremiumPerformanceRadar({
       {isPremium ? (
         <View style={styles.radarSummaryRow}>
           <View style={styles.radarSummaryBlock}>
-            <Text style={styles.terminalSmallLabel}>Strengths</Text>
+            <Text style={styles.terminalSmallLabel}>{t("strengths")}</Text>
             <View style={styles.terminalChipRow}>
               {strongest.map((item) => <Text key={item.label} style={[styles.terminalChip, styles.radarAccentText]}>● {item.label}</Text>)}
             </View>
           </View>
           <View style={styles.radarWeakBlock}>
-            <Text style={styles.terminalSmallLabel}>Weakest Area</Text>
+            <Text style={styles.terminalSmallLabel}>{t("weakestArea")}</Text>
             <Text style={styles.dnaWeakText}>{weakest?.label || "—"}</Text>
             <Text style={styles.terminalSub}>Target {weakest?.target || "—"}</Text>
           </View>
@@ -4896,26 +3823,26 @@ function PremiumPerformanceRadar({
       ) : (
         <>
           <View style={styles.radarLockedGrid}>
-            {["Profit Factor", "Consistency", "Recovery"].map((label) => (
-              <View key={label} style={styles.radarLockedCard}>
-                <Text style={styles.radarLockedLabel}>{label}</Text>
+            {(["profitFactor", "consistency", "recovery"] as const).map((key) => (
+              <View key={key} style={styles.radarLockedCard}>
+                <Text style={styles.radarLockedLabel}>{t(key)}</Text>
                 <Text style={styles.radarLockedPro}>PRO</Text>
               </View>
             ))}
           </View>
           <Pressable onPress={onUpgrade} style={styles.radarUnlockBtn}>
-            <Text style={styles.radarUnlockBtnText}>Unlock Full Trading Profile</Text>
+            <Text style={styles.radarUnlockBtnText}>{t("unlockFullTradingProfile")}</Text>
           </Pressable>
         </>
       )}
       <MetricPillRow
         items={axes.map((axis) => ({
           label: axis.label,
-          value: isAxisLocked(axis.label) ? "PRO" : axis.value,
-          tone: isAxisLocked(axis.label) ? "grey" : axis.score >= 65 ? "purple" : "grey",
+          value: isAxisLocked(axis.key) ? "PRO" : axis.value,
+          tone: isAxisLocked(axis.key) ? "grey" : axis.score >= 65 ? "purple" : "grey",
         }))}
       />
-      <BottomSheetPanel visible={!!selected} title={selected?.label || "Metric"} onClose={() => setSelected(null)}>
+      <BottomSheetPanel visible={!!selected} title={selected?.label || t("metricDefault")} onClose={() => setSelected(null)}>
         {selected ? (
           <>
             <Text style={styles.bottomSheetBig}>{selected.value}</Text>
@@ -4945,9 +3872,9 @@ function buildSessionCells(trades: Trade[], mode: SessionMode) {
     mode === "Hours"
       ? Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`)
       : mode === "Sessions"
-        ? ["Morning", "Midday", "Afternoon"]
+        ? [t("sessionMorning"), t("sessionMidday"), t("sessionAfternoon")]
         : mode === "Days"
-          ? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+          ? [t("weekdayMonday"), t("weekdayTuesday"), t("weekdayWednesday"), t("weekdayThursday"), t("weekdayFriday"), t("weekdaySaturday"), t("weekdaySunday")]
           : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const byKey = new Map(rows.map((row) => [row.key, row]));
   const expanded = orderedKeys.map((key) => byKey.get(key) || emptyBreakdown(key));
@@ -4973,7 +3900,7 @@ function TerminalSessionIntelligence({ trades }: { trades: Trade[] }) {
     <TerminalGlassCard>
       <View style={styles.terminalHeaderRow}>
         <View>
-          <Text style={styles.terminalSectionTitle}>Heatmap</Text>
+          <Text style={styles.terminalSectionTitle}>{t("heatmap")}</Text>
         </View>
       </View>
       <SegmentedTimeFilter options={SESSION_MODES} value={mode} onChange={(value) => setMode(value as SessionMode)} />
@@ -4985,7 +3912,7 @@ function TerminalSessionIntelligence({ trades }: { trades: Trade[] }) {
             <Text style={styles.calendarHeatmapMeta}>{cell.trades} trades</Text>
           </Pressable>
         )) : (
-          <Text style={styles.terminalSub}>Log trades to build session intelligence.</Text>
+          <Text style={styles.terminalSub}>{t("logTradesSessionIntel")}</Text>
         )}
       </View>
       <BottomSheetPanel visible={!!selected} title={selected?.key || "Session"} onClose={() => setSelected(null)}>
@@ -4993,14 +3920,14 @@ function TerminalSessionIntelligence({ trades }: { trades: Trade[] }) {
           <>
             <MetricPillRow
               items={[
-                { label: "Trades", value: `${selected.trades}`, tone: "grey" },
-                { label: "Win Rate", value: `${selected.winRate.toFixed(0)}%`, tone: selected.winRate >= 50 ? "green" : "red" },
-                { label: "Profit", value: moneyCompact(selected.netPnl), tone: selected.netPnl >= 0 ? "green" : "red" },
-                { label: "Avg", value: moneyCompact(selected.avgPnl), tone: "grey" },
+                { label: t("trades"), value: `${selected.trades}`, tone: "grey" },
+                { label: t("winRate"), value: `${selected.winRate.toFixed(0)}%`, tone: selected.winRate >= 50 ? "green" : "red" },
+                { label: t("microProfit"), value: moneyCompact(selected.netPnl), tone: selected.netPnl >= 0 ? "green" : "red" },
+                { label: t("microAvg"), value: moneyCompact(selected.avgPnl), tone: "grey" },
               ]}
             />
             <Text style={styles.bottomSheetText}>Best setup: {selected.netPnl >= 0 ? "Repeat this window with strict checklist quality." : "Wait for cleaner context before sizing up."}</Text>
-            <Text style={styles.bottomSheetText}>Mistakes: watch overtrading, weak notes and trades outside your best session.</Text>
+            <Text style={styles.bottomSheetText}>{t("breakdownMistakesHint")}</Text>
           </>
         ) : null}
       </BottomSheetPanel>
@@ -5023,51 +3950,45 @@ function TerminalTraderStatus({
   isPremium: boolean;
   session: Session | null;
 }) {
-  const [shareTarget, setShareTarget] = useState<Achievement | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
-  const achievementShareRef = useRef<View>(null);
-  const shareStats = useMemo(() => {
-    const stats = calcStats(trades);
-    const score = tradingScoreForTrades(trades).score;
-    return {
-      tradesLogged: stats.count,
-      winRate: stats.wr,
-      totalPnl: stats.pnl,
-      profitFactor: stats.pf,
-      avgWinLoss: stats.avgWinLoss,
-      riskControl: stats.drawdownControl,
-      consistency: stats.consistency,
-      maxDrawdown: stats.maxDd,
-      tradingScore: score,
-      bestSession: stats.session[0]?.label || "N/A",
-      dateLabel: achievementShareDateLabel(selectedDate),
-    };
-  }, [selectedDate, trades]);
+  const shareStats = useMemo(() => buildAchievementShareStats(trades, selectedDate), [selectedDate, trades]);
   const allUnlocked = achievements.filter((item) => item.unlocked);
   const freeUnlockLimitReached = !isPremium && allUnlocked.length > 5;
   const unlocked = isPremium ? allUnlocked : allUnlocked.slice(0, 5);
   const next = achievements.filter((item) => !item.unlocked).slice(0, 4);
-  const waitForCard = () =>
-    new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 220)));
-    });
-  const shareAchievement = async (item: Achievement) => {
+  const exportAchievementCard = async (item: Achievement, action: "share" | "save") => {
     if (!item.unlocked) return;
+    const allowed = await ensureShareCardExportAllowed(isPremium, session?.user.id || null, (message) => {
+      Alert.alert(t("shareCardLimitReached"), message);
+    });
+    if (!allowed) return;
     try {
       setShareBusy(true);
-      await checkAndRecordAchievementShareUsage({ session, isPremium, achievement: item });
-      setShareTarget(item);
-      await waitForCard();
-      const { shareCapturedView } = await import("./src/components/insights/shareExport");
-      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card");
-      trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
-    } catch (error) {
-      alertExportError("Achievement share failed", error);
-      logger.error(error, { feature: "achievements", action: "terminal_share", userId: session?.user.id });
+      const { shareAchievementCardFromData, saveAchievementCardFromDataToPhotos } = await import("./src/components/insights/shareExport");
+      if (action === "share") {
+        await shareAchievementCardFromData(item, shareStats);
+        trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
+      } else {
+        await saveAchievementCardFromDataToPhotos(item, shareStats);
+        Alert.alert(t("savedTitle"), t("achievementCardSaved"));
+        trackEvent("achievement_card_saved", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
+      }
+      await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+      void recordAchievementShareAnalytics({ session, isPremium, achievement: item });
+    } catch {
+      Alert.alert(action === "share" ? t("achievementShareFailed") : t("achievementSaveFailed"), t("shareCardExportFailed"));
+      logger.error(new Error(t("shareCardExportFailed")), { feature: "achievements", action: action === "share" ? "terminal_share" : "terminal_save", userId: session?.user.id });
     } finally {
-      setShareTarget(null);
       setShareBusy(false);
     }
+  };
+  const promptAchievementExport = (item: Achievement) => {
+    if (!item.unlocked) return;
+    Alert.alert(item.title, t("exportAchievementCard"), [
+      { text: t("sharePnlCard"), onPress: () => void exportAchievementCard(item, "share") },
+      { text: t("saveImage"), onPress: () => void exportAchievementCard(item, "save") },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
   return (
     <TerminalGlassCard>
@@ -5078,18 +3999,18 @@ function TerminalTraderStatus({
         </View>
       </View>
       {shareBusy ? <ActivityIndicator color={C.green} style={{ marginVertical: 10 }} /> : null}
-      <Text style={styles.terminalSmallLabel}>Unlocked</Text>
+      <Text style={styles.terminalSmallLabel}>{t("unlocked")}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.achievementRail}>
         {unlocked.map((item) => (
-          <Pressable key={item.id} onPress={() => shareAchievement(item)} style={styles.achievementRailCard}>
-            <Text style={styles.achievementRailStatus}>Unlocked</Text>
+          <Pressable key={item.id} onPress={() => promptAchievementExport(item)} style={styles.achievementRailCard}>
+            <Text style={styles.achievementRailStatus}>{t("unlocked")}</Text>
             <Text style={styles.achievementRailTitle}>{item.title}</Text>
             <Text style={styles.achievementRailMeta}>{item.progressLabel}</Text>
-            <Text style={styles.achievementRailTap}>Tap to share</Text>
+            <Text style={styles.achievementRailTap}>{t("tapToShare")}</Text>
           </Pressable>
         ))}
       </ScrollView>
-      <Text style={styles.terminalSmallLabel}>Next Targets</Text>
+      <Text style={styles.terminalSmallLabel}>{t("nextTargets")}</Text>
       <View style={styles.nextTargetList}>
         {next.map((item) => (
           <View key={item.id} style={styles.nextTargetRow}>
@@ -5101,13 +4022,6 @@ function TerminalTraderStatus({
           </View>
         ))}
       </View>
-      {shareTarget ? (
-        <View style={styles.offscreenShareCard} collapsable={false}>
-          <View ref={achievementShareRef} collapsable={false} style={styles.achievementShareCaptureFrame}>
-            <AchievementShareCard item={shareTarget} level={level} stats={shareStats} />
-          </View>
-        </View>
-      ) : null}
     </TerminalGlassCard>
   );
 }
@@ -5134,12 +4048,12 @@ function RadarProfile({
   const minR = 22;
 
 	  const axes = [
-	    { label: "Win %", value: `${winRate.toFixed(0)}%`, score: Math.min(100, winRate) },
-	    { label: "PF", value: profitFactor ? profitFactor.toFixed(2) : "—", score: Math.min(100, (profitFactor / 2.4) * 100) },
-    { label: "Avg W/L", value: avgWinLoss ? avgWinLoss.toFixed(2) : "—", score: Math.min(100, (avgWinLoss / 2.4) * 100) },
-    { label: "Recovery", value: recoveryFactor ? recoveryFactor.toFixed(2) : "—", score: Math.min(100, (Math.max(0, recoveryFactor) / 3.2) * 100) },
-    { label: "Risk Ctrl", value: `${drawdownControl.toFixed(0)}%`, score: Math.min(100, Math.max(0, drawdownControl)) },
-	    { label: "Consistency", value: `${consistency.toFixed(0)}%`, score: Math.min(100, consistency) },
+	    { label: t("microWinPct"), value: `${winRate.toFixed(0)}%`, score: Math.min(100, winRate) },
+	    { label: t("microPF"), value: profitFactor ? profitFactor.toFixed(2) : "—", score: Math.min(100, (profitFactor / 2.4) * 100) },
+    { label: t("microAvgWL"), value: avgWinLoss ? avgWinLoss.toFixed(2) : "—", score: Math.min(100, (avgWinLoss / 2.4) * 100) },
+    { label: t("recovery"), value: recoveryFactor ? recoveryFactor.toFixed(2) : "—", score: Math.min(100, (Math.max(0, recoveryFactor) / 3.2) * 100) },
+    { label: t("riskCtrl"), value: `${drawdownControl.toFixed(0)}%`, score: Math.min(100, Math.max(0, drawdownControl)) },
+	    { key: "consistency", label: t("consistency"), value: `${consistency.toFixed(0)}%`, score: Math.min(100, consistency) },
 	  ];
 	  const scoreForAxis = (axis: { score: number }, i: number) => {
 	    const score = locked && i > 1 ? Math.max(28, axis.score * 0.35) : axis.score;
@@ -5243,7 +4157,7 @@ function RadarProfile({
 
 	        <View style={styles.radarCenterBadge}>
 	          <Text style={styles.radarCenterScore}>{locked ? "PRO" : profileScore}</Text>
-	          <Text style={styles.radarCenterLabel}>PROFILE</Text>
+	          <Text style={styles.radarCenterLabel}>{t("radarProfile")}</Text>
 	        </View>
 
 	        {pts.map((pt, i) => (
@@ -5267,8 +4181,8 @@ function RadarProfile({
 
         {locked && (
           <View style={styles.radarLockLayer}>
-            <Text style={styles.radarLockTitle}>PRO RADAR</Text>
-            <Text style={styles.radarLockSub}>Unlock full profile</Text>
+            <Text style={styles.radarLockTitle}>{t("proRadar")}</Text>
+            <Text style={styles.radarLockSub}>{t("unlockFullProfile")}</Text>
           </View>
 	        )}
 	      </View>
@@ -5300,16 +4214,16 @@ function RadarProfile({
 
 function TradeAnalysisCard({ result }: { result: TradeAnalysisResult }) {
   const sections = [
-    { title: "Mistakes", tone: C.red, items: result.mistakes.map((item) => ({ title: item.title, body: item.evidence ? `${item.explanation} Evidence: ${item.evidence}` : item.explanation })) },
-    { title: "Strengths", tone: C.green, items: result.strengths.map((item) => ({ title: item.title, body: item.evidence ? `${item.explanation} Evidence: ${item.evidence}` : item.explanation })) },
-    { title: "Actions", tone: C.purple, items: result.recommendations.map((item) => ({ title: item.title, body: item.why ? `${item.action} Why: ${item.why}` : item.action })) },
+    { title: t("microMistakes"), tone: C.red, items: result.mistakes.map((item) => ({ title: item.title, body: item.evidence ? `${item.explanation} ${t("microEvidence")} ${item.evidence}` : item.explanation })) },
+    { title: t("strengthsSection"), tone: C.green, items: result.strengths.map((item) => ({ title: item.title, body: item.evidence ? `${item.explanation} ${t("microEvidence")} ${item.evidence}` : item.explanation })) },
+    { title: t("microActions"), tone: C.purple, items: result.recommendations.map((item) => ({ title: item.title, body: item.why ? `${item.action} ${t("microWhy")} ${item.why}` : item.action })) },
   ];
   return (
     <>
       <GlassCard style={styles.aiAnalysisCard} intensity={42}>
         <View style={styles.rowBetween}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.aiAnalysisTitle}>AI Journal Review</Text>
+            <Text style={styles.aiAnalysisTitle}>{t("aiJournalReview")}</Text>
             <Text style={styles.aiAnalysisSummary} numberOfLines={2}>{result.summary}</Text>
           </View>
           <Text style={styles.aiAnalysisSource}>SAVED</Text>
@@ -5343,15 +4257,15 @@ function TradeAnalysisCard({ result }: { result: TradeAnalysisResult }) {
 function PatternDetectiveCard({ result }: { result: TradeAnalysisResult }) {
   const [openAgents, setOpenAgents] = useState<Record<string, boolean>>({ riskAgent: true, propFirmAgent: true });
   const agentRows: Array<{ key: keyof typeof result.agentFindings; title: string; tone: string }> = [
-    { key: "riskAgent", title: "Risk Agent", tone: C.red },
-    { key: "disciplineAgent", title: "Discipline Agent", tone: C.yellow },
-    { key: "propFirmAgent", title: "Prop Firm Agent", tone: C.green },
-    { key: "sessionAgent", title: "Session Agent", tone: C.purple },
-    { key: "psychologyAgent", title: "Psychology Agent", tone: C.yellow },
-    { key: "instrumentAgent", title: "Instrument Agent", tone: C.green },
-    { key: "streakAgent", title: "Streak Agent", tone: C.red },
-    { key: "executionAgent", title: "Execution Agent", tone: C.purple },
-    { key: "consistencyAgent", title: "Consistency Agent", tone: C.green },
+    { key: "riskAgent", title: t("agentRisk"), tone: C.red },
+    { key: "disciplineAgent", title: t("agentDiscipline"), tone: C.yellow },
+    { key: "propFirmAgent", title: t("agentPropFirm"), tone: C.green },
+    { key: "sessionAgent", title: t("agentSession"), tone: C.purple },
+    { key: "psychologyAgent", title: t("agentPsychology"), tone: C.yellow },
+    { key: "instrumentAgent", title: t("agentInstrument"), tone: C.green },
+    { key: "streakAgent", title: t("agentStreak"), tone: C.red },
+    { key: "executionAgent", title: t("agentExecution"), tone: C.purple },
+    { key: "consistencyAgent", title: t("agentConsistency"), tone: C.green },
   ];
   const toggleAgent = (key: string, title: string) => {
     setOpenAgents((current) => ({ ...current, [key]: !current[key] }));
@@ -5361,7 +4275,7 @@ function PatternDetectiveCard({ result }: { result: TradeAnalysisResult }) {
     <GlassCard style={styles.detectiveCard} intensity={42}>
       <View style={styles.detectiveHero}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.detectiveTitle}>Your journal is exposing hidden patterns.</Text>
+          <Text style={styles.detectiveTitle}>{t("detectiveTitle")}</Text>
         </View>
         <View style={styles.detectiveScoreBox}>
           <Text style={styles.edgeMiniLabel}>Score</Text>
@@ -5370,14 +4284,14 @@ function PatternDetectiveCard({ result }: { result: TradeAnalysisResult }) {
       </View>
 
       <View style={styles.detectiveBlindSpot}>
-        <Text style={styles.detectiveSectionLabel}>Main Blind Spot</Text>
+        <Text style={styles.detectiveSectionLabel}>{t("mainBlindSpot")}</Text>
         <Text style={styles.detectiveBlindTitle}>{result.mainBlindSpot.title}</Text>
         <Text style={styles.detectiveEvidence}>{result.mainBlindSpot.evidence}</Text>
         <Text style={styles.detectiveBody}>{result.mainBlindSpot.whyItMatters}</Text>
         <Text style={styles.detectiveAction}>{result.mainBlindSpot.action}</Text>
       </View>
 
-      <Text style={styles.detectiveSectionLabel}>Hidden Patterns</Text>
+      <Text style={styles.detectiveSectionLabel}>{t("hiddenPatterns")}</Text>
       {result.hiddenPatterns.slice(0, 7).map((pattern, index) => {
         const impactColor = pattern.impact === "high" ? C.red : pattern.impact === "medium" ? C.yellow : C.green;
         return (
@@ -5392,12 +4306,12 @@ function PatternDetectiveCard({ result }: { result: TradeAnalysisResult }) {
               </View>
             </View>
             <Text style={styles.detectiveBody} numberOfLines={2}>{pattern.action}</Text>
-            <Text style={styles.detectiveConfidence}>Confidence: {pattern.confidence.toUpperCase()}</Text>
+            <Text style={styles.detectiveConfidence}>{t("confidencePrefix")} {pattern.confidence.toUpperCase()}</Text>
           </View>
         );
       })}
 
-      <Text style={styles.detectiveSectionLabel}>Agent Findings</Text>
+      <Text style={styles.detectiveSectionLabel}>{t("agentFindings")}</Text>
       {agentRows.map((agent) => {
         const finding = result.agentFindings[agent.key];
         const isOpen = Boolean(openAgents[agent.key]);
@@ -5425,7 +4339,7 @@ function PatternDetectiveCard({ result }: { result: TradeAnalysisResult }) {
       })}
 
       <View style={styles.detectiveRuleCard}>
-        <Text style={styles.detectiveSectionLabel}>Next Trading Rule</Text>
+        <Text style={styles.detectiveSectionLabel}>{t("nextTradingRule")}</Text>
         <Text style={styles.detectiveRuleText}>{result.nextTradingRule}</Text>
       </View>
     </GlassCard>
@@ -5437,7 +4351,7 @@ function TradingScoreCard({ score }: { score: TradingScoreResult }) {
     <GlassCard style={styles.tradingScoreHeroCard} intensity={38}>
       <View style={styles.rowBetween}>
         <View>
-          <Text style={styles.scoreLabel}>Trading Score</Text>
+          <Text style={styles.scoreLabel}>{t("tradingScore")}</Text>
           <Text style={styles.scoreHeroNumber}>{score.score}</Text>
         </View>
         <View style={styles.scoreGradePill}>
@@ -5447,19 +4361,19 @@ function TradingScoreCard({ score }: { score: TradingScoreResult }) {
       </View>
       <View style={styles.scoreInsightRow}>
         <View style={styles.scoreInsightBox}>
-          <Text style={styles.edgeMiniLabel}>Strength</Text>
-          <Text style={styles.scoreInsightText}>{score.strengths[0] || "Keep building your sample."}</Text>
+          <Text style={styles.edgeMiniLabel}>{t("strength")}</Text>
+          <Text style={styles.scoreInsightText}>{score.strengths[0] || t("keepBuildingSample")}</Text>
         </View>
         <View style={styles.scoreInsightBox}>
           <Text style={styles.edgeMiniLabel}>Focus</Text>
-          <Text style={styles.scoreInsightText}>{score.weaknesses[0] || "Maintain consistency."}</Text>
+          <Text style={styles.scoreInsightText}>{score.weaknesses[0] || t("maintainConsistency")}</Text>
         </View>
       </View>
     </GlassCard>
   );
 }
 
-function TradingScoreMini({ score, label = "Trading Score" }: { score: TradingScoreResult; label?: string }) {
+function TradingScoreMini({ score, label = t("tradingScore") }: { score: TradingScoreResult; label?: string }) {
   return (
     <View style={styles.tradingScoreMini}>
       <Text style={styles.tradingScoreMiniLabel}>{label}</Text>
@@ -5476,8 +4390,8 @@ function PatternDetectionCard({ result, locked }: { result: PatternDetectionResu
       <View key={`${item.title}-${index}`} style={styles.patternInsightCard}>
         <View style={[styles.metricDot, { backgroundColor: color }]} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.patternInsightTitle}>{locked && index > 0 ? "Pro Pattern" : item.title}</Text>
-          <Text style={styles.patternInsightText}>{locked && index > 0 ? "Unlock Pro to reveal deeper pattern detection." : item.detail}</Text>
+          <Text style={styles.patternInsightTitle}>{locked && index > 0 ? t("proPattern") : item.title}</Text>
+          <Text style={styles.patternInsightText}>{locked && index > 0 ? t("unlockProRevealPatterns") : item.detail}</Text>
         </View>
       </View>
     );
@@ -5485,16 +4399,16 @@ function PatternDetectionCard({ result, locked }: { result: PatternDetectionResu
   return (
     <GlassCard style={styles.patternCard} intensity={34}>
       <View style={styles.rowBetween}>
-        <Text style={styles.myStatsTitle}>Pattern Prediction</Text>
+        <Text style={styles.myStatsTitle}>{t("patternPrediction")}</Text>
         {locked ? <Text style={styles.aiAnalysisSource}>PRO</Text> : <Text style={styles.aiAnalysisSource}>LIVE</Text>}
       </View>
-      <Text style={styles.breakdownHint}>Top strength patterns</Text>
+      <Text style={styles.breakdownHint}>{t("topStrengthPatterns")}</Text>
       {result.strengths.map(renderInsight)}
-      <Text style={[styles.breakdownHint, { marginTop: 12 }]}>Top risk patterns</Text>
+      <Text style={[styles.breakdownHint, { marginTop: 12 }]}>{t("topRiskPatterns")}</Text>
       {result.risks.map(renderInsight)}
       <View style={styles.patternOpportunity}>
-        <Text style={styles.edgeMiniLabel}>Top Opportunity</Text>
-        <Text style={styles.scoreInsightText}>{locked ? "Unlock Pro to see the highest-impact improvement." : result.opportunity.detail}</Text>
+        <Text style={styles.edgeMiniLabel}>{t("topOpportunity")}</Text>
+        <Text style={styles.scoreInsightText}>{locked ? t("unlockProSeeImprovement") : result.opportunity.detail}</Text>
       </View>
     </GlassCard>
   );
@@ -5515,7 +4429,7 @@ function PassProbabilityCard({ result }: { result: PassProbabilityResult }) {
     <GlassCard style={styles.aiCoachModuleCard} intensity={34}>
       <View style={styles.rowBetween}>
         <View>
-          <Text style={styles.edgeMiniLabel}>Pass Probability</Text>
+          <Text style={styles.edgeMiniLabel}>{t("passProbability")}</Text>
           <Text style={[styles.survivalValue, { color: statusColor }]}>{result.probability}%</Text>
         </View>
         <View style={[styles.riskStatusPill, { borderColor: statusColor, backgroundColor: result.status === "DANGER" ? C.redSoft : result.status === "AT_RISK" ? C.yellowSoft : C.greenSoft }]}>
@@ -5523,10 +4437,10 @@ function PassProbabilityCard({ result }: { result: PassProbabilityResult }) {
         </View>
       </View>
       <View style={styles.aiMetricExplainBox}>
-        <Text style={styles.edgeMiniLabel}>What it means</Text>
+        <Text style={styles.edgeMiniLabel}>{t("whatItMeans")}</Text>
         <Text style={styles.aiCompactText} numberOfLines={2}>{result.explanation}</Text>
       </View>
-      <Text style={[styles.breakdownHint, { marginTop: 8 }]}>Confidence: {result.confidence}</Text>
+      <Text style={[styles.breakdownHint, { marginTop: 8 }]}>{t("confidencePrefix")} {result.confidence}</Text>
     </GlassCard>
   );
 }
@@ -5537,7 +4451,7 @@ function RevengeTradingCard({ result }: { result: RevengeTradingResult }) {
     <GlassCard style={[styles.aiCoachModuleCard, result.detected && styles.revengeAlertCard]} intensity={34}>
       <View style={styles.rowBetween}>
         <Text style={[styles.aiModuleTitle, { color }]}>
-          {result.detected ? "Revenge Trading Alert" : "Revenge Trading Check"}
+          {result.detected ? t("revengeTradingAlert") : t("revengeTradingCheck")}
         </Text>
         <View style={[styles.riskStatusPill, { borderColor: color, backgroundColor: result.detected ? C.redSoft : C.greenSoft }]}>
           <Text style={[styles.riskStatusText, { color }]}>{result.severity}</Text>
@@ -5545,7 +4459,7 @@ function RevengeTradingCard({ result }: { result: RevengeTradingResult }) {
       </View>
       <Text style={styles.aiCompactText} numberOfLines={2}>{result.reason}</Text>
       <View style={styles.patternOpportunity}>
-        <Text style={styles.edgeMiniLabel}>Recommendation</Text>
+        <Text style={styles.edgeMiniLabel}>{t("recommendation")}</Text>
         <Text style={styles.scoreInsightText} numberOfLines={2}>{result.recommendation}</Text>
       </View>
     </GlassCard>
@@ -5557,13 +4471,13 @@ function HiddenLeaksCard({ leaks }: { leaks: HiddenLeak[] }) {
     <GlassCard style={styles.aiCoachModuleCard} intensity={34}>
       <View style={styles.rowBetween}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.aiModuleTitle}>Hidden Leaks</Text>
-          <Text style={styles.breakdownHint}>Highest-impact behavior patterns to fix first</Text>
+          <Text style={styles.aiModuleTitle}>{t("hiddenLeaks")}</Text>
+          <Text style={styles.breakdownHint}>{t("hiddenLeaksHint")}</Text>
         </View>
         <Text style={styles.aiAnalysisSource}>LIVE</Text>
       </View>
       {leaks.length === 0 ? (
-        <Text style={styles.aiCompactText}>More trade history is needed before patterns can be detected.</Text>
+        <Text style={styles.aiCompactText}>{t("moreTradeHistoryNeeded")}</Text>
       ) : (
         leaks.map((leak, index) => (
           <View key={`${leak.title}-${index}`} style={styles.patternInsightCard}>
@@ -5580,6 +4494,35 @@ function HiddenLeaksCard({ leaks }: { leaks: HiddenLeak[] }) {
   );
 }
 
+function buildAchievementShareStats(trades: Trade[], selectedDate: string) {
+  const stats = calcStats(trades);
+  const score = tradingScoreForTrades(trades).score;
+  const ordered = [...trades].sort((a, b) => getTradeTime(a).getTime() - getTradeTime(b).getTime());
+  const streaks = currentTradeStreaks(ordered);
+  const bestTrade = trades.length ? Math.max(0, ...trades.map((trade) => trade.pnl)) : 0;
+  const greenDays = buildDailySeries(trades).filter((day) => day.value > 0).length;
+  return {
+    tradesLogged: stats.count,
+    winRate: stats.wr,
+    totalPnl: stats.pnl,
+    profitFactor: stats.pf,
+    avgWinLoss: stats.avgWinLoss,
+    avgRR: stats.avgRR,
+    avgWin: stats.avgWin,
+    avgLoss: stats.avgLoss,
+    expectancy: stats.exp,
+    bestTrade,
+    currentWinStreak: streaks.currentWinStreak,
+    greenDays,
+    riskControl: stats.drawdownControl,
+    consistency: stats.consistency,
+    maxDrawdown: stats.maxDd,
+    tradingScore: score,
+    bestSession: stats.session[0]?.label || "N/A",
+    dateLabel: achievementShareDateLabel(selectedDate),
+  };
+}
+
 function achievementShareDateLabel(selectedDate: string) {
   const d = safeDateFromISO(selectedDate);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase();
@@ -5589,6 +4532,16 @@ function monthRangeIso(date = new Date()) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1);
   const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function dayRangeIso(date = new Date()) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+function usageDayKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
 }
 
 function usageMonthKey(date = new Date()) {
@@ -5621,26 +4574,7 @@ function monthlyLoggedTradeCount(trades: Trade[], date = new Date()) {
   return trades.filter((trade) => tradeLoggedMonthKey(trade) === month).length;
 }
 
-function achievementShareUsageStorageKey(userId: string | null, date = new Date()) {
-  const month = date.toISOString().slice(0, 7);
-  return `achievement-share-usage:${userId || "local"}:${month}`;
-}
-
-async function checkAndRecordLocalAchievementShareUsage(limit: number, userId: string | null) {
-  const key = achievementShareUsageStorageKey(userId);
-  const raw = await AsyncStorage.getItem(key);
-  const used = Number(raw || "0");
-  if (Number.isFinite(used) && used >= limit) {
-    throw new Error(
-      limit >= PRO_MONTHLY_SHARE_CARD_LIMIT
-        ? "Your monthly card sharing allowance has been used."
-        : `Free includes ${FREE_MONTHLY_SHARE_CARD_LIMIT} saved or shared cards per month. Upgrade to Pro for ${PRO_MONTHLY_SHARE_CARD_LIMIT}.`,
-    );
-  }
-  await AsyncStorage.setItem(key, String((Number.isFinite(used) ? used : 0) + 1));
-}
-
-async function checkAndRecordAchievementShareUsage({
+async function recordAchievementShareAnalytics({
   session,
   isPremium,
   achievement,
@@ -5649,40 +4583,26 @@ async function checkAndRecordAchievementShareUsage({
   isPremium: boolean;
   achievement: Achievement;
 }) {
-  const limit = isPremium ? PRO_MONTHLY_SHARE_CARD_LIMIT : FREE_MONTHLY_SHARE_CARD_LIMIT;
-  if (!supabase || !session?.user.id) {
-    await checkAndRecordLocalAchievementShareUsage(limit, session?.user.id || null);
-    return;
-  }
-  const { start, end } = monthRangeIso();
-  const { count, error: countError } = await supabase
-    .from("achievement_share_usage")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", session.user.id)
-    .gte("shared_at", start)
-    .lt("shared_at", end);
-  if (countError) {
-    logger.warn("Falling back to local achievement share limits", { feature: "achievements", action: "share_limit_count", userId: session.user.id });
-    await checkAndRecordLocalAchievementShareUsage(limit, session.user.id);
-    return;
-  }
-  if ((count || 0) >= limit) {
-    throw new Error(
-      isPremium
-        ? "Your monthly card sharing allowance has been used."
-        : `Free includes ${FREE_MONTHLY_SHARE_CARD_LIMIT} saved or shared cards per month. Upgrade to Pro for ${PRO_MONTHLY_SHARE_CARD_LIMIT}.`,
-    );
-  }
-  const { error: insertError } = await supabase.from("achievement_share_usage").insert({
+  if (!supabase || !session?.user.id) return;
+  await supabase.from("achievement_share_usage").insert({
     user_id: session.user.id,
     achievement_id: achievement.id,
     achievement_title: achievement.title,
     is_pro_snapshot: isPremium,
   });
-  if (insertError) {
-    logger.warn("Falling back to local achievement share limits", { feature: "achievements", action: "share_limit_insert", userId: session.user.id });
-    await checkAndRecordLocalAchievementShareUsage(limit, session.user.id);
+}
+
+async function ensureShareCardExportAllowed(
+  isPremium: boolean,
+  userId: string | null,
+  onBlocked: (message: string) => void,
+) {
+  const check = await peekShareCardExportAllowed(isPremium, userId);
+  if (!check.allowed) {
+    onBlocked(check.message || FEATURE_LIMIT_MESSAGES.shareCardMonthlyLimit);
+    return false;
   }
+  return true;
 }
 
 function AchievementBadgeCard({ item, onShare }: { item: Achievement; onShare: (item: Achievement) => void }) {
@@ -5705,7 +4625,7 @@ function AchievementBadgeCard({ item, onShare }: { item: Achievement; onShare: (
       >
       <View style={styles.safeRowBetween}>
         <SafeText style={[styles.achievementStatusTag, unlocked ? { color: C.green } : next ? { color: C.purple } : null]}>
-          {unlocked ? "UNLOCKED" : next ? "NEXT TARGET" : "LOCKED"}
+          {unlocked ? t("badgeUnlocked") : next ? t("badgeNextTarget") : t("badgeLocked")}
         </SafeText>
         <SafeText style={styles.achievementCategory}>{item.category.replace("_", " ").toUpperCase()}</SafeText>
       </View>
@@ -5716,7 +4636,7 @@ function AchievementBadgeCard({ item, onShare }: { item: Achievement; onShare: (
       </View>
       <View style={styles.achievementFooterRow}>
         <SafeText style={styles.achievementProgress}>{item.progressLabel}</SafeText>
-        <SafeMetricLabel style={styles.achievementShareHint}>{unlocked ? "Tap to share" : item.metricLabel}</SafeMetricLabel>
+        <SafeMetricLabel style={styles.achievementShareHint}>{unlocked ? t("tapToShare") : item.metricLabel}</SafeMetricLabel>
       </View>
       </GlassCard>
     </Pressable>
@@ -5738,63 +4658,58 @@ function AchievementSection({
   isPremium: boolean;
   session: Session | null;
 }) {
-  const [shareTarget, setShareTarget] = useState<Achievement | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
-  const achievementShareRef = useRef<View>(null);
-  const shareStats = useMemo(() => {
-    const stats = calcStats(trades);
-    const score = tradingScoreForTrades(trades).score;
-    return {
-      tradesLogged: stats.count,
-      winRate: stats.wr,
-      totalPnl: stats.pnl,
-      profitFactor: stats.pf,
-      avgWinLoss: stats.avgWinLoss,
-      riskControl: stats.drawdownControl,
-      consistency: stats.consistency,
-      maxDrawdown: stats.maxDd,
-      tradingScore: score,
-      bestSession: stats.session[0]?.label || "N/A",
-      dateLabel: achievementShareDateLabel(selectedDate),
-    };
-  }, [selectedDate, trades]);
+  const shareStats = useMemo(() => buildAchievementShareStats(trades, selectedDate), [selectedDate, trades]);
   const allUnlocked = achievements.filter((item) => item.unlocked);
   const freeUnlockLimitReached = !isPremium && allUnlocked.length > 5;
   const unlocked = isPremium ? allUnlocked : allUnlocked.slice(0, 5);
   const nextTargets = achievements.filter((item) => !item.unlocked && item.status === "next_target").slice(0, 4);
   const locked = achievements.filter((item) => !item.unlocked && item.status === "locked").slice(0, Math.max(0, 4 - nextTargets.length));
-  const waitForCard = () =>
-    new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 220)));
+  const exportAchievementCard = async (item: Achievement, action: "share" | "save") => {
+    if (!item.unlocked) return;
+    const allowed = await ensureShareCardExportAllowed(isPremium, session?.user.id || null, (message) => {
+      Alert.alert(t("shareCardLimitReached"), message);
     });
-  const shareAchievement = async (item: Achievement) => {
+    if (!allowed) return;
     try {
       setShareBusy(true);
-      await checkAndRecordAchievementShareUsage({ session, isPremium, achievement: item });
-      setShareTarget(item);
-      await waitForCard();
-      const { shareCapturedView } = await import("./src/components/insights/shareExport");
-      await shareCapturedView(achievementShareRef, "Share YouTrader achievement card");
-      trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
-    } catch (error) {
-      alertExportError("Achievement share failed", error);
-      logger.error(error, { feature: "achievements", action: "share", userId: session?.user.id });
+      const { shareAchievementCardFromData, saveAchievementCardFromDataToPhotos } = await import("./src/components/insights/shareExport");
+      if (action === "share") {
+        await shareAchievementCardFromData(item, shareStats);
+        trackEvent("achievement_share_generated", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
+      } else {
+        await saveAchievementCardFromDataToPhotos(item, shareStats);
+        Alert.alert(t("savedTitle"), t("achievementCardSaved"));
+        trackEvent("achievement_card_saved", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
+      }
+      await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+      void recordAchievementShareAnalytics({ session, isPremium, achievement: item });
+    } catch {
+      Alert.alert(action === "share" ? t("achievementShareFailed") : t("achievementSaveFailed"), t("shareCardExportFailed"));
+      logger.error(new Error(t("shareCardExportFailed")), { feature: "achievements", action: action === "share" ? "share" : "save", userId: session?.user.id });
     } finally {
-      setShareTarget(null);
       setShareBusy(false);
     }
+  };
+  const promptAchievementExport = (item: Achievement) => {
+    if (!item.unlocked) return;
+    Alert.alert(item.title, t("exportAchievementCard"), [
+      { text: t("sharePnlCard"), onPress: () => void exportAchievementCard(item, "share") },
+      { text: t("saveImage"), onPress: () => void exportAchievementCard(item, "save") },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
   return (
     <GlassCard style={styles.achievementCard} intensity={34}>
       <View style={styles.safeRowBetween}>
         <View style={styles.flexShrink}>
-          <SafeText style={styles.myStatsTitle}>Trader Status</SafeText>
-          <SafeText style={styles.breakdownHint}>Share-worthy badges from real journal data</SafeText>
+          <SafeText style={styles.myStatsTitle}>{t("traderStatus")}</SafeText>
+          <SafeText style={styles.breakdownHint}>{t("traderStatusShareSub")}</SafeText>
         </View>
       </View>
       <View style={styles.traderLevelHero}>
         <View style={styles.flexShrink}>
-          <SafeText style={styles.traderLevelLabel}>Current Trader Level</SafeText>
+          <SafeText style={styles.traderLevelLabel}>{t("currentTraderLevel")}</SafeText>
           <SafeText style={styles.traderLevelTitle}>{level.title}</SafeText>
           <SafeText style={styles.traderLevelPhrase} lines={2}>{level.phrase}</SafeText>
         </View>
@@ -5804,35 +4719,30 @@ function AchievementSection({
           {level.topLabel ? (
             <SafeText style={styles.traderLevelTop}>{level.topLabel}</SafeText>
           ) : level.nextLevel ? (
-            <SafeText style={styles.traderLevelTop}>Next · {level.nextLevel}</SafeText>
+            <SafeText style={styles.traderLevelTop}>{t("nextLevelPrefix")} {level.nextLevel}</SafeText>
           ) : null}
         </View>
       </View>
       {shareBusy ? <ActivityIndicator color={C.green} style={{ marginVertical: 10 }} /> : null}
       {unlocked.length ? (
         <>
-          <Text style={styles.achievementSectionLabel}>Unlocked Status Badges</Text>
+          <Text style={styles.achievementSectionLabel}>{t("unlockedStatusBadges")}</Text>
           <View style={styles.achievementGrid}>
-            {unlocked.map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={shareAchievement} />)}
+            {unlocked.map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={promptAchievementExport} />)}
           </View>
           {freeUnlockLimitReached ? (
-            <Text style={styles.breakdownEmptyText}>Free includes {FREE_MONTHLY_SHARE_CARD_LIMIT} saved or shared cards per month. Upgrade to Pro for {PRO_MONTHLY_SHARE_CARD_LIMIT}.</Text>
+            <Text style={styles.breakdownEmptyText}>
+              {t("shareCardLimitNote", { free: FREE_LIMITS.shareCardsPerMonth, pro: PRO_LIMITS.shareCardsPerMonth })}
+            </Text>
           ) : null}
         </>
       ) : (
-        <Text style={styles.breakdownEmptyText}>Keep logging trades to unlock your first trader-status badge.</Text>
+        <Text style={styles.breakdownEmptyText}>{t("keepLoggingBadges")}</Text>
       )}
-      <Text style={styles.achievementSectionLabel}>Next Targets</Text>
+      <Text style={styles.achievementSectionLabel}>{t("nextTargets")}</Text>
       <View style={styles.achievementGrid}>
-        {[...nextTargets, ...locked].map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={shareAchievement} />)}
+        {[...nextTargets, ...locked].map((item) => <AchievementBadgeCard key={item.id} item={item} onShare={promptAchievementExport} />)}
       </View>
-      {shareTarget ? (
-        <View style={styles.offscreenShareCard} collapsable={false}>
-          <View ref={achievementShareRef} collapsable={false} style={styles.achievementShareCaptureFrame}>
-            <AchievementShareCard item={shareTarget} level={level} stats={shareStats} />
-          </View>
-        </View>
-      ) : null}
     </GlassCard>
   );
 }
@@ -5856,31 +4766,31 @@ function SessionHeatmapCard({ cells }: { cells: HourHeatmapCell[] }) {
     <Card style={styles.heatmapCard}>
       <View style={styles.rowBetween}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.myStatsTitle}>Session Heatmap</Text>
-          <Text style={styles.breakdownHint}>P&L, win rate, and trade volume by hour</Text>
+          <Text style={styles.myStatsTitle}>{t("sessionHeatmap")}</Text>
+          <Text style={styles.breakdownHint}>{t("sessionHeatmapSub")}</Text>
         </View>
         <Text style={styles.heatmapTimeBadge}>6AM-8PM</Text>
       </View>
       <View style={styles.heatmapSummaryRow}>
         <View style={styles.heatmapSummaryBox}>
           <Text style={styles.edgeMiniLabel}>Best</Text>
-          <Text style={styles.heatmapSummaryValue} numberOfLines={1}>{best ? `${best.label} ${moneyCompact(best.pnl)}` : "Need trades"}</Text>
+          <Text style={styles.heatmapSummaryValue} numberOfLines={1}>{best ? `${best.label} ${moneyCompact(best.pnl)}` : t("needTrades")}</Text>
         </View>
         <View style={styles.heatmapSummaryBox}>
           <Text style={styles.edgeMiniLabel}>Risk</Text>
           <Text style={[styles.heatmapSummaryValue, { color: worst && worst.pnl < 0 ? C.red : C.sub }]} numberOfLines={1}>
-            {worst ? `${worst.label} ${moneyCompact(worst.pnl)}` : "Need trades"}
+            {worst ? `${worst.label} ${moneyCompact(worst.pnl)}` : t("needTrades")}
           </Text>
         </View>
         <View style={styles.heatmapSummaryBox}>
-          <Text style={styles.edgeMiniLabel}>Volume</Text>
-          <Text style={styles.heatmapSummaryValue} numberOfLines={1}>{active ? `${active.label} ${active.tradeCount}` : "Need trades"}</Text>
+          <Text style={styles.edgeMiniLabel}>{t("volume")}</Text>
+          <Text style={styles.heatmapSummaryValue} numberOfLines={1}>{active ? `${active.label} ${active.tradeCount}` : t("needTrades")}</Text>
         </View>
       </View>
       <View style={styles.heatmapLegend}>
-        <Text style={styles.heatmapLegendItem}>Loss leak</Text>
-        <Text style={styles.heatmapLegendItem}>Weak win rate</Text>
-        <Text style={styles.heatmapLegendItem}>Strong edge</Text>
+        <Text style={styles.heatmapLegendItem}>{t("lossLeak")}</Text>
+        <Text style={styles.heatmapLegendItem}>{t("weakWinRate")}</Text>
+        <Text style={styles.heatmapLegendItem}>{t("strongEdge")}</Text>
       </View>
       <View style={styles.heatmapGrid}>
         {cells.map((cell) => (
@@ -5918,6 +4828,9 @@ function Stats({
   onRestore,
   onRadarUpgrade,
   session,
+  achievements,
+  traderLevel,
+  shareStats,
 }: {
   trades: Trade[];
   lang: Lang;
@@ -5932,6 +4845,9 @@ function Stats({
   onRestore: () => void;
   onRadarUpgrade: () => void;
   session: Session | null;
+  achievements: Achievement[];
+  traderLevel: TraderLevel;
+  shareStats: ReturnType<typeof buildAchievementShareStats>;
 }) {
   const visibleTrades = trades;
   const s = useMemo(() => calcStats(visibleTrades), [visibleTrades]);
@@ -5961,6 +4877,16 @@ function Stats({
         onUpgrade={onRadarUpgrade}
       />
       <TerminalSessionIntelligence trades={visibleTrades} />
+
+      <TraderStatusDashboard
+        achievements={achievements}
+        level={traderLevel}
+        trades={visibleTrades}
+        selectedDate={selectedDate}
+        isPremium={isPremium}
+        session={session}
+        shareStats={shareStats}
+      />
 
       {!isPremium && (
         <PaywallPreview
@@ -6008,12 +4934,10 @@ function StatsScreen({
   const [period, setPeriod] = useState<"day" | "week" | "month" | "year">("month");
   const [selectedDate] = useState(todayISO());
   const [exportBusy, setExportBusy] = useState(false);
-  const [shareCardMounted, setShareCardMounted] = useState(false);
-  const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "usage_limit", title: "YouTrader Pro", message: "Unlock premium exports." });
+  const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "usage_limit", title: "YouTrader Pro", message: t("unlockPremiumExports") });
   const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
   const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
   const [tradeAnalysisError, setTradeAnalysisError] = useState("");
-  const shareCardRef = useRef<View>(null);
   const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
   const weekPnl = periodPnlFromTrades(trades, selectedDate, "week");
@@ -6042,16 +4966,56 @@ function StatsScreen({
       }),
     [trades, selectedDate, propTemplateKey, propMode, safePropTemplates],
   );
+  const activePropTemplate = propTemplateKey
+    ? safePropTemplates.find((template) => template.key === propTemplateKey) || null
+    : null;
+  const passProbability = useMemo(
+    () =>
+      activePropTemplate
+        ? calculatePassProbability({ trades, selectedDate, template: activePropTemplate })
+        : { probability: 0, status: "DANGER" as const, explanation: "", confidence: "low" as const },
+    [trades, selectedDate, activePropTemplate],
+  );
+  const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
+  const achievementList = useMemo(
+    () =>
+      calculateAchievements({
+        trades: periodTrades,
+        selectedDate,
+        tradingScore: tradingScore.score,
+        winRate: periodStats.wr,
+        profitFactor: periodStats.pf,
+        riskControl: periodStats.drawdownControl,
+        propSurvivalScore: passProbability.probability,
+        propTargetRemainingPct:
+          propSnapshot && propSnapshot.template.evaluationTarget > 0
+            ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
+            : 100,
+        monthlyPnl: periodStats.pnl,
+        bestMonthPnl: Math.max(0, periodStats.pnl),
+        dailyLossLimit: propSnapshot?.template.dailyLossLimit ?? 0,
+      }),
+    [passProbability.probability, periodStats, periodTrades, propSnapshot, selectedDate, tradingScore.score],
+  );
+  const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
+  const achievementShareStats = useMemo(() => buildAchievementShareStats(periodTrades, selectedDate), [periodTrades, selectedDate]);
 
   const shareCardData = useMemo(
     () => {
       const propMeta = propSnapshotShareMeta(propSnapshot);
+      const ordered = [...periodTrades].sort((a, b) => getTradeTime(a).getTime() - getTradeTime(b).getTime());
+      const streaks = currentTradeStreaks(ordered);
+      const bestTrade = periodTrades.length ? Math.max(0, ...periodTrades.map((trade) => trade.pnl)) : 0;
+      const greenDays = buildDailySeries(periodTrades).filter((day) => day.value > 0).length;
       return {
       periodLabel: `${period.toUpperCase()} • ${selectedDate}`,
       netPnl: periodStats.pnl,
       winRate: periodStats.wr,
       profitFactor: periodStats.pf,
       avgWinLoss: periodStats.avgWinLoss,
+      avgWin: periodStats.avgWin,
+      avgLoss: periodStats.avgLoss,
+      expectancy: periodStats.exp,
       consistency: periodStats.consistency,
       maxDrawdown: periodStats.maxDd,
       riskControl: periodStats.drawdownControl,
@@ -6063,60 +5027,67 @@ function StatsScreen({
       bestSession: periodStats.session[0]?.label || "N/A",
       dailyBuffer: propMeta.dailyBuffer,
       propStatus: propMeta.propStatus,
+      bestTrade,
+      currentWinStreak: streaks.currentWinStreak,
+      greenDays,
     };
     },
     [period, selectedDate, periodStats, periodTrades, weekPnl, monthPnl, propSnapshot],
   );
 
-  const waitForShareCardLayout = () =>
-    new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
-
   const openRadarUpgrade = () => {
     setValueModal({
       visible: true,
       reason: "pro_feature",
-      title: "Unlock Full Trading Profile",
-      message: "Pro unlocks Profit Factor, Consistency, Recovery, strengths, and weakest-area analysis in your full Trading Radar.",
-      bullets: ["Full radar profile score", "Strengths and weakest-area insights", "Advanced performance metrics"],
+      title: t("unlockFullTradingProfile"),
+      message: t("radarUnlockMessage"),
+      bullets: [t("radarUnlockBullet1"), t("radarUnlockBullet2"), t("radarUnlockBullet3")],
     });
   };
 
   const runExport = async (action: "share" | "save" | "pdf") => {
+    console.log(`[YouTrader:export-action] ${action === "share" ? "Share Card pressed" : action === "save" ? "Save Card pressed" : "Monthly PDF pressed"}`);
+    if (!isPremium) {
+      setValueModal({
+        visible: true,
+        reason: "pro_feature",
+        title: t("premiumExports"),
+        message: FEATURE_LIMIT_MESSAGES.exportProPaywall,
+        bullets: [t("premiumExportsBullet1"), t("premiumExportsBullet2"), t("premiumExportsBullet3")],
+        primaryTrial: true,
+      });
+      return;
+    }
     try {
-      const limit = await checkClientRateLimit("export:generate", "stats-local");
+      const limit = await peekClientRateLimit("export:generate", "stats-local", "export_attempt");
+      logExportRateLimitDebug(limit, `runExport:${action}:precheck`);
       if (!limit.allowed) {
-        Alert.alert(tText(lang, "exportTitle"), SECURITY_MESSAGES.rateLimited);
+        console.warn(
+          `[YouTrader:export-rate-limit] BLOCKED export:${action} — ${limit.retryAfterSeconds}s remaining (${limit.count}/${limit.limit} in window)`,
+        );
+        Alert.alert(t("exportTitle"), SECURITY_MESSAGES.rateLimited);
         return;
       }
-      if (!isPremium && action === "save") {
+      if ((action === "share" || action === "save") && !(await ensureShareCardExportAllowed(isPremium, session?.user.id || null, (message) => {
         setValueModal({
           visible: true,
           reason: "usage_limit",
-          title: tText(lang, "saveImageProTitle"),
-          message: tText(lang, "saveImageProMessage"),
-          bullets: [tText(lang, "fullExportsBenefit"), tText(lang, "unlimitedPdfBenefit"), tText(lang, "premiumReportBenefit")],
+          title: t("shareCardLimitReached"),
+          message,
+          bullets: [t("moreShareCardsBenefit"), t("fullImageExportsBenefit"), t("monthlyReportsBenefit")],
         });
-        return;
-      }
-      if (!isPremium && action === "share" && (await getMonthlyUsageCount("share-cards", session?.user.id || null)) >= FREE_MONTHLY_SHARE_CARD_LIMIT) {
-        setValueModal({
-          visible: true,
-          reason: "usage_limit",
-          title: tText(lang, "shareCardLimitReached"),
-          message: tText(lang, "shareCardLimitMessage"),
-          bullets: [tText(lang, "moreShareCardsBenefit"), tText(lang, "fullImageExportsBenefit"), tText(lang, "monthlyReportsBenefit")],
-        });
+      }))) {
+        logExportRateLimitDebug(limit, `runExport:${action}:blocked_monthly_share_quota`);
         return;
       }
       if (!isPremium && action === "pdf" && (await getMonthlyUsageCount("pdf-previews", session?.user.id || null)) >= FREE_MONTHLY_PDF_PREVIEW_LIMIT) {
+        logExportRateLimitDebug(limit, `runExport:${action}:blocked_monthly_pdf_quota`);
         setValueModal({
           visible: true,
           reason: "usage_limit",
-          title: tText(lang, "monthlyPdfPreviewUsed"),
-          message: tText(lang, "monthlyPdfPreviewMessage"),
-          bullets: [tText(lang, "unlimitedPdfBenefit"), tText(lang, "noWatermarkBenefit"), tText(lang, "aiSummaryReportBenefit")],
+          title: t("monthlyPdfPreviewUsed"),
+          message: t("monthlyPdfPreviewMessage"),
+          bullets: [t("unlimitedPdfBenefit"), t("noWatermarkBenefit"), t("aiSummaryReportBenefit")],
         });
         return;
       }
@@ -6124,23 +5095,36 @@ function StatsScreen({
       const { shareCapturedView, saveCapturedViewToPhotos, shareMonthlyPdfReport } = await import(
         "./src/components/insights/shareExport"
       );
-      if (action === "share" || action === "save") {
-        setShareCardMounted(true);
-        await waitForShareCardLayout();
-      }
-      const exportKey = { action, period, selectedDate, count: periodTrades.length, pnl: periodStats.pnl };
+      const cardMeta = {
+        userId: session?.user.id || null,
+        action: action as "share" | "save",
+        period,
+      };
+      const cardExport = { card: shareCardData, meta: cardMeta };
       if (action === "share") {
-        await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareCapturedView(shareCardRef));
-        trackEvent("share_card_exported", { action: "share", period, trade_count: periodTrades.length, is_pro: isPremium });
-        if (!isPremium) await incrementMonthlyUsageCount("share-cards", session?.user.id || null);
+        console.log("[YouTrader:export-action] running share flow");
+        const result = await shareCapturedView(null, "Share YouTrader card", { data: cardExport });
+        if (result.shared) {
+          const consumed = await consumeClientRateLimit("export:generate", "stats-local");
+          logExportRateLimitDebug(consumed, "runExport:share:success");
+          await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+        } else {
+          logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "share_sheet_unavailable"), "runExport:share:skipped");
+        }
+        trackEvent("share_card_exported", { action: "share", period, trade_count: periodTrades.length, is_pro: isPremium, shared: result.shared });
         return;
       }
       if (action === "save") {
-        await runIdempotentLocal("export:generate", "stats-local", exportKey, () => saveCapturedViewToPhotos(shareCardRef));
+        console.log("[YouTrader:export-action] running save flow");
+        await saveCapturedViewToPhotos(null, { data: cardExport });
+        const consumed = await consumeClientRateLimit("export:generate", "stats-local");
+        logExportRateLimitDebug(consumed, "runExport:save:success");
         trackEvent("share_card_exported", { action: "save", period, trade_count: periodTrades.length, is_pro: isPremium });
-        Alert.alert(tText(lang, "savedTitle"), tText(lang, "pnlCardSaved"));
+        Alert.alert(t("savedTitle"), t("pnlCardSaved"));
+        await recordShareCardExportSuccess(session?.user.id || null, isPremium);
         return;
       }
+      const exportKey = { action, period, selectedDate, count: periodTrades.length, pnl: periodStats.pnl, ts: Date.now() };
       const monthTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "month"));
       const monthStats = calcStats(monthTrades);
       const monthWins = monthTrades.filter((trade) => trade.pnl > 0).length;
@@ -6156,9 +5140,9 @@ function StatsScreen({
       const monthScore = tradingScoreForTrades(monthTrades);
       const start = periodStart(safeDateFromISO(selectedDate), "month");
       const end = addDays(addMonths(start, 1), -1);
-      await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
+      const result = await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
         lang,
-        title: "Monthly Performance Report",
+        title: t("monthlyPerformanceReport"),
         rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
         netPnl: monthStats.pnl,
         winRate: monthStats.wr,
@@ -6183,27 +5167,35 @@ function StatsScreen({
         worstSession: formatSessionLabel(worstSession),
         watermarked: !isPremium,
       }));
+      if (!result.duplicate) {
+        const consumed = await consumeClientRateLimit("export:generate", "stats-local");
+        logExportRateLimitDebug(consumed, "runExport:pdf:success");
+      } else {
+        logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "duplicate_pdf_skipped"), "runExport:pdf:duplicate");
+      }
       trackEvent("pdf_exported", { period: "month", trade_count: monthTrades.length, is_pro: isPremium, watermarked: !isPremium });
       trackEvent("weekly_report_opened", { period: "month", trade_count: monthTrades.length, is_pro: isPremium });
       if (!isPremium) await incrementMonthlyUsageCount("pdf-previews", session?.user.id || null);
     } catch (error) {
-      alertExportError(tText(lang, "exportFailed"), error);
+      const failed = await peekClientRateLimit("export:generate", "stats-local", "export_failed");
+      logExportRateLimitDebug(failed, "runExport:error");
+      console.warn("[YouTrader:export-rate-limit] Export failed without consuming quota", error);
+      alertExportError(t("exportFailed"), error);
     } finally {
-      setShareCardMounted(false);
       setExportBusy(false);
     }
   };
 
   const runTradeAnalysis = async () => {
     if (!isPremium) {
-      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "aiTradeAnalysisPro"), [
-        { text: tText(lang, "ok") },
-        { text: tText(lang, "unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
+      Alert.alert(t("premiumAccess"), t("aiTradeAnalysisPro"), [
+        { text: t("ok") },
+        { text: t("unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
       ]);
       return;
     }
     if (!periodTrades.length) {
-      Alert.alert(tText(lang, "aiTradeAnalysis"), tText(lang, "addTradesFirstAnalysis"));
+      Alert.alert(t("aiTradeAnalysis"), t("addTradesFirstAnalysis"));
       return;
     }
     try {
@@ -6227,7 +5219,7 @@ function StatsScreen({
       logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
       setTradeAnalysis(fallback);
-      setTradeAnalysisError(tText(lang, "aiUnavailableLocal"));
+      setTradeAnalysisError(t("aiUnavailableLocal"));
     } finally {
       setTradeAnalysisBusy(false);
     }
@@ -6236,20 +5228,20 @@ function StatsScreen({
   const aiAnalysisBlock = (
     <>
       <Card>
-        <Text style={styles.h2}>{tText(lang, "aiTradeAnalysis")}</Text>
-        <Text style={styles.sub}>{tText(lang, "aiTradeAnalysisSub")}</Text>
+        <Text style={styles.h2}>{t("aiTradeAnalysis")}</Text>
+        <Text style={styles.sub}>{t("aiTradeAnalysisSub")}</Text>
         <Pressable
           disabled={tradeAnalysisBusy || !isPremium}
           onPress={runTradeAnalysis}
           style={[styles.secondaryBig, styles.purpleAction, (tradeAnalysisBusy || !isPremium) && styles.disabledBtn]}
         >
-          <Text style={styles.secondaryText}>{tradeAnalysisBusy ? tText(lang, "analyzing") : tText(lang, "analyzeMyTrades")}</Text>
+          <Text style={styles.secondaryText}>{tradeAnalysisBusy ? t("analyzing") : t("analyzeMyTrades")}</Text>
         </Pressable>
         {tradeAnalysisError ? (
           <Text style={[styles.sub, { color: C.yellow, marginTop: 10 }]}>{tradeAnalysisError}</Text>
         ) : null}
         {tradeAnalysis ? (
-          <Text style={[styles.sub, { color: C.green, marginTop: 10 }]}>{tText(lang, "analysisReady")}</Text>
+          <Text style={[styles.sub, { color: C.green, marginTop: 10 }]}>{t("analysisReady")}</Text>
         ) : null}
       </Card>
       {tradeAnalysis ? <TradeAnalysisCard result={tradeAnalysis} /> : null}
@@ -6274,29 +5266,38 @@ function StatsScreen({
       <View style={styles.statsActionsRow}>
         <Pressable
           disabled={exportBusy}
-          onPress={() => runExport("share")}
+          onPress={() => {
+            console.log("[YouTrader:export-action] Share Card pressed");
+            void runExport("share");
+          }}
           style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
         >
           <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {tText(lang, "sharePnlCard")}
+            {t("sharePnlCard")}
           </Text>
         </Pressable>
         <Pressable
           disabled={exportBusy}
-          onPress={() => runExport("save")}
+          onPress={() => {
+            console.log("[YouTrader:export-action] Save Card pressed");
+            void runExport("save");
+          }}
           style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
         >
           <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {tText(lang, "saveImage")}
+            {t("saveImage")}
           </Text>
         </Pressable>
         <Pressable
           disabled={exportBusy}
-          onPress={() => runExport("pdf")}
+          onPress={() => {
+            console.log("[YouTrader:export-action] Monthly PDF pressed");
+            void runExport("pdf");
+          }}
           style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
         >
           <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {tText(lang, "monthlyPdf")}
+            {t("monthlyPdf")}
           </Text>
         </Pressable>
       </View>
@@ -6313,13 +5314,6 @@ function StatsScreen({
         onClose={() => setValueModal((prev) => ({ ...prev, visible: false }))}
       />
       {exportBusy ? <ActivityIndicator color={C.green} style={{ marginBottom: 10 }} /> : null}
-      {shareCardMounted ? (
-        <View style={styles.offscreenShareCard} collapsable={false}>
-          <View ref={shareCardRef} collapsable={false}>
-            <SharePnLCard data={shareCardData} />
-          </View>
-        </View>
-      ) : null}
       <Stats
         trades={periodTrades}
         lang={lang}
@@ -6334,6 +5328,9 @@ function StatsScreen({
         onRestore={onRestore}
         onRadarUpgrade={openRadarUpgrade}
         session={session}
+        achievements={achievementList}
+        traderLevel={traderLevel}
+        shareStats={achievementShareStats}
       />
     </ScrollView>
   );
@@ -6354,21 +5351,21 @@ function buildAiCommandCenter({
 }) {
   if (!trades.length) {
     return {
-      title: "Build a clean trading sample",
+      title: t("coachMissionSampleTitle"),
       status: "SETUP",
       color: C.purple,
       softColor: C.purpleSoft,
-      action: "Log each trade with entry time, exit time, symbol, result, and tags. The coach becomes useful once your journal has enough clean data.",
+      action: t("coachActionSampleBody"),
     };
   }
 
   if (!propSnapshot) {
     return {
-      title: "Connect a prop firm template",
+      title: t("coachMissionPropTitle"),
       status: "SETUP",
       color: C.purple,
       softColor: C.purpleSoft,
-      action: "Sync firm rules from Supabase, then select your evaluation account to unlock prop-aware coaching.",
+      action: t("coachActionPropBody"),
     };
   }
 
@@ -6377,39 +5374,39 @@ function buildAiCommandCenter({
 
   if (propSnapshot.status === "STOP" || (revengeTrading.detected && revengeTrading.severity === "HIGH")) {
     return {
-      title: "Protect the account first",
+      title: t("coachMissionProtectAccount"),
       status: "STOP",
       color: C.red,
       softColor: C.redSoft,
-      action: `${revengeTrading.detected ? revengeTrading.recommendation : "Stop trading today and switch to review-only mode."} Do not increase size while the account is under pressure.`,
+      action: `${revengeTrading.detected ? revengeTrading.recommendation : t("coachActionStopToday")} ${t("coachActionNoSizePressure")}`,
     };
   }
 
   if (passProbability.status === "DANGER" || dailyRiskRatio <= 0.25 || accountRiskRatio <= 0.25) {
     return {
-      title: "Evaluation is in danger mode",
+      title: t("coachMissionEvalDanger"),
       status: "DANGER",
       color: C.red,
       softColor: C.redSoft,
-      action: "Cut risk, protect remaining buffer, and take only checklist-perfect setups. The goal is survival before progress.",
+      action: t("coachActionEvalDangerBody"),
     };
   }
 
   if (propSnapshot.status === "CAUTION" || passProbability.status === "AT_RISK" || revengeTrading.detected) {
     return {
-      title: "Trade smaller and slower",
+      title: t("coachMissionTradeSmaller"),
       status: "CAUTION",
       color: C.yellow,
       softColor: C.yellowSoft,
       action: revengeTrading.detected
         ? revengeTrading.recommendation
-        : "Keep size fixed, avoid chasing the pass target, and stop immediately if another loss reduces your daily buffer.",
+        : t("coachActionTradeSmallerFallback"),
     };
   }
 
   if (hiddenLeaks[0]) {
     return {
-      title: "Clear conditions, one leak to watch",
+      title: t("coachMissionClearConditions"),
       status: "CLEAR",
       color: C.green,
       softColor: C.greenSoft,
@@ -6419,20 +5416,20 @@ function buildAiCommandCenter({
 
   if (passProbability.status === "EXCELLENT") {
     return {
-      title: "Protect a strong pass path",
+      title: t("coachMissionProtectPassPath"),
       status: "EXCELLENT",
       color: C.green,
       softColor: C.greenSoft,
-      action: "Your pass path is strong. Keep size stable, avoid overtrading after green days, and protect the account buffer.",
+      action: t("coachActionProtectPassBody"),
     };
   }
 
   return {
-    title: "Conditions are clear",
+    title: t("coachMissionConditionsClear"),
     status: "ON TRACK",
     color: C.green,
     softColor: C.greenSoft,
-    action: "Trade only your best setups with fixed risk. The current plan is to preserve discipline and let expectancy work.",
+    action: t("coachActionConditionsClearBody"),
   };
 }
 
@@ -6487,40 +5484,40 @@ function DailyCoachCard({
     if (!trades.length) {
       return {
         tone: "green" as const,
-        title: "Daily Coach",
-        body: "Log your first trade today. The coach will start reading your edge from real journal data.",
-        action: "Start with one clean setup.",
+        title: t("dailyCoachTitle"),
+        body: t("dailyCoachBodyEmpty"),
+        action: t("dailyCoachActionEmpty"),
       };
     }
     if (latestMistake) {
       return {
         tone: "red" as const,
-        title: "Risk Coach",
-        body: "Your recent journal mentions tilt, FOMO, overtrading or revenge risk.",
-        action: "Cut size and wait for only A+ setups.",
+        title: t("riskCoachTitle"),
+        body: t("dailyCoachBodyRisk"),
+        action: t("dailyCoachActionRisk"),
       };
     }
     if (selectedTrades.length >= 3 && selectedPnl < 0) {
       return {
         tone: "red" as const,
-        title: "Protect Today",
-        body: "Today is red after multiple trades. The premium move is to stop digging.",
-        action: "Review screenshots before adding another trade.",
+        title: t("protectTodayTitle"),
+        body: t("dailyCoachBodyProtect"),
+        action: t("dailyCoachActionProtect"),
       };
     }
     if (recentWins >= recentLosses && recentWins >= 4) {
       return {
         tone: "green" as const,
-        title: "Edge Is Showing",
-        body: "Recent trades are leaning green. Keep execution boring and avoid adding random size.",
-        action: "Repeat your best setup, not every setup.",
+        title: t("edgeShowingTitle"),
+        body: t("dailyCoachBodyEdge"),
+        action: t("dailyCoachActionEdge"),
       };
     }
     return {
       tone: "purple" as const,
-      title: "Daily Coach",
-      body: "Your journal has enough signal to keep the next trade simple.",
-      action: "Define entry, invalidation and target before tapping save.",
+      title: t("dailyCoachTitle"),
+      body: t("dailyCoachBodyDefault"),
+      action: t("dailyCoachActionDefault"),
     };
   }, [selectedDate, trades]);
 
@@ -6627,14 +5624,14 @@ function TerminalPatternDetective({
   stats: ReturnType<typeof calcStats>;
 }) {
   const rows = [
-    { label: "Morning", data: stats.session.find((item) => item.label === "Morning") },
-    { label: "Lunch", data: stats.session.find((item) => item.label === "Midday") },
-    { label: "Power Hour", data: stats.session.find((item) => item.label === "Afternoon") },
-    { label: "News", data: stats.weekday[0] },
+    { label: t("sessionMorning"), data: stats.session.find((item) => item.label === t("sessionMorning")) },
+    { label: t("microLunch"), data: stats.session.find((item) => item.label === t("sessionMidday")) },
+    { label: t("microPowerHour"), data: stats.session.find((item) => item.label === t("sessionAfternoon")) },
+    { label: t("news"), data: stats.weekday[0] },
   ];
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Signal Timeline</Text>
+      <Text style={styles.terminalSectionTitle}>{t("signalTimeline")}</Text>
       <View style={styles.patternTimeline}>
         {rows.map((row) => {
           const pnl = row.data?.pnl || 0;
@@ -6670,14 +5667,14 @@ function TerminalTradingCoach({
     <TerminalGlassCard>
       <View style={styles.aiCoachUnifiedRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.terminalSectionTitle}>Today's Coaching</Text>
+          <Text style={styles.terminalSectionTitle}>{t("todaysCoaching")}</Text>
           <Text style={styles.aiCoachVoice}>{weekly?.coachMessage || daily?.coachMessage || "Protect clean execution. Trade less, but with better rules."}</Text>
-          <Text style={styles.terminalSmallLabel}>Next improvement</Text>
+          <Text style={styles.terminalSmallLabel}>{t("nextImprovement")}</Text>
           <Text style={styles.aiCoachNext}>{challenge?.challengeTitle || "Reduce size after emotional trades."}</Text>
         </View>
-        <AppleRing label="Focus" value={focusScore} display={`${focusScore}`} size={112} color={C.green} />
+        <AppleRing label={t("focusLabel")} value={focusScore} display={`${focusScore}`} size={112} color={C.green} />
       </View>
-      <Text style={styles.terminalSmallLabel}>Action Plan</Text>
+      <Text style={styles.terminalSmallLabel}>{t("actionPlan")}</Text>
       <BulletList items={daily?.tradeRules || weekly?.nextWeekFocus || ["Trade only best session", "Stop after rule breaks", "Journal every trade with reason"]} />
     </TerminalGlassCard>
   );
@@ -6698,7 +5695,7 @@ function buildPropCoachRecommendation({
   if (!snapshot) {
     return {
       headline: "Sync a prop firm template to unlock risk coaching.",
-      action: "Select Firm",
+      action: t("microSelectFirm"),
       rules: ["Open Prop Firm Risk Assistant and choose your evaluation account.", "Firm rules load from Supabase — no hardcoded limits in the app."],
       reason: `Based on ${stats.count} trades and ${stats.wr.toFixed(0)}% win rate. Prop-specific buffer coaching activates after a template is selected.`,
     };
@@ -6710,7 +5707,7 @@ function buildPropCoachRecommendation({
     : caution
       ? "Reduce size until the buffer and execution quality recover."
       : "Protect the pass path with stable size and fewer decisions.";
-  const action = danger ? "Stop Trading Today" : caution ? "Reduce Size" : "Protect Pass Path";
+  const action = danger ? t("stopTradingToday") : caution ? t("reduceSize") : t("protectPassPath");
   const rules = danger
     ? ["No new trades after a daily or account buffer breach.", "Review the last losing sequence before the next session.", "Return only with fixed risk and one A+ setup." ]
     : caution
@@ -6807,18 +5804,18 @@ function AIWeeklyReportCard({ report }: { report: AiWeeklyReport }) {
     <TerminalGlassCard>
       <View style={styles.terminalHeaderRow}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.terminalSectionTitle}>AI Weekly Report</Text>
-          <Text style={styles.terminalSub}>A compact weekly read on P&L, risk, behavior and next focus.</Text>
+          <Text style={styles.terminalSectionTitle}>{t("aiWeeklyReport")}</Text>
+          <Text style={styles.terminalSub}>{t("aiWeeklyReportSub")}</Text>
         </View>
         <AppleRing label={report.grade} value={report.score} display={`${report.score}`} size={104} color={report.score >= 68 ? C.green : report.score >= 52 ? C.purple : C.red} />
       </View>
       <MetricPillRow
         items={[
-          { label: "Weekly P&L", value: moneyCompact(report.pnl), tone: report.pnl >= 0 ? "green" : "red" },
-          { label: "Win Rate", value: `${report.winRate.toFixed(0)}%`, tone: report.winRate >= 50 ? "green" : "purple" },
-          { label: "Profit Factor", value: report.profitFactor.toFixed(2), tone: report.profitFactor >= 1 ? "green" : "red" },
-          { label: "Expectancy", value: moneyCompact(report.expectancy), tone: report.expectancy >= 0 ? "green" : "red" },
-          { label: "Trades", value: String(report.tradeCount), tone: "grey" },
+          { label: t("microWeeklyPnl"), value: moneyCompact(report.pnl), tone: report.pnl >= 0 ? "green" : "red" },
+          { label: t("winRate"), value: `${report.winRate.toFixed(0)}%`, tone: report.winRate >= 50 ? "green" : "purple" },
+          { label: t("profitFactor"), value: report.profitFactor.toFixed(2), tone: report.profitFactor >= 1 ? "green" : "red" },
+          { label: t("expectancy"), value: moneyCompact(report.expectancy), tone: report.expectancy >= 0 ? "green" : "red" },
+          { label: t("trades"), value: String(report.tradeCount), tone: "grey" },
         ]}
       />
       <WeeklyPnlMiniChart points={report.chartPoints} />
@@ -6838,18 +5835,18 @@ function AIWeeklyReportCard({ report }: { report: AiWeeklyReport }) {
       </View>
       <View style={{ gap: 10, marginTop: 12 }}>
         <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(177,66,255,0.22)", padding: 12, backgroundColor: "rgba(177,66,255,0.055)" }}>
-          <Text style={styles.terminalSmallLabel}>Best Behavior</Text>
+          <Text style={styles.terminalSmallLabel}>{t("bestBehavior")}</Text>
           <Text style={styles.monthlyTimelineValue}>{report.bestBehavior}</Text>
         </View>
         <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", padding: 12, backgroundColor: "rgba(255,255,255,0.035)" }}>
-          <Text style={styles.terminalSmallLabel}>Main Risk Warning</Text>
+          <Text style={styles.terminalSmallLabel}>{t("mainRiskWarning")}</Text>
           <Text style={styles.monthlyTimelineValue}>{report.mainRiskWarning}</Text>
         </View>
       </View>
       <Text style={[styles.terminalSmallLabel, { marginTop: 14 }]}>3 AI Takeaways</Text>
       <BulletList items={report.takeaways.slice(0, 3)} />
       <View style={styles.propCoachAdviceCard}>
-        <Text style={styles.propCoachHeadline}>Next week focus</Text>
+        <Text style={styles.propCoachHeadline}>{t("nextWeekFocus")}</Text>
         <Text style={styles.terminalSub}>{report.nextWeekFocus}</Text>
       </View>
     </TerminalGlassCard>
@@ -6877,7 +5874,7 @@ function DailyMissionCard({
     <TerminalGlassCard>
       <View style={styles.terminalHeaderRow}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.terminalSectionTitle}>Daily Mission</Text>
+          <Text style={styles.terminalSectionTitle}>{t("dailyMission")}</Text>
           <Text style={[styles.propCoachHeadline, { color: tone }]}>{mission.title}</Text>
           <Text style={styles.terminalSub}>{mission.reason}</Text>
         </View>
@@ -6899,8 +5896,8 @@ function DailyMissionCard({
           );
         })}
       </View>
-      <Pressable onPress={() => Alert.alert("Related stats", mission.relatedStats.join("\n"))} style={{ marginTop: 12, borderRadius: 999, borderWidth: 1, borderColor: "rgba(177,66,255,0.28)", paddingHorizontal: 14, paddingVertical: 10, alignSelf: "flex-start" }}>
-        <Text style={[styles.terminalSmallLabel, { color: C.purple }]}>View related stats</Text>
+      <Pressable onPress={() => Alert.alert(t("relatedStats"), mission.relatedStats.join("\n"))} style={{ marginTop: 12, borderRadius: 999, borderWidth: 1, borderColor: "rgba(177,66,255,0.28)", paddingHorizontal: 14, paddingVertical: 10, alignSelf: "flex-start" }}>
+        <Text style={[styles.terminalSmallLabel, { color: C.purple }]}>{t("viewRelatedStats")}</Text>
       </Pressable>
       <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
         {(["completed", "failed", "skipped"] as AiDailyMissionStatus[]).map((item) => (
@@ -6999,7 +5996,7 @@ function AIInsightCard({ insight }: { insight: AiInsight }) {
       <Text style={styles.terminalSmallLabel}>{insight.category.toUpperCase()} · {insight.priority.toUpperCase()}</Text>
       <Text style={styles.propCoachHeadline}>{insight.title}</Text>
       <EvidenceChart label="Evidence" values={insight.evidence.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: insight.priority === "high" ? "red" : "purple" }))} />
-      <RuleImpactCard title="Recommendation" rule={insight.recommendation} evidence={insight.sourceMetrics.join(" · ")} />
+      <RuleImpactCard title={t("microRecommendation")} rule={insight.recommendation} evidence={insight.sourceMetrics.join(" · ")} />
     </View>
   );
 }
@@ -7013,12 +6010,12 @@ function AchievementDetailModal({ achievement, onClose }: { achievement: AiTradi
         <View style={[styles.terminalCard, { width: "100%", maxWidth: 420, gap: 14 }]}>
           <Text style={styles.terminalSmallLabel}>{achievement.rarity.toUpperCase()} · {achievement.category.toUpperCase()}</Text>
           <Text style={styles.terminalSectionTitle}>{achievement.icon} {achievement.title}</Text>
-          <RiskMeter label={achievement.unlocked ? "Unlocked" : "Progress"} value={pctDone} />
+          <RiskMeter label={achievement.unlocked ? t("microUnlockedLabel") : t("microProgress")} value={pctDone} />
           <Text style={styles.terminalSub}>{achievement.explanation}</Text>
-          <WarningCard title="Why it matters" body={achievement.whyItMatters} />
-          <EvidenceChart label="Connected statistics" values={achievement.connectedStats.map((item, index) => ({ name: item, value: achievement.connectedStats.length - index, tone: achievement.unlocked ? "green" : "purple" }))} />
+          <WarningCard title={t("achWhyItMatters")} body={achievement.whyItMatters} />
+          <EvidenceChart label={t("profileConnectedStats")} values={achievement.connectedStats.map((item, index) => ({ name: item, value: achievement.connectedStats.length - index, tone: achievement.unlocked ? "green" : "purple" }))} />
           <Pressable onPress={onClose} style={styles.primaryBig}>
-            <Text style={styles.primaryText}>Close</Text>
+            <Text style={styles.primaryText}>{t("microClose")}</Text>
           </Pressable>
         </View>
       </View>
@@ -7030,8 +6027,8 @@ function AchievementSystemCard({ achievements }: { achievements: AiTradingAchiev
   const [selected, setSelected] = useState<AiTradingAchievement | null>(null);
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Achievement System</Text>
-      <Text style={styles.terminalSub}>Behavior-based milestones. No fake rankings, no vanity badges.</Text>
+      <Text style={styles.terminalSectionTitle}>{t("achievementSystem")}</Text>
+      <Text style={styles.terminalSub}>{t("achievementSystemSub")}</Text>
       <View style={{ gap: 10, marginTop: 14 }}>
         {achievements.map((achievement) => {
           const pctDone = Math.round((achievement.progress / Math.max(1, achievement.target)) * 100);
@@ -7041,7 +6038,7 @@ function AchievementSystemCard({ achievements }: { achievements: AiTradingAchiev
                 <Text style={[styles.propCoachHeadline, { color: achievement.unlocked ? C.green : C.sub }]}>{achievement.icon}</Text>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.monthlyTimelineValue}>{achievement.title}</Text>
-                  <Text style={styles.terminalSmallLabel}>{achievement.rarity.toUpperCase()} · {achievement.unlocked ? "UNLOCKED" : "LOCKED"}</Text>
+                  <Text style={styles.terminalSmallLabel}>{achievement.rarity.toUpperCase()} · {achievement.unlocked ? t("badgeUnlocked") : t("badgeLocked")}</Text>
                 </View>
                 <Text style={[styles.terminalSmallLabel, { color: achievement.unlocked ? C.green : C.purple }]}>{pctDone}%</Text>
               </View>
@@ -7058,21 +6055,21 @@ function AchievementSystemCard({ achievements }: { achievements: AiTradingAchiev
 function TradingDNACard({ profile }: { profile: AiTradingDNAProfile }) {
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Personal Trading DNA</Text>
+      <Text style={styles.terminalSectionTitle}>{t("personalTradingDna")}</Text>
       <Text style={styles.terminalSub}>{profile.summary}</Text>
       <View style={{ gap: 10, marginTop: 14 }}>
-        <RuleImpactCard title="Trader Type" rule={profile.traderType} evidence={profile.enoughData ? "Built from your journal sample." : "Requires at least 10 trades."} />
+        <RuleImpactCard title={t("profileTraderType")} rule={profile.traderType} evidence={profile.enoughData ? t("profileBuiltFromJournal") : t("profileRequiresTenTrades")} />
         <MetricPillRow items={[
-          { label: "Best Symbol", value: profile.metrics.bestSymbol, tone: "purple" },
-          { label: "Best Session", value: profile.metrics.bestSession, tone: "purple" },
-          { label: "Avg RR", value: profile.metrics.averageRR.toFixed(2), tone: profile.metrics.averageRR >= 1 ? "green" : "grey" },
-          { label: "Hold", value: profile.metrics.averageHoldingMinutes ? `${profile.metrics.averageHoldingMinutes}m` : "N/A", tone: "grey" },
+          { label: t("profileBestSymbol"), value: profile.metrics.bestSymbol, tone: "purple" },
+          { label: t("profileBestSession"), value: profile.metrics.bestSession, tone: "purple" },
+          { label: t("profileAvgRR"), value: profile.metrics.averageRR.toFixed(2), tone: profile.metrics.averageRR >= 1 ? "green" : "grey" },
+          { label: t("profileHold"), value: profile.metrics.averageHoldingMinutes ? `${profile.metrics.averageHoldingMinutes}m` : t("microNA"), tone: "grey" },
         ]} />
-        <EvidenceChart label="Strengths" values={profile.strengths.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: "green" }))} />
-        <EvidenceChart label="Weaknesses" values={profile.weaknesses.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: "red" }))} />
-        <RuleImpactCard title="Best Conditions" rule={profile.bestConditions.join(" · ")} evidence={profile.metrics.bestSetup} />
-        <WarningCard title="Danger Zones" body={profile.dangerZones.join(" · ")} />
-        <RuleImpactCard title="Personal Rules" rule={profile.personalRules.join(" · ")} evidence={profile.growthPotential} />
+        <EvidenceChart label={t("strengthsSection")} values={profile.strengths.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: "green" }))} />
+        <EvidenceChart label={t("profileWeaknesses")} values={profile.weaknesses.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: "red" }))} />
+        <RuleImpactCard title={t("profileBestConditions")} rule={profile.bestConditions.join(" · ")} evidence={profile.metrics.bestSetup} />
+        <WarningCard title={t("profileDangerZones")} body={profile.dangerZones.join(" · ")} />
+        <RuleImpactCard title={t("profilePersonalRules")} rule={profile.personalRules.join(" · ")} evidence={profile.growthPotential} />
       </View>
     </TerminalGlassCard>
   );
@@ -7081,12 +6078,12 @@ function TradingDNACard({ profile }: { profile: AiTradingDNAProfile }) {
 function BenchmarkCard({ benchmark }: { benchmark: AiBenchmarkProfile }) {
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Compare Yourself</Text>
-      <Text style={styles.terminalSub}>Anonymous benchmark architecture. User data stays private.</Text>
+      <Text style={styles.terminalSectionTitle}>{t("compareYourself")}</Text>
+      <Text style={styles.terminalSub}>{t("compareYourselfSub")}</Text>
       {!benchmark.available ? (
-        <WarningCard title="Benchmark locked" body={benchmark.message} />
+        <WarningCard title={t("profileBenchmarkLocked")} body={benchmark.message} />
       ) : (
-        <EvidenceChart label="Percentiles" values={Object.entries(benchmark.percentiles).map(([name, value]) => ({ name, value: value || 0, tone: "purple" }))} />
+        <EvidenceChart label={t("profilePercentiles")} values={Object.entries(benchmark.percentiles).map(([name, value]) => ({ name, value: value || 0, tone: "purple" }))} />
       )}
     </TerminalGlassCard>
   );
@@ -7095,8 +6092,8 @@ function BenchmarkCard({ benchmark }: { benchmark: AiBenchmarkProfile }) {
 function ImprovementCard({ timeline }: { timeline: AiImprovementTimeline }) {
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>You Are Improving</Text>
-      <Text style={styles.terminalSub}>Real comparison only. If performance declines, the card says so.</Text>
+      <Text style={styles.terminalSectionTitle}>{t("youAreImproving")}</Text>
+      <Text style={styles.terminalSub}>{t("youAreImprovingSub")}</Text>
       <View style={{ gap: 10, marginTop: 14 }}>
         {timeline.windows.map((window) => (
           <View key={window.label} style={{ borderRadius: 18, borderWidth: 1, borderColor: window.improved ? "rgba(150,255,0,0.22)" : "rgba(255,69,105,0.22)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 8 }}>
@@ -7106,18 +6103,18 @@ function ImprovementCard({ timeline }: { timeline: AiImprovementTimeline }) {
             <Text style={styles.terminalSub}>{window.explanation}</Text>
           </View>
         ))}
-        <RuleImpactCard title="Next improvement" rule={timeline.nextFocus} evidence={[...timeline.whatImproved, ...timeline.whatDeclined].slice(0, 3).join(" · ") || "Need more comparable history."} />
+        <RuleImpactCard title={t("profileNextImprovement")} rule={timeline.nextFocus} evidence={[...timeline.whatImproved, ...timeline.whatDeclined].slice(0, 3).join(" · ") || t("profileNeedMoreHistory")} />
       </View>
     </TerminalGlassCard>
   );
 }
 
 function SessionHeatmap({ stats }: { stats: ReturnType<typeof calcStats> }) {
-  return <EvidenceChart label="Session Impact" values={stats.session.slice(0, 3).map((row) => ({ name: row.label, value: row.pnl, tone: row.pnl >= 0 ? "green" : "red" }))} />;
+  return <EvidenceChart label={t("profileSessionImpact")} values={stats.session.slice(0, 3).map((row) => ({ name: row.label, value: row.pnl, tone: row.pnl >= 0 ? "green" : "red" }))} />;
 }
 
 function CalendarImpact({ stats }: { stats: ReturnType<typeof calcStats> }) {
-  return <EvidenceChart label="Calendar Impact" values={stats.weekday.slice(0, 3).map((row) => ({ name: row.label, value: row.pnl, tone: row.pnl >= 0 ? "green" : "red" }))} />;
+  return <EvidenceChart label={t("profileCalendarImpact")} values={stats.weekday.slice(0, 3).map((row) => ({ name: row.label, value: row.pnl, tone: row.pnl >= 0 ? "green" : "red" }))} />;
 }
 
 function PropFirmCoachSection({
@@ -7145,11 +6142,11 @@ function PropFirmCoachSection({
   if (!snapshot) {
     return (
       <TerminalGlassCard>
-        <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
+        <Text style={styles.terminalSectionTitle}>{t("propFirmRiskAssistant")}</Text>
         <Text style={styles.terminalSub}>
           {safeTemplates.length
-            ? "Select your evaluation account to unlock prop-aware risk coaching."
-            : "Firm templates load from Supabase. Connect and reopen AI Analytics to sync rules."}
+            ? t("propSelectEvalAccount")
+            : t("propTemplatesLoadHint")}
         </Text>
         {safeTemplates.length ? (
           <>
@@ -7194,8 +6191,8 @@ function PropFirmCoachSection({
     <TerminalGlassCard>
       <View style={styles.terminalHeaderRow}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
-          <Text style={styles.terminalSub}>Unified risk engine fed into Weekly Report, Daily Mission, DNA, Coach and achievements.</Text>
+          <Text style={styles.terminalSectionTitle}>{t("propFirmRiskAssistant")}</Text>
+          <Text style={styles.terminalSub}>{t("propFirmRiskAssistantSub")}</Text>
         </View>
         <AppleRing label={isFunded ? "HEALTH" : "PASS"} value={isFunded ? safetyScore : passProbability.probability} display={`${isFunded ? safetyScore : passProbability.probability}%`} size={112} color={snapshot.statusColor} />
       </View>
@@ -7224,19 +6221,19 @@ function PropFirmCoachSection({
       </ScrollView>
       <View style={styles.propCoachStatusCard}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.terminalSmallLabel}>Status</Text>
+          <Text style={styles.terminalSmallLabel}>{t("statusLabel")}</Text>
           <Text style={[styles.propCoachStatus, { color: snapshot.statusColor }]}>{snapshot.status}</Text>
         </View>
         <Text style={[styles.propCoachAction, { color: snapshot.statusColor }]}>{action}</Text>
       </View>
       <MetricPillRow
         items={[
-          { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
-          { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
+          { label: t("dailyBuffer"), value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+          { label: t("microAccountBuffer"), value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
           { label: isFunded ? "Health Score" : "To Pass", value: isFunded ? `${safetyScore}%` : moneyCompact(snapshot.remainingToPass), tone: isFunded ? "purple" : snapshot.remainingToPass <= 0 ? "green" : "purple" },
-          { label: "Contracts Rec.", value: engine ? `${engine.contractRecommendation.recommended}/${engine.contractRecommendation.maxAllowed}` : `${maxContracts} max`, tone: "purple" },
-          { label: "Payout Ready", value: engine?.payoutReadiness.ready ? "YES" : `${engine?.payoutReadiness.pct ?? 0}%`, tone: engine?.payoutReadiness.ready ? "green" : "grey" },
-          { label: "Revenge Risk", value: `${revengeRiskScore}%`, tone: revengeRiskScore >= 60 ? "red" : "grey" },
+          { label: t("microContractsRec"), value: engine ? `${engine.contractRecommendation.recommended}/${engine.contractRecommendation.maxAllowed}` : `${maxContracts} max`, tone: "purple" },
+          { label: t("microPayoutReady"), value: engine?.payoutReadiness.ready ? t("microYes") : `${engine?.payoutReadiness.pct ?? 0}%`, tone: engine?.payoutReadiness.ready ? "green" : "grey" },
+          { label: t("microRevengeRisk"), value: `${revengeRiskScore}%`, tone: revengeRiskScore >= 60 ? "red" : "grey" },
         ]}
       />
       <View style={styles.propCoachAdviceCard}>
@@ -7244,7 +6241,7 @@ function PropFirmCoachSection({
         <BulletList items={engine?.ruleWarnings.slice(0, 3).map((w) => w.title) || coach.rules} />
         <Text style={styles.terminalSub}>{coach.reason}</Text>
       </View>
-      <Text style={styles.newsDisclaimer}>Educational analysis only. Not financial advice.</Text>
+      <Text style={styles.newsDisclaimer}>{t("educationalDisclaimer")}</Text>
     </TerminalGlassCard>
   );
 }
@@ -7261,7 +6258,7 @@ function TerminalPropFirmMission({
     return (
       <TerminalGlassCard>
         <Text style={styles.terminalSectionTitle}>Eval</Text>
-        <Text style={styles.terminalSub}>Select a prop firm template to unlock pass-path coaching.</Text>
+        <Text style={styles.terminalSub}>{t("selectPropTemplatePass")}</Text>
       </TerminalGlassCard>
     );
   }
@@ -7284,19 +6281,19 @@ function TerminalPropFirmMission({
         items={[
           { label: "Daily Buffer", value: moneyCompact(propSnapshot.dailyRemaining), tone: propSnapshot.dailyRemaining > 0 ? "green" : "red" },
           { label: "Account Buffer", value: moneyCompact(propSnapshot.accountRemaining), tone: propSnapshot.accountRemaining > 0 ? "green" : "red" },
-          { label: "To Pass", value: moneyCompact(propSnapshot.remainingToPass), tone: propSnapshot.remainingToPass > 0 ? "purple" : "green" },
-          { label: "Daily Limit", value: moneyCompact(propSnapshot.template.dailyLossLimit), tone: "grey" },
-          { label: "Max Loss", value: moneyCompact(propSnapshot.template.maxLossLimit), tone: "grey" },
-          { label: "Contracts", value: `${maxContracts} max`, tone: "purple" },
+          { label: t("microToPass"), value: moneyCompact(propSnapshot.remainingToPass), tone: propSnapshot.remainingToPass > 0 ? "purple" : "green" },
+          { label: t("microDailyLimit"), value: moneyCompact(propSnapshot.template.dailyLossLimit), tone: "grey" },
+          { label: t("microMaxLoss"), value: moneyCompact(propSnapshot.template.maxLossLimit), tone: "grey" },
+          { label: t("microContracts"), value: `${maxContracts} max`, tone: "purple" },
         ]}
       />
       <Pressable onPress={() => setDetailsOpen(true)} style={styles.missionCta}>
-        <Text style={styles.missionCtaText}>Protect Pass Path</Text>
+        <Text style={styles.missionCtaText}>{t("protectPassPath")}</Text>
       </Pressable>
       <BottomSheetPanel visible={detailsOpen} title="Protect Pass Path" onClose={() => setDetailsOpen(false)}>
         <MetricPillRow
           items={[
-            { label: "Pass", value: `${passProbability.probability}%`, tone: passProbability.probability >= 70 ? "green" : "purple" },
+            { label: t("microPass"), value: `${passProbability.probability}%`, tone: passProbability.probability >= 70 ? "green" : "purple" },
             { label: "Daily Buffer", value: moneyCompact(propSnapshot.dailyRemaining), tone: propSnapshot.dailyRemaining > 0 ? "green" : "red" },
             { label: "Account Buffer", value: moneyCompact(propSnapshot.accountRemaining), tone: propSnapshot.accountRemaining > 0 ? "green" : "red" },
           ]}
@@ -7324,18 +6321,18 @@ function TerminalMonthlyIntelligence({
   const bestSession = stats.session[0];
   const worstSession = [...stats.session].sort((a, b) => a.pnl - b.pnl)[0];
   const rows = [
-    { label: "Strength", value: tradeAnalysis?.strengths[0]?.title || patterns.strengths[0]?.title || "Best setup forming" },
-    { label: "Mistake", value: tradeAnalysis?.mistakes[0]?.title || patterns.risks[0]?.title || "No major mistake detected" },
-    { label: "Best Setup", value: stats.bySetup[0]?.label || "Add tags" },
-    { label: "Worst Setup", value: [...stats.bySetup].sort((a, b) => a.pnl - b.pnl)[0]?.label || "—" },
-    { label: "Best Day", value: bestDay ? fullWeekdayName(bestDay.label) : "—" },
-    { label: "Worst Day", value: worstDay ? fullWeekdayName(worstDay.label) : "—" },
-    { label: "Best Session", value: bestSession?.label || "—" },
-    { label: "Weak Session", value: worstSession?.label || "—" },
+    { label: t("profileStrength"), value: tradeAnalysis?.strengths[0]?.title || patterns.strengths[0]?.title || t("profileBestSetupForming") },
+    { label: t("profileMistake"), value: tradeAnalysis?.mistakes[0]?.title || patterns.risks[0]?.title || t("profileNoMajorMistake") },
+    { label: t("profileBestSetup"), value: stats.bySetup[0]?.label || t("profileAddTags") },
+    { label: t("profileWorstSetup"), value: [...stats.bySetup].sort((a, b) => a.pnl - b.pnl)[0]?.label || "—" },
+    { label: t("profileBestDay"), value: bestDay ? fullWeekdayName(bestDay.label) : "—" },
+    { label: t("profileWorstDay"), value: worstDay ? fullWeekdayName(worstDay.label) : "—" },
+    { label: t("profileBestSession"), value: bestSession?.label || "—" },
+    { label: t("profileWeakSession"), value: worstSession?.label || "—" },
   ];
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSectionTitle}>Performance Intelligence</Text>
+      <Text style={styles.terminalSectionTitle}>{t("performanceIntelligence")}</Text>
       <View style={styles.monthlyTimeline}>
         {rows.map((row, index) => (
           <View key={`${row.label}-${index}`} style={styles.monthlyTimelineRow}>
@@ -7365,7 +6362,7 @@ function TerminalFundedPanel({
     return (
       <TerminalGlassCard>
         <Text style={styles.terminalSectionTitle}>{isFunded ? "Funded" : "Evaluation"}</Text>
-        <Text style={styles.terminalSub}>Select a prop firm template to unlock funded/evaluation risk planning.</Text>
+        <Text style={styles.terminalSub}>{t("selectPropTemplateFunded")}</Text>
       </TerminalGlassCard>
     );
   }
@@ -7396,12 +6393,12 @@ function TerminalFundedPanel({
       </View>
       <MetricPillRow
         items={[
-          { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
-          { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
+          { label: t("dailyBuffer"), value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+          { label: t("microAccountBuffer"), value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
           { label: isFunded ? "Live Cap" : "To Pass", value: isFunded ? `${maxContracts} max` : moneyCompact(snapshot.remainingToPass), tone: isFunded ? "purple" : snapshot.remainingToPass <= 0 ? "green" : "purple" },
-          { label: "Contracts", value: `${maxContracts} max`, tone: "purple" },
-          { label: "Risk / Trade", value: `${Math.round(riskPct * 100)}%`, tone: "grey" },
-          { label: "Status", value: snapshot.status, tone: snapshot.status === "CLEAR" ? "green" : snapshot.status === "STOP" ? "red" : "purple" },
+          { label: t("microContracts"), value: `${maxContracts} max`, tone: "purple" },
+          { label: t("microRiskPerTrade"), value: `${Math.round(riskPct * 100)}%`, tone: "grey" },
+          { label: t("statusLabel"), value: snapshot.status, tone: snapshot.status === "CLEAR" ? "green" : snapshot.status === "STOP" ? "red" : "purple" },
         ]}
       />
       <Text style={styles.terminalSub}>
@@ -7583,27 +6580,6 @@ function AiAnalysisScreen({
     }),
     [hiddenLeaks, passProbability, periodStats, periodTrades, propSnapshot, revengeTrading, selectedDate, trades],
   );
-  const achievementList = useMemo(
-    () =>
-      calculateAchievements({
-        trades: periodTrades,
-        selectedDate,
-        tradingScore: tradingScore.score,
-        winRate: periodStats.wr,
-        profitFactor: periodStats.pf,
-        riskControl: periodStats.drawdownControl,
-        propSurvivalScore: passProbability.probability,
-        propTargetRemainingPct:
-          propSnapshot && propSnapshot.template.evaluationTarget > 0
-            ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
-            : 100,
-        monthlyPnl: periodStats.pnl,
-        bestMonthPnl: Math.max(0, periodStats.pnl),
-        dailyLossLimit: propSnapshot?.template.dailyLossLimit ?? 0,
-      }),
-    [passProbability.probability, periodStats, periodTrades, propSnapshot, selectedDate, tradingScore.score],
-  );
-  const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
   const unifiedInsights = useMemo(
     () =>
       buildAiInsights({
@@ -7696,9 +6672,12 @@ function AiAnalysisScreen({
   }, [dailyMission.checklist, dailyMissionChecked, dailyMissionStatus, persistDailyMission]);
 
   const runCoachFeature = async (key: keyof AIResultMap) => {
-    if (!isPremium) {
+    if (!isPremium || !getLimitsForUser(isPremium).paidAiAnalysis) {
       warningHaptic();
-      Alert.alert("YouTrader Pro", "NVIDIA AI coaching is included in YouTrader Pro.");
+      Alert.alert(t("premiumAccess"), t("paidAiPaywall"), [
+        { text: t("cancel"), style: "cancel" },
+        { text: t("unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
+      ]);
       return;
     }
     lightHaptic();
@@ -7727,14 +6706,14 @@ function AiAnalysisScreen({
 
   const runTradeAnalysis = async () => {
     if (!isPremium) {
-      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "aiTradeAnalysisPro"), [
-        { text: tText(lang, "ok") },
-        { text: tText(lang, "unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
+      Alert.alert(t("premiumAccess"), t("aiTradeAnalysisPro"), [
+        { text: t("ok") },
+        { text: t("unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
       ]);
       return;
     }
     if (!periodTrades.length) {
-      Alert.alert(tText(lang, "aiTradeAnalysis"), tText(lang, "addTradesFirstAnalysis"));
+      Alert.alert(t("aiTradeAnalysis"), t("addTradesFirstAnalysis"));
       return;
     }
     try {
@@ -7758,111 +6737,96 @@ function AiAnalysisScreen({
       logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
       setTradeAnalysis(fallback);
-      setTradeAnalysisError(tText(lang, "aiUnavailableLocal"));
+      setTradeAnalysisError(t("aiUnavailableLocal"));
     } finally {
       setTradeAnalysisBusy(false);
     }
   };
 
+  const localCoachStack = (
+    <View style={styles.terminalScreenStack}>
+      <Text style={styles.terminalSectionTitle}>{t("freeLocalCoach")}</Text>
+      <Text style={styles.terminalSub}>Rule-based insights from your journal — no paid AI API calls.</Text>
+      <AIWeeklyReportCard report={weeklyReport} />
+      <DailyMissionCard
+        mission={dailyMission}
+        status={dailyMissionStatus}
+        checked={dailyMissionChecked}
+        onToggle={toggleDailyMissionItem}
+        onStatusChange={(status) => persistDailyMission(status, dailyMissionChecked)}
+      />
+      <AchievementSystemCard achievements={aiAchievements} />
+      <TradingDNACard profile={tradingDna} />
+      <BenchmarkCard benchmark={benchmarkProfile} />
+      <ImprovementCard timeline={improvementTimeline} />
+      <View style={{ gap: 10 }}>
+        {unifiedInsights.primary.slice(0, 2).map((insight) => (
+          <AIInsightCard key={insight.id} insight={insight} />
+        ))}
+      </View>
+      <TerminalGlassCard>
+        <Text style={styles.terminalSectionTitle}>{t("evidenceMap")}</Text>
+        <Text style={styles.terminalSub}>{t("evidenceMapSub")}</Text>
+        <View style={{ gap: 12, marginTop: 14 }}>
+          <SessionHeatmap stats={periodStats} />
+          <CalendarImpact stats={periodStats} />
+        </View>
+      </TerminalGlassCard>
+    </View>
+  );
+
+  if (!isPremium) {
+    return (
+      <AiAnalyticsProScreen
+        packages={packages}
+        storeProducts={storeProducts}
+        purchaseBusy={purchaseBusy}
+        paywallError={paywallError}
+        showRestorePurchases={showRestorePurchases}
+        monthlyProductId={YOU_TRADER_MONTHLY_PRODUCT_ID}
+        fallbackPrice={PREMIUM_PRICE}
+        packageTitle={packageTitle}
+        packagePrice={packagePrice}
+        onPurchase={onPurchase}
+        onRestore={onRestore}
+      />
+    );
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
-      <MarketIntelligencePanel lang={lang} />
-
-      <View style={!isPremium ? styles.analysisLockedWrap : undefined}>
-        <View pointerEvents={!isPremium ? "none" : "auto"} style={!isPremium ? styles.analysisLockedContent : undefined}>
-          <View style={styles.terminalScreenStack}>
-            <AIWeeklyReportCard report={weeklyReport} />
-            <DailyMissionCard
-              mission={dailyMission}
-              status={dailyMissionStatus}
-              checked={dailyMissionChecked}
-              onToggle={toggleDailyMissionItem}
-              onStatusChange={(status) => persistDailyMission(status, dailyMissionChecked)}
+      {localCoachStack}
+      <View style={styles.terminalScreenStack}>
+        <View style={{ gap: 10 }}>
+          <Text style={styles.terminalSectionTitle}>{t("propFirmRiskAssistant")}</Text>
+          {safeAnalysisTemplates.length ? (
+            <PropFirmCoachSection
+              templates={safeAnalysisTemplates}
+              value={analysisTemplateKey || activeTemplate?.key || ""}
+              mode={propMode}
+              snapshot={selectedPropSnapshot}
+              stats={periodStats}
+              passProbability={passProbability}
+              revengeTrading={revengeTrading}
+              onTemplateChange={changeAnalysisTemplate}
+              onModeChange={changePropMode}
             />
-            <AchievementSystemCard achievements={aiAchievements} />
-            <TradingDNACard profile={tradingDna} />
-            <BenchmarkCard benchmark={benchmarkProfile} />
-            <ImprovementCard timeline={improvementTimeline} />
-            <View style={{ gap: 10 }}>
-              <Text style={styles.terminalSectionTitle}>AI Advice / Coach</Text>
-              {unifiedInsights.primary.slice(0, 2).map((insight) => (
-                <AIInsightCard key={insight.id} insight={insight} />
-              ))}
-              <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
-            </View>
+          ) : (
             <TerminalGlassCard>
-              <Text style={styles.terminalSectionTitle}>Evidence Map</Text>
-              <Text style={styles.terminalSub}>Every recommendation is tied back to session and calendar behavior.</Text>
-              <View style={{ gap: 12, marginTop: 14 }}>
-                <SessionHeatmap stats={periodStats} />
-                <CalendarImpact stats={periodStats} />
-              </View>
+              <Text style={styles.terminalSub}>{t("syncFirmTemplates")}</Text>
             </TerminalGlassCard>
-            <View style={{ gap: 10 }}>
-              <Text style={styles.terminalSectionTitle}>Prop Firm Risk Assistant</Text>
-              {safeAnalysisTemplates.length ? (
-              <PropFirmCoachSection
-                templates={safeAnalysisTemplates}
-                value={analysisTemplateKey || activeTemplate?.key || ""}
-                mode={propMode}
-                snapshot={selectedPropSnapshot}
-                stats={periodStats}
-                passProbability={passProbability}
-                revengeTrading={revengeTrading}
-                onTemplateChange={changeAnalysisTemplate}
-                onModeChange={changePropMode}
-              />
-              ) : (
-                <TerminalGlassCard>
-                  <Text style={styles.terminalSub}>Sync firm templates from Supabase to activate prop-firm-aware coaching.</Text>
-                </TerminalGlassCard>
-              )}
-            </View>
-            <TerminalPatternDetective stats={periodStats} />
-            <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
-            {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
-          </View>
+          )}
         </View>
-        {!isPremium ? (
-          <View style={styles.analysisLockPinned}>
-            <PremiumLockOverlay
-              title={tText(lang, "unlockAiAnalytics")}
-              subtitle="Reveal AI Coach, pass probability, hidden leaks, revenge trading alerts, prop firm insights and risk coaching."
-              cta="Upgrade to Pro"
-              secondary="See all features"
-              onUpgrade={() => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)}
-              onSecondary={() =>
-                Alert.alert(
-                  "YouTrader Pro features",
-                  "AI Coach, Pass Probability, Hidden Leaks, Revenge Trading Alerts, Prop Firm Insights, Risk Coach, Advanced Stats, Performance Profile, premium exports and full calendar access.",
-                )
-              }
-            />
-          </View>
-        ) : null}
+        <TerminalPatternDetective stats={periodStats} />
+        <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
+        {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
       </View>
 
-      <AchievementSection
-        achievements={achievementList}
-        level={traderLevel}
-        trades={periodTrades}
-        selectedDate={selectedDate}
-        isPremium={isPremium}
-        session={session}
-      />
-
-      {!isPremium && (
-        <PaywallPreview
-          lang={lang}
-          packages={packages}
-          storeProducts={storeProducts}
-          purchaseBusy={purchaseBusy}
-          paywallError={paywallError}
-          onPurchase={onPurchase}
-          onRestore={onRestore}
-          showRestorePurchases={showRestorePurchases}
-        />
-      )}
+      <View style={styles.terminalScreenStack}>
+        <MarketIntelligenceTools />
+        <MarketIntelligencePanel lang={lang} />
+        <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
+      </View>
     </ScrollView>
   );
 }
@@ -7928,30 +6892,30 @@ function buildFirstInsight(trades: Trade[], stats: ReturnType<typeof calcStats>)
   const worstHour = [...hourlyCells].sort((a, b) => a.pnl - b.pnl)[0];
   if (stats.avgLoss && stats.avgWin && Math.abs(stats.avgLoss) > stats.avgWin) {
     return {
-      title: "First Insight",
+      title: t("microFirstInsight"),
       text: `Your average loss (${moneyCompact(stats.avgLoss)}) is bigger than your average win (${moneyCompact(stats.avgWin)}). Protect risk before chasing more trades.`,
     };
   }
   if (worstHour && worstHour.pnl < 0) {
     return {
-      title: "First Insight",
+      title: t("microFirstInsight"),
       text: `Your worst trading hour is ${worstHour.label}. That window is costing ${moneyCompact(worstHour.pnl)} in this sample.`,
     };
   }
   if (bestSession) {
     return {
-      title: "First Insight",
+      title: t("microFirstInsight"),
       text: `Your best session is ${bestSession.label}. It has produced ${moneyCompact(bestSession.pnl)} across your logged trades.`,
     };
   }
   if (bestHour && worstHour && bestHour.label !== worstHour.label) {
     return {
-      title: "First Insight",
+      title: t("microFirstInsight"),
       text: `Your win rate and P&L are stronger around ${bestHour.label} than ${worstHour.label}.`,
     };
   }
   return {
-    title: "First Insight",
+    title: t("microFirstInsight"),
     text: `You have enough data for a first sample: ${trades.length} trades, ${stats.wr.toFixed(0)}% win rate, ${moneyCompact(stats.pnl)} net P&L.`,
   };
 }
@@ -7989,7 +6953,6 @@ function JournalScreen({
   onRestore: () => void;
   onTradeDeleted: (tradeId: string) => void;
 }) {
-  const t = (k: string) => tText(lang, k);
   const { width } = useWindowDimensions();
   const isTabletLayout = width >= 768;
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -8003,7 +6966,7 @@ function JournalScreen({
   const [editId, setEditId] = useState<string | null>(null);
   const [pnlSide, setPnlSide] = useState<"plus" | "minus">("plus");
   const [savingTrade, setSavingTrade] = useState(false);
-  const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "pro_feature", title: "YouTrader Pro", message: "Unlock serious trader tools." });
+  const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "pro_feature", title: "YouTrader Pro", message: t("unlockSeriousTraderTools") });
   const [firstInsightDismissed, setFirstInsightDismissed] = useState(false);
   const [lockedInsightDismissed, setLockedInsightDismissed] = useState(false);
   const [deleteDayDate, setDeleteDayDate] = useState<string | null>(null);
@@ -8076,19 +7039,21 @@ function JournalScreen({
     AsyncStorage.setItem(lockedInsightKey, "true").catch(() => {});
   }, [lockedInsightKey]);
   const openTradeLimitModal = useCallback(() => {
+    trackEvent("trade_limit_reached", { limit: FREE_MONTHLY_TRADE_LIMIT });
     setValueModal({
       visible: true,
       reason: "trade_limit",
-      title: "31 trades logged this month",
-      message: "You’ve logged 31 trades this month. That’s a real trading sample. Upgrade to Pro for unlimited trades, deeper analytics, and AI coaching.",
-      bullets: ["Unlimited monthly trades", "Deeper setup/session/symbol analytics", "AI coaching and Prop Firm Coach"],
+      title: TRADE_LIMIT_PAYWALL.title,
+      message: TRADE_LIMIT_PAYWALL.subtitle,
+      bullets: ["Unlimited monthly trades", "Advanced AI and market intelligence", "Premium exports and analytics"],
+      primaryTrial: true,
     });
   }, []);
   const openLockedInsightModal = useCallback(() => {
     setValueModal({
       visible: true,
       reason: "locked_insight",
-      title: "Your journal found 3 hidden leaks",
+      title: t("hiddenLeaksFoundTitle"),
       message: "Unlock Pro to see exactly which session, setup, and behavior is costing you money.",
       bullets: ["Hidden Leaks from your own trades", "Revenge Alerts after emotional sequences", "Pattern Detective and Prop Firm Coach"],
       primaryTrial: true,
@@ -8096,7 +7061,7 @@ function JournalScreen({
   }, []);
   const showProGate = useCallback(
     (feature: string) => {
-      Alert.alert("YouTrader Pro", `${feature} is included in YouTrader Pro.`, [
+      Alert.alert(t("premiumAccess"), t("featureIncludedInPro", { feature }), [
         { text: t("close"), style: "cancel" },
         { text: "Unlock Pro", onPress: onUpgrade },
       ]);
@@ -8317,19 +7282,16 @@ function JournalScreen({
   const pnlPreview = calcPnl();
   const pickImage = async (camera: boolean) => {
     if (!isPremium) {
-      const usedScreenshots = await getMonthlyUsageCount("screenshots", null);
       if (form.photoUri) {
         Alert.alert("YouTrader", t("screenshotLimitTrade"));
         return;
       }
-      if (usedScreenshots >= FREE_MONTHLY_SCREENSHOT_LIMIT) {
-        setValueModal({
-          visible: true,
-          reason: "usage_limit",
-          title: t("screenshotLimitReached"),
-          message: t("screenshotLimitMessage"),
-          bullets: [t("unlimitedScreenshots"), t("voiceNotesReview"), t("cloudSyncReports")],
-        });
+      const imageCheck = canAttachTradeImage(isPremium, trades, editId, form.photoUri);
+      if (!imageCheck.allowed) {
+        Alert.alert(t("screenshotLimitReached"), t("screenshotLimitMessage"), [
+          { text: t("upgradeToProCta"), onPress: () => onUpgrade() },
+          { text: t("stayFree"), style: "cancel" },
+        ]);
         return;
       }
     }
@@ -8362,7 +7324,6 @@ function JournalScreen({
             originalName,
             mimeType,
           });
-          if (!isPremium) await incrementMonthlyUsageCount("screenshots", null);
           setForm((prev) => ({ ...prev, photoUri: savedUri }));
         }
       } else {
@@ -8393,7 +7354,6 @@ function JournalScreen({
             originalName,
             mimeType,
           });
-          if (!isPremium) await incrementMonthlyUsageCount("screenshots", null);
           setForm((prev) => ({ ...prev, photoUri: savedUri }));
         }
       }
@@ -9024,30 +7984,30 @@ function MarketIntelligencePanel({ lang }: { lang: Lang }) {
   const data = intel || { brief: null, watchlist: [], summary: null, events: [], propUpdates: [], headlines: [] };
   return (
     <View style={styles.terminalScreenStack}>
-      <MarketSection title={tText(lang, "dailyBrief")}>
+      <MarketSection title={t("dailyBrief")}>
         {loading && !intel ? <ActivityIndicator color={C.purple} /> : data.brief ? (
           <GlassCard style={styles.marketHeroCard} intensity={30}>
             <View style={styles.rowBetween}>
               <Pill text={data.brief.marketRegime} tone="med" />
-              <Text style={styles.sub}>{data.brief.generatedAt ? new Date(data.brief.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : tText(lang, "cached")}</Text>
+              <Text style={styles.sub}>{data.brief.generatedAt ? new Date(data.brief.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : t("cached")}</Text>
             </View>
             <Text style={styles.newsTitle}>{data.brief.title}</Text>
             <Text style={styles.newsSummary}>{data.brief.summary}</Text>
-            {!!data.brief.whatNotToDo && <Text style={styles.marketCaution}>{tText(lang, "doNot")} {data.brief.whatNotToDo}</Text>}
+            {!!data.brief.whatNotToDo && <Text style={styles.marketCaution}>{t("doNot")} {data.brief.whatNotToDo}</Text>}
           </GlassCard>
-        ) : <MarketEmpty text={tText(lang, "dailyBriefEmpty")} />}
+        ) : <MarketEmpty text={t("dailyBriefEmpty")} />}
       </MarketSection>
 
-      <MarketSection title={tText(lang, "marketSummary")}>
+      <MarketSection title={t("marketSummary")}>
         {data.summary ? (
           <GlassCard style={styles.marketCard} intensity={24}>
             <View style={styles.marketSummaryRow}>
-              <SmallMetric l={tText(lang, "macro")} v={data.summary.macroTone} />
-              <SmallMetric l={tText(lang, "risk")} v={data.summary.riskMode} />
+              <SmallMetric l={t("macro")} v={data.summary.macroTone} />
+              <SmallMetric l={t("risk")} v={data.summary.riskMode} />
             </View>
             {data.summary.strongestHeadlines.slice(0, 3).map((item) => <Text key={item} style={styles.marketListText}>• {item}</Text>)}
           </GlassCard>
-        ) : <MarketEmpty text={tText(lang, "marketSummaryEmpty")} />}
+        ) : <MarketEmpty text={t("marketSummaryEmpty")} />}
       </MarketSection>
     </View>
   );
@@ -9090,10 +8050,11 @@ function NewsScreen({
       keyExtractor={(item) => item.id}
       refreshing={loading}
       onRefresh={refresh}
+      ListHeaderComponent={<AiNewsSentimentCard isPremium={isPremium} onUpgrade={onUpgrade} />}
       ListEmptyComponent={
         <GlassCard style={styles.marketCard} intensity={28}>
-          <Text style={styles.newsTitle}>Market headlines are warming up.</Text>
-          <Text style={styles.newsSummary}>Pull to refresh. Cached news appears here when Supabase or the public fallback returns headlines.</Text>
+          <Text style={styles.newsTitle}>{t("marketHeadlinesWarming")}</Text>
+          <Text style={styles.newsSummary}>{t("marketHeadlinesSub")}</Text>
         </GlassCard>
       }
       renderItem={({ item }) => (
@@ -9146,7 +8107,6 @@ function CalendarScreen({
   isPremium: boolean;
   onUpgrade: () => void;
 }) {
-  const t = (k: string) => tText(lang, k);
   const { width } = useWindowDimensions();
   const isTabletLayout = width >= 768;
   const [events, setEvents] = useState<EconEvent[]>([]);
@@ -9250,7 +8210,7 @@ function CalendarScreen({
                     </Text>
                   )}
                 </Text>
-                <Text style={[styles.calendarEventDate, isTabletLayout && styles.calendarEventDateTablet]} numberOfLines={1}>Eastern Time</Text>
+                <Text style={[styles.calendarEventDate, isTabletLayout && styles.calendarEventDateTablet]} numberOfLines={1}>{t("easternTime")}</Text>
               </View>
               <View style={styles.calendarEventBody}>
                 <Text style={[styles.calendarEventTitle, isTabletLayout && styles.calendarEventTitleTablet]} numberOfLines={2}>{e.name}</Text>
@@ -9298,8 +8258,8 @@ function CalendarScreen({
           );
         }) : (
           <Card style={styles.calendarEventCard}>
-            <Text style={styles.calendarEventTitle}>No scheduled events for this day yet.</Text>
-            <Text style={[styles.sub, { marginTop: 6 }]}>Tap Refresh to pull the latest live calendar data. If the provider has not published events for this date, YouTrader will leave the day empty instead of showing demo events.</Text>
+            <Text style={styles.calendarEventTitle}>{t("noEventsThisDay")}</Text>
+            <Text style={[styles.sub, { marginTop: 6 }]}>{t("noEventsThisDaySub")}</Text>
           </Card>
         )
       )}
@@ -9307,7 +8267,6 @@ function CalendarScreen({
   );
 }
 function CalcScreen({ lang }: { lang: Lang }) {
-  const t = (k: string) => tText(lang, k);
   const [symbol, setSymbol] = useState("MES");
   const [mode, setMode] = useState<"ticks" | "points">("ticks");
   const [amount, setAmount] = useState("20");
@@ -9407,7 +8366,6 @@ function PremiumScreen({
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
 }) {
-  const t = (k: string) => tText(lang, k);
   const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
   const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null;
   const monthlyProduct =
@@ -9460,7 +8418,7 @@ function PremiumScreen({
             style={[styles.yearlyPlan, purchaseBusy && styles.disabledBtn]}
           >
             <View style={styles.bestValueBadge}>
-              <Text style={styles.bestValueText}>BEST VALUE</Text>
+              <Text style={styles.bestValueText}>{t("bestValue")}</Text>
             </View>
             <Text style={styles.planName}>YEARLY</Text>
             <Text style={styles.planPrice}>{yearlyPriceLabel}</Text>
@@ -9532,6 +8490,10 @@ function SettingsScreen({
   onImportTradesCsv,
   onSignIn,
   onSignOut,
+  onChangePassword,
+  onChangeEmail,
+  calendarEvents,
+  onUpgrade,
 }: {
   lang: Lang;
   setLang: (x: Lang) => void;
@@ -9557,11 +8519,15 @@ function SettingsScreen({
   onImportTradesCsv: () => void;
   onSignIn: (provider: AuthProvider) => void;
   onSignOut: () => void;
+  onChangePassword: (password: string) => Promise<void>;
+  onChangeEmail: (email: string) => Promise<void>;
+  calendarEvents: EconEvent[];
+  onUpgrade: () => void;
 }) {
-  const t = (k: string) => tText(lang, k);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const choose = (l: Lang) => {
-    setLang(l);
-    AsyncStorage.setItem(LANG_STORAGE_KEY, l);
+    void changeAppLanguage(l).then(() => setLang(l));
   };
   const [calendarAlertsEnabled, setCalendarAlertsEnabled] = useState(false);
   const [propRiskAlertsEnabled, setPropRiskAlertsEnabled] = useState(false);
@@ -9666,8 +8632,8 @@ YouTrader does not knowingly collect data from or market to individuals under th
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { flexGrow: 1, justifyContent: "space-between", paddingBottom: 36 }]}>
       <View>
-        <Card>
-          <Text style={styles.h2}>{t("notifications")}</Text>
+        <Card style={styles.notificationsCard}>
+          <Text style={[styles.h2, styles.notificationsTitle]}>{t("notifications")}</Text>
           <View style={styles.settingsSwitchRow}>
             <View style={styles.settingsSwitchCopy}>
               <Text style={styles.settingsSwitchTitle}>{t("dailyPropReminder")}</Text>
@@ -9676,11 +8642,12 @@ YouTrader does not knowingly collect data from or market to individuals under th
             <Switch
               value={lockScreenBufferEnabled}
               onValueChange={(enabled) => onToggleLockScreenBuffer(enabled)}
-              trackColor={{ false: "#222936", true: "rgba(150,255,0,0.45)" }}
-              thumbColor={lockScreenBufferEnabled ? "#96FF00" : "#7D8795"}
+              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
+              thumbColor={lockScreenBufferEnabled ? C.purple : "#7D8795"}
+              ios_backgroundColor="#222936"
             />
           </View>
-          <View style={styles.settingsSwitchDivider} />
+          <View style={styles.settingsSwitchDividerPurple} />
           <View style={styles.settingsSwitchRow}>
             <View style={styles.settingsSwitchCopy}>
               <Text style={styles.settingsSwitchTitle}>{t("riskAlerts")}</Text>
@@ -9689,11 +8656,12 @@ YouTrader does not knowingly collect data from or market to individuals under th
             <Switch
               value={propRiskAlertsEnabled}
               onValueChange={togglePropRiskAlerts}
-              trackColor={{ false: "#222936", true: "rgba(150,255,0,0.45)" }}
-              thumbColor={propRiskAlertsEnabled ? "#96FF00" : "#7D8795"}
+              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
+              thumbColor={propRiskAlertsEnabled ? C.purple : "#7D8795"}
+              ios_backgroundColor="#222936"
             />
           </View>
-          <View style={styles.settingsSwitchDivider} />
+          <View style={styles.settingsSwitchDividerPurple} />
           <View style={styles.settingsSwitchRow}>
             <View style={styles.settingsSwitchCopy}>
               <Text style={styles.settingsSwitchTitle}>{t("economicCalendarAlerts")}</Text>
@@ -9702,10 +8670,21 @@ YouTrader does not knowingly collect data from or market to individuals under th
             <Switch
               value={calendarAlertsEnabled}
               onValueChange={toggleCalendarAlerts}
-              trackColor={{ false: "#222936", true: "rgba(150,255,0,0.45)" }}
-              thumbColor={calendarAlertsEnabled ? "#96FF00" : "#7D8795"}
+              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
+              thumbColor={calendarAlertsEnabled ? C.purple : "#7D8795"}
+              ios_backgroundColor="#222936"
             />
           </View>
+          <SmartNotificationsSection
+            isPro={isPremium}
+            calendarEvents={calendarEvents.map((e) => ({
+              id: e.id,
+              date: e.date,
+              time: e.time,
+              name: e.name,
+            }))}
+            onUpgrade={onUpgrade}
+          />
         </Card>
 
         <Card>
@@ -9744,25 +8723,25 @@ YouTrader does not knowingly collect data from or market to individuals under th
           </View>
           {!isPremium && (
             <>
-              <SettingsBenefitLine>AI Trade Analysis with educational feedback</SettingsBenefitLine>
-              <SettingsBenefitLine>AI Pattern Detective — surface hidden blind spots and recurring patterns</SettingsBenefitLine>
-              <SettingsBenefitLine>Prop Firm Coach: survival score, pass probability, and daily buffer</SettingsBenefitLine>
-              <SettingsBenefitLine>Rule-violation risk alerts and revenge-trading detection</SettingsBenefitLine>
-              <SettingsBenefitLine>Hidden leak detection to protect your edge</SettingsBenefitLine>
-              <SettingsBenefitLine>Unlimited trade journaling</SettingsBenefitLine>
-              <SettingsBenefitLine>Save screenshots, photos, and voice notes for every setup</SettingsBenefitLine>
-              <SettingsBenefitLine>Cloud sync and backup across all your devices</SettingsBenefitLine>
-              <SettingsBenefitLine>Import your trading history with CSV</SettingsBenefitLine>
-              <SettingsBenefitLine>Export and share journal reports</SettingsBenefitLine>
-              <SettingsBenefitLine>Track Profit Factor, Expectancy, Sharpe Ratio, Consistency, and Drawdown</SettingsBenefitLine>
-              <SettingsBenefitLine>Discover your most profitable symbols, sessions, and trading hours</SettingsBenefitLine>
-              <SettingsBenefitLine>Session heatmap and trading-hour edge analysis</SettingsBenefitLine>
-              <SettingsBenefitLine>Trading Score, achievements, and trader status progression</SettingsBenefitLine>
-              <SettingsBenefitLine>Advanced performance analytics and edge tracking</SettingsBenefitLine>
-              <SettingsBenefitLine>Full trader performance profile and radar analysis</SettingsBenefitLine>
-              <SettingsBenefitLine>Daily prop firm risk reminders and notifications</SettingsBenefitLine>
-              <SettingsBenefitLine>Real-time Market Pulse news and financial updates</SettingsBenefitLine>
-              <SettingsBenefitLine>Multi-day economic calendar with CPI, PPI, FOMC, NFP, GDP, and more</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit1")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit2")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit3")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit4")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit5")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit6")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit7")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit8")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit9")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit10")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit11")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit12")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit13")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit14")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit15")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit16")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit17")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit18")}</SettingsBenefitLine>
+              <SettingsBenefitLine>{t("settingsProBenefit19")}</SettingsBenefitLine>
               <SubscriptionLegalDisclosure
                 monthlyPackage={packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null}
                 monthlyProduct={storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null}
@@ -9813,6 +8792,74 @@ YouTrader does not knowingly collect data from or market to individuals under th
         </GlassCard>
 
         <Card>
+          <Text style={styles.h2}>{t("account")}</Text>
+          {session?.user ? (
+            <>
+              <Text style={styles.sub}>{t("signedInAs")}</Text>
+              <Text style={styles.settingsAccountEmail}>{session.user.email || session.user.id}</Text>
+              <Pressable
+                onPress={() => setChangeEmailOpen(true)}
+                style={[styles.secondaryBig, { marginTop: 10 }]}
+              >
+                <Text style={styles.secondaryText}>{t("authChangeEmail")}</Text>
+              </Pressable>
+              <Text style={[styles.sub, { marginTop: 10 }]}>
+                Password: {userHasPasswordSet(session) ? t("authPasswordMasked") : t("authPasswordNotSet")}
+              </Text>
+              <Pressable
+                onPress={() => setChangePasswordOpen(true)}
+                style={[styles.secondaryBig, { marginTop: 10 }]}
+              >
+                <Text style={styles.secondaryText}>{t("authChangePassword")}</Text>
+              </Pressable>
+              <Text style={[styles.sub, { marginTop: 10 }]}>
+                {cloudSyncStatus === "syncing"
+                  ? cloudSyncMessage
+                  : cloudSyncStatus === "synced"
+                    ? t("cloudSynced")
+                    : cloudSyncStatus === "error"
+                      ? cloudSyncMessage
+                      : t("cloudSyncActive")}
+              </Text>
+              {lastCloudSyncAt ? (
+                <Text style={styles.sub}>{t("lastSync")} {new Date(lastCloudSyncAt).toLocaleString()}</Text>
+              ) : null}
+              {cloudSyncEnabled ? (
+                <Pressable onPress={onSyncNow} style={[styles.secondaryBig, { marginTop: 14 }]}>
+                  <Text style={styles.secondaryText}>{t("syncNow")}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable onPress={onSignOut} style={[styles.secondaryBig, { marginTop: 10 }]}>
+                <Text style={styles.secondaryText}>{t("signOut")}</Text>
+              </Pressable>
+            </>
+          ) : authConfigured ? (
+            <>
+              <Text style={styles.sub}>{t("authSecureNote")}</Text>
+              <Pressable disabled={authBusy} onPress={() => onSignIn("apple")} style={[styles.secondaryBig, { marginTop: 14 }, authBusy && styles.disabledBtn]}>
+                <Text style={styles.secondaryText}>{t("authApple")}</Text>
+              </Pressable>
+              <Pressable disabled={authBusy} onPress={() => onSignIn("google")} style={[styles.secondaryBig, { marginTop: 10 }, authBusy && styles.disabledBtn]}>
+                <Text style={styles.secondaryText}>{t("authGoogle")}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={styles.sub}>{t("cloudSignInNotConfigured")}</Text>
+          )}
+        </Card>
+
+        <ChangePasswordModal
+          visible={changePasswordOpen}
+          onClose={() => setChangePasswordOpen(false)}
+          onSubmit={onChangePassword}
+        />
+        <ChangeEmailModal
+          visible={changeEmailOpen}
+          onClose={() => setChangeEmailOpen(false)}
+          onSubmit={onChangeEmail}
+        />
+
+        <Card>
           <Text style={styles.h2}>{t("language")}</Text>
           <View style={styles.langRow}>
             {(["en", "ru", "es", "fr", "it", "uk", "de"] as Lang[]).map((l) => (
@@ -9829,8 +8876,8 @@ YouTrader does not knowingly collect data from or market to individuals under th
 
         <Card>
           <Text style={styles.h2}>Legal</Text>
-          <Pressable onPress={() => Alert.alert("Terms, Risk Disclosure & Privacy", legalInfo)} style={styles.legalRow}>
-            <Text style={styles.legalText}>Terms, Risk Disclosure & Privacy</Text>
+          <Pressable onPress={() => Alert.alert(t("termsRiskPrivacy"), legalInfo)} style={styles.legalRow}>
+            <Text style={styles.legalText}>{t("termsRiskPrivacy")}</Text>
             <Text style={styles.legalArrow}>›</Text>
           </Pressable>
           <Pressable onPress={() => openLegalUrl(TERMS_OF_USE_EULA_URL, "Terms of Use (EULA)")} style={[styles.legalRow, { borderBottomWidth: 0 }]}>
@@ -9855,8 +8902,8 @@ YouTrader does not knowingly collect data from or market to individuals under th
       </View>
 
       <View>
-        <Text style={styles.versionText}>v1.5.4 (51) • Review</Text>
-        <Text style={styles.madeByText}>MADE BY A TRADER, FOR TRADERS</Text>
+        <Text style={styles.versionText}>{appVersionDisplayLabel()}</Text>
+        <Text style={styles.madeByText}>{t("madeByTraders")}</Text>
       </View>
     </ScrollView>
   );
@@ -9978,10 +9025,13 @@ class AppErrorBoundary extends React.Component<
 function App() {
   const [tab, setTab] = useState<Tab>("journal");
   const [lang, setLang] = useState<Lang>("en");
+  const [i18nReady, setI18nReady] = useState(false);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradesHydrated, setTradesHydrated] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const [authHydrated, setAuthHydrated] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [revenueCatReady, setRevenueCatReady] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
@@ -10000,20 +9050,74 @@ function App() {
     source: "fallback",
   });
   const [lockScreenBufferEnabled, setLockScreenBufferEnabled] = useState(false);
+  const [pushCalendarEvents, setPushCalendarEvents] = useState<EconEvent[]>([]);
   const purchasesConfigured = useRef(false);
   const cloudSyncInFlight = useRef(false);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
   const serverEntitlementActiveRef = useRef(false);
 
-  const authConfigured = false;
+  const authConfigured = isSupabaseConfigured;
+  const authRequired = isSupabaseConfigured;
   const revenueCatConfigured = isRevenueCatConfigured;
   const isPremium = proAccess.isPro;
-  const cloudSyncEnabled = false;
+  const cloudSyncEnabled = authConfigured && !!session?.user.id;
   const currentTradeSignature = useMemo(() => tradesSignature(trades), [trades]);
 
   useEffect(() => {
     trackEvent("app_opened");
   }, []);
+
+  useEffect(() => {
+    void loadCalendarEvents()
+      .then(setPushCalendarEvents)
+      .catch(() => setPushCalendarEvents([]));
+  }, []);
+
+  useEffect(() => {
+    if (!tradesHydrated) return;
+    let cancelled = false;
+    void (async () => {
+      const [templateKeyRaw, modeRaw] = await Promise.all([
+        AsyncStorage.getItem("prop-risk-template-v1"),
+        AsyncStorage.getItem("prop-risk-mode-v1"),
+      ]);
+      const templateKey = resolvePropTemplateKey(templateKeyRaw || "", propTemplates);
+      const mode: FirmMode = modeRaw === "funded" ? "funded" : "evaluation";
+      const snapshot = tryComputePropRiskSnapshot({
+        trades,
+        selectedDate: todayISO(),
+        templateKey,
+        mode,
+        templates: propTemplates,
+      });
+      const propSnapshot = snapshot
+        ? {
+            enabled: Boolean(templateKey),
+            dailyRemaining: snapshot.dailyRemaining,
+            dailyLossLimit: snapshot.template.dailyLossLimit,
+            dayPnl: snapshot.dayPnl,
+            status: snapshot.status,
+          }
+        : null;
+      const calendarMapped = pushCalendarEvents.map((e) => ({
+        id: e.id,
+        date: e.date,
+        time: e.time,
+        name: e.name,
+      }));
+      if (cancelled) return;
+      await syncSmartPushSchedules({ isPro: isPremium, calendarEvents: calendarMapped });
+      await evaluateSmartPushConditions({
+        trades,
+        isPro: isPremium,
+        calendarEvents: calendarMapped,
+        propSnapshot,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trades, tradesHydrated, isPremium, propTemplates, pushCalendarEvents]);
 
   useEffect(() => {
     trackScreen(tab);
@@ -10071,31 +9175,87 @@ function App() {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem(LANG_STORAGE_KEY).then((v) => {
-      if (v && ["en", "ru", "es", "fr", "it", "uk", "de"].includes(v))
-        setLang(v as Lang);
-    });
-  }, []);
-
-  useEffect(() => {
-    AsyncStorage.getItem(TRADES_STORAGE_KEY)
-      .then((value) => {
-        if (!value) return;
-        try {
-          setTrades(normalizeTrades(JSON.parse(value)));
-        } catch {
-          AsyncStorage.removeItem(TRADES_STORAGE_KEY);
+    let cancelled = false;
+    void initAppI18n()
+      .then((initial) => {
+        if (!cancelled) {
+          setLang(initial);
+          setI18nReady(true);
         }
       })
-      .finally(() => setTradesHydrated(true));
-    const safety = setTimeout(() => setTradesHydrated(true), 4000);
-    return () => clearTimeout(safety);
+      .catch((error) => {
+        captureAppError(error, { feature: "i18n", action: "init" });
+        if (!cancelled) setI18nReady(true);
+      });
+    const onLanguageChanged = (lng: string) => {
+      if (["en", "ru", "es", "fr", "it", "uk", "de"].includes(lng)) setLang(lng as Lang);
+    };
+    i18n.on("languageChanged", onLanguageChanged);
+    return () => {
+      cancelled = true;
+      i18n.off("languageChanged", onLanguageChanged);
+    };
   }, []);
 
   useEffect(() => {
-    if (!tradesHydrated) return;
-    AsyncStorage.setItem(TRADES_STORAGE_KEY, JSON.stringify(normalizeTrades(trades)));
-  }, [trades, tradesHydrated]);
+    if (!supabase || !session?.user.id) return;
+    void pullUserPreferences(supabase, session.user.id).then((prefs) => {
+      if (prefs?.lang && ["en", "ru", "es", "fr", "it", "uk", "de"].includes(prefs.lang)) {
+        void changeAppLanguage(prefs.lang as Lang).then(() => setLang(prefs.lang as Lang));
+      }
+    }).catch(() => {});
+  }, [session?.user.id]);
+
+  useEffect(() => {
+    if (!supabase || !session?.user.id) return;
+    void pushUserPreferences(supabase, session.user.id, { lang }).catch(() => {});
+  }, [lang, session?.user.id]);
+
+  const activeTradesStorageKey = session?.user.id ? userTradesStorageKey(session.user.id) : TRADES_STORAGE_KEY;
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTrades = async () => {
+      if (authRequired && !session?.user.id) {
+        if (!cancelled) {
+          setTrades([]);
+          setTradesHydrated(true);
+        }
+        return;
+      }
+      const key = session?.user.id ? userTradesStorageKey(session.user.id) : TRADES_STORAGE_KEY;
+      try {
+        const value = await AsyncStorage.getItem(key);
+        if (value) {
+          setTrades(normalizeTrades(JSON.parse(value)));
+        } else if (session?.user.id) {
+          const guest = await AsyncStorage.getItem(TRADES_STORAGE_KEY);
+          if (guest) {
+            setTrades(normalizeTrades(JSON.parse(guest)));
+          }
+        }
+      } catch {
+        await AsyncStorage.removeItem(key);
+      } finally {
+        if (!cancelled) setTradesHydrated(true);
+      }
+    };
+    if (!authHydrated) return;
+    setTradesHydrated(false);
+    void loadTrades();
+    const safety = setTimeout(() => {
+      if (!cancelled) setTradesHydrated(true);
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
+  }, [authHydrated, authRequired, session?.user.id]);
+
+  useEffect(() => {
+    if (!tradesHydrated || !session?.user.id) return;
+    AsyncStorage.setItem(activeTradesStorageKey, JSON.stringify(normalizeTrades(trades)));
+  }, [activeTradesStorageKey, session?.user.id, trades, tradesHydrated]);
 
   const applyCustomerInfo = useCallback((info: CustomerInfo, reason: string) => {
     customerInfoRef.current = info;
@@ -10258,7 +9418,7 @@ function App() {
     try {
       const limit = await checkClientRateLimit("csv:import", session?.user.id || "local");
       if (!limit.allowed) {
-        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.rateLimited);
+        Alert.alert(t("importTrades"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       trackEvent("csv_import_started", { source: "settings" });
@@ -10283,7 +9443,7 @@ function App() {
       });
       if (!csvUploadCheck.ok) {
         await recordSecurityEvent("invalid_csv_import", "csv:import", session?.user.id || "local");
-        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.invalidUpload);
+        Alert.alert(t("importTrades"), SECURITY_MESSAGES.invalidUpload);
         return;
       }
       const text = await readCsvFileAsText(asset.uri);
@@ -10293,7 +9453,7 @@ function App() {
       if (!importCheck.ok) {
         await recordSecurityEvent("invalid_csv_import", "csv:import", session?.user.id || "local");
         Alert.alert(
-          tText(lang, "importTrades"),
+          t("importTrades"),
           importCheck.reason === "too_large" ? SECURITY_MESSAGES.csvTooLarge : SECURITY_MESSAGES.csvTooManyRows,
         );
         return;
@@ -10301,8 +9461,8 @@ function App() {
       const rows = parseTradesCsvText(text);
       if (!rows.length) {
         Alert.alert(
-          tText(lang, "importTrades"),
-          tText(lang, "noTradesFoundCsv"),
+          t("importTrades"),
+          t("noTradesFoundCsv"),
         );
         return;
       }
@@ -10311,7 +9471,7 @@ function App() {
           ...row,
           stopLoss: null,
           takeProfit: null,
-          notes: row.notes || tText(lang, "importedFromCsv"),
+          notes: row.notes || t("importedFromCsv"),
         });
         if (!validated.ok) return [];
         return [{
@@ -10324,14 +9484,14 @@ function App() {
           contracts: validated.value.contracts,
           pnl: validated.value.pnl,
           mood: validated.value.mood,
-          notes: validated.value.notes || tText(lang, "importedFromCsv"),
+          notes: validated.value.notes || t("importedFromCsv"),
           createdAt: Date.now(),
           updatedAt: Date.now(),
         }];
       });
       if (!imported.length) {
         await recordSecurityEvent("invalid_csv_rows", "csv:import", session?.user.id || "local");
-        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.invalidTrade);
+        Alert.alert(t("importTrades"), SECURITY_MESSAGES.invalidTrade);
         return;
       }
       const claimed = await claimRemoteIdempotency("csv:import", session?.user.id, {
@@ -10339,14 +9499,14 @@ function App() {
         rowCount: imported.length,
       });
       if (!claimed) {
-        Alert.alert(tText(lang, "importTrades"), SECURITY_MESSAGES.duplicateRequest);
+        Alert.alert(t("importTrades"), SECURITY_MESSAGES.duplicateRequest);
         return;
       }
       setTrades((prev) => [...imported, ...prev]);
       trackEvent("csv_import_completed", { row_count: imported.length });
-      Alert.alert(tText(lang, "importComplete"), interpolateI18n(tText(lang, "tradesAddedJournal"), { count: imported.length }));
+      Alert.alert(t("importComplete"), t("tradesAddedJournal", { count: imported.length }));
     } catch (error) {
-      alertExportError(tText(lang, "csvImportFailed"), error);
+      alertExportError(t("csvImportFailed"), error);
     }
   }, [lang, session?.user.id]);
 
@@ -10360,18 +9520,42 @@ function App() {
   );
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setAuthHydrated(true);
+      return;
+    }
+    let cancelled = false;
+    const safety = setTimeout(() => {
+      if (!cancelled) setAuthHydrated(true);
+    }, 6000);
     supabase.auth
       .getSession()
-      .then(({ data }) => setSession(data.session))
+      .then(({ data }) => {
+        if (cancelled) return;
+        setSession(data.session);
+        setAuthHydrated(true);
+      })
       .catch((error) => {
+        if (cancelled) return;
         logger.error(error, { feature: "supabase", action: "get_session" });
+        setAuthHydrated(true);
       });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      setAuthHydrated(true);
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+      data.subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      identifyAnalyticsUser(session.user.id, { provider: session.user.app_metadata?.provider || "unknown" });
+    }
+  }, [session?.user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -10411,35 +9595,56 @@ function App() {
 
   useEffect(() => {
     if (!supabase) return;
-    const handleUrl = (url: string) => {
-      createSessionFromAuthUrl(url).catch((error) => {
-        logger.error(error, { feature: "supabase", action: "create_session_from_url" });
-        Alert.alert("Sign in failed", "Please try again.");
-      });
+    const handleUrl = async (url: string) => {
+      if (!url) return;
+      try {
+        const result = await processAuthDeepLink(url);
+        if (result.kind === "email_confirmed") {
+          Alert.alert(
+            "Email confirmed",
+            "Your email is verified. You can now sign in with your email and password.",
+          );
+          return;
+        }
+        if (result.kind === "password_recovery") {
+          setSession(result.session);
+          setAuthHydrated(true);
+          setAuthBusy(false);
+          setResetPasswordOpen(true);
+        }
+      } catch (error) {
+        if (isAuthCancellation(error)) return;
+        logger.error(error, { feature: "supabase", action: "auth_deep_link" });
+        logAuthDev("email", error, { source: "auth_deep_link" });
+        Alert.alert(
+          "Account link",
+          error instanceof Error ? error.message : "Could not complete account link.",
+        );
+      }
     };
-    Linking.getInitialURL().then((url) => {
-      if (url) handleUrl(url);
+    void Linking.getInitialURL().then((url) => {
+      if (url) void handleUrl(url);
     });
-    const subscription = Linking.addEventListener("url", ({ url }) => handleUrl(url));
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      void handleUrl(url);
+    });
     return () => subscription.remove();
   }, []);
 
   const syncTradesWithCloud = useCallback(async () => {
-    if (!supabase || !session?.user.id || !isPremium || !tradesHydrated) {
+    if (!supabase || !session?.user.id || !tradesHydrated) {
       setCloudSyncStatus("off");
       setCloudSyncMessage(
         !session?.user.id
-          ? "Sign in to sync your journal across devices."
-          : !isPremium
-            ? "Pro journal tools are active."
-            : "Journal is waiting for local data to load.",
+          ? t("authSecureNote")
+          : t("loadingJournal"),
       );
       return;
     }
     if (cloudSyncInFlight.current) return;
     cloudSyncInFlight.current = true;
     setCloudSyncStatus("syncing");
-    setCloudSyncMessage("Syncing journal with cloud...");
+    setCloudSyncMessage(t("cloudSyncing"));
     try {
       const { data, error } = await withTimeout(supabase
         .from("trade_journal")
@@ -10449,10 +9654,19 @@ function App() {
       if (error) throw error;
 
       const cloudRows = (data || []) as TradeJournalRow[];
-      const activeCloudSignature = tradesSignature(
-        cloudRows.filter((row) => !row.deleted_at).map(cloudRowToTrade),
-      );
+      const activeCloudTrades = cloudRows.filter((row) => !row.deleted_at).map(cloudRowToTrade);
+      const activeCloudSignature = tradesSignature(activeCloudTrades);
       const merged = await mergeLocalAndCloudTrades(trades, cloudRows);
+      if (!merged.length && activeCloudTrades.length) {
+        const cloudOnly = sortTrades(activeCloudTrades);
+        setTrades(cloudOnly);
+        setCloudSyncStatus("synced");
+        setCloudSyncMessage(t("cloudSynced"));
+        setLastCloudSyncAt(new Date().toISOString());
+        await clearOfflineJobsForUser(session.user.id);
+        cloudSyncInFlight.current = false;
+        return;
+      }
       const mergedSignature = tradesSignature(merged);
       if (mergedSignature !== currentTradeSignature) {
         setTrades(merged);
@@ -10510,20 +9724,29 @@ function App() {
       setCloudSyncStatus(attachmentRetryNeeded ? "error" : "synced");
       setCloudSyncMessage(
         attachmentRetryNeeded
-          ? "Saved locally. Cloud sync will retry attachments."
-          : `Synced ${savedCount} trades across devices.`,
+          ? t("cloudSyncError")
+          : t("cloudSynced"),
       );
+      await clearOfflineJobsForUser(session.user.id);
+      try {
+        await pullUserPreferences(supabase, session.user.id);
+      } catch (prefsError) {
+        logger.warn("Failed to pull user preferences", { feature: "supabase", action: "pull_preferences", userId: session.user.id, error: prefsError });
+      }
     } catch (error: any) {
       logger.error(error, { feature: "supabase", action: "sync_trades", table: "trade_journal", userId: session?.user.id });
       setCloudSyncStatus("error");
-      setCloudSyncMessage("Journal update failed. Please try again.");
+      setCloudSyncMessage(t("cloudSyncError"));
+      for (const trade of trades) {
+        await enqueueOfflineJob({ type: "trade_upsert", userId: session.user.id, tradeId: trade.id, queuedAt: Date.now() });
+      }
     } finally {
       cloudSyncInFlight.current = false;
     }
-  }, [currentTradeSignature, isPremium, session?.user.id, trades, tradesHydrated]);
+  }, [currentTradeSignature, lang, session?.user.id, trades, tradesHydrated]);
 
   const markCloudTradeDeleted = useCallback(async (tradeId: string) => {
-    if (!supabase || !session?.user.id || !isPremium) return;
+    if (!supabase || !session?.user.id) return;
     try {
       const now = new Date().toISOString();
       const claimed = await claimRemoteIdempotency("trade:cloud-delete", session.user.id, { tradeId, now });
@@ -10536,23 +9759,21 @@ function App() {
     } catch (error) {
       logger.error(error, { feature: "supabase", action: "mark_trade_deleted", table: "trade_journal", userId: session?.user.id });
     }
-  }, [isPremium, session?.user.id]);
+  }, [session?.user.id]);
 
   useEffect(() => {
     if (!cloudSyncEnabled || !tradesHydrated) {
       setCloudSyncStatus("off");
       setCloudSyncMessage(
         !session?.user.id
-          ? "Sign in to sync your journal across devices."
-          : !isPremium
-            ? "Pro journal tools are active."
-            : "Journal is waiting for local data to load.",
+          ? t("authSecureNote")
+          : t("loadingJournal"),
       );
       return;
     }
     const timeout = setTimeout(syncTradesWithCloud, 900);
     return () => clearTimeout(timeout);
-  }, [cloudSyncEnabled, currentTradeSignature, isPremium, session?.user.id, syncTradesWithCloud, tradesHydrated]);
+  }, [cloudSyncEnabled, currentTradeSignature, lang, session?.user.id, syncTradesWithCloud, tradesHydrated]);
 
   useEffect(() => {
     if (!cloudSyncEnabled || !supabase || !session?.user.id) return;
@@ -10584,11 +9805,15 @@ function App() {
     return () => subscription.remove();
   }, [cloudSyncEnabled, syncTradesWithCloud]);
 
+  useNetworkReconnect(() => {
+    if (cloudSyncEnabled) syncTradesWithCloud();
+  });
+
   const signInWithProvider = useCallback(async (provider: AuthProvider) => {
     if (!supabase || !authConfigured) {
       Alert.alert(
-        "Sign-in unavailable",
-        "Cloud sign-in is not available in this build. You can still use the journal on this device.",
+        t("signInUnavailable"),
+        t("signInUnavailableBody"),
       );
       return;
     }
@@ -10597,28 +9822,16 @@ function App() {
     try {
       const limit = await checkClientRateLimit("auth", provider);
       if (!limit.allowed) {
-        Alert.alert("Sign in failed", SECURITY_MESSAGES.rateLimited);
+        Alert.alert(t("signInFailed"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       trackEvent("signup_started", { provider });
-      if (
-        enableNativeAppleSignIn &&
-        provider === "apple" &&
-        Platform.OS === "ios" &&
-        await AppleAuthentication.isAvailableAsync()
-      ) {
-        const credential = await AppleAuthentication.signInAsync({
-          requestedScopes: [
-            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-            AppleAuthentication.AppleAuthenticationScope.EMAIL,
-          ],
-        });
-        if (!credential.identityToken) throw new Error("Apple did not return an identity token.");
-        const { error } = await withTimeout(supabase.auth.signInWithIdToken({
-          provider: "apple",
-          token: credential.identityToken,
-        }));
-        if (error) throw error;
+      if (provider === "apple") {
+        if (Platform.OS !== "ios") {
+          Alert.alert(t("signInFailed"), userFacingAuthError(provider));
+          return;
+        }
+        const credential = await signInWithAppleNative(supabase);
         if (credential.fullName?.givenName || credential.fullName?.familyName) {
           const fullName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(" ");
           await supabase.auth.updateUser({
@@ -10633,37 +9846,116 @@ function App() {
         return;
       }
 
-      const { data, error } = await withTimeout(supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: AUTH_REDIRECT_TO,
-          skipBrowserRedirect: true,
-        },
-      }));
-      if (error) throw error;
-      const result = await WebBrowser.openAuthSessionAsync(data.url || "", AUTH_REDIRECT_TO);
-      if (result.type === "success") {
-        await createSessionFromAuthUrl(result.url);
-        trackEvent("signup_completed", { provider });
+      if (provider !== "google") {
+        throw new Error(`Unsupported sign-in provider: ${provider}`);
       }
+
+      await signInWithGoogle(supabase);
+      trackEvent("signup_completed", { provider });
     } catch (error: any) {
-      if (error?.code !== "ERR_REQUEST_CANCELED") {
-        logger.error(error, { feature: "supabase", action: "sign_in", provider });
-        Alert.alert("Sign in failed", "Please try again.");
-      }
+      if (isAuthCancellation(error)) return;
+      logger.error(error, { feature: "supabase", action: "sign_in", provider });
+      logAuthDev(provider, error);
+      Alert.alert(t("signInFailed"), userFacingAuthError(provider, error));
     } finally {
       setAuthBusy(false);
     }
   }, [authConfigured]);
 
+  const completeEmailAuthSession = useCallback(async (nextSession: Session) => {
+    setSession(nextSession);
+    setAuthHydrated(true);
+    setAuthBusy(false);
+    trackEvent("login_completed", { provider: "email" });
+  }, []);
+
+  const signInWithEmailPasswordHandler = useCallback(async (email: string, password: string) => {
+    if (!supabase || !authConfigured) {
+      throw new Error("Cloud sign-in is not configured in this build.");
+    }
+    const limit = await checkClientRateLimit("auth", "email");
+    if (!limit.allowed) {
+      throw new Error(SECURITY_MESSAGES.rateLimited);
+    }
+    setAuthBusy(true);
+    try {
+      const nextSession = await signInWithEmailPassword(email, password);
+      await completeEmailAuthSession(nextSession);
+    } catch (error) {
+      setAuthBusy(false);
+      throw error;
+    }
+  }, [authConfigured, completeEmailAuthSession]);
+
+  const signUpWithEmailPasswordHandler = useCallback(async (email: string, password: string) => {
+    if (!supabase || !authConfigured) {
+      throw new Error("Cloud sign-in is not configured in this build.");
+    }
+    const limit = await checkClientRateLimit("auth", "email");
+    if (!limit.allowed) {
+      throw new Error(SECURITY_MESSAGES.rateLimited);
+    }
+    trackEvent("sign_up_started", { provider: "email" });
+    const result = await signUpWithEmailPassword(email, password);
+    if (result === "confirmation_sent") return "confirmation_sent" as const;
+    await completeEmailAuthSession(result);
+    trackEvent("sign_up_completed", { provider: "email" });
+    return "signed_in" as const;
+  }, [authConfigured, completeEmailAuthSession]);
+
+  const requestPasswordResetHandler = useCallback(async (email: string) => {
+    if (!supabase || !authConfigured) {
+      throw new Error("Cloud sign-in is not configured in this build.");
+    }
+    await requestPasswordResetEmail(email);
+  }, [authConfigured]);
+
+  const changeAccountPassword = useCallback(async (newPassword: string) => {
+    if (!supabase || !session?.user) {
+      throw new Error("Sign in to change your password.");
+    }
+    await updateUserPassword(newPassword);
+    const { data } = await supabase.auth.getSession();
+    if (data.session) setSession(data.session);
+    Alert.alert(t("account"), EMAIL_PASSWORD_MESSAGES.passwordUpdated);
+  }, [session?.user]);
+
+  const changeAccountEmail = useCallback(async (newEmail: string) => {
+    if (!supabase || !session?.user) {
+      throw new Error("Sign in to change your email.");
+    }
+    await updateUserEmail(newEmail);
+    Alert.alert(t("account"), EMAIL_PASSWORD_MESSAGES.emailChangeSent);
+  }, [session?.user]);
+
+  const completePasswordReset = useCallback(async (newPassword: string) => {
+    if (!supabase || !session?.user) {
+      throw new Error("Open the password reset link again.");
+    }
+    await updateUserPassword(newPassword);
+    const { data } = await supabase.auth.getSession();
+    if (data.session) setSession(data.session);
+    setResetPasswordOpen(false);
+    Alert.alert(t("account"), EMAIL_PASSWORD_MESSAGES.passwordUpdated);
+  }, [session?.user]);
+
   const signOut = useCallback(async () => {
     if (!supabase) return;
+    const userId = session?.user.id || null;
+    await signOutGoogleNative();
     const { error } = await supabase.auth.signOut();
     if (error) {
       logger.error(error, { feature: "supabase", action: "sign_out" });
-      Alert.alert("Sign out failed", "Please try again.");
+      Alert.alert(t("signOutFailed"), t("signOutFailedBody"));
+      return;
     }
-  }, []);
+    await clearLocalUserCache(userId);
+    resetAnalyticsUser();
+    setTrades([]);
+    setTradesHydrated(true);
+    setCloudSyncStatus("off");
+    setLastCloudSyncAt(null);
+  }, [session?.user.id]);
 
   const refreshCurrentEntitlements = useCallback(async (reason: string, retryDelays = ENTITLEMENT_RETRY_DELAYS_MS) => {
     if (!purchasesConfigured.current) return null;
@@ -10710,11 +10002,11 @@ function App() {
     });
 
     if (resultProductId && !YOU_TRADER_PRO_PRODUCT_IDS.includes(resultProductId)) {
-      const message = tText(lang, "purchaseDifferentProduct");
+      const message = t("purchaseDifferentProduct");
       setPaywallError(message);
       setShowRestorePurchases(true);
       trackEvent("purchase_failed", { reason: "wrong_product" });
-      Alert.alert(tText(lang, "purchaseIssue"), message);
+      Alert.alert(t("purchaseIssue"), message);
       return;
     }
 
@@ -10722,7 +10014,7 @@ function App() {
       logger.info("RevenueCat purchase unlocked Pro", { feature: "revenuecat", action: "purchase_success", reason });
       trackEvent("purchase_success", { reason });
       trackEvent("pro_purchased", { reason });
-      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "proUnlocked"));
+      Alert.alert(t("premiumAccess"), t("proUnlocked"));
       return;
     }
 
@@ -10731,17 +10023,17 @@ function App() {
       logger.info("RevenueCat entitlement refresh unlocked Pro", { feature: "revenuecat", action: "purchase_success_after_refresh", reason });
       trackEvent("purchase_success", { reason });
       trackEvent("pro_purchased", { reason });
-      Alert.alert(tText(lang, "premiumAccess"), tText(lang, "proUnlocked"));
+      Alert.alert(t("premiumAccess"), t("proUnlocked"));
       return;
     }
 
     setShowRestorePurchases(true);
-    setPaywallError(tText(lang, "purchaseUnreadable"));
+    setPaywallError(t("purchaseUnreadable"));
     logger.warn("RevenueCat purchase completed without readable entitlement", { feature: "revenuecat", action: "entitlement_unreadable" });
     trackEvent("purchase_failed", { reason: "entitlement_unreadable" });
     Alert.alert(
-      tText(lang, "purchaseComplete"),
-      tText(lang, "purchaseUnreadable"),
+      t("purchaseComplete"),
+      t("purchaseUnreadable"),
     );
   }, [applyCustomerInfo, lang, refreshCurrentEntitlements, session?.user.id]);
 
@@ -10762,7 +10054,7 @@ function App() {
         expectedProductIds: YOU_TRADER_PRO_PRODUCT_IDS,
         requestedProductId: productId,
       });
-      Alert.alert("YouTrader Pro", message);
+      Alert.alert(t("premiumAccess"), message);
       return;
     }
     const isYearly = productId === YOU_TRADER_YEARLY_PRODUCT_ID;
@@ -10772,7 +10064,7 @@ function App() {
     try {
       const limit = await checkClientRateLimit("purchase", session?.user.id || "local");
       if (!limit.allowed) {
-        Alert.alert("YouTrader Pro", SECURITY_MESSAGES.rateLimited);
+        Alert.alert(t("premiumAccess"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       logger.info("RevenueCat purchase started", { feature: "revenuecat", action: "purchase_started" });
@@ -10797,7 +10089,11 @@ function App() {
       if (selectedPackage) {
         const trialEligible = !!(selectedPackage.product as any)?.introPrice;
         const result = await withTimeout(Purchases.purchasePackage(selectedPackage));
-        if (trialEligible) trackEvent("trial_started", { plan: isYearly ? "yearly" : "monthly" });
+        if (trialEligible) {
+          console.log("[YouTrader:trial] started", { plan: isYearly ? "yearly" : "monthly" });
+          trackEvent("trial_started", { plan: isYearly ? "yearly" : "monthly" });
+        }
+        console.log("[YouTrader:subscription] purchase_package_success", { productId });
         await finishPurchaseFlow(result, "purchasePackage");
         return;
       }
@@ -10822,7 +10118,7 @@ function App() {
           catalogPackageIds: catalogPackages.map((item) => item.product.identifier),
           catalogProductIds: catalogProducts.map((product) => product.identifier),
         });
-        Alert.alert("YouTrader Pro", message);
+        Alert.alert(t("premiumAccess"), message);
         return;
       }
 
@@ -10834,7 +10130,7 @@ function App() {
         const message = userFacingBillingError(error?.message || "Purchase failed. Please try again.");
         setPaywallError(message);
         trackEvent("purchase_failed", { reason: "purchase_error" });
-        Alert.alert(tText(lang, "purchaseFailed"), message);
+        Alert.alert(t("purchaseFailed"), message);
       }
       await refreshRevenueCat();
     } finally {
@@ -10845,8 +10141,8 @@ function App() {
   const restorePurchases = useCallback(async () => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
       Alert.alert(
-        tText(lang, "restorePurchases"),
-        tText(lang, "restoreUnavailable"),
+        t("restorePurchases"),
+        t("restoreUnavailable"),
       );
       return;
     }
@@ -10855,7 +10151,7 @@ function App() {
     try {
       const limit = await checkClientRateLimit("restore", session?.user.id || "local");
       if (!limit.allowed) {
-        Alert.alert(tText(lang, "restorePurchases"), SECURITY_MESSAGES.rateLimited);
+        Alert.alert(t("restorePurchases"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       billingDebugLog("restore started", { productId: YOU_TRADER_MONTHLY_PRODUCT_ID });
@@ -10873,24 +10169,55 @@ function App() {
         setPaywallError("");
         setShowRestorePurchases(false);
         trackEvent("pro_restored", { source: "restore_purchases" });
-        Alert.alert(tText(lang, "premiumAccess"), tText(lang, "proUnlocked"));
+        Alert.alert(t("premiumAccess"), t("proUnlocked"));
       } else {
         logger.warn("RevenueCat restore found no active subscription", { feature: "revenuecat", action: "restore_no_active_subscription" });
         setShowRestorePurchases(true);
-        Alert.alert(tText(lang, "restorePurchases"), tText(lang, "noActiveSubscription"));
+        Alert.alert(t("restorePurchases"), t("noActiveSubscription"));
       }
     } catch (error: any) {
       logger.error(error, { feature: "revenuecat", action: "restore" });
       billingDebugLog("restore failed", { message: error?.message });
-      const message = tText(lang, "restoreFailedTryAgain");
+      const message = t("restoreFailedTryAgain");
       setPaywallError(message);
-      Alert.alert(tText(lang, "restorePurchases"), tText(lang, "restoreFailedTryAgain"));
+      Alert.alert(t("restorePurchases"), t("restoreFailedTryAgain"));
     } finally {
       setPurchaseBusy(false);
     }
   }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id]);
 
-  const appReady = tradesHydrated;
+  const appReady = i18nReady && tradesHydrated && authHydrated;
+  const authScreenCopy: AuthScreenCopy = {
+    headline: t("authHeadline"),
+    subtitle: t("authSubtitle"),
+    apple: t("authApple"),
+    google: t("authGoogle"),
+    email: t("authEmail"),
+    secureNote: t("authSecureNote"),
+    termsPrefix: t("authTermsPrefix"),
+    termsLabel: t("authTermsLabel"),
+    termsAnd: t("authTermsAnd"),
+    privacyLabel: t("authPrivacyLabel"),
+    termsSuffix: t("authTermsSuffix"),
+    cancel: t("cancel"),
+  };
+  const emailModalCopy: EmailAuthModalCopy = {
+    signInTitle: t("authEmailSignInTitle"),
+    signUpTitle: t("authEmailSignUpTitle"),
+    forgotTitle: t("authEmailForgotTitle"),
+    checkEmailTitle: t("authEmailCheckTitle"),
+    checkEmailBody: t("authEmailCheckBody"),
+    emailPlaceholder: t("authEmailPlaceholder"),
+    passwordPlaceholder: t("authEmailPasswordPlaceholder"),
+    confirmPasswordPlaceholder: t("authEmailConfirmPasswordPlaceholder"),
+    signIn: t("authEmailSignIn"),
+    createAccount: t("authEmailCreateAccount"),
+    createAccountLink: t("authEmailCreateAccountLink"),
+    forgotPassword: t("authEmailForgotPassword"),
+    sendReset: t("authEmailSendReset"),
+    backToSignIn: t("authEmailBackToSignIn"),
+    cancel: t("cancel"),
+  };
 
   if (!appReady) {
     return (
@@ -10900,21 +10227,39 @@ function App() {
           <View style={styles.lockScreen}>
             <Text style={styles.h1}>YouTrader</Text>
             <ActivityIndicator color={C.green} style={{ marginTop: 18 }} />
-            <Text style={[styles.sub, { marginTop: 12 }]}>{tText(lang, "loadingJournal")}</Text>
+            <Text style={[styles.sub, { marginTop: 12 }]}>{t("loadingJournal")}</Text>
           </View>
         </SafeAreaView>
       </SafeAreaProvider>
     );
   }
 
+  if (authRequired && !session?.user) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="light" backgroundColor="#000000" />
+        <AuthScreen
+          busy={authBusy}
+          copy={authScreenCopy}
+          emailModalCopy={emailModalCopy}
+          showApple={Platform.OS === "ios"}
+          onSignIn={signInWithProvider}
+          onSignInWithEmailPassword={signInWithEmailPasswordHandler}
+          onSignUpWithEmailPassword={signUpWithEmailPasswordHandler}
+          onRequestPasswordReset={requestPasswordResetHandler}
+        />
+      </SafeAreaProvider>
+    );
+  }
+
   const tabs: { id: Tab; label: string }[] = [
-    { id: "journal", label: tText(lang, "journal") },
-    { id: "stats", label: tText(lang, "stats") },
-    { id: "calc", label: tText(lang, "calc") },
-    { id: "ai", label: tText(lang, "aiAnalytics") },
-    { id: "news", label: tText(lang, "news") },
-    { id: "calendar", label: tText(lang, "calendar") },
-    { id: "settings", label: tText(lang, "settings") },
+    { id: "journal", label: t("journal") },
+    { id: "stats", label: t("stats") },
+    { id: "calc", label: t("calc") },
+    { id: "ai", label: t("aiAnalytics") },
+    { id: "news", label: t("news") },
+    { id: "calendar", label: t("calendar") },
+    { id: "settings", label: t("settings") },
   ];
   const premiumTabs: Tab[] = [];
   const locked = !isPremium && premiumTabs.includes(tab);
@@ -11022,9 +10367,25 @@ function App() {
               onImportTradesCsv={importTradesFromCsv}
               onSignIn={signInWithProvider}
               onSignOut={signOut}
+              onChangePassword={changeAccountPassword}
+              onChangeEmail={changeAccountEmail}
+              calendarEvents={pushCalendarEvents}
+              onUpgrade={() =>
+                purchasePackage(
+                  packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null,
+                  YOU_TRADER_MONTHLY_PRODUCT_ID,
+                )
+              }
             />
           )}
         </View>
+        <ChangePasswordModal
+          visible={resetPasswordOpen}
+          title={t("authResetPassword")}
+          submitLabel={t("authUpdatePassword")}
+          onClose={() => setResetPasswordOpen(false)}
+          onSubmit={completePasswordReset}
+        />
         <Modal visible={propRiskOpen} animationType="slide">
           <SafeAreaView style={styles.modal}>
             <View style={styles.propModalTopBar}>
@@ -11059,6 +10420,7 @@ function App() {
             />
           ))}
         </View>
+        <StatCardExportHost />
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -11410,20 +10772,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "center",
   },
-  offscreenShareCard: {
+  offscreenAchievementShareCard: {
     position: "absolute",
-    left: -1400,
+    left: 0,
     top: 0,
-    width: SHARE_CARD_WIDTH,
-    height: SHARE_CARD_HEIGHT,
-    opacity: 1,
+    opacity: 0.02,
     zIndex: -1,
     pointerEvents: "none",
   },
   achievementShareCaptureFrame: {
-    width: SHARE_CARD_WIDTH,
-    height: SHARE_CARD_HEIGHT,
-    backgroundColor: "#000000",
+    backgroundColor: "transparent",
+    overflow: "hidden",
   },
   propTemplateRailCompact: {
     gap: 8,
@@ -12319,6 +11678,23 @@ const styles = StyleSheet.create({
   settingsSwitchDivider: {
     height: 1,
     backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  notificationsCard: {
+    backgroundColor: "rgba(176,38,255,0.10)",
+    borderColor: "rgba(176,38,255,0.45)",
+    shadowColor: C.purple,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  notificationsTitle: {
+    color: C.purple,
+    marginBottom: 4,
+  },
+  settingsSwitchDividerPurple: {
+    height: 1,
+    backgroundColor: "rgba(176,38,255,0.22)",
   },
   purpleAction: {
     borderColor: C.purple,
@@ -15351,4 +14727,5 @@ const styles = StyleSheet.create({
   },
   settingsBenefitCheck: { color: C.purple, fontWeight: "900" },
   settingsBenefitText: { color: C.green, fontWeight: "800" },
+  settingsAccountEmail: { color: C.text, fontSize: 16, fontWeight: "700", marginTop: 4 },
 });

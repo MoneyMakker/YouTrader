@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "../config/appConfig";
+import { t } from "../i18n";
 
 export type AIProviderStatus = "openrouter" | "gemini" | "anthropic" | "nvidia" | "local_fallback" | "quota_exceeded" | "free_preview";
 
@@ -101,20 +102,20 @@ function fallback(action: Action, payload: Record<string, any>): any {
   const profitFactor = Number(s.pf || s.profitFactor || payload.profitFactor || 0);
   const bestSession = payload.bestSession || s.bestSession || null;
   const worstSession = payload.worstSession || s.worstSession || null;
-  const headline = payload.news?.title || payload.headline || "Market news";
+  const headline = payload.news?.title || payload.headline || t("aiMarketNewsFallback");
 
   switch (action) {
     case "weekly_coach":
       return {
-        title: "Weekly Trading Coach",
+        title: t("aiWeeklyCoachTitle"),
         summary: `This review is based on ${totalTrades} logged trades. Win rate is ${Math.round(winRate)}% and profit factor is ${profitFactor.toFixed(2)}.`,
-        topStrengths: ["You are building journal data", "Your risk and session stats can now be reviewed"],
-        mainLeaks: ["Protect weak sessions", "Avoid changing size after emotional trades"],
+        topStrengths: [t("aiFallbackBuildingJournal"), t("aiFallbackSessionStatsReview")],
+        mainLeaks: [t("aiFallbackProtectWeakSessions"), t("aiFallbackAvoidSizeAfterEmotional")],
         bestSession,
         worstSession,
-        riskNotes: ["Respect daily stop rules", "No size increase after losses"],
-        nextWeekFocus: ["Journal every trade", "Trade only planned setups"],
-        coachMessage: "Educational process feedback only. Not financial advice.",
+        riskNotes: [t("aiFallbackRespectDailyStop"), t("aiFallbackNoSizeAfterLosses")],
+        nextWeekFocus: [t("aiFallbackJournalEveryTrade"), t("aiFallbackTradePlannedSetups")],
+        coachMessage: t("aiCoachEducationalDisclaimer"),
       } satisfies AIWeeklyCoach;
     case "risk_predictor":
       return {
@@ -124,7 +125,7 @@ function fallback(action: Action, payload: Record<string, any>): any {
         warningSigns: ["Overtrading", "Revenge entries", "Oversized trades"],
         recommendedRules: ["Stop after 2 losses", "Predefine max risk", "No trades without invalidation"],
         maxRiskSuggestion: "Keep risk small and fixed until execution is clean.",
-        coachMessage: "This predicts discipline risk only, not market direction.",
+        coachMessage: t("aiDisciplineRiskOnly"),
       } satisfies AIRiskPredictor;
     case "journal_summary":
       return {
@@ -144,7 +145,7 @@ function fallback(action: Action, payload: Record<string, any>): any {
         tradeRules: ["Define invalidation before entry", "No size increase after a loss", "Journal every trade"],
         sessionFocus: bestSession,
         newsAwareness: ["Treat upcoming news as volatility risk, not a trading signal."],
-        coachMessage: "Your first job today is execution quality.",
+        coachMessage: t("aiExecutionQualityFirst"),
       } satisfies AIDailyPlan;
     case "news_explainer":
       return {
@@ -152,12 +153,12 @@ function fallback(action: Action, payload: Record<string, any>): any {
         plainEnglish: "This news may affect expectations and short-term volatility.",
         whyItMatters: "News can change liquidity, spreads, and emotional pressure around market opens.",
         marketsPotentiallyAffected: ["Indexes", "Rates", "Commodities"],
-        riskReminder: "This is not a buy or sell signal. Manage risk first.",
+        riskReminder: t("aiNotBuySellSignal"),
         notFinancialAdvice: true,
       } satisfies AINewsExplainer;
     case "daily_challenge":
       return {
-        challengeTitle: "No Revenge Trade Challenge",
+        challengeTitle: t("aiNoRevengeChallenge"),
         challengeDescription: "Take only trades from your plan, not from frustration.",
         rules: ["Stop after 2 losses", "No size increases after red trades", "Journal before and after entry"],
         successCriteria: ["No impulse trades", "Every trade has a written reason", "Risk stayed inside the plan"],
@@ -176,7 +177,7 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
         data: fallbackData,
         providerStatus: "local_fallback",
         usedFallback: true,
-        message: "Cloud AI is not configured. Showing local YouTrader analysis.",
+        message: t("aiCloudNotConfigured"),
         generatedAt: now(),
       };
     }
@@ -187,7 +188,7 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
         data: fallbackData,
         providerStatus: "local_fallback",
         usedFallback: true,
-        message: "Sign in to use cloud AI. Showing local YouTrader analysis.",
+        message: t("aiCloudSignInRequired"),
         generatedAt: now(),
       };
     }
@@ -197,11 +198,12 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
     });
 
     if (error || !data?.data) {
+      const limitMessage = data?.message?.includes("limit") ? data.message : undefined;
       return {
         data: fallbackData,
         providerStatus: data?.providerStatus === "quota_exceeded" ? "quota_exceeded" : "local_fallback",
         usedFallback: true,
-        message: data?.message || "Cloud AI is unavailable. Showing local YouTrader analysis.",
+        message: limitMessage || data?.message || t("aiCloudUnavailable"),
         generatedAt: now(),
       };
     }

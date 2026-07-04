@@ -2,6 +2,12 @@ import React from "react";
 import { ImageBackground, StyleSheet, Text, View } from "react-native";
 import { EXPORT_BRAND, EXPORT_CARD_HEIGHT, EXPORT_CARD_WIDTH } from "../exportDesign";
 import { CARD_LAYOUT, CARD_TEXT, slotStyle, TRADER_CARD_TEMPLATE, scaledFont, type CardSlot } from "./cardTemplate";
+import {
+  STAT_BOX_PADDING,
+  statLabelFontSize,
+  statValueFontSize,
+  statValueMinimumScale,
+} from "./shareCardTypography";
 
 export function CardTemplateShell({
   children,
@@ -105,6 +111,62 @@ export function OverlayLabelValue({
   );
 }
 
+export function OverlayStatPanel({
+  slot,
+  label,
+  value,
+  tone = "green",
+}: {
+  slot: CardSlot;
+  label: string;
+  value: string;
+  tone?: "green" | "white" | "purple" | "red" | "gold";
+  valueSize?: number;
+}) {
+  const color =
+    tone === "white"
+      ? CARD_TEXT.white
+      : tone === "purple"
+        ? CARD_TEXT.purple
+        : tone === "red"
+          ? CARD_TEXT.red
+          : tone === "gold"
+            ? CARD_TEXT.gold
+            : CARD_TEXT.green;
+  const labelSize = statLabelFontSize();
+  const resolvedValueSize = statValueFontSize(value);
+  const minScale = statValueMinimumScale(value);
+  return (
+    <View style={[styles.statPanel, slotStyle(slot)]}>
+      <Text
+        allowFontScaling={false}
+        style={[styles.statLabel, { fontSize: labelSize, lineHeight: Math.round(labelSize * 1.15) }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.65}
+      >
+        {label}
+      </Text>
+      <Text
+        allowFontScaling={false}
+        style={[
+          styles.statValue,
+          {
+            color,
+            fontSize: resolvedValueSize,
+            lineHeight: Math.round(resolvedValueSize * 1.08),
+          },
+        ]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={minScale}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     width: EXPORT_CARD_WIDTH,
@@ -142,6 +204,30 @@ const styles = StyleSheet.create({
   alignCenter: { alignItems: "center" },
   alignLeft: { alignItems: "flex-start" },
   alignRight: { alignItems: "flex-end" },
+  statPanel: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: STAT_BOX_PADDING.horizontal,
+    paddingVertical: STAT_BOX_PADDING.vertical,
+  },
+  statLabel: {
+    color: CARD_TEXT.sub,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+    textAlign: "center",
+    width: "100%",
+    maxWidth: "100%",
+    marginBottom: 4,
+  },
+  statValue: {
+    fontWeight: "900",
+    textAlign: "center",
+    width: "100%",
+    textShadowColor: CARD_TEXT.shadow,
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 10,
+  },
   label: {
     color: CARD_TEXT.white,
     fontSize: scaledFont(11),

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { t } from "../../i18n";
 import { C } from "../../theme/colors";
 
 export type YouTraderLottieSlot =
@@ -15,12 +16,12 @@ type Props = {
   label?: string;
 };
 
-const LABELS: Record<YouTraderLottieSlot, string> = {
-  passedEvaluation: "Evaluation passed",
-  firstGreenWeek: "First green week",
-  upgradeToPro: "Upgrade to Pro",
-  emptyState: "Start building your journal",
-  dailyGoalReached: "Daily goal reached",
+const LABEL_KEYS: Record<YouTraderLottieSlot, string> = {
+  passedEvaluation: "lottiePassedEvaluation",
+  firstGreenWeek: "lottieFirstGreenWeek",
+  upgradeToPro: "upgradeToPro",
+  emptyState: "lottieEmptyState",
+  dailyGoalReached: "lottieDailyGoalReached",
 };
 
 export function YouTraderLottie({ slot, style, label }: Props) {
@@ -38,60 +39,48 @@ export function YouTraderLottie({ slot, style, label }: Props) {
   }, [pulse]);
 
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1.03] });
+  const glow = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
 
   return (
-    <View style={[styles.root, style]}>
-      <Animated.View style={[styles.mark, { transform: [{ scale }] }]}>
-        <View style={styles.candleGreen} />
-        <View style={styles.candlePurple} />
-        <View style={styles.candleGreenSmall} />
-      </Animated.View>
-      <Text style={styles.label}>{label || LABELS[slot]}</Text>
-    </View>
+    <Animated.View style={[styles.wrap, style, { transform: [{ scale }] }]}>
+      <Animated.View style={[styles.glow, { opacity: glow }]} />
+      <View style={styles.core}>
+        <Text style={styles.emoji}>📈</Text>
+      </View>
+      {label || LABEL_KEYS[slot] ? (
+        <Text style={styles.label} numberOfLines={2}>
+          {label || t(LABEL_KEYS[slot])}
+        </Text>
+      ) : null}
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 92,
-    gap: 10,
+  wrap: { alignItems: "center", justifyContent: "center", gap: 10 },
+  glow: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: C.green,
   },
-  mark: {
-    width: 72,
-    height: 48,
-    borderRadius: 24,
+  core: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "rgba(10,12,16,0.92)",
     borderWidth: 1,
-    borderColor: "rgba(163,255,18,0.22)",
-    backgroundColor: "rgba(163,255,18,0.06)",
+    borderColor: "rgba(163,255,18,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 5,
   },
-  candleGreen: {
-    width: 8,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: C.green,
-  },
-  candlePurple: {
-    width: 8,
-    height: 38,
-    borderRadius: 6,
-    backgroundColor: C.purple,
-  },
-  candleGreenSmall: {
-    width: 8,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: C.green,
-  },
+  emoji: { fontSize: 34 },
   label: {
-    color: C.sub,
-    fontSize: 12,
-    fontWeight: "800",
+    color: C.text,
+    fontSize: 13,
+    fontWeight: "700",
     textAlign: "center",
+    maxWidth: 180,
   },
 });

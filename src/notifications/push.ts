@@ -3,19 +3,19 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { trackEvent } from "../observability/analytics";
 import { captureAppError } from "../observability/monitoring";
+import {
+  getSmartPushPreferences,
+  setSmartPushPreference,
+  type LegacyNotificationPreferenceKey,
+  type SmartPushPreferenceKey,
+} from "./notificationPreferences";
 
-export type NotificationPreferenceKey =
-  | "logTodayTrade"
-  | "weeklyReportReady"
-  | "dailyBriefReady"
-  | "riskLimitClose"
-  | "propDailyBufferAtRisk";
+/** @deprecated Use SmartPushPreferenceKey */
+export type NotificationPreferenceKey = LegacyNotificationPreferenceKey;
 
-export type NotificationPreferences = Record<NotificationPreferenceKey, boolean>;
+const LEGACY_PREFS_KEY = "notification-preferences-v1";
 
-const NOTIFICATION_PREFS_KEY = "notification-preferences-v1";
-
-export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+export const DEFAULT_NOTIFICATION_PREFERENCES = {
   logTodayTrade: false,
   weeklyReportReady: false,
   dailyBriefReady: false,
@@ -23,38 +23,41 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   propDailyBufferAtRisk: false,
 };
 
-export async function getNotificationPreferences(): Promise<NotificationPreferences> {
-  try {
-    const raw = await AsyncStorage.getItem(NOTIFICATION_PREFS_KEY);
-    if (!raw) return DEFAULT_NOTIFICATION_PREFERENCES;
-    return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...JSON.parse(raw) };
-  } catch (error) {
-    captureAppError(error, { feature: "notifications", action: "read_preferences" });
-    return DEFAULT_NOTIFICATION_PREFERENCES;
-  }
+export async function getNotificationPreferences() {
+  const smart = await getSmartPushPreferences();
+  return {
+    logTodayTrade: smart.dailyJournalReminder,
+    weeklyReportReady: smart.weeklyPerformanceReview,
+    dailyBriefReady: smart.economicCalendarAlerts,
+    riskLimitClose: smart.dailyLossLimitWarning,
+    propDailyBufferAtRisk: smart.propFirmBufferWarning,
+  };
 }
 
 export async function setNotificationPreference(key: NotificationPreferenceKey, enabled: boolean) {
-  const current = await getNotificationPreferences();
-  const next = { ...current, [key]: enabled };
-  await AsyncStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(next));
-  return next;
+  const smartKey: Record<NotificationPreferenceKey, SmartPushPreferenceKey> = {
+    logTodayTrade: "dailyJournalReminder",
+    weeklyReportReady: "weeklyPerformanceReview",
+    dailyBriefReady: "economicCalendarAlerts",
+    riskLimitClose: "dailyLossLimitWarning",
+    propDailyBufferAtRisk: "propFirmBufferWarning",
+  };
+  await setSmartPushPreference(smartKey[key], enabled);
+  const legacy = await getNotificationPreferences();
+  await AsyncStorage.setItem(LEGACY_PREFS_KEY, JSON.stringify(legacy));
+  return legacy;
 }
 
 export async function requestNotificationPermission(reason: NotificationPreferenceKey) {
-  trackEvent("push_permission_requested", { reason });
-  try {
-    const current = await Notifications.getPermissionsAsync();
-    const permission = current.granted ? current : await Notifications.requestPermissionsAsync();
-    if (permission.granted) {
-      trackEvent("push_permission_granted", { reason });
-      return true;
-    }
-    return false;
-  } catch (error) {
-    captureAppError(error, { feature: "notifications", action: "request_permission", reason });
-    return false;
-  }
+  const { requestSmartPushPermission } = await import("./smartAlerts");
+  const smartKey: Record<NotificationPreferenceKey, SmartPushPreferenceKey> = {
+    logTodayTrade: "dailyJournalReminder",
+    weeklyReportReady: "weeklyPerformanceReview",
+    dailyBriefReady: "economicCalendarAlerts",
+    riskLimitClose: "dailyLossLimitWarning",
+    propDailyBufferAtRisk: "propFirmBufferWarning",
+  };
+  return requestSmartPushPermission(smartKey[reason]);
 }
 
 export async function scheduleLocalReminder(options: {
@@ -103,4 +106,16 @@ export async function getExpoPushTokenIfServerStorageIsReady() {
     captureAppError(error, { feature: "notifications", action: "get_expo_push_token" });
     return null;
   }
+}
+
+export function configureNotificationHandler() {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
 }

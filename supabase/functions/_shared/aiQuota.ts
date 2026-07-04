@@ -1,90 +1,30 @@
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  checkRateLimitBucket,
+  DAILY_AI_LIMIT_MESSAGE,
+  recordRateLimitUsage,
+} from "./rateLimits.ts";
 import type { AICoachAction } from "./aiSchemas.ts";
 
-type QuotaRule = {
-  limit: number;
-  window: "month";
-};
-
-const QUOTAS: Record<AICoachAction, QuotaRule> = {
-  daily_plan: { limit: 20, window: "month" },
-  risk_predictor: { limit: 30, window: "month" },
-  weekly_coach: { limit: 8, window: "month" },
-  journal_summary: { limit: 12, window: "month" },
-  news_explainer: { limit: 40, window: "month" },
-  daily_challenge: { limit: 20, window: "month" },
-};
-
-const COOLDOWN_SECONDS: Record<AICoachAction, number> = {
-  daily_plan: 60,
-  risk_predictor: 45,
-  weekly_coach: 300,
-  journal_summary: 90,
-  news_explainer: 15,
-  daily_challenge: 60,
-};
-
-function startOfWindow(rule: QuotaRule) {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-}
-
+/** @deprecated Use checkRateLimitBucket from rateLimits.ts */
 export async function checkAIQuota(
-  supabaseAdmin: SupabaseClient,
+  supabaseAdmin: Parameters<typeof checkRateLimitBucket>[0],
   userId: string,
   action: AICoachAction,
 ) {
-  const rule = QUOTAS[action];
-  const cooldownSeconds = COOLDOWN_SECONDS[action];
-  const { data: latest, error: latestError } = await supabaseAdmin
-    .from("ai_usage_events")
-    .select("created_at")
-    .eq("user_id", userId)
-    .eq("action", action)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!latestError && latest?.created_at) {
-    const elapsed = (Date.now() - new Date(latest.created_at).getTime()) / 1000;
-    if (elapsed < cooldownSeconds) {
-      return {
-        allowed: false,
-        reason: "cooldown" as const,
-        retryAfterSeconds: Math.ceil(cooldownSeconds - elapsed),
-        remaining: Math.max(0, rule.limit - 1),
-        limit: rule.limit,
-      };
-    }
-  }
-
-  const { count, error } = await supabaseAdmin
-    .from("ai_usage_events")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("action", action)
-    .gte("created_at", startOfWindow(rule));
-
-  if (error) {
-    console.error("ai_quota_check_failed", { action, code: error.code, message: error.message });
-    return { allowed: true, remaining: rule.limit, limit: rule.limit };
-  }
-
-  const used = count || 0;
+  const quota = await checkRateLimitBucket(supabaseAdmin, userId, action);
   return {
-    allowed: used < rule.limit,
-    reason: used < rule.limit ? "ok" as const : "quota" as const,
-    remaining: Math.max(0, rule.limit - used),
-    limit: rule.limit,
-    warning:
-      used + 1 >= Math.floor(rule.limit * 0.9) && used < rule.limit
-        ? "You are approaching your monthly AI allowance."
-        : undefined,
+    allowed: quota.allowed,
+    reason: quota.reason,
+    remaining: quota.remaining,
+    limit: quota.limit,
+    message: quota.message,
+    warning: quota.remaining <= 3 && quota.allowed ? "You are approaching your daily AI allowance." : undefined,
   };
 }
 
+/** @deprecated Use recordRateLimitUsage from rateLimits.ts */
 export async function recordAIUsage(
-  supabaseAdmin: SupabaseClient,
+  supabaseAdmin: Parameters<typeof recordRateLimitUsage>[0],
   input: {
     userId: string;
     action: AICoachAction;
@@ -93,15 +33,14 @@ export async function recordAIUsage(
     usedFallback: boolean;
   },
 ) {
-  const { error } = await supabaseAdmin.from("ai_usage_events").insert({
-    user_id: input.userId,
+  await recordRateLimitUsage(supabaseAdmin, {
+    userId: input.userId,
     action: input.action,
-    period_key: input.periodKey,
+    periodKey: input.periodKey,
     provider: input.provider,
-    used_fallback: input.usedFallback,
-    metadata: { source: "ai-coach" },
+    usedFallback: input.usedFallback,
+    source: "ai-coach",
   });
-  if (error) {
-    console.error("ai_usage_record_failed", { action: input.action, code: error.code, message: error.message });
-  }
 }
+
+export { DAILY_AI_LIMIT_MESSAGE };

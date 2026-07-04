@@ -1,5 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
+import { logger } from "../lib/logger";
+import {
+  EXPORT_IDEMPOTENCY_TTL_MS,
+  EXPORT_RATE_LIMIT_SCHEMA_VERSION,
+  normalizeTimestamp,
+  stableSecurityHash,
+} from "./exportRateLimitEngine";
 import { SECURITY_LIMITS } from "./securityConfig";
 
 export type SecurityAction =
@@ -45,41 +52,158 @@ const LIMITS: Record<SecurityAction, number> = {
 
 type RateBucket = { startedAt: number; count: number };
 
-export function stableSecurityHash(input: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16);
-}
+export type ClientRateLimitStatus = {
+  allowed: boolean;
+  retryAfterMs: number;
+  retryAfterSeconds: number;
+  count: number;
+  limit: number;
+  windowMs: number;
+  startedAt: number;
+  now: number;
+  key: string;
+  reason: string;
+};
+
+const IDEMPOTENCY_TTL_MS = EXPORT_IDEMPOTENCY_TTL_MS;
+const RATE_LIMIT_SCHEMA_VERSION = EXPORT_RATE_LIMIT_SCHEMA_VERSION;
+
+export { stableSecurityHash } from "./exportRateLimitEngine";
 
 function bucketKey(action: SecurityAction, actor = "local") {
   return `security-rate:${actor}:${action}`;
 }
 
-export async function checkClientRateLimit(action: SecurityAction, actor = "local") {
+async function readRateBucket(action: SecurityAction, actor = "local") {
   const key = bucketKey(action, actor);
+  const versionKey = `${key}:v`;
   const now = Date.now();
   const windowMs = WINDOW_MS[action];
   const limit = LIMITS[action];
   let bucket: RateBucket = { startedAt: now, count: 0 };
   try {
-    const raw = await AsyncStorage.getItem(key);
-    if (raw) bucket = JSON.parse(raw);
+    const storedVersion = Number(await AsyncStorage.getItem(versionKey));
+    if (storedVersion !== RATE_LIMIT_SCHEMA_VERSION) {
+      await AsyncStorage.multiRemove([key, versionKey]);
+      await AsyncStorage.setItem(versionKey, String(RATE_LIMIT_SCHEMA_VERSION));
+      bucket = { startedAt: now, count: 0 };
+    } else {
+      const raw = await AsyncStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<RateBucket>;
+        const startedAt = normalizeTimestamp(parsed.startedAt);
+        const count = Number(parsed.count);
+        if (startedAt > 0 && Number.isFinite(count) && count >= 0) {
+          bucket = { startedAt, count };
+        }
+      }
+    }
   } catch {
     bucket = { startedAt: now, count: 0 };
   }
   if (!bucket.startedAt || now - bucket.startedAt > windowMs) {
     bucket = { startedAt: now, count: 0 };
   }
-  if (bucket.count >= limit) {
+  const allowed = bucket.count < limit;
+  const retryAfterMs = allowed ? 0 : Math.max(0, windowMs - (now - bucket.startedAt));
+  return {
+    key,
+    now,
+    windowMs,
+    limit,
+    bucket,
+    allowed,
+    retryAfterMs,
+    retryAfterSeconds: Math.ceil(retryAfterMs / 1000),
+  };
+}
+
+export function logExportRateLimitDebug(
+  status: ClientRateLimitStatus,
+  context: string,
+) {
+  const payload = {
+    context,
+    reason: status.reason,
+    now: status.now,
+    nowIso: new Date(status.now).toISOString(),
+    storedStartedAt: status.startedAt,
+    storedStartedAtIso: status.startedAt ? new Date(status.startedAt).toISOString() : null,
+    count: status.count,
+    limit: status.limit,
+    windowMs: status.windowMs,
+    remainingCooldownMs: status.retryAfterMs,
+    remainingCooldownSeconds: status.retryAfterSeconds,
+    storageKey: status.key,
+    allowed: status.allowed,
+  };
+  console.warn("[YouTrader:export-rate-limit]", payload);
+  logger.warn("[YouTrader:export-rate-limit]", payload);
+}
+
+export async function peekClientRateLimit(
+  action: SecurityAction,
+  actor = "local",
+  reason = "peek",
+): Promise<ClientRateLimitStatus> {
+  const state = await readRateBucket(action, actor);
+  return {
+    allowed: state.allowed,
+    retryAfterMs: state.retryAfterMs,
+    retryAfterSeconds: state.retryAfterSeconds,
+    count: state.bucket.count,
+    limit: state.limit,
+    windowMs: state.windowMs,
+    startedAt: state.bucket.startedAt,
+    now: state.now,
+    key: state.key,
+    reason,
+  };
+}
+
+export async function consumeClientRateLimit(
+  action: SecurityAction,
+  actor = "local",
+): Promise<ClientRateLimitStatus> {
+  const state = await readRateBucket(action, actor);
+  if (!state.allowed) {
     await recordSecurityEvent("rate_limit_exceeded", action, actor);
-    return { allowed: false, retryAfterMs: Math.max(0, windowMs - (now - bucket.startedAt)) };
+    return {
+      allowed: false,
+      retryAfterMs: state.retryAfterMs,
+      retryAfterSeconds: state.retryAfterSeconds,
+      count: state.bucket.count,
+      limit: state.limit,
+      windowMs: state.windowMs,
+      startedAt: state.bucket.startedAt,
+      now: state.now,
+      key: state.key,
+      reason: "consume_blocked",
+    };
   }
-  bucket.count += 1;
-  await AsyncStorage.setItem(key, JSON.stringify(bucket));
-  return { allowed: true, retryAfterMs: 0 };
+  const nextBucket: RateBucket = {
+    startedAt: state.bucket.startedAt || state.now,
+    count: state.bucket.count + 1,
+  };
+  await AsyncStorage.setItem(state.key, JSON.stringify(nextBucket));
+  return {
+    allowed: true,
+    retryAfterMs: 0,
+    retryAfterSeconds: 0,
+    count: nextBucket.count,
+    limit: state.limit,
+    windowMs: state.windowMs,
+    startedAt: nextBucket.startedAt,
+    now: state.now,
+    key: state.key,
+    reason: "consume_ok",
+  };
+}
+
+/** Checks and immediately consumes one rate-limit slot (legacy behavior). */
+export async function checkClientRateLimit(action: SecurityAction, actor = "local") {
+  const status = await consumeClientRateLimit(action, actor);
+  return { allowed: status.allowed, retryAfterMs: status.retryAfterMs };
 }
 
 export async function runIdempotentLocal<T>(
@@ -90,13 +214,29 @@ export async function runIdempotentLocal<T>(
 ) {
   const id = stableSecurityHash(`${action}:${actor}:${JSON.stringify(payload)}`);
   const key = `security-idempotency:${id}`;
+  const now = Date.now();
   const existing = await AsyncStorage.getItem(key);
   if (existing) {
-    await recordSecurityEvent("duplicate_idempotency_key", action, actor);
-    return { duplicate: true, value: JSON.parse(existing) as T };
+    try {
+      const parsed = JSON.parse(existing) as { value?: T; expiresAt?: number };
+      if (parsed && typeof parsed === "object" && "expiresAt" in parsed) {
+        if (Number(parsed.expiresAt) > now && "value" in parsed) {
+          await recordSecurityEvent("duplicate_idempotency_key", action, actor);
+          return { duplicate: true, value: parsed.value as T };
+        }
+      } else {
+        await recordSecurityEvent("duplicate_idempotency_key", action, actor);
+        return { duplicate: true, value: parsed as T };
+      }
+    } catch {
+      // Corrupt idempotency record — allow retry.
+    }
   }
   const value = await task();
-  await AsyncStorage.setItem(key, JSON.stringify(value));
+  await AsyncStorage.setItem(
+    key,
+    JSON.stringify({ value, expiresAt: now + IDEMPOTENCY_TTL_MS }),
+  );
   return { duplicate: false, value };
 }
 

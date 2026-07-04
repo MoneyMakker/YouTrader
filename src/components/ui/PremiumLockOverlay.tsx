@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { Lock } from "lucide-react-native";
+import { t } from "../../i18n";
 import { GlassCard } from "./GlassCard";
 import { lightHaptic } from "./haptics";
 import { C } from "../../theme/colors";
@@ -18,7 +19,7 @@ type Props = {
 export function PremiumLockOverlay({
   title,
   subtitle,
-  cta = "Upgrade to Pro",
+  cta = t("upgradeToPro"),
   secondary,
   onUpgrade,
   onSecondary,

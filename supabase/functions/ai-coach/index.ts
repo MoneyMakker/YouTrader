@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { corsHeadersFor, jsonResponse } from "../_shared/cors.ts";
-import { checkAIQuota, recordAIUsage } from "../_shared/aiQuota.ts";
+import { checkAIQuota, recordAIUsage, DAILY_AI_LIMIT_MESSAGE } from "../_shared/aiQuota.ts";
 import { generateAI } from "../_shared/aiProvider.ts";
 import { isAICoachAction, type AICoachRequest } from "../_shared/aiSchemas.ts";
 
@@ -96,39 +96,12 @@ Deno.serve(async (req) => {
 
   const quota = await checkAIQuota(supabaseAdmin, userData.user.id, body.action);
   if (!quota.allowed) {
-    const isCooldown = quota.reason === "cooldown";
-    if (!isCooldown) {
-      const result = await generateAI(
-        {
-          action: body.action,
-          period: body.period || "day",
-          payload: body.payload || {},
-        },
-        false,
-      );
-      return jsonResponse({
-        data: result.data,
-        providerStatus: "quota_exceeded",
-        usedFallback: true,
-        message: "Your monthly AI allowance has been used. AI features will automatically reset after your next billing cycle.",
-        rag: result.retrieval ? {
-          sources: result.retrieval.sources,
-          confidence: result.retrieval.confidence,
-          lowConfidence: result.retrieval.lowConfidence,
-        } : undefined,
-        quota: {
-          remaining: 0,
-          limit: quota.limit,
-        },
-      }, 200, req);
-    }
     return jsonResponse(
       {
-        error: isCooldown ? "cooldown" : "quota_exceeded",
-        message: isCooldown
-          ? `Please wait ${quota.retryAfterSeconds || 60} seconds before generating this AI coach again.`
-          : "Your monthly AI allowance has been used. AI features will automatically reset after your next billing cycle.",
+        error: "quota_exceeded",
+        message: quota.message || DAILY_AI_LIMIT_MESSAGE,
         providerStatus: "quota_exceeded",
+        quota: { remaining: 0, limit: quota.limit },
       },
       429,
       req,

@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 type Impact = "HIGH" | "MED" | "LOW";
 type Asset = "ES" | "NQ" | "GOLD" | "OIL" | "BTC" | "ETH";
 type Bias = "LONG" | "SHORT" | "NEUTRAL";
@@ -67,7 +69,7 @@ export function mapFinnhubEconomicRows(
     })
     .map((row, index) => {
       const parsed = parseFinnhubTime(row.time);
-      const name = String(row.event || "Economic event");
+      const name = String(row.event || t("fallbackEconomicEvent"));
       const text = `${name} ${row.country || ""}`;
       return {
         id: `${parsed.date || "event"}-${index}-${name.slice(0, 24)}`,

@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 type TradeLike = {
   date?: string;
   pnl?: number;
@@ -19,7 +21,15 @@ export type Achievement = {
   unlocked: boolean;
   status: "unlocked" | "next_target" | "locked";
 };
-export type TraderLevel = { title: string; phrase: string; score: number; topLabel: string; nextLevel?: string; nextAction?: string };
+export type TraderLevel = {
+  titleKey: "Rookie" | "Consistent" | "Funded" | "Elite";
+  title: string;
+  phrase: string;
+  score: number;
+  topLabel: string;
+  nextLevel?: string;
+  nextAction?: string;
+};
 
 function formatProgress(progress: number, target: number) {
   return `${Math.min(Math.round(progress), target)} / ${target}`;
@@ -111,25 +121,63 @@ export function calculateAchievements(input: {
   const discipline = Math.max(Number(input.drawdownControl ?? input.riskControl ?? 0), riskDisciplineStreak(trades));
 
   return [
-    achievement("first_trade", "First Trade Logged", "Log your first trade", "journal", count, 1),
-    achievement("first_10_trades", "10 Trades Logged", "Log 10 trades", "journal", count, 10),
-    achievement("green_100", "100 Green Trades", "Close 100 green trades", "performance", greenTrades, 100),
-    achievement("green_days_10", "10 Green Days", "Finish 10 days green", "performance", greenDays, 10),
-    achievement("first_green_week", "First Green Week", "Finish one week green", "performance", greenWeeks, 1),
-    achievement("five_r_trade", "5R Trade", "Log a 5R trade", "performance", bestR * 100, 500),
-    achievement("pass_eval", "Pass Eval", "Reach 85 prop survival score", "prop_firm", Math.round(input.propSurvivalScore), 85),
-    achievement("no_revenge_week", "No Revenge Trading Week", "Keep 5 clean sessions", "risk", riskDisciplineStreak(trades), 5),
-    achievement("risk_streak", "Risk Discipline Streak", "Keep discipline score above 70", "risk", Math.round(discipline), 70),
-    achievement("equity_high", "New Equity High", "Build positive monthly P&L", "performance", Math.max(0, input.bestMonthPnl), 1),
-    achievement("first_1k_month", "First $1K Month", "Reach $1,000 in a month", "performance", Math.max(0, input.bestMonthPnl), 1000),
-    achievement("first_10k_month", "First $10K Month", "Reach $10,000 in a month", "performance", Math.max(0, input.bestMonthPnl), 10000),
-    achievement("top_20_trader", "Top 20% Trader", "Reach Trading Score 70", "performance", Math.round(input.tradingScore), 70),
-    achievement("one_step_funding", "One Step From Funding", "Keep prop target remaining under 10%", "prop_firm", Math.max(0, 10 - Number(input.propTargetRemainingPct ?? 10)), 10),
+    achievement("first_trade", t("achFirstTradeTitle"), t("achFirstTradeCond"), "journal", count, 1),
+    achievement("first_10_trades", t("ach10TradesTitle"), t("ach10TradesCond"), "journal", count, 10),
+    achievement("green_100", t("ach100GreenTitle"), t("ach100GreenCond"), "performance", greenTrades, 100),
+    achievement("green_days_10", t("ach10GreenDaysTitle"), t("ach10GreenDaysCond"), "performance", greenDays, 10),
+    achievement("first_green_week", t("achFirstGreenWeekTitle"), t("achFirstGreenWeekCond"), "performance", greenWeeks, 1),
+    achievement("five_r_trade", t("ach5RTitle"), t("ach5RCond"), "performance", bestR * 100, 500),
+    achievement("pass_eval", t("achPassEvalTitle"), t("achPassEvalCond"), "prop_firm", Math.round(input.propSurvivalScore), 85),
+    achievement("no_revenge_week", t("achNoRevengeTitle"), t("achNoRevengeCond"), "risk", riskDisciplineStreak(trades), 5),
+    achievement("risk_streak", t("achRiskStreakTitle"), t("achRiskStreakCond"), "risk", Math.round(discipline), 70),
+    achievement("equity_high", t("achEquityHighTitle"), t("achEquityHighCond"), "performance", Math.max(0, input.bestMonthPnl), 1),
+    achievement("first_1k_month", t("ach1KMonthTitle"), t("ach1KMonthCond"), "performance", Math.max(0, input.bestMonthPnl), 1000),
+    achievement("first_10k_month", t("ach10KMonthTitle"), t("ach10KMonthCond"), "performance", Math.max(0, input.bestMonthPnl), 10000),
+    achievement("top_20_trader", t("achTop20Title"), t("achTop20Cond"), "performance", Math.round(input.tradingScore), 70),
+    achievement("one_step_funding", t("achOneStepTitle"), t("achOneStepCond"), "prop_firm", Math.max(0, 10 - Number(input.propTargetRemainingPct ?? 10)), 10),
   ];
 }
+
 export function traderLevelFromScore(score: number, _selectedDate?: string): TraderLevel {
-  if (score >= 88) return { title: "Elite", phrase: "Your process is behaving like a professional desk.", score, topLabel: "Top 5%", nextAction: "Protect size and consistency." };
-  if (score >= 76) return { title: "Funded", phrase: "Your edge is strong enough to protect like funded capital.", score, topLabel: "Top 10%", nextLevel: "Elite", nextAction: "Reduce drawdown and keep clean execution." };
-  if (score >= 58) return { title: "Consistent", phrase: "Your edge is forming. Protect risk and repeat the best setups.", score, topLabel: "Top 25%", nextLevel: "Funded", nextAction: "Improve profit factor and green-day consistency." };
-  return { title: "Rookie", phrase: "Keep logging trades to reveal your edge.", score, topLabel: "", nextLevel: "Consistent", nextAction: "Log more trades and control risk per setup." };
+  if (score >= 88) {
+    return {
+      titleKey: "Elite",
+      title: t("levelEliteTitle"),
+      phrase: t("levelElitePhrase"),
+      score,
+      topLabel: t("levelTop5"),
+      nextAction: t("levelEliteAction"),
+    };
+  }
+  if (score >= 76) {
+    return {
+      titleKey: "Funded",
+      title: t("levelFundedTitle"),
+      phrase: t("levelFundedPhrase"),
+      score,
+      topLabel: t("levelTop10"),
+      nextLevel: t("levelEliteTitle"),
+      nextAction: t("levelFundedAction"),
+    };
+  }
+  if (score >= 58) {
+    return {
+      titleKey: "Consistent",
+      title: t("levelConsistentTitle"),
+      phrase: t("levelConsistentPhrase"),
+      score,
+      topLabel: t("levelTop25"),
+      nextLevel: t("levelFundedTitle"),
+      nextAction: t("levelConsistentAction"),
+    };
+  }
+  return {
+    titleKey: "Rookie",
+    title: t("levelRookieTitle"),
+    phrase: t("levelRookiePhrase"),
+    score,
+    topLabel: "",
+    nextLevel: t("levelConsistentTitle"),
+    nextAction: t("levelRookieAction"),
+  };
 }

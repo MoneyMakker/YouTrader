@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export type AiInsightCategory =
   | "risk"
   | "discipline"
@@ -276,18 +278,18 @@ const gradeForScore = (score: number): AiWeeklyReport["grade"] =>
   score >= 82 ? "A" : score >= 68 ? "B" : score >= 52 ? "C" : "D";
 
 const fallbackBehavior = (stats: StatsLike, prop?: PropContext) => {
-  if ((prop?.bufferPct || 0) >= 70) return "You protected the prop-firm buffer.";
-  if (stats.pf >= 1.5) return "Winners paid for losses with a healthy profit factor.";
-  if (stats.consistency >= 70) return "Execution stayed consistent across the sample.";
-  return "You kept building journal evidence instead of trading blind.";
+  if ((prop?.bufferPct || 0) >= 70) return t("aiInsightProtectedBuffer");
+  if (stats.pf >= 1.5) return t("aiInsightHealthyPf");
+  if (stats.consistency >= 70) return t("aiInsightConsistentExecution");
+  return t("aiInsightBuildingEvidence");
 };
 
 const fallbackMistake = (stats: StatsLike, patterns?: AiInsightEngineInput["patterns"]) => {
   if (patterns?.risks?.[0]?.title) return patterns.risks[0].title;
-  if (stats.avgWinLoss && stats.avgWinLoss < 1) return "Average loss is larger than average win.";
-  if (stats.maxDd < 0) return `Drawdown reached ${money(stats.maxDd)}.`;
-  if (stats.pf > 0 && stats.pf < 1) return "Profit factor is below 1.00.";
-  return "No major mistake detected yet.";
+  if (stats.avgWinLoss && stats.avgWinLoss < 1) return t("aiInsightAvgLossLarger");
+  if (stats.maxDd < 0) return t("aiInsightDrawdownReached", { amount: money(stats.maxDd) });
+  if (stats.pf > 0 && stats.pf < 1) return t("aiInsightPfBelowOne");
+  return t("aiInsightNoMajorMistake");
 };
 
 function createInsight(input: Omit<AiInsight, "id" | "createdAt" | "relatedInsightIds"> & { createdAt: string }): AiInsight {
@@ -363,7 +365,7 @@ export function buildAiWeeklyReport(input: AiInsightEngineInput): AiWeeklyReport
           ? "Prop-firm buffer is in caution mode. Reduce size."
           : stats.maxDd < 0
             ? `Drawdown reached ${money(stats.maxDd)}. Protect downside first.`
-            : "No urgent risk warning. Keep size stable.");
+            : t("aiInsightNoUrgentRisk"));
   const nextWeekFocus =
     prop?.primaryAction ||
     (worstSession && worstSession.pnl < 0
@@ -387,11 +389,11 @@ export function buildAiWeeklyReport(input: AiInsightEngineInput): AiWeeklyReport
     profitFactor: stats.pf,
     expectancy: stats.exp,
     tradeCount: stats.count,
-    bestDay: rowLabel(bestDay, "Need more days"),
-    worstDay: rowLabel(worstDay, "Need more days"),
-    bestSession: rowLabel(bestSession, "Need session data"),
-    worstSession: rowLabel(worstSession, "Need session data"),
-    bestSymbol: rowLabel(bestSymbol, "Need symbol data"),
+    bestDay: rowLabel(bestDay, t("aiInsightNeedMoreDays")),
+    worstDay: rowLabel(worstDay, t("aiInsightNeedMoreDays")),
+    bestSession: rowLabel(bestSession, t("aiInsightNeedSessionData")),
+    worstSession: rowLabel(worstSession, t("aiInsightNeedSessionData")),
+    bestSymbol: rowLabel(bestSymbol, t("aiInsightNeedSymbolData")),
     biggestMistake: fallbackMistake(stats, patterns),
     bestBehavior: patterns?.strengths?.[0]?.title || fallbackBehavior(stats, prop),
     mainRiskWarning,

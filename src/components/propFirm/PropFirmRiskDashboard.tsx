@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Path } from "react-native-svg";
+import { t } from "../../i18n";
 import { C } from "../../theme/colors";
 import type { PropFirmPhase, PropFirmTemplate, PropRiskEngineResult, PropRiskWarning } from "../../propFirm/types";
 
@@ -108,7 +109,7 @@ function Section({
     <View style={[styles.section, locked && styles.sectionLocked]}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {subtitle ? <Text style={styles.sectionSub}>{subtitle}</Text> : null}
-      {locked ? <Text style={styles.lockedHint}>Upgrade to YouTrader Pro for full Prop Firm Risk Assistant.</Text> : children}
+      {locked ? <Text style={styles.lockedHint}>{t("propUpgradeProHint")}</Text> : children}
     </View>
   );
 }
@@ -144,14 +145,14 @@ export function PropFirmRiskDashboard({
     <View style={styles.root}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.heroTitle}>Prop Firm Risk Assistant</Text>
+          <Text style={styles.heroTitle}>{t("propFirmRiskAssistant")}</Text>
           <Text style={styles.heroSub}>
             {result.template.company} • {result.template.accountName}
-            {!isPremium ? " • Preview" : ""}
+            {!isPremium ? ` • ${t("propPreview")}` : ""}
           </Text>
         </View>
         <ScoreRing
-          label="HEALTH"
+          label={t("propHealthLabel")}
           value={result.accountHealthScore}
           display={`${result.accountHealthScore}`}
           color={result.statusColor}
@@ -180,25 +181,34 @@ export function PropFirmRiskDashboard({
           return (
             <Pressable key={item} onPress={() => onPhaseChange(item)} style={[styles.phaseChip, active && styles.phaseChipActive]}>
               <Text style={[styles.phaseText, active && { color: C.bg }]}>
-                {item === "evaluation" ? "Eval" : item === "challenge" ? "Challenge" : item === "funded" ? "Funded" : "Live"}
+                {item === "evaluation"
+                  ? t("propPhaseEval")
+                  : item === "challenge"
+                    ? t("propPhaseChallenge")
+                    : item === "funded"
+                      ? t("funded")
+                      : t("propPhaseLive")}
               </Text>
             </Pressable>
           );
         })}
       </View>
 
-      <Section title="Account Health Score" subtitle={`Grade ${result.accountHealthGrade} • ${result.primaryAction}`}>
+      <Section
+        title={t("propAccountHealthScore")}
+        subtitle={t("propAccountHealthSubtitle", { grade: result.accountHealthGrade, action: result.primaryAction })}
+      >
         <View style={styles.metricGrid}>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Status</Text>
+            <Text style={styles.metricLabel}>{t("statusLabel")}</Text>
             <Text style={[styles.metricValue, { color: result.statusColor }]}>{result.status}</Text>
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Survival</Text>
+            <Text style={styles.metricLabel}>{t("propSurvival")}</Text>
             <Text style={styles.metricValue}>{result.riskForecast.survivalProbability}%</Text>
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Trend</Text>
+            <Text style={styles.metricLabel}>{t("propTrend")}</Text>
             <Text style={[styles.metricValue, { color: result.riskForecast.trend === "declining" ? C.red : result.riskForecast.trend === "improving" ? C.green : C.sub }]}>
               {result.riskForecast.trend.toUpperCase()}
             </Text>
@@ -207,27 +217,32 @@ export function PropFirmRiskDashboard({
         <Text style={styles.coachLine}>{result.coachMessage}</Text>
       </Section>
 
-      <Section title="Today's Risk" subtitle={`Day P&L ${result.todayRisk.dayPnl >= 0 ? "+" : ""}$${Math.abs(result.todayRisk.dayPnl).toFixed(0)}`}>
+      <Section
+        title={t("propTodaysRisk")}
+        subtitle={t("propTodaysRiskSubtitle", {
+          pnl: `${result.todayRisk.dayPnl >= 0 ? "+" : ""}$${Math.abs(result.todayRisk.dayPnl).toFixed(0)}`,
+        })}
+      >
         <RiskBar
-          label="Daily loss buffer remaining"
+          label={t("propDailyLossBufferRemaining")}
           value={result.todayRisk.remainingDailyLoss}
           max={result.todayRisk.dailyLimit}
           tone={result.todayRisk.level === "STOP" ? "red" : result.todayRisk.level === "HIGH" ? "yellow" : "green"}
         />
         <Text style={styles.smallMeta}>
-          {result.todayRisk.pctUsed}% of today's limit used • Level {result.todayRisk.level}
+          {t("propDayLimitUsed", { pct: result.todayRisk.pctUsed, level: result.todayRisk.level })}
         </Text>
       </Section>
 
       <Section
-        title="Remaining Drawdown"
-        subtitle={result.remainingDrawdown.drawdownType === "trailing" ? "Trailing drawdown" : "Static drawdown"}
+        title={t("propRemainingDrawdown")}
+        subtitle={result.remainingDrawdown.drawdownType === "trailing" ? t("propTrailingDrawdown") : t("propStaticDrawdown")}
         locked={!isPremium}
       >
         {!isPremium ? null : (
           <>
             <RiskBar
-              label="Account buffer remaining"
+              label={t("propAccountBufferRemaining")}
               value={result.remainingDrawdown.amount}
               max={result.remainingDrawdown.limit}
               tone={result.remainingDrawdown.pctRemaining < 35 ? "red" : result.remainingDrawdown.pctRemaining < 55 ? "yellow" : "purple"}
@@ -237,8 +252,8 @@ export function PropFirmRiskDashboard({
                 warning={{
                   id: "trail",
                   severity: "high",
-                  title: "Trailing drawdown is tightening",
-                  body: "Losses reduce remaining room immediately on trailing accounts.",
+                  title: t("propTrailingTighteningTitle"),
+                  body: t("propTrailingTighteningBody"),
                   category: "drawdown",
                 }}
               />
@@ -247,25 +262,25 @@ export function PropFirmRiskDashboard({
         )}
       </Section>
 
-      <Section title="Challenge Progress" locked={!isPremium}>
+      <Section title={t("propChallengeProgress")} locked={!isPremium}>
         {!isPremium ? null : (
           <>
-            <RiskBar label="Profit target progress" value={result.challengeProgress.current} max={result.challengeProgress.target} tone="green" />
+            <RiskBar label={t("propProfitTargetProgress")} value={result.challengeProgress.current} max={result.challengeProgress.target} tone="green" />
             <View style={styles.metricGrid}>
               <View style={styles.metricBox}>
-                <Text style={styles.metricLabel}>Remaining</Text>
+                <Text style={styles.metricLabel}>{t("propRemaining")}</Text>
                 <Text style={styles.metricValue}>${Math.round(result.challengeProgress.remaining)}</Text>
               </View>
               <View style={styles.metricBox}>
-                <Text style={styles.metricLabel}>Trading days</Text>
+                <Text style={styles.metricLabel}>{t("propTradingDays")}</Text>
                 <Text style={styles.metricValue}>
                   {result.challengeProgress.tradingDays}/{result.challengeProgress.minTradingDays || "—"}
                 </Text>
               </View>
               <View style={styles.metricBox}>
-                <Text style={styles.metricLabel}>Min days</Text>
+                <Text style={styles.metricLabel}>{t("propMinDays")}</Text>
                 <Text style={[styles.metricValue, { color: result.challengeProgress.minDaysMet ? C.green : C.yellow }]}>
-                  {result.challengeProgress.minDaysMet ? "MET" : "NEED"}
+                  {result.challengeProgress.minDaysMet ? t("propMet") : t("propNeed")}
                 </Text>
               </View>
             </View>
@@ -273,38 +288,38 @@ export function PropFirmRiskDashboard({
         )}
       </Section>
 
-      <Section title="Payout Readiness" locked={!isPremium}>
+      <Section title={t("propPayoutReadiness")} locked={!isPremium}>
         {!isPremium ? null : (
           <>
-            <RiskBar label="Payout readiness" value={result.payoutReadiness.pct} max={100} tone={result.payoutReadiness.ready ? "green" : "purple"} />
+            <RiskBar label={t("propPayoutReadinessBar")} value={result.payoutReadiness.pct} max={100} tone={result.payoutReadiness.ready ? "green" : "purple"} />
             <Text style={styles.coachLine}>{result.payoutReadiness.message}</Text>
           </>
         )}
       </Section>
 
-      <Section title="Rule Warnings" locked={!isPremium}>
+      <Section title={t("propRuleWarnings")} locked={!isPremium}>
         {!isPremium ? null : (
           <View style={{ gap: 10 }}>
             {result.ruleWarnings.length ? result.ruleWarnings.map((warning) => <WarningCard key={warning.id} warning={warning} />) : (
-              <Text style={styles.sectionSub}>No active rule warnings. Keep discipline steady.</Text>
+              <Text style={styles.sectionSub}>{t("propNoRuleWarnings")}</Text>
             )}
           </View>
         )}
       </Section>
 
-      <Section title="Contract Recommendation" locked={!isPremium}>
+      <Section title={t("propContractRecommendation")} locked={!isPremium}>
         {!isPremium ? null : (
           <View style={styles.metricGrid}>
             <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>Current avg</Text>
+              <Text style={styles.metricLabel}>{t("propCurrentAvg")}</Text>
               <Text style={styles.metricValue}>{result.contractRecommendation.currentAvg}</Text>
             </View>
             <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>Recommended</Text>
+              <Text style={styles.metricLabel}>{t("propRecommended")}</Text>
               <Text style={[styles.metricValue, { color: C.green }]}>{result.contractRecommendation.recommended}</Text>
             </View>
             <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>Firm max</Text>
+              <Text style={styles.metricLabel}>{t("propFirmMax")}</Text>
               <Text style={styles.metricValue}>{result.contractRecommendation.maxAllowed}</Text>
             </View>
           </View>
@@ -312,20 +327,22 @@ export function PropFirmRiskDashboard({
         {!isPremium ? null : <Text style={styles.coachLine}>{result.contractRecommendation.reason}</Text>}
       </Section>
 
-      <Section title="Risk Forecast" locked={!isPremium}>
+      <Section title={t("propRiskForecast")} locked={!isPremium}>
         {!isPremium ? null : (
           <>
             <TrendMiniChart values={forecastTrend} />
             <Text style={styles.coachLine}>
-              Top risk: {result.riskForecast.topRisk}
-              {result.riskForecast.daysToPass ? ` • Est. pass window ${result.riskForecast.daysToPass} days` : ""}
+              {t("propTopRisk", {
+                risk: result.riskForecast.topRisk,
+                days: result.riskForecast.daysToPass ? t("propEstPassWindow", { days: result.riskForecast.daysToPass }) : "",
+              })}
             </Text>
           </>
         )}
       </Section>
 
       {isPremium && result.emergencyAlerts.length ? (
-        <Section title="Emergency Alerts">
+        <Section title={t("propEmergencyAlerts")}>
           {result.emergencyAlerts.map((warning) => (
             <WarningCard key={warning.id} warning={warning} />
           ))}
@@ -333,19 +350,22 @@ export function PropFirmRiskDashboard({
       ) : null}
 
       <Pressable onPress={() => setShowOverridesHint((v) => !v)} style={styles.metaBtn}>
-        <Text style={styles.metaBtnText}>{showOverridesHint ? "Hide firm metadata" : "Firm rule source"}</Text>
+        <Text style={styles.metaBtnText}>{showOverridesHint ? t("propHideFirmMetadata") : t("propFirmRuleSource")}</Text>
       </Pressable>
       {showOverridesHint ? (
         <View style={styles.metaBox}>
           <Text style={styles.sectionSub}>
-            Last verified: {result.template.lastVerified || "Pending"} • Drawdown: {result.remainingDrawdown.drawdownType}
+            {t("propLastVerified", {
+              date: result.template.lastVerified || t("propPending"),
+              type: result.remainingDrawdown.drawdownType,
+            })}
           </Text>
           {result.template.sourceUrl ? (
             <Pressable onPress={() => Linking.openURL(result.template.sourceUrl!)}>
               <Text style={[styles.metaLink, { color: C.purple }]}>{result.template.sourceUrl}</Text>
             </Pressable>
           ) : (
-            <Text style={styles.sectionSub}>Custom firm — user overrides apply in Settings.</Text>
+            <Text style={styles.sectionSub}>{t("propCustomFirmOverrides")}</Text>
           )}
         </View>
       ) : null}

@@ -6,6 +6,7 @@ import {
   PRIVACY_POLICY_URL,
   TERMS_OF_USE_EULA_URL,
 } from "../../config/legalUrls";
+import { t } from "../../i18n";
 
 const C = {
   text: "#F4F4F5",
@@ -19,21 +20,21 @@ const YEARLY_FALLBACK = { title: "YouTrader Pro Yearly", duration: "1 year", pri
 
 function productDuration(productId: string) {
   const id = productId.toLowerCase();
-  if (id.includes("year") || id.includes("annual")) return "1 year";
-  return "1 month";
+  if (id.includes("year") || id.includes("annual")) return t("subDurationYear");
+  return t("subDurationMonth");
 }
 
 function formatProductPrice(product?: PurchasesStoreProduct | null, fallback = MONTHLY_FALLBACK.price) {
   if (!product?.priceString) return fallback;
   const duration = productDuration(product.identifier);
-  return duration === "1 year" ? `${product.priceString}/year` : `${product.priceString}/month`;
+  return duration === t("subDurationYear") ? `${product.priceString}${t("subPerYear")}` : `${product.priceString}${t("subPerMonth")}`;
 }
 
 function formatPackagePrice(pkg?: PurchasesPackage | null, fallback = MONTHLY_FALLBACK.price) {
   if (!pkg?.product?.priceString) return fallback;
   const id = `${pkg.identifier} ${pkg.product.identifier}`.toLowerCase();
   const yearly = id.includes("year") || id.includes("annual");
-  return yearly ? `${pkg.product.priceString}/year` : `${pkg.product.priceString}/month`;
+  return yearly ? `${pkg.product.priceString}${t("subPerYear")}` : `${pkg.product.priceString}${t("subPerMonth")}`;
 }
 
 function packageTitle(pkg: PurchasesPackage) {
@@ -60,36 +61,32 @@ export function SubscriptionLegalDisclosure({
 }: Props) {
   const monthly = {
     title: monthlyPackage ? packageTitle(monthlyPackage) : MONTHLY_FALLBACK.title,
-    duration: "1 month",
+    duration: t("subDurationMonth"),
     price: formatPackagePrice(monthlyPackage, formatProductPrice(monthlyProduct, MONTHLY_FALLBACK.price)),
   };
   const yearly = {
     title: yearlyPackage ? packageTitle(yearlyPackage) : YEARLY_FALLBACK.title,
-    duration: "1 year",
+    duration: t("subDurationYear"),
     price: formatPackagePrice(yearlyPackage, formatProductPrice(yearlyProduct, YEARLY_FALLBACK.price)),
   };
 
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
-      <Text style={styles.heading}>Auto-renewable subscriptions</Text>
+      <Text style={styles.heading}>{t("subAutoRenewHeading")}</Text>
       <Text style={styles.line}>
         • {monthly.title} — {monthly.duration} — {monthly.price}
       </Text>
       <Text style={styles.line}>
         • {yearly.title} — {yearly.duration} — {yearly.price}
       </Text>
-      <Text style={styles.disclosure}>
-        Payment is charged to your Apple ID at confirmation of purchase. Subscription automatically renews unless
-        canceled at least 24 hours before the end of the current period. Your account is charged for renewal within
-        24 hours before the current period ends. Manage or cancel in App Store account settings.
-      </Text>
+      <Text style={styles.disclosure}>{t("subDisclosure")}</Text>
       <View style={styles.linkRow}>
-        <Pressable onPress={() => openLegalUrl(PRIVACY_POLICY_URL, "Privacy Policy")}>
-          <Text style={styles.link}>Privacy Policy</Text>
+        <Pressable onPress={() => openLegalUrl(PRIVACY_POLICY_URL, t("authPrivacyLabel"))}>
+          <Text style={styles.link}>{t("authPrivacyLabel")}</Text>
         </Pressable>
         <Text style={styles.sep}>•</Text>
-        <Pressable onPress={() => openLegalUrl(TERMS_OF_USE_EULA_URL, "Terms of Use (EULA)")}>
-          <Text style={styles.link}>Terms of Use (EULA)</Text>
+        <Pressable onPress={() => openLegalUrl(TERMS_OF_USE_EULA_URL, t("subTermsEula"))}>
+          <Text style={styles.link}>{t("subTermsEula")}</Text>
         </Pressable>
       </View>
     </View>

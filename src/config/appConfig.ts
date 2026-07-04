@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
+import { t } from "../i18n";
 
 const PLACEHOLDER_SNIPPETS = [
   "your_project",
@@ -60,6 +61,7 @@ export const supabase = isSupabaseConfigured
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        flowType: "pkce",
       },
     })
   : null;
@@ -94,10 +96,36 @@ export const isRevenueCatConfigured =
 export const enableCloudSignIn =
   process.env.EXPO_PUBLIC_ENABLE_CLOUD_SIGN_IN === "true";
 
-/** Prefer native Apple on iOS when Supabase is live — avoids browser OAuth during review. */
+export const IOS_BUNDLE_IDENTIFIER =
+  Constants.expoConfig?.ios?.bundleIdentifier || "com.youtrader.pro";
+
+/** iOS always uses native Apple sign-in (signInWithIdToken), never browser OAuth. */
 export const enableNativeAppleSignIn =
-  process.env.EXPO_PUBLIC_ENABLE_NATIVE_APPLE_SIGN_IN === "true" ||
-  (Platform.OS === "ios" && isSupabaseConfigured && enableCloudSignIn);
+  Platform.OS === "ios" && isSupabaseConfigured;
+
+function resolveGoogleClientId(envKey: string): string {
+  const value = (process.env[envKey] || "").trim();
+  if (looksLikePlaceholder(value)) return "";
+  if (!value.endsWith(".apps.googleusercontent.com")) return "";
+  return value;
+}
+
+/** Web OAuth client ID — required for native Google idToken on iOS. */
+export const GOOGLE_WEB_CLIENT_ID = resolveGoogleClientId(
+  "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID",
+);
+
+/** iOS OAuth client ID — bundle-linked native Google Sign-In. */
+export const GOOGLE_IOS_CLIENT_ID = resolveGoogleClientId(
+  "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID",
+);
+
+export const isGoogleNativeSignInConfigured =
+  !!GOOGLE_WEB_CLIENT_ID && !!GOOGLE_IOS_CLIENT_ID;
+
+/** Native Google on iOS dev/TestFlight/App Store builds (not Expo Go). */
+export const enableNativeGoogleSignIn =
+  Platform.OS === "ios" && !isExpoGo && isGoogleNativeSignInConfigured;
 
 export function userFacingBillingError(message?: string) {
   if (!message) return "";
@@ -111,12 +139,18 @@ export function userFacingBillingError(message?: string) {
     lower.includes("product not found") ||
     lower.includes("no subscription packages found")
   ) {
-    return "Subscriptions are temporarily unavailable. Please try again in a moment.";
+    return t("subsTemporarilyUnavailable");
   }
   if (message.length > 140) {
-    return "Unable to load subscriptions right now. Try again in a moment.";
+    return t("subsUnableToLoad");
   }
   return message;
+}
+
+export function appVersionDisplayLabel() {
+  const version = Constants.expoConfig?.version || "1.5.8";
+  const build = Constants.expoConfig?.ios?.buildNumber || "76";
+  return `Version ${version} (${build})`;
 }
 
 export function releaseConfigSummary() {
@@ -127,5 +161,6 @@ export function releaseConfigSummary() {
     finnhub: !!(process.env.EXPO_PUBLIC_FINNHUB_API_KEY || "").trim() && !looksLikePlaceholder(process.env.EXPO_PUBLIC_FINNHUB_API_KEY || ""),
     cloudSignIn: enableCloudSignIn,
     nativeApple: enableNativeAppleSignIn,
+    nativeGoogle: enableNativeGoogleSignIn,
   };
 }

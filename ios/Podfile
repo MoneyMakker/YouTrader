@@ -23,6 +23,10 @@ prepare_react_native_project!
 target 'YouTrader' do
   use_expo_modules!
 
+  # AppCheckCore (Google Sign-In) needs module maps for these Obj-C dependencies when linked as static libraries.
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'RecaptchaInterop', :modular_headers => true
+
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else

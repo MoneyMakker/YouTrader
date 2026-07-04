@@ -1,4 +1,5 @@
-import { Alert, Linking } from "react-native";
+import { Alert } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 
 export const APPLE_STANDARD_EULA_URL =
   "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
@@ -26,9 +27,10 @@ export const TERMS_OF_USE_EULA_URL = resolveUrl(
 
 export async function openLegalUrl(url: string, label: string) {
   try {
-    const supported = await Linking.canOpenURL(url);
-    if (!supported) throw new Error("unsupported");
-    await Linking.openURL(url);
+    await WebBrowser.openBrowserAsync(url, {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+      controlsColor: "#A3FF12",
+    });
   } catch {
     Alert.alert(label, `Unable to open ${url}. Please try again later.`);
   }
