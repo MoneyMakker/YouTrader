@@ -26,7 +26,6 @@ import {
   signUpWithEmailPassword,
   updateUserEmail,
   updateUserPassword,
-  userHasPasswordSet,
 } from "./src/auth/emailPasswordAuth";
 import { EMAIL_PASSWORD_MESSAGES } from "./src/auth/emailPasswordMessages";
 import { buildLocalizedLocalCoachAnalysis } from "./src/i18n/localCoachAnalysis";
@@ -49,6 +48,7 @@ import {
   Easing,
   FlatList,
   Image,
+  InteractionManager,
   KeyboardAvoidingView,
   Linking,
   LogBox,
@@ -86,7 +86,6 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
-import { StatCardExportHost } from "./src/components/insights/shareCard/StatCardExportHost";
 import { AuthScreen } from "./src/auth/AuthScreen";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./src/auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "./src/auth/userCache";
@@ -97,9 +96,10 @@ import { alertExportError } from "./src/utils/alertExportError";
 import { parseTradesCsvText } from "./src/utils/importTradesCsv";
 import { readCsvFileAsText } from "./src/utils/readCsvFile";
 import { scheduleDailyPropRiskNotification } from "./src/utils/propRiskNotification";
-import { clearLocalReminder, configureNotificationHandler, scheduleLocalReminder } from "./src/notifications/push";
+import { configureNotificationHandler } from "./src/notifications/push";
+import { LOCK_SCREEN_BUFFER_KEY } from "./src/notifications/dailyTradingBrief";
 import { SmartNotificationsSection } from "./src/notifications/SmartNotificationsSection";
-import { evaluateSmartPushConditions, syncSmartPushSchedules } from "./src/notifications/smartAlerts";
+import { SettingsAccountSection } from "./src/components/settings/SettingsAccountSection";
 import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "./src/api/finnhubCalendar";
 import {
   analyzeTrades,
@@ -126,9 +126,10 @@ import {
 } from "./src/api/aiCoach";
 import { trackEvent, trackScreen } from "./src/observability/analytics";
 import { identifyAnalyticsUser, resetAnalyticsUser } from "./src/lib/analytics";
-import { captureAppError, initializeMonitoring, logCrashlyticsBreadcrumb, wrapAppWithSentry } from "./src/observability/monitoring";
+import { captureAppError, logCrashlyticsBreadcrumb, scheduleMonitoringInit, wrapAppWithSentry } from "./src/observability/monitoring";
 import { recordMetric } from "./src/observability/metrics";
-import { posthogClient } from "./src/lib/posthog";
+import { getPosthogClient } from "./src/lib/posthog";
+import { logStartupPerf, markAppStart } from "./src/lib/startupPerf";
 import { logger } from "./src/lib/logger";
 import {
   enableCloudSignIn,
@@ -242,8 +243,14 @@ if (isExpoGo && __DEV__) {
 }
 
 WebBrowser.maybeCompleteAuthSession();
-initializeMonitoring();
 configureNotificationHandler();
+markAppStart();
+
+const LazyStatCardExportHost = React.lazy(() =>
+  import("./src/components/insights/shareCard/StatCardExportHost").then((mod) => ({
+    default: mod.StatCardExportHost,
+  })),
+);
 
 type Tab = "journal" | "stats" | "ai" | "calendar" | "news" | "calc" | "settings";
 type Direction = "LONG" | "SHORT";
@@ -403,11 +410,8 @@ const BILLING_DEBUG_LOGS = __DEV__ || process.env.EXPO_PUBLIC_BILLING_DEBUG_LOGS
 const ENTITLEMENT_RETRY_DELAYS_MS = [0, 900, 1800, 3200];
 const TRADES_STORAGE_KEY = GUEST_TRADES_STORAGE_KEY;
 const LANG_STORAGE_KEY = "lang-v1";
-const LOCK_SCREEN_BUFFER_KEY = "prop-lock-screen-v1";
 /** @deprecated Journal day limit removed — free users log unlimited days; Pro unlocks media/sync/analytics. */
 const FREE_JOURNAL_DAYS = 10;
-const PROP_RISK_ALERT_ID_KEY = "prop-risk-alert-notification-id-v1";
-const CALENDAR_ALERT_ID_KEY = "calendar-alert-notification-id-v1";
 const MAX_SYMBOL_LENGTH = 12;
 const MAX_NOTES_LENGTH = 2000;
 const MAX_MOOD_LENGTH = 32;
@@ -8482,11 +8486,9 @@ function SettingsScreen({
   cloudSyncStatus,
   cloudSyncMessage,
   lastCloudSyncAt,
-  lockScreenBufferEnabled,
   onPurchase,
   onRestore,
   onSyncNow,
-  onToggleLockScreenBuffer,
   onImportTradesCsv,
   onSignIn,
   onSignOut,
@@ -8494,6 +8496,7 @@ function SettingsScreen({
   onChangeEmail,
   calendarEvents,
   onUpgrade,
+  refreshDailyPropBuffer,
 }: {
   lang: Lang;
   setLang: (x: Lang) => void;
@@ -8511,11 +8514,9 @@ function SettingsScreen({
   cloudSyncStatus: "off" | "syncing" | "synced" | "error";
   cloudSyncMessage: string;
   lastCloudSyncAt: string | null;
-  lockScreenBufferEnabled: boolean;
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
   onSyncNow: () => void;
-  onToggleLockScreenBuffer: (enabled: boolean) => void;
   onImportTradesCsv: () => void;
   onSignIn: (provider: AuthProvider) => void;
   onSignOut: () => void;
@@ -8523,71 +8524,12 @@ function SettingsScreen({
   onChangeEmail: (email: string) => Promise<void>;
   calendarEvents: EconEvent[];
   onUpgrade: () => void;
+  refreshDailyPropBuffer: () => Promise<void>;
 }) {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const choose = (l: Lang) => {
     void changeAppLanguage(l).then(() => setLang(l));
-  };
-  const [calendarAlertsEnabled, setCalendarAlertsEnabled] = useState(false);
-  const [propRiskAlertsEnabled, setPropRiskAlertsEnabled] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem("calendar-alerts-v1").then((v) => setCalendarAlertsEnabled(v === "on"));
-    AsyncStorage.getItem("prop-risk-alerts-v1").then((v) => setPropRiskAlertsEnabled(v === "on"));
-  }, []);
-
-  const togglePropRiskAlerts = async () => {
-    if (propRiskAlertsEnabled) {
-      await clearLocalReminder(PROP_RISK_ALERT_ID_KEY, "propDailyBufferAtRisk");
-      await AsyncStorage.setItem("prop-risk-alerts-v1", "off");
-      setPropRiskAlertsEnabled(false);
-      return;
-    }
-    const id = await scheduleLocalReminder({
-      idKey: PROP_RISK_ALERT_ID_KEY,
-      title: t("youTraderRiskCoach"),
-      body: t("riskCoachReminderBody"),
-      hour: 8,
-      minute: 15,
-      preference: "propDailyBufferAtRisk",
-    });
-    if (!id) {
-      Alert.alert(t("notifications"), t("notificationsRiskPermission"));
-      return;
-    }
-    await AsyncStorage.setItem("prop-risk-alerts-v1", "on");
-    setPropRiskAlertsEnabled(true);
-  };
-
-  const toggleCalendarAlerts = async (enabled: boolean) => {
-    setCalendarAlertsEnabled(enabled);
-    try {
-      if (!enabled) {
-        await clearLocalReminder(CALENDAR_ALERT_ID_KEY, "dailyBriefReady");
-        await AsyncStorage.setItem("calendar-alerts-v1", "off");
-        return;
-      }
-
-      const id = await scheduleLocalReminder({
-        idKey: CALENDAR_ALERT_ID_KEY,
-        title: t("youTraderEconomicCalendar"),
-        body: t("economicCalendarReminderBody"),
-        hour: 7,
-        minute: 45,
-        preference: "dailyBriefReady",
-      });
-      if (!id) {
-        setCalendarAlertsEnabled(false);
-        Alert.alert(t("notifications"), t("notificationsCalendarPermission"));
-        return;
-      }
-      await AsyncStorage.setItem("calendar-alerts-v1", "on");
-    } catch (error) {
-      setCalendarAlertsEnabled(!enabled);
-      Alert.alert(t("calendarAlertsTitle"), t("calendarAlertsUpdateFailed"));
-      captureAppError(error, { feature: "settings", action: "toggle_calendar_alerts" });
-    }
   };
 
   const legalInfo = `YouTrader: Terms of Service, Risk Disclosure & Privacy Policy
@@ -8634,47 +8576,6 @@ YouTrader does not knowingly collect data from or market to individuals under th
       <View>
         <Card style={styles.notificationsCard}>
           <Text style={[styles.h2, styles.notificationsTitle]}>{t("notifications")}</Text>
-          <View style={styles.settingsSwitchRow}>
-            <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>{t("dailyPropReminder")}</Text>
-              <Text style={styles.sub}>{t("dailyPropReminderBody")}</Text>
-            </View>
-            <Switch
-              value={lockScreenBufferEnabled}
-              onValueChange={(enabled) => onToggleLockScreenBuffer(enabled)}
-              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
-              thumbColor={lockScreenBufferEnabled ? C.purple : "#7D8795"}
-              ios_backgroundColor="#222936"
-            />
-          </View>
-          <View style={styles.settingsSwitchDividerPurple} />
-          <View style={styles.settingsSwitchRow}>
-            <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>{t("riskAlerts")}</Text>
-              <Text style={styles.sub}>{t("riskAlertsBody")}</Text>
-            </View>
-            <Switch
-              value={propRiskAlertsEnabled}
-              onValueChange={togglePropRiskAlerts}
-              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
-              thumbColor={propRiskAlertsEnabled ? C.purple : "#7D8795"}
-              ios_backgroundColor="#222936"
-            />
-          </View>
-          <View style={styles.settingsSwitchDividerPurple} />
-          <View style={styles.settingsSwitchRow}>
-            <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>{t("economicCalendarAlerts")}</Text>
-              <Text style={styles.sub}>{t("economicCalendarAlertsBody")}</Text>
-            </View>
-            <Switch
-              value={calendarAlertsEnabled}
-              onValueChange={toggleCalendarAlerts}
-              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
-              thumbColor={calendarAlertsEnabled ? C.purple : "#7D8795"}
-              ios_backgroundColor="#222936"
-            />
-          </View>
           <SmartNotificationsSection
             isPro={isPremium}
             calendarEvents={calendarEvents.map((e) => ({
@@ -8684,6 +8585,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
               name: e.name,
             }))}
             onUpgrade={onUpgrade}
+            refreshDailyPropBuffer={refreshDailyPropBuffer}
           />
         </Card>
 
@@ -8791,62 +8693,20 @@ YouTrader does not knowingly collect data from or market to individuals under th
           {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
         </GlassCard>
 
-        <Card>
-          <Text style={styles.h2}>{t("account")}</Text>
-          {session?.user ? (
-            <>
-              <Text style={styles.sub}>{t("signedInAs")}</Text>
-              <Text style={styles.settingsAccountEmail}>{session.user.email || session.user.id}</Text>
-              <Pressable
-                onPress={() => setChangeEmailOpen(true)}
-                style={[styles.secondaryBig, { marginTop: 10 }]}
-              >
-                <Text style={styles.secondaryText}>{t("authChangeEmail")}</Text>
-              </Pressable>
-              <Text style={[styles.sub, { marginTop: 10 }]}>
-                Password: {userHasPasswordSet(session) ? t("authPasswordMasked") : t("authPasswordNotSet")}
-              </Text>
-              <Pressable
-                onPress={() => setChangePasswordOpen(true)}
-                style={[styles.secondaryBig, { marginTop: 10 }]}
-              >
-                <Text style={styles.secondaryText}>{t("authChangePassword")}</Text>
-              </Pressable>
-              <Text style={[styles.sub, { marginTop: 10 }]}>
-                {cloudSyncStatus === "syncing"
-                  ? cloudSyncMessage
-                  : cloudSyncStatus === "synced"
-                    ? t("cloudSynced")
-                    : cloudSyncStatus === "error"
-                      ? cloudSyncMessage
-                      : t("cloudSyncActive")}
-              </Text>
-              {lastCloudSyncAt ? (
-                <Text style={styles.sub}>{t("lastSync")} {new Date(lastCloudSyncAt).toLocaleString()}</Text>
-              ) : null}
-              {cloudSyncEnabled ? (
-                <Pressable onPress={onSyncNow} style={[styles.secondaryBig, { marginTop: 14 }]}>
-                  <Text style={styles.secondaryText}>{t("syncNow")}</Text>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={onSignOut} style={[styles.secondaryBig, { marginTop: 10 }]}>
-                <Text style={styles.secondaryText}>{t("signOut")}</Text>
-              </Pressable>
-            </>
-          ) : authConfigured ? (
-            <>
-              <Text style={styles.sub}>{t("authSecureNote")}</Text>
-              <Pressable disabled={authBusy} onPress={() => onSignIn("apple")} style={[styles.secondaryBig, { marginTop: 14 }, authBusy && styles.disabledBtn]}>
-                <Text style={styles.secondaryText}>{t("authApple")}</Text>
-              </Pressable>
-              <Pressable disabled={authBusy} onPress={() => onSignIn("google")} style={[styles.secondaryBig, { marginTop: 10 }, authBusy && styles.disabledBtn]}>
-                <Text style={styles.secondaryText}>{t("authGoogle")}</Text>
-              </Pressable>
-            </>
-          ) : (
-            <Text style={styles.sub}>{t("cloudSignInNotConfigured")}</Text>
-          )}
-        </Card>
+        <SettingsAccountSection
+          session={session}
+          authBusy={authBusy}
+          authConfigured={authConfigured}
+          cloudSyncEnabled={cloudSyncEnabled}
+          cloudSyncStatus={cloudSyncStatus}
+          cloudSyncMessage={cloudSyncMessage}
+          lastCloudSyncAt={lastCloudSyncAt}
+          onSignIn={onSignIn}
+          onSignOut={onSignOut}
+          onChangeEmail={() => setChangeEmailOpen(true)}
+          onChangePassword={() => setChangePasswordOpen(true)}
+          onSyncNow={onSyncNow}
+        />
 
         <ChangePasswordModal
           visible={changePasswordOpen}
@@ -9023,9 +8883,10 @@ class AppErrorBoundary extends React.Component<
 }
 
 function App() {
+  const firstRenderLogged = useRef(false);
+  const authReadyLogged = useRef(false);
   const [tab, setTab] = useState<Tab>("journal");
   const [lang, setLang] = useState<Lang>("en");
-  const [i18nReady, setI18nReady] = useState(false);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradesHydrated, setTradesHydrated] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -9049,8 +8910,8 @@ function App() {
   const [propRulesMeta, setPropRulesMeta] = useState<{ source: "remote" | "cache" | "fallback"; updatedAt?: string }>({
     source: "fallback",
   });
-  const [lockScreenBufferEnabled, setLockScreenBufferEnabled] = useState(false);
   const [pushCalendarEvents, setPushCalendarEvents] = useState<EconEvent[]>([]);
+  const [shareExportHostReady, setShareExportHostReady] = useState(false);
   const purchasesConfigured = useRef(false);
   const cloudSyncInFlight = useRef(false);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -9064,60 +8925,16 @@ function App() {
   const currentTradeSignature = useMemo(() => tradesSignature(trades), [trades]);
 
   useEffect(() => {
-    trackEvent("app_opened");
+    if (firstRenderLogged.current) return;
+    firstRenderLogged.current = true;
+    logStartupPerf("first_render");
   }, []);
 
   useEffect(() => {
-    void loadCalendarEvents()
-      .then(setPushCalendarEvents)
-      .catch(() => setPushCalendarEvents([]));
-  }, []);
-
-  useEffect(() => {
-    if (!tradesHydrated) return;
-    let cancelled = false;
-    void (async () => {
-      const [templateKeyRaw, modeRaw] = await Promise.all([
-        AsyncStorage.getItem("prop-risk-template-v1"),
-        AsyncStorage.getItem("prop-risk-mode-v1"),
-      ]);
-      const templateKey = resolvePropTemplateKey(templateKeyRaw || "", propTemplates);
-      const mode: FirmMode = modeRaw === "funded" ? "funded" : "evaluation";
-      const snapshot = tryComputePropRiskSnapshot({
-        trades,
-        selectedDate: todayISO(),
-        templateKey,
-        mode,
-        templates: propTemplates,
-      });
-      const propSnapshot = snapshot
-        ? {
-            enabled: Boolean(templateKey),
-            dailyRemaining: snapshot.dailyRemaining,
-            dailyLossLimit: snapshot.template.dailyLossLimit,
-            dayPnl: snapshot.dayPnl,
-            status: snapshot.status,
-          }
-        : null;
-      const calendarMapped = pushCalendarEvents.map((e) => ({
-        id: e.id,
-        date: e.date,
-        time: e.time,
-        name: e.name,
-      }));
-      if (cancelled) return;
-      await syncSmartPushSchedules({ isPro: isPremium, calendarEvents: calendarMapped });
-      await evaluateSmartPushConditions({
-        trades,
-        isPro: isPremium,
-        calendarEvents: calendarMapped,
-        propSnapshot,
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [trades, tradesHydrated, isPremium, propTemplates, pushCalendarEvents]);
+    if (!authHydrated || authReadyLogged.current) return;
+    authReadyLogged.current = true;
+    logStartupPerf("auth_ready");
+  }, [authHydrated]);
 
   useEffect(() => {
     trackScreen(tab);
@@ -9128,51 +8945,132 @@ function App() {
     if (tradesHydrated) recordMetric("journal_trade_count", trades.length);
   }, [trades.length, tradesHydrated]);
 
+  const appReady = tradesHydrated && authHydrated;
+
   useEffect(() => {
-    (async () => {
-      try {
-        const cached = await AsyncStorage.getItem(PROP_RULES_CACHE_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached) as { templates?: unknown[]; updatedAt?: string };
-          const normalized = Array.isArray(parsed.templates)
-            ? parsed.templates
-                .map((row) => normalizeRemoteTemplate(row))
-                .filter((x): x is RiskTemplate => Boolean(x))
-            : [];
-          if (normalized.length) {
-            setPropTemplates(normalized);
-            setPropRulesMeta({ source: "cache", updatedAt: parsed.updatedAt });
+    if (!appReady) return;
+    let cancelled = false;
+    logStartupPerf("non_critical_init_started");
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          scheduleMonitoringInit();
+          getPosthogClient();
+          trackEvent("app_opened");
+
+          const events = await loadCalendarEvents().catch(() => [] as EconEvent[]);
+          if (!cancelled) setPushCalendarEvents(events);
+
+          try {
+            const cached = await AsyncStorage.getItem(PROP_RULES_CACHE_KEY);
+            if (cached) {
+              const parsed = JSON.parse(cached) as { templates?: unknown[]; updatedAt?: string };
+              const normalized = Array.isArray(parsed.templates)
+                ? parsed.templates
+                    .map((row) => normalizeRemoteTemplate(row))
+                    .filter((x): x is RiskTemplate => Boolean(x))
+                : [];
+              if (normalized.length && !cancelled) {
+                setPropTemplates(normalized);
+                setPropRulesMeta({ source: "cache", updatedAt: parsed.updatedAt });
+              }
+            }
+          } catch {
+            // ignore cache parsing issues
           }
+
+          if (supabase && !cancelled) {
+            try {
+              const { data, error } = await supabase
+                .from("prop_firms")
+                .select(PROP_FIRM_SELECT_COLUMNS)
+                .eq("is_active", true)
+                .order("account_size", { ascending: true });
+              if (error) throw error;
+              const normalized = (data || [])
+                .map((row) => normalizeRemoteTemplate(row))
+                .filter((x): x is RiskTemplate => Boolean(x));
+              if (normalized.length && !cancelled) {
+                const updatedAt = new Date().toISOString();
+                setPropTemplates(normalized);
+                setPropRulesMeta({ source: "remote", updatedAt });
+                await AsyncStorage.setItem(
+                  PROP_RULES_CACHE_KEY,
+                  JSON.stringify({ templates: data, updatedAt }),
+                );
+              }
+            } catch (error) {
+              logger.error(error, { feature: "supabase", action: "load_prop_firms", table: "prop_firms" });
+            }
+          }
+
+          if (!cancelled) setShareExportHostReady(true);
+        } catch (error) {
+          captureAppError(error, { feature: "startup", action: "non_critical_init" });
+        } finally {
+          if (!cancelled) logStartupPerf("non_critical_init_done");
         }
-      } catch {
-        // ignore cache parsing issues
-      }
-      if (!supabase) return;
-      try {
-        const { data, error } = await supabase
-          .from("prop_firms")
-          .select(PROP_FIRM_SELECT_COLUMNS)
-          .eq("is_active", true)
-          .order("account_size", { ascending: true });
-        if (error) throw error;
-        const normalized = (data || [])
-          .map((row) => normalizeRemoteTemplate(row))
-          .filter((x): x is RiskTemplate => Boolean(x));
-        if (normalized.length) {
-          const updatedAt = new Date().toISOString();
-          setPropTemplates(normalized);
-          setPropRulesMeta({ source: "remote", updatedAt });
-          await AsyncStorage.setItem(
-            PROP_RULES_CACHE_KEY,
-            JSON.stringify({ templates: data, updatedAt }),
-          );
+      })();
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+    };
+  }, [appReady]);
+
+  useEffect(() => {
+    if (!authHydrated || !tradesHydrated) return;
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          const { syncSmartPushSchedules, evaluateSmartPushConditions } = await import("./src/notifications/smartAlerts");
+          const [templateKeyRaw, modeRaw] = await Promise.all([
+            AsyncStorage.getItem("prop-risk-template-v1"),
+            AsyncStorage.getItem("prop-risk-mode-v1"),
+          ]);
+          const templateKey = resolvePropTemplateKey(templateKeyRaw || "", propTemplates);
+          const mode: FirmMode = modeRaw === "funded" ? "funded" : "evaluation";
+          const snapshot = tryComputePropRiskSnapshot({
+            trades,
+            selectedDate: todayISO(),
+            templateKey,
+            mode,
+            templates: propTemplates,
+          });
+          const propSnapshot = snapshot
+            ? {
+                enabled: Boolean(templateKey),
+                dailyRemaining: snapshot.dailyRemaining,
+                dailyLossLimit: snapshot.template.dailyLossLimit,
+                dayPnl: snapshot.dayPnl,
+                status: snapshot.status,
+              }
+            : null;
+          const calendarMapped = pushCalendarEvents.map((e) => ({
+            id: e.id,
+            date: e.date,
+            time: e.time,
+            name: e.name,
+          }));
+          if (cancelled) return;
+          await syncSmartPushSchedules({ isPro: isPremium, calendarEvents: calendarMapped });
+          await evaluateSmartPushConditions({
+            trades,
+            isPro: isPremium,
+            calendarEvents: calendarMapped,
+            propSnapshot,
+          });
+        } catch (error) {
+          captureAppError(error, { feature: "smart_push", action: "startup_sync" });
         }
-      } catch (error) {
-        logger.error(error, { feature: "supabase", action: "load_prop_firms", table: "prop_firms" });
-        // keep cache/fallback if remote request fails
-      }
-    })();
-  }, []);
+      })();
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+    };
+  }, [authHydrated, trades, tradesHydrated, isPremium, propTemplates, pushCalendarEvents]);
 
   useEffect(() => {
     let cancelled = false;
@@ -9180,12 +9078,12 @@ function App() {
       .then((initial) => {
         if (!cancelled) {
           setLang(initial);
-          setI18nReady(true);
+          logStartupPerf("i18n_ready");
         }
       })
       .catch((error) => {
         captureAppError(error, { feature: "i18n", action: "init" });
-        if (!cancelled) setI18nReady(true);
+        if (!cancelled) logStartupPerf("i18n_ready");
       });
     const onLanguageChanged = (lng: string) => {
       if (["en", "ru", "es", "fr", "it", "uk", "de"].includes(lng)) setLang(lng as Lang);
@@ -9340,26 +9238,30 @@ function App() {
 
   useEffect(() => {
     if (!revenueCatConfigured || purchasesConfigured.current) return;
-    try {
-      Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
-      Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-      purchasesConfigured.current = true;
-      setRevenueCatReady(true);
-      refreshRevenueCat();
-      const listener = (info: CustomerInfo) => {
-        applyCustomerInfo(info, "customerInfoUpdateListener");
-      };
-      Purchases.addCustomerInfoUpdateListener(listener);
-      return () => {
-        Purchases.removeCustomerInfoUpdateListener(listener);
-      };
-    } catch (error: any) {
-      if (!isExpoGo) {
-        logger.error(error, { feature: "revenuecat", action: "configure" });
+    let listener: ((info: CustomerInfo) => void) | null = null;
+    const task = InteractionManager.runAfterInteractions(() => {
+      try {
+        Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
+        Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+        purchasesConfigured.current = true;
+        setRevenueCatReady(true);
+        refreshRevenueCat();
+        listener = (info: CustomerInfo) => {
+          applyCustomerInfo(info, "customerInfoUpdateListener");
+        };
+        Purchases.addCustomerInfoUpdateListener(listener);
+      } catch (error: any) {
+        if (!isExpoGo) {
+          logger.error(error, { feature: "revenuecat", action: "configure" });
+        }
+        setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
       }
-      setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
-    }
-  }, [refreshRevenueCat, revenueCatConfigured]);
+    });
+    return () => {
+      task.cancel();
+      if (listener) Purchases.removeCustomerInfoUpdateListener(listener);
+    };
+  }, [applyCustomerInfo, refreshRevenueCat, revenueCatConfigured]);
 
   useEffect(() => {
     if (!purchasesConfigured.current || !session?.user.id) return;
@@ -9377,9 +9279,8 @@ function App() {
       AsyncStorage.getItem("prop-risk-template-v1"),
       AsyncStorage.getItem("prop-risk-mode-v1"),
     ]);
-    const enabled = enabledRaw === "on";
-    setLockScreenBufferEnabled(enabled);
-    if (!enabled) {
+  const enabled = enabledRaw === "on";
+  if (!enabled) {
       await scheduleDailyPropRiskNotification({ enabled: false, title: "", body: "" });
       return;
     }
@@ -9402,12 +9303,6 @@ function App() {
       body: `Daily buffer ${moneyCompact(snapshot.dailyRemaining)} • ${snapshot.status} • Day P&L ${moneyCompact(snapshot.dayPnl)}`,
     });
   }, [trades, propTemplates]);
-
-  useEffect(() => {
-    AsyncStorage.getItem(LOCK_SCREEN_BUFFER_KEY).then((value) => {
-      setLockScreenBufferEnabled(value === "on");
-    });
-  }, []);
 
   useEffect(() => {
     if (!tradesHydrated) return;
@@ -9509,15 +9404,6 @@ function App() {
       alertExportError(t("csvImportFailed"), error);
     }
   }, [lang, session?.user.id]);
-
-  const toggleLockScreenBuffer = useCallback(
-    async (enabled: boolean) => {
-      setLockScreenBufferEnabled(enabled);
-      await AsyncStorage.setItem(LOCK_SCREEN_BUFFER_KEY, enabled ? "on" : "off");
-      await refreshLockScreenBufferReminder();
-    },
-    [refreshLockScreenBufferReminder],
-  );
 
   useEffect(() => {
     if (!supabase) {
@@ -10186,7 +10072,6 @@ function App() {
     }
   }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id]);
 
-  const appReady = i18nReady && tradesHydrated && authHydrated;
   const authScreenCopy: AuthScreenCopy = {
     headline: t("authHeadline"),
     subtitle: t("authSubtitle"),
@@ -10362,9 +10247,8 @@ function App() {
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
               onSyncNow={syncTradesWithCloud}
-              lockScreenBufferEnabled={lockScreenBufferEnabled}
-              onToggleLockScreenBuffer={toggleLockScreenBuffer}
               onImportTradesCsv={importTradesFromCsv}
+              refreshDailyPropBuffer={refreshLockScreenBufferReminder}
               onSignIn={signInWithProvider}
               onSignOut={signOut}
               onChangePassword={changeAccountPassword}
@@ -10420,13 +10304,27 @@ function App() {
             />
           ))}
         </View>
-        <StatCardExportHost />
+        {shareExportHostReady ? (
+          <React.Suspense fallback={null}>
+            <LazyStatCardExportHost />
+          </React.Suspense>
+        ) : null}
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
 function AppRoot() {
+  const [posthogReady, setPosthogReady] = useState(false);
+  const posthogClient = posthogReady ? getPosthogClient() : undefined;
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setPosthogReady(true);
+    });
+    return () => task.cancel();
+  }, []);
+
   const app = (
     <AppErrorBoundary>
       <App />

@@ -35,6 +35,23 @@ export function initializeMonitoring() {
   monitoringInitialized = true;
 }
 
+/** Defer Sentry init until after first paint — avoids startup UI hangs. */
+export function scheduleMonitoringInit() {
+  if (monitoringInitialized || !SENTRY_DSN) return;
+  const run = () => {
+    try {
+      initializeMonitoring();
+    } catch {
+      // Monitoring must never block app render.
+    }
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => setTimeout(run, 0));
+  } else {
+    setTimeout(run, 0);
+  }
+}
+
 export function captureAppError(error: unknown, context?: Record<string, unknown>) {
   const safeContext = sanitizeContext(context);
   if (SENTRY_DSN) {
@@ -55,6 +72,6 @@ export function logCrashlyticsBreadcrumb(message: string, data?: Record<string, 
 
 export function wrapAppWithSentry<T extends React.ComponentType<any>>(Component: T): T {
   if (!SENTRY_DSN) return Component;
-  initializeMonitoring();
+  scheduleMonitoringInit();
   return Sentry.wrap(Component) as T;
 }

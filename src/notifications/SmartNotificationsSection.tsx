@@ -1,23 +1,23 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, StyleSheet, Switch, Text, View } from "react-native";
 import { t } from "../i18n";
 import { C } from "../theme/colors";
 import {
-  BASIC_PREFERENCE_KEYS,
-  getSmartPushPreferences,
-  isProOnlyPreference,
-  PREF_I18N_KEYS,
-  PRO_ONLY_PREFERENCE_KEYS,
-  type SmartPushPreferenceKey,
-  type SmartPushPreferences,
-} from "./notificationPreferences";
-import { setSmartPushPreferenceEnabled } from "./smartAlerts";
+  MASTER_GROUP_I18N,
+  NOTIFICATION_MASTER_GROUP_ORDER,
+  getNotificationMasterGroups,
+  refreshDailyTradingBriefMasterState,
+  type NotificationMasterGroupId,
+  type NotificationMasterGroupPrefs,
+} from "./notificationMasterGroups";
+import { setMasterNotificationGroupEnabled } from "./smartAlerts";
 import type { CalendarEventInput } from "./smartAlertEngine";
 
 type Props = {
   isPro: boolean;
   calendarEvents?: CalendarEventInput[];
   onUpgrade: () => void;
+  refreshDailyPropBuffer?: () => Promise<void>;
 };
 
 function ProBadge() {
@@ -28,34 +28,34 @@ function ProBadge() {
   );
 }
 
-function ToggleRow({
-  prefKey,
-  prefs,
+function MasterToggleRow({
+  groupId,
+  enabled,
   isPro,
   onToggle,
 }: {
-  prefKey: SmartPushPreferenceKey;
-  prefs: SmartPushPreferences;
+  groupId: NotificationMasterGroupId;
+  enabled: boolean;
   isPro: boolean;
-  onToggle: (key: SmartPushPreferenceKey, next: boolean) => void;
+  onToggle: (groupId: NotificationMasterGroupId, next: boolean) => void;
 }) {
-  const locked = isProOnlyPreference(prefKey) && !isPro;
-  const copy = PREF_I18N_KEYS[prefKey];
-  const value = prefs[prefKey];
+  const copy = MASTER_GROUP_I18N[groupId];
+  const locked = copy.proOnly && !isPro;
+  const value = enabled && !locked;
 
   return (
     <View style={styles.row}>
       <View style={styles.copy}>
         <View style={styles.titleRow}>
           <Text style={[styles.title, locked && styles.titleLocked]}>{t(copy.title)}</Text>
-          {isProOnlyPreference(prefKey) ? <ProBadge /> : null}
+          {copy.proOnly ? <ProBadge /> : null}
         </View>
         <Text style={styles.sub}>{t(copy.body)}</Text>
       </View>
       <Switch
-        value={value && !locked}
+        value={value}
         disabled={locked && !value}
-        onValueChange={(next) => onToggle(prefKey, next)}
+        onValueChange={(next) => onToggle(groupId, next)}
         trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
         thumbColor={value && !locked ? C.purple : "#7D8795"}
         ios_backgroundColor="#222936"
@@ -64,16 +64,23 @@ function ToggleRow({
   );
 }
 
-export function SmartNotificationsSection({ isPro, calendarEvents, onUpgrade }: Props) {
-  const [prefs, setPrefs] = useState<SmartPushPreferences | null>(null);
+export function SmartNotificationsSection({
+  isPro,
+  calendarEvents,
+  onUpgrade,
+  refreshDailyPropBuffer,
+}: Props) {
+  const [masters, setMasters] = useState<NotificationMasterGroupPrefs | null>(null);
 
   useEffect(() => {
-    void getSmartPushPreferences().then(setPrefs);
+    void getNotificationMasterGroups()
+      .then((loaded) => refreshDailyTradingBriefMasterState(loaded))
+      .then(setMasters);
   }, []);
 
   const handleToggle = useCallback(
-    async (key: SmartPushPreferenceKey, enabled: boolean) => {
-      if (isProOnlyPreference(key) && !isPro) {
+    async (groupId: NotificationMasterGroupId, enabled: boolean) => {
+      if (MASTER_GROUP_I18N[groupId].proOnly && !isPro) {
         Alert.alert(t("notificationsProLockedTitle"), t("notificationsProLockedBody"), [
           { text: t("cancel"), style: "cancel" },
           { text: t("upgradeToPro"), onPress: onUpgrade },
@@ -81,11 +88,12 @@ export function SmartNotificationsSection({ isPro, calendarEvents, onUpgrade }: 
         return;
       }
 
-      const result = await setSmartPushPreferenceEnabled({
-        key,
+      const result = await setMasterNotificationGroupEnabled({
+        groupId,
         enabled,
         isPro,
         calendarEvents,
+        refreshDailyPropBuffer,
       });
 
       if (!result.ok && result.reason === "permission_denied") {
@@ -99,37 +107,27 @@ export function SmartNotificationsSection({ isPro, calendarEvents, onUpgrade }: 
         ]);
         return;
       }
-      if (result.ok) setPrefs(result.prefs);
+      if (result.ok) setMasters(result.masters);
     },
-    [calendarEvents, isPro, onUpgrade],
+    [calendarEvents, isPro, onUpgrade, refreshDailyPropBuffer],
   );
 
-  if (!prefs) return null;
+  if (!masters) return null;
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.sectionDivider} />
-      <Text style={styles.sectionTitle}>{t("notificationsSmartTitle")}</Text>
-      <Text style={styles.sectionSub}>{t("notificationsSmartSub")}</Text>
-
-      <Text style={styles.groupLabel}>{t("notificationsBasicReminders")}</Text>
-      {BASIC_PREFERENCE_KEYS.map((key) => (
-        <React.Fragment key={key}>
-          <ToggleRow prefKey={key} prefs={prefs} isPro={isPro} onToggle={handleToggle} />
-          <View style={styles.divider} />
-        </React.Fragment>
-      ))}
-
-      <Text style={[styles.groupLabel, { marginTop: 8 }]}>{t("notificationsProSmartAlerts")}</Text>
-      {!isPro ? (
-        <Pressable onPress={onUpgrade} style={styles.previewChip}>
-          <Text style={styles.previewText}>{t("notificationsProPreview")}</Text>
-        </Pressable>
-      ) : null}
-      {PRO_ONLY_PREFERENCE_KEYS.map((key) => (
-        <React.Fragment key={key}>
-          <ToggleRow prefKey={key} prefs={prefs} isPro={isPro} onToggle={handleToggle} />
-          <View style={styles.divider} />
+      <Text style={styles.sectionSub}>{t("notificationsMasterSub")}</Text>
+      {NOTIFICATION_MASTER_GROUP_ORDER.map((groupId, index) => (
+        <React.Fragment key={groupId}>
+          <MasterToggleRow
+            groupId={groupId}
+            enabled={masters[groupId]}
+            isPro={isPro}
+            onToggle={handleToggle}
+          />
+          {index < NOTIFICATION_MASTER_GROUP_ORDER.length - 1 ? (
+            <View style={styles.divider} />
+          ) : null}
         </React.Fragment>
       ))}
     </View>
@@ -138,33 +136,13 @@ export function SmartNotificationsSection({ isPro, calendarEvents, onUpgrade }: 
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 8,
-  },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: "rgba(176,38,255,0.22)",
-    marginBottom: 14,
-    marginTop: 6,
-  },
-  sectionTitle: {
-    color: C.purple,
-    fontSize: 17,
-    fontWeight: "800",
-    marginBottom: 4,
+    marginTop: 2,
   },
   sectionSub: {
     color: C.sub,
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 12,
-  },
-  groupLabel: {
-    color: C.text,
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    textTransform: "uppercase",
+    marginBottom: 10,
   },
   row: {
     flexDirection: "row",
@@ -175,19 +153,21 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
-    paddingRight: 8,
+    minWidth: 0,
+    paddingRight: 4,
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   title: {
     color: C.text,
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "800",
+    lineHeight: 21,
   },
   titleLocked: {
     color: C.sub,
@@ -214,20 +194,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.6,
-  },
-  previewChip: {
-    alignSelf: "flex-start",
-    marginBottom: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(176,38,255,0.35)",
-    backgroundColor: "rgba(176,38,255,0.08)",
-  },
-  previewText: {
-    color: C.purple,
-    fontSize: 12,
-    fontWeight: "700",
   },
 });

@@ -6,6 +6,16 @@
     <true/>
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+      <string>en</string>
+      <string>ru</string>
+      <string>de</string>
+      <string>fr</string>
+      <string>es</string>
+      <string>it</string>
+      <string>uk</string>
+    </array>
     <key>CFBundleDisplayName</key>
     <string>YouTrader</string>
     <key>CFBundleExecutable</key>
@@ -33,7 +43,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>83</string>
+    <string>90</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>

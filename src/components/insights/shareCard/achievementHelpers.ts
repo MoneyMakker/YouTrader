@@ -1,5 +1,6 @@
 import type { Achievement, TraderLevel } from "../../../analytics/achievements";
 import { t } from "../../../i18n";
+import { achievementTitleDesignSize } from "./achievementShareTextLayout";
 
 export type AchievementRarity = "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
 
@@ -171,9 +172,5 @@ export function buildAchievementRewardOverlay(
 }
 
 export function achievementTitleFontSize(title: string) {
-  const len = title.length;
-  if (len > 28) return 90;
-  if (len > 22) return 100;
-  if (len > 16) return 110;
-  return 120;
+  return achievementTitleDesignSize(title);
 }

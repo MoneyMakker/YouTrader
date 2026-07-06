@@ -1,4 +1,4 @@
-import { posthogClient } from "../lib/posthog";
+import { getPosthogClient } from "../lib/posthog";
 
 type AnalyticsValue = string | number | boolean | null;
 type AnalyticsProperties = Record<string, unknown>;
@@ -31,12 +31,12 @@ function sanitizeProperties(properties?: AnalyticsProperties): SafeAnalyticsProp
 
 export function trackEvent(name: string, properties?: AnalyticsProperties) {
   const safe = sanitizeProperties(properties);
-  posthogClient?.capture(name, safe);
+  getPosthogClient()?.capture(name, safe);
   if (__DEV__) console.log("[analytics:event]", name, safe || {});
 }
 
 export function trackScreen(name: string, properties?: AnalyticsProperties) {
   const safe = sanitizeProperties(properties);
-  posthogClient?.screen(name, safe);
+  getPosthogClient()?.screen(name, safe);
   if (__DEV__) console.log("[analytics:screen]", name, safe || {});
 }

@@ -1,24 +1,26 @@
-import React, { memo, useEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
+  Platform,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { t } from "../../i18n";
 
-const { width: SCREEN_W } = Dimensions.get("window");
-
-// ─── Palette ───────────────────────────────────────────────────────────────
 const PX = 3;
-const PURPLE = "#8A2EFF";
-const PURPLE_MID = "#6B1FD4";
-const PURPLE_DARK = "#4A128F";
-const PURPLE_LIGHT = "#A85CFF";
-const PURPLE_HOT = "#C084FC";
-const NEON_GREEN = "#A3FF12";
+const LIME = "#B8FF1A";
+const LIME_BRIGHT = "#D4FF5C";
+const LIME_MID = "#8ECC12";
+const LIME_DARK = "#5A9908";
+const LIME_DEEP = "#3D6B06";
+const HORN = "#6BB010";
+const HORN_DARK = "#4A7808";
+const HOOF = "#2E4A06";
 const WHITE = "#FFFFFF";
+const BLACK = "#000000";
 const VOID = "#000000";
 const WICK = "#2A3040";
 const GROUND = "#1A1F2A";
@@ -26,31 +28,32 @@ const CANDLE_GREEN = "#3DDB4A";
 const CANDLE_GREEN_DARK = "#2A9E34";
 const CANDLE_RED = "#FF3B5F";
 const CANDLE_RED_DARK = "#CC2F4C";
-const MONITOR_BEZEL = "#1E2430";
-const MONITOR_SCREEN = "#0D1117";
-const MONITOR_GLOW = "#1A3D2A";
-const KEY_GRAY = "#2A3040";
+const DUST = "#6B7280";
 
-// ─── Stage layout ──────────────────────────────────────────────────────────
-const STAGE_W = Math.min(SCREEN_W - 32, 380);
-const STAGE_H = 196;
-const CHART_W = STAGE_W * 0.52;
-const CHART_H = 112;
-const CHART_TOP = 28;
-const OPERATOR_W = STAGE_W * 0.4;
-const BULL_GRID_W = 20;
-const BULL_GRID_H = 18;
-const COMPUTER_W = 14;
-const COMPUTER_H = 16;
+const STAGE_H = 228;
+const CHART_FRAME_H = 108;
+const CHART_PAD_H = 10;
+const CHART_PAD_TOP = 10;
+const CHART_PAD_BOTTOM = 8;
+const BASELINE_H = 2;
+const BASELINE_MT = 6;
 
-const SCAN_DURATION_MS = 2800;
-const DRIFT_DURATION_MS = 4800;
-const BREATH_IN_MS = 900;
-const BREATH_OUT_MS = 900;
-const THINK_FLASH_MS = 220;
+const JUMP_MS = 940;
+const PAUSE_MS = 350;
+const TURN_MS = 560;
+const JUMP_ARC = 22;
+const LAND_BOUNCE_MS = 120;
+
+const CANDLE_SLOT_W = 15;
+const CANDLE_GAP = 6;
+const WICK_W = 3;
+
+const BULL_PX_W = 26;
+const BULL_PX_H = 22;
 
 type PixelSpec = { x: number; y: number; w: number; h: number; c: string };
-type IndicatorKind = "+" | "%";
+type BullPose = "idle" | "takeoff" | "airborne" | "land";
+type DialogueKey = "authPixelDontGamble" | "authPixelTradeDiscipline";
 
 type CandleDef = {
   bullish: boolean;
@@ -60,20 +63,49 @@ type CandleDef = {
 };
 
 const CANDLES: CandleDef[] = [
-  { bullish: true, bodyH: 22, wickTop: 6, wickBottom: 4 },
-  { bullish: false, bodyH: 16, wickTop: 4, wickBottom: 6 },
-  { bullish: true, bodyH: 32, wickTop: 8, wickBottom: 4 },
-  { bullish: true, bodyH: 20, wickTop: 5, wickBottom: 3 },
-  { bullish: false, bodyH: 26, wickTop: 6, wickBottom: 5 },
-  { bullish: true, bodyH: 28, wickTop: 7, wickBottom: 4 },
-  { bullish: false, bodyH: 18, wickTop: 5, wickBottom: 5 },
-  { bullish: true, bodyH: 36, wickTop: 9, wickBottom: 4 },
+  { bullish: true, bodyH: 26, wickTop: 7, wickBottom: 5 },
+  { bullish: false, bodyH: 18, wickTop: 5, wickBottom: 7 },
+  { bullish: true, bodyH: 38, wickTop: 9, wickBottom: 5 },
+  { bullish: true, bodyH: 24, wickTop: 6, wickBottom: 4 },
+  { bullish: false, bodyH: 30, wickTop: 7, wickBottom: 6 },
+  { bullish: true, bodyH: 32, wickTop: 8, wickBottom: 5 },
+  { bullish: false, bodyH: 20, wickTop: 6, wickBottom: 6 },
+  { bullish: true, bodyH: 42, wickTop: 10, wickBottom: 5 },
 ];
 
-const CANDLE_SLOT_W = 7;
-const CANDLE_GAP = 3;
+const CANDLE_COUNT = CANDLES.length;
+const CANDLE_ROW_H = CHART_FRAME_H - CHART_PAD_TOP - CHART_PAD_BOTTOM - BASELINE_H - BASELINE_MT;
 
-// ─── Primitives ──────────────────────────────────────────────────────────────
+type CandleLayout = {
+  x: number;
+  bodyTop: number;
+  centerX: number;
+};
+
+function buildCandleLayout(chartW: number): CandleLayout[] {
+  const innerW = chartW - CHART_PAD_H * 2;
+  return CANDLES.map((def, i) => {
+    const x =
+      CANDLE_COUNT === 1
+        ? CHART_PAD_H
+        : CHART_PAD_H + (i / (CANDLE_COUNT - 1)) * (innerW - CANDLE_SLOT_W);
+    const totalH = def.wickTop + def.bodyH + def.wickBottom;
+    const bodyTop = CHART_PAD_TOP + CANDLE_ROW_H - totalH + def.wickTop;
+    return { x, bodyTop, centerX: x + CANDLE_SLOT_W / 2 };
+  });
+}
+
+const CHART_AREA_H = 118;
+const CHART_TOP_IN_AREA = CHART_AREA_H - CHART_FRAME_H;
+
+function bullStandY(layout: CandleLayout): number {
+  return CHART_TOP_IN_AREA + layout.bodyTop - BULL_PX_H * PX;
+}
+
+function bullStandX(layout: CandleLayout): number {
+  return layout.centerX - (BULL_PX_W * PX) / 2;
+}
+
 const Pixel = memo(function Pixel({ x, y, w, h, c }: PixelSpec) {
   return (
     <View
@@ -99,446 +131,888 @@ const PixelGroup = memo(function PixelGroup({ specs }: { specs: PixelSpec[] }) {
   );
 });
 
-// ─── Chart candlesticks (standard Views) ───────────────────────────────────
+function legSpecs(frame: number, pose: BullPose): PixelSpec[] {
+  const f = frame % 3;
+  const stride = pose === "takeoff" ? 1 : pose === "airborne" ? 2 : 0;
+  const specs: PixelSpec[] = [];
+
+  const frontShift = f === 0 ? 0 : f === 1 ? stride : -stride;
+  const backShift = f === 0 ? 0 : f === 1 ? -stride : stride;
+
+  specs.push(
+    { x: 8 + backShift, y: 16, w: 2, h: 3, c: LIME_DARK },
+    { x: 11 + backShift, y: 17, w: 2, h: 2, c: HOOF },
+    { x: 14 + frontShift, y: 16, w: 2, h: 3, c: LIME_DARK },
+    { x: 17 + frontShift, y: 17, w: 2, h: 2, c: HOOF },
+    { x: 10 + backShift, y: 15, w: 2, h: 2, c: LIME_DEEP },
+    { x: 16 + frontShift, y: 15, w: 2, h: 2, c: LIME_DEEP },
+  );
+
+  if (pose === "takeoff") {
+    specs.push(
+      { x: 13, y: 17, w: 2, h: 1, c: HOOF },
+      { x: 15, y: 16, w: 2, h: 1, c: LIME_DARK },
+    );
+  }
+
+  return specs;
+}
+
+function tailSpecs(frame: number): PixelSpec[] {
+  const f = frame % 4;
+  if (f === 0) {
+    return [
+      { x: 1, y: 11, w: 2, h: 1, c: LIME_MID },
+      { x: 0, y: 12, w: 2, h: 1, c: LIME },
+      { x: -1, y: 13, w: 2, h: 1, c: LIME_BRIGHT },
+      { x: -2, y: 14, w: 2, h: 1, c: LIME_MID },
+      { x: -1, y: 15, w: 1, h: 1, c: LIME_DARK },
+    ];
+  }
+  if (f === 1) {
+    return [
+      { x: 1, y: 10, w: 2, h: 1, c: LIME_MID },
+      { x: 0, y: 11, w: 2, h: 1, c: LIME },
+      { x: -1, y: 10, w: 2, h: 1, c: LIME_BRIGHT },
+      { x: -2, y: 9, w: 2, h: 1, c: LIME },
+      { x: -3, y: 8, w: 1, h: 1, c: LIME_MID },
+    ];
+  }
+  if (f === 2) {
+    return [
+      { x: 1, y: 9, w: 2, h: 1, c: LIME_MID },
+      { x: 0, y: 8, w: 2, h: 1, c: LIME },
+      { x: -1, y: 7, w: 2, h: 1, c: LIME_BRIGHT },
+      { x: -2, y: 6, w: 2, h: 1, c: LIME },
+      { x: -1, y: 5, w: 1, h: 1, c: LIME_MID },
+    ];
+  }
+  return [
+    { x: 1, y: 10, w: 2, h: 1, c: LIME_MID },
+    { x: 0, y: 11, w: 2, h: 1, c: LIME },
+    { x: -1, y: 12, w: 2, h: 1, c: LIME_BRIGHT },
+    { x: -2, y: 11, w: 2, h: 1, c: LIME },
+    { x: -3, y: 10, w: 1, h: 1, c: LIME_DARK },
+  ];
+}
+
+function bullBodySpecs({
+  blink,
+  tailFrame,
+  legFrame,
+  earsPerked,
+  headTilt,
+  pose,
+}: {
+  blink: boolean;
+  tailFrame: number;
+  legFrame: number;
+  earsPerked: boolean;
+  headTilt: -1 | 0 | 1;
+  pose: BullPose;
+}): PixelSpec[] {
+  const specs: PixelSpec[] = [];
+  const tilt = headTilt;
+  const y = (row: number) => row + tilt;
+
+  specs.push(
+    { x: 15, y: y(0), w: 2, h: 2, c: HORN },
+    { x: 17, y: y(0), w: 2, h: 2, c: HORN },
+    { x: 14, y: y(1), w: 2, h: 1, c: HORN_DARK },
+    { x: 18, y: y(1), w: 2, h: 1, c: HORN_DARK },
+    { x: 16, y: y(2), w: 1, h: 1, c: HORN_DARK },
+    { x: 17, y: y(2), w: 1, h: 1, c: HORN_DARK },
+  );
+
+  specs.push(
+    { x: earsPerked ? 12 : 13, y: y(3), w: 2, h: 1, c: LIME_MID },
+    { x: earsPerked ? 17 : 16, y: y(3), w: 2, h: 1, c: LIME_MID },
+  );
+
+  specs.push(
+    { x: 12, y: y(4), w: 8, h: 1, c: LIME_BRIGHT },
+    { x: 11, y: y(5), w: 10, h: 1, c: LIME },
+    { x: 12, y: y(6), w: 9, h: 1, c: LIME_MID },
+    { x: 13, y: y(7), w: 2, h: 2, c: LIME_DARK },
+    { x: 17, y: y(7), w: 2, h: 2, c: LIME_DARK },
+    { x: 18, y: y(8), w: 3, h: 1, c: LIME_MID },
+    { x: 19, y: y(9), w: 2, h: 1, c: LIME_DARK },
+  );
+
+  if (blink) {
+    specs.push(
+      { x: 13, y: y(6), w: 3, h: 1, c: LIME_DEEP },
+      { x: 17, y: y(6), w: 3, h: 1, c: LIME_DEEP },
+    );
+  } else {
+    specs.push(
+      { x: 13, y: y(5), w: 3, h: 3, c: WHITE },
+      { x: 17, y: y(5), w: 3, h: 3, c: WHITE },
+      { x: 14, y: y(7), w: 2, h: 2, c: BLACK },
+      { x: 18, y: y(7), w: 2, h: 2, c: BLACK },
+      { x: 14, y: y(7), w: 1, h: 1, c: WHITE },
+    );
+  }
+
+  const bodyStretch = pose === "takeoff" || pose === "airborne" ? 1 : 0;
+  specs.push(
+    { x: 5, y: y(8 + bodyStretch), w: 12, h: 1, c: LIME_BRIGHT },
+    { x: 4, y: y(9 + bodyStretch), w: 14, h: 1, c: LIME },
+    { x: 4, y: y(10 + bodyStretch), w: 14, h: 2, c: LIME_MID },
+    { x: 5, y: y(12 + bodyStretch), w: 12, h: 1, c: LIME },
+    { x: 6, y: y(13 + bodyStretch), w: 10, h: 1, c: LIME_DARK },
+    { x: 7, y: y(14 + bodyStretch), w: 8, h: 1, c: LIME_DEEP },
+  );
+
+  specs.push(...legSpecs(legFrame, pose));
+  specs.push(...tailSpecs(tailFrame));
+  return specs;
+}
+
+const BullMascot = memo(function BullMascot({
+  blink,
+  tailFrame,
+  legFrame,
+  earsPerked,
+  headTilt,
+  pose,
+}: {
+  blink: boolean;
+  tailFrame: number;
+  legFrame: number;
+  earsPerked: boolean;
+  headTilt: -1 | 0 | 1;
+  pose: BullPose;
+}) {
+  return (
+    <View style={styles.bullCanvas}>
+      <PixelGroup
+        specs={bullBodySpecs({ blink, tailFrame, legFrame, earsPerked, headTilt, pose })}
+      />
+    </View>
+  );
+});
+
+const DustPuff = memo(function DustPuff({ opacity }: { opacity: Animated.Value }) {
+  return (
+    <Animated.View pointerEvents="none" style={[styles.dustWrap, { opacity }]}>
+      <View style={[styles.dustPixel, { left: 4, top: 8 }]} />
+      <View style={[styles.dustPixel, { left: 12, top: 10 }]} />
+      <View style={[styles.dustPixel, { left: 20, top: 7 }]} />
+      <View style={[styles.dustPixel, { left: 28, top: 11, opacity: 0.7 }]} />
+    </Animated.View>
+  );
+});
+
+const SpeechBubble = memo(function SpeechBubble({
+  text,
+  opacity,
+}: {
+  text: string;
+  opacity: Animated.Value;
+}) {
+  return (
+    <Animated.View style={[styles.bubbleWrap, { opacity }]}>
+      <View style={styles.bubbleBox}>
+        <Text style={styles.bubbleText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+          {text}
+        </Text>
+      </View>
+      <View style={styles.bubbleTailCol}>
+        <View style={styles.bubbleTailMid} />
+        <View style={styles.bubbleTailTip} />
+      </View>
+    </Animated.View>
+  );
+});
+
+type StarDef = {
+  x: number;
+  y: number;
+  size: number;
+  phase: number;
+  pulse: boolean;
+  twinkleMs: number;
+};
+
+const TwinkleStar = memo(function TwinkleStar({
+  star,
+  master,
+}: {
+  star: StarDef;
+  master: Animated.Value;
+}) {
+  const opacity = master.interpolate({
+    inputRange: [0, 0.35, 0.7, 1],
+    outputRange: star.pulse
+      ? [0.42, 1, 0.55, 0.42]
+      : [0.4, 0.72, 0.48, 0.4],
+  });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.star,
+        { left: star.x, top: star.y, width: star.size, height: star.size, opacity },
+      ]}
+    >
+      <View style={[styles.starH, { width: star.size }]} />
+      <View style={[styles.starV, { height: star.size }]} />
+    </Animated.View>
+  );
+});
+
+const ShootingStar = memo(function ShootingStar({
+  startX,
+  startY,
+  progress,
+}: {
+  startX: number;
+  startY: number;
+  progress: Animated.Value;
+}) {
+  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [0, 72] });
+  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [0, 18] });
+  const opacity = progress.interpolate({ inputRange: [0, 0.15, 0.85, 1], outputRange: [0, 0.55, 0.35, 0] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.shootingStar,
+        {
+          left: startX,
+          top: startY,
+          opacity,
+          transform: [{ translateX }, { translateY }],
+        },
+      ]}
+    />
+  );
+});
+
 const ChartCandle = memo(function ChartCandle({
   def,
-  showIndicator,
-  indicatorKind,
-  indicatorScale,
-  indicatorOpacity,
+  bobY,
 }: {
   def: CandleDef;
-  showIndicator: boolean;
-  indicatorKind: IndicatorKind;
-  indicatorScale?: Animated.AnimatedInterpolation<number>;
-  indicatorOpacity?: Animated.AnimatedInterpolation<number> | Animated.Value;
+  bobY: Animated.AnimatedInterpolation<number>;
 }) {
   const bodyColor = def.bullish ? CANDLE_GREEN : CANDLE_RED;
   const shade = def.bullish ? CANDLE_GREEN_DARK : CANDLE_RED_DARK;
 
   return (
-    <View style={styles.candleSlot}>
-      {showIndicator ? (
-        <Animated.View
-          style={[
-            styles.indicatorBubble,
-            indicatorScale != null && indicatorOpacity != null
-              ? { opacity: indicatorOpacity, transform: [{ scale: indicatorScale }] }
-              : null,
-          ]}
-        >
-          <Text style={styles.indicatorText}>{indicatorKind}</Text>
-        </Animated.View>
-      ) : null}
+    <Animated.View style={[styles.candleSlot, { transform: [{ translateY: bobY }] }]}>
       <View style={[styles.wick, { height: def.wickTop }]} />
       <View style={[styles.candleBody, { height: def.bodyH, backgroundColor: bodyColor }]}>
         <View style={[styles.candleShade, { backgroundColor: shade }]} />
       </View>
       <View style={[styles.wick, { height: def.wickBottom }]} />
-    </View>
-  );
-});
-
-const ChartArea = memo(function ChartArea({
-  driftX,
-  scanX,
-  activeIndex,
-  indicatorKind,
-  indicatorVisible,
-  indicatorScale,
-  indicatorOpacity,
-}: {
-  driftX: Animated.AnimatedInterpolation<number>;
-  scanX: Animated.AnimatedInterpolation<number>;
-  activeIndex: number;
-  indicatorKind: IndicatorKind;
-  indicatorVisible: boolean;
-  indicatorScale: Animated.AnimatedInterpolation<number>;
-  indicatorOpacity: Animated.Value;
-}) {
-  return (
-    <Animated.View
-      style={[
-        styles.chartArea,
-        {
-          transform: [{ translateX: driftX }],
-        },
-      ]}
-    >
-      <View style={styles.chartFrame}>
-        <View style={styles.candleRow}>
-          {CANDLES.map((def, i) => (
-            <ChartCandle
-              key={`candle-${i}`}
-              def={def}
-              showIndicator={indicatorVisible && activeIndex === i}
-              indicatorKind={indicatorKind}
-              indicatorScale={indicatorScale}
-              indicatorOpacity={indicatorOpacity}
-            />
-          ))}
-        </View>
-        <View style={styles.chartBaseline} />
-      </View>
-
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.scannerLaser,
-          {
-            transform: [{ translateX: scanX }],
-          },
-        ]}
-      />
-      <View pointerEvents="none" style={styles.scannerGlowTrack} />
     </Animated.View>
   );
 });
 
-// ─── Retro computer sprite ───────────────────────────────────────────────────
-function computerSpecs(screenTint: string): PixelSpec[] {
-  return [
-    { x: 0, y: 0, w: 14, h: 1, c: MONITOR_BEZEL },
-    { x: 0, y: 1, w: 1, h: 8, c: MONITOR_BEZEL },
-    { x: 13, y: 1, w: 1, h: 8, c: MONITOR_BEZEL },
-    { x: 1, y: 1, w: 12, h: 7, c: MONITOR_SCREEN },
-    { x: 2, y: 2, w: 10, h: 5, c: screenTint },
-    { x: 3, y: 3, w: 3, h: 1, c: NEON_GREEN },
-    { x: 7, y: 3, w: 4, h: 1, c: MONITOR_GLOW },
-    { x: 3, y: 5, w: 8, h: 1, c: MONITOR_GLOW },
-    { x: 0, y: 9, w: 14, h: 1, c: MONITOR_BEZEL },
-    { x: 4, y: 10, w: 6, h: 2, c: KEY_GRAY },
-    { x: 2, y: 12, w: 10, h: 1, c: KEY_GRAY },
-    { x: 1, y: 13, w: 12, h: 2, c: KEY_GRAY },
-    { x: 3, y: 14, w: 2, h: 1, c: PURPLE_DARK },
-    { x: 6, y: 14, w: 2, h: 1, c: PURPLE_DARK },
-    { x: 9, y: 14, w: 2, h: 1, c: PURPLE_DARK },
-  ];
-}
-
-const RetroComputer = memo(function RetroComputer({ screenTint }: { screenTint: string }) {
+const ChartArea = memo(function ChartArea({
+  candlePhase,
+}: {
+  candlePhase: Animated.Value;
+}) {
   return (
-    <View style={styles.computerCanvas}>
-      <PixelGroup specs={computerSpecs(screenTint)} />
+    <View style={styles.chartStack}>
+      <View style={styles.chartFrame}>
+        <View style={styles.candleRow}>
+          {CANDLES.map((def, i) => {
+            const bobY = candlePhase.interpolate({
+              inputRange: [0, 0.25, 0.5, 0.75, 1],
+              outputRange: [0, i % 2 === 0 ? -0.5 : 0.25, 0, i % 2 === 0 ? 0.25 : -0.5, 0],
+            });
+            return <ChartCandle key={`candle-${i}`} def={def} bobY={bobY} />;
+          })}
+        </View>
+        <View style={styles.chartBaseline} />
+      </View>
     </View>
   );
 });
 
-// ─── Bull sprite (idle operator) ─────────────────────────────────────────────
-function bullHorns(think: boolean): PixelSpec[] {
-  const hornColor = think ? PURPLE_HOT : PURPLE;
-  const hornMid = think ? PURPLE_LIGHT : PURPLE_MID;
-  return [
-    { x: 0, y: 0, w: 2, h: 1, c: hornColor },
-    { x: -1, y: 1, w: 2, h: 1, c: hornMid },
-    { x: -1, y: 2, w: 1, h: 2, c: PURPLE_DARK },
-    { x: 0, y: 4, w: 2, h: 1, c: hornMid },
-    { x: 14, y: 0, w: 2, h: 1, c: hornColor },
-    { x: 15, y: 1, w: 2, h: 1, c: hornMid },
-    { x: 16, y: 2, w: 1, h: 2, c: PURPLE_DARK },
-    { x: 14, y: 4, w: 2, h: 1, c: hornMid },
-  ];
-}
-
-function bullBodySpecs(blink: boolean, think: boolean): PixelSpec[] {
-  const eye: PixelSpec = blink
-    ? { x: 8, y: 7, w: 2, h: 1, c: PURPLE_DARK }
-    : { x: 9, y: 7, w: 1, h: 1, c: think ? WHITE : NEON_GREEN };
-
-  return [
-    ...bullHorns(think),
-    { x: 1, y: 5, w: 14, h: 1, c: PURPLE },
-    { x: 0, y: 6, w: 16, h: 1, c: PURPLE_LIGHT },
-    { x: 0, y: 7, w: 16, h: 1, c: PURPLE },
-    { x: 1, y: 8, w: 14, h: 1, c: PURPLE_MID },
-    { x: 11, y: 8, w: 5, h: 1, c: PURPLE },
-    { x: 12, y: 9, w: 4, h: 1, c: PURPLE_MID },
-    { x: 13, y: 10, w: 3, h: 1, c: PURPLE },
-    eye,
-    { x: 2, y: 11, w: 12, h: 1, c: PURPLE },
-    { x: 3, y: 12, w: 10, h: 1, c: PURPLE_MID },
-    { x: 4, y: 13, w: 8, h: 1, c: PURPLE },
-    { x: 4, y: 14, w: 3, h: 2, c: PURPLE_MID },
-    { x: 11, y: 14, w: 3, h: 2, c: PURPLE_MID },
-    { x: 4, y: 16, w: 3, h: 1, c: PURPLE_DARK },
-    { x: 11, y: 16, w: 3, h: 1, c: PURPLE_DARK },
-  ];
-}
-
-const BullOperator = memo(function BullOperator({ blink, thinking }: { blink: boolean; thinking: boolean }) {
-  return (
-    <View style={styles.bullCanvas}>
-      <PixelGroup specs={bullBodySpecs(blink, thinking)} />
-    </View>
-  );
-});
-
-// ─── Animation helpers ───────────────────────────────────────────────────────
 function stopAnimatedValue(value: Animated.Value) {
   value.stopAnimation();
   value.removeAllListeners();
 }
 
-function candleIndexFromScan(value: number) {
-  const clamped = Math.max(0, Math.min(1, value));
-  return Math.round(clamped * (CANDLES.length - 1));
+function dialogueForLanding(landingIndex: number): DialogueKey {
+  return landingIndex % 2 === 1 ? "authPixelDontGamble" : "authPixelTradeDiscipline";
 }
 
-function scanTravelWidth() {
-  const inner = CANDLES.length * CANDLE_SLOT_W + (CANDLES.length - 1) * CANDLE_GAP;
-  return inner - 2;
-}
-
-/** Premium pixel AI chart scanner — candles, laser sweep, operator bull. */
+/** Playful pixel mascot — bull hops candle to candle on a live chart. */
 export const PixelNeonBull = memo(function PixelNeonBull() {
-  const scanProgress = useRef(new Animated.Value(0)).current;
-  const chartDrift = useRef(new Animated.Value(0)).current;
-  const bullBreath = useRef(new Animated.Value(1)).current;
-  const hornThink = useRef(new Animated.Value(0)).current;
-  const indicatorPop = useRef(new Animated.Value(0)).current;
+  const { width: screenW } = useWindowDimensions();
+  const stageW = Math.min(screenW - 32, 360);
+  const chartW = stageW * 0.88;
+  const layout = useMemo(() => buildCandleLayout(chartW), [chartW]);
 
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [indicatorKind, setIndicatorKind] = useState<IndicatorKind>("+");
-  const [indicatorVisible, setIndicatorVisible] = useState(false);
+  const bullX = useRef(new Animated.Value(bullStandX(layout[0]))).current;
+  const bullY = useRef(new Animated.Value(bullStandY(layout[0]))).current;
+  const facingScale = useRef(new Animated.Value(1)).current;
+  const bodyStretch = useRef(new Animated.Value(1)).current;
+  const bubbleOpacity = useRef(new Animated.Value(0)).current;
+  const dustOpacity = useRef(new Animated.Value(0)).current;
+  const candlePhase = useRef(new Animated.Value(0)).current;
+
+  const starMasterA = useRef(new Animated.Value(0)).current;
+  const starMasterB = useRef(new Animated.Value(0)).current;
+  const starMasterC = useRef(new Animated.Value(0)).current;
+  const shootingProgress = useRef(new Animated.Value(0)).current;
+  const sparkleOpacity = useRef(new Animated.Value(0)).current;
+
   const [blink, setBlink] = useState(false);
-  const [thinking, setThinking] = useState(false);
+  const [tailFrame, setTailFrame] = useState(0);
+  const [legFrame, setLegFrame] = useState(0);
+  const [earsPerked, setEarsPerked] = useState(false);
+  const [headTilt, setHeadTilt] = useState<0 | 1 | -1>(0);
+  const [pose, setPose] = useState<BullPose>("idle");
+  const [dialogueKey, setDialogueKey] = useState<DialogueKey>("authPixelDontGamble");
+  const [shootingStar, setShootingStar] = useState({ x: stageW * 0.12, y: 16, key: 0 });
 
   const mountedRef = useRef(true);
-  const scanDirectionRef = useRef<1 | -1>(1);
-  const indicatorToggleRef = useRef(false);
-  const breathLoopRef = useRef<Animated.CompositeAnimation | null>(null);
-  const scanLoopRef = useRef<Animated.CompositeAnimation | null>(null);
-  const driftLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const landingCounterRef = useRef(1);
   const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const thinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const indicatorHideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tailIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const legIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const earsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const headIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const shootingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const driftX = chartDrift.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-3, 3],
-  });
-
-  const scanX = scanProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, scanTravelWidth()],
-  });
-
-  const bullScale = bullBreath;
-  const bullOffsetY = bullBreath.interpolate({
-    inputRange: [0.96, 1.04],
-    outputRange: [2, -2],
-  });
-
-  const hornTintOpacity = hornThink.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  const indicatorScale = indicatorPop.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.35, 1],
-  });
+  const stars = useMemo<StarDef[]>(
+    () => [
+      { x: stageW * 0.05, y: 12, size: 4, phase: 0, pulse: true, twinkleMs: 2800 },
+      { x: stageW * 0.92, y: 18, size: 3, phase: 1, pulse: false, twinkleMs: 3400 },
+      { x: stageW * 0.08, y: 52, size: 3, phase: 2, pulse: true, twinkleMs: 3100 },
+      { x: stageW * 0.88, y: 48, size: 4, phase: 0.5, pulse: false, twinkleMs: 3600 },
+      { x: stageW * 0.42, y: 8, size: 2, phase: 1.2, pulse: false, twinkleMs: 4200 },
+      { x: stageW * 0.62, y: 28, size: 2, phase: 0.8, pulse: true, twinkleMs: 3900 },
+    ],
+    [stageW],
+  );
 
   useEffect(() => {
     mountedRef.current = true;
 
-    const triggerThinkPulse = (index: number) => {
-      if (!mountedRef.current) return;
+    const candleLoop = Animated.loop(
+      Animated.timing(candlePhase, {
+        toValue: 1,
+        duration: 6400,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+        isInteraction: false,
+      }),
+    );
 
-      setThinking(true);
-      setActiveIndex(index);
-      hornThink.setValue(0);
-      indicatorToggleRef.current = !indicatorToggleRef.current;
-      setIndicatorKind(indicatorToggleRef.current ? "%" : "+");
-      setIndicatorVisible(true);
-      indicatorPop.setValue(0);
-
+    const starLoopA = Animated.loop(
       Animated.sequence([
-        Animated.timing(hornThink, {
+        Animated.timing(starMasterA, {
           toValue: 1,
-          duration: THINK_FLASH_MS,
+          duration: 3000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(starMasterA, {
+          toValue: 0,
+          duration: 3000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+      ]),
+    );
+
+    const starLoopB = Animated.loop(
+      Animated.sequence([
+        Animated.delay(900),
+        Animated.timing(starMasterB, {
+          toValue: 1,
+          duration: 3600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(starMasterB, {
+          toValue: 0,
+          duration: 3600,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+      ]),
+    );
+
+    const starLoopC = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1800),
+        Animated.timing(starMasterC, {
+          toValue: 1,
+          duration: 4200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(starMasterC, {
+          toValue: 0,
+          duration: 4200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+      ]),
+    );
+
+    const sparkleLoop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(5200),
+        Animated.timing(sparkleOpacity, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(sparkleOpacity, {
+          toValue: 0,
+          duration: 520,
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.delay(6800),
+      ]),
+    );
+
+    candleLoop.start();
+    starLoopA.start();
+    starLoopB.start();
+    starLoopC.start();
+    sparkleLoop.start();
+
+    const scheduleBlink = () => {
+      if (!mountedRef.current) return;
+      const delay = 2800 + Math.random() * 3400;
+      blinkTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
+        setBlink(true);
+        blinkTimeoutRef.current = setTimeout(() => {
+          if (!mountedRef.current) return;
+          setBlink(false);
+          scheduleBlink();
+        }, 110);
+      }, delay);
+    };
+    scheduleBlink();
+
+    tailIntervalRef.current = setInterval(() => {
+      if (mountedRef.current) setTailFrame((v) => (v + 1) % 4);
+    }, 320);
+
+    legIntervalRef.current = setInterval(() => {
+      if (mountedRef.current) setLegFrame((v) => (v + 1) % 3);
+    }, 220);
+
+    earsIntervalRef.current = setInterval(() => {
+      if (!mountedRef.current) return;
+      setEarsPerked(true);
+      setTimeout(() => {
+        if (mountedRef.current) setEarsPerked(false);
+      }, 160);
+    }, 1600);
+
+    headIntervalRef.current = setInterval(() => {
+      if (!mountedRef.current) return;
+      const tilts: Array<0 | 1 | -1> = [0, 1, 0, -1, 0];
+      const pick = tilts[Math.floor(Math.random() * tilts.length)];
+      setHeadTilt(pick);
+    }, 1800);
+
+    const scheduleShootingStar = () => {
+      if (!mountedRef.current) return;
+      const delay = 10000 + Math.random() * 5000;
+      shootingTimeoutRef.current = setTimeout(() => {
+        if (!mountedRef.current) return;
+        setShootingStar({
+          x: stageW * (0.08 + Math.random() * 0.55),
+          y: 8 + Math.random() * 36,
+          key: Date.now(),
+        });
+        shootingProgress.setValue(0);
+        Animated.timing(shootingProgress, {
+          toValue: 1,
+          duration: 680,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+          isInteraction: false,
+        }).start(() => scheduleShootingStar());
+      }, delay);
+    };
+    scheduleShootingStar();
+
+    return () => {
+      mountedRef.current = false;
+      stopAnimatedValue(candlePhase);
+      stopAnimatedValue(starMasterA);
+      stopAnimatedValue(starMasterB);
+      stopAnimatedValue(starMasterC);
+      stopAnimatedValue(shootingProgress);
+      stopAnimatedValue(sparkleOpacity);
+      stopAnimatedValue(bullX);
+      stopAnimatedValue(bullY);
+      stopAnimatedValue(facingScale);
+      stopAnimatedValue(bodyStretch);
+      stopAnimatedValue(bubbleOpacity);
+      stopAnimatedValue(dustOpacity);
+      candleLoop.stop();
+      starLoopA.stop();
+      starLoopB.stop();
+      starLoopC.stop();
+      sparkleLoop.stop();
+      if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
+      if (tailIntervalRef.current) clearInterval(tailIntervalRef.current);
+      if (legIntervalRef.current) clearInterval(legIntervalRef.current);
+      if (earsIntervalRef.current) clearInterval(earsIntervalRef.current);
+      if (headIntervalRef.current) clearInterval(headIntervalRef.current);
+      if (shootingTimeoutRef.current) clearTimeout(shootingTimeoutRef.current);
+    };
+  }, [
+    bodyStretch,
+    bullX,
+    bullY,
+    bubbleOpacity,
+    candlePhase,
+    dustOpacity,
+    facingScale,
+    shootingProgress,
+    sparkleOpacity,
+    stageW,
+    starMasterA,
+    starMasterB,
+    starMasterC,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const showBubbleOnCandle = (): Animated.CompositeAnimation =>
+      Animated.sequence([
+        Animated.timing(bubbleOpacity, {
+          toValue: 1,
+          duration: 120,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
           isInteraction: false,
         }),
-        Animated.timing(hornThink, {
+        Animated.delay(PAUSE_MS),
+        Animated.timing(bubbleOpacity, {
           toValue: 0,
-          duration: THINK_FLASH_MS,
-          easing: Easing.in(Easing.quad),
+          duration: 180,
           useNativeDriver: true,
           isInteraction: false,
         }),
-      ]).start();
+      ]);
 
-      Animated.spring(indicatorPop, {
-        toValue: 1,
-        friction: 5,
-        tension: 120,
-        useNativeDriver: true,
-        isInteraction: false,
-      }).start();
+    const landOnCandle = (candleIndex: number): Animated.CompositeAnimation => {
+      const targetX = bullStandX(layout[candleIndex]);
+      const targetY = bullStandY(layout[candleIndex]);
+      const key = dialogueForLanding(landingCounterRef.current);
+      landingCounterRef.current += 1;
+      setDialogueKey(key);
+      setPose("land");
+      setTimeout(() => {
+        if (!cancelled) setPose("idle");
+      }, 320);
 
-      if (thinkTimeoutRef.current) clearTimeout(thinkTimeoutRef.current);
-      thinkTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current) setThinking(false);
-      }, THINK_FLASH_MS * 2 + 40);
+      return Animated.sequence([
+        Animated.parallel([
+          Animated.timing(bullX, {
+            toValue: targetX,
+            duration: LAND_BOUNCE_MS,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+            isInteraction: false,
+          }),
+          Animated.sequence([
+            Animated.timing(bullY, {
+              toValue: targetY + 3,
+              duration: 60,
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.timing(bullY, {
+              toValue: targetY - 3,
+              duration: 80,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.timing(bullY, {
+              toValue: targetY,
+              duration: 70,
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+          ]),
+          Animated.sequence([
+            Animated.timing(dustOpacity, { toValue: 0.65, duration: 40, useNativeDriver: true }),
+            Animated.timing(dustOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+          ]),
+        ]),
+        showBubbleOnCandle(),
+      ]);
+    };
 
-      if (indicatorHideRef.current) clearTimeout(indicatorHideRef.current);
-      indicatorHideRef.current = setTimeout(() => {
-        if (!mountedRef.current) return;
-        Animated.timing(indicatorPop, {
-          toValue: 0,
+    const hopToCandle = (fromIndex: number, toIndex: number): Animated.CompositeAnimation => {
+      const fromX = bullStandX(layout[fromIndex]);
+      const fromY = bullStandY(layout[fromIndex]);
+      const toX = bullStandX(layout[toIndex]);
+      const toY = bullStandY(layout[toIndex]);
+      const apexY = Math.min(fromY, toY) - JUMP_ARC;
+
+      bullX.setValue(fromX);
+      bullY.setValue(fromY);
+      bubbleOpacity.setValue(0);
+      setPose("takeoff");
+      setTimeout(() => {
+        if (!cancelled) setPose("airborne");
+      }, 160);
+
+      return Animated.sequence([
+        Animated.timing(bodyStretch, {
+          toValue: 1.08,
+          duration: 120,
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.parallel([
+          Animated.timing(bullX, {
+            toValue: toX,
+            duration: JUMP_MS,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+            isInteraction: false,
+          }),
+          Animated.sequence([
+            Animated.timing(bullY, {
+              toValue: apexY,
+              duration: Math.round(JUMP_MS * 0.48),
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.timing(bullY, {
+              toValue: toY,
+              duration: Math.round(JUMP_MS * 0.52),
+              easing: Easing.in(Easing.quad),
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+          ]),
+          Animated.sequence([
+            Animated.delay(Math.round(JUMP_MS * 0.35)),
+            Animated.timing(bodyStretch, {
+              toValue: 0.94,
+              duration: 140,
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.timing(bodyStretch, {
+              toValue: 1,
+              duration: 120,
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+          ]),
+        ]),
+      ]);
+    };
+
+    const turnAround = (nextScale: number, atIndex: number): Animated.CompositeAnimation => {
+      const standY = bullStandY(layout[atIndex]);
+      setPose("idle");
+      return Animated.sequence([
+        Animated.timing(bullY, {
+          toValue: standY + 2,
+          duration: 140,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(facingScale, {
+          toValue: nextScale,
+          duration: TURN_MS,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(bullY, {
+          toValue: standY,
           duration: 160,
+          easing: Easing.out(Easing.bounce),
           useNativeDriver: true,
           isInteraction: false,
-        }).start(({ finished }) => {
-          if (finished && mountedRef.current) setIndicatorVisible(false);
-        });
-      }, 680);
+        }),
+        Animated.delay(200),
+      ]);
     };
 
-    const scheduleBlink = () => {
-    if (!mountedRef.current) return;
-    const delay = 2200 + Math.random() * 2600;
-    blinkTimeoutRef.current = setTimeout(() => {
-      if (!mountedRef.current) return;
-      setBlink(true);
-      blinkTimeoutRef.current = setTimeout(() => {
-        if (!mountedRef.current) return;
-        setBlink(false);
-        scheduleBlink();
-      }, 90);
-    }, delay);
-    };
+    const runTrip = (direction: "right" | "left", onDone: () => void) => {
+      if (cancelled) return;
 
-    breathLoopRef.current = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bullBreath, {
-          toValue: 1.04,
-          duration: BREATH_IN_MS,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
-        Animated.timing(bullBreath, {
-          toValue: 0.96,
-          duration: BREATH_OUT_MS,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
-      ]),
-    );
-    breathLoopRef.current.start();
+      const startIndex = direction === "right" ? 0 : CANDLE_COUNT - 1;
+      const step = direction === "right" ? 1 : -1;
+      facingScale.setValue(direction === "right" ? 1 : -1);
 
-    driftLoopRef.current = Animated.loop(
-      Animated.sequence([
-        Animated.timing(chartDrift, {
-          toValue: 1,
-          duration: DRIFT_DURATION_MS,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
-        Animated.timing(chartDrift, {
-          toValue: 0,
-          duration: DRIFT_DURATION_MS,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
-      ]),
-    );
-    driftLoopRef.current.start();
+      const steps: Animated.CompositeAnimation[] = [
+        landOnCandle(startIndex),
+      ];
 
-    const runScanLeg = (toValue: number) =>
-      Animated.timing(scanProgress, {
-        toValue,
-        duration: SCAN_DURATION_MS,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true,
-        isInteraction: false,
-      });
-
-    scanLoopRef.current = Animated.loop(
-      Animated.sequence([
-        runScanLeg(1),
-        runScanLeg(0),
-      ]),
-    );
-    scanLoopRef.current.start();
-
-    const scanListenerId = scanProgress.addListener(({ value }) => {
-      if (!mountedRef.current) return;
-      setActiveIndex(candleIndexFromScan(value));
-
-      const nearStart = value <= 0.04;
-      const nearEnd = value >= 0.96;
-      if (nearStart && scanDirectionRef.current === -1) {
-        scanDirectionRef.current = 1;
-        triggerThinkPulse(candleIndexFromScan(value));
-      } else if (nearEnd && scanDirectionRef.current === 1) {
-        scanDirectionRef.current = -1;
-        triggerThinkPulse(candleIndexFromScan(value));
+      for (let i = startIndex; i !== startIndex + step * CANDLE_COUNT; i += step) {
+        const next = i + step;
+        if (next < 0 || next >= CANDLE_COUNT) break;
+        steps.push(
+          Animated.sequence([
+            hopToCandle(i, next),
+            landOnCandle(next),
+          ]),
+        );
       }
-    });
 
-    scheduleBlink();
+      const endIndex = direction === "right" ? CANDLE_COUNT - 1 : 0;
+      const nextScale = direction === "right" ? -1 : 1;
+      steps.push(turnAround(nextScale, endIndex));
+
+      Animated.sequence(steps).start(({ finished }) => {
+        if (finished && !cancelled) onDone();
+      });
+    };
+
+    bullX.setValue(bullStandX(layout[0]));
+    bullY.setValue(bullStandY(layout[0]));
+    facingScale.setValue(1);
+    landingCounterRef.current = 1;
+    setDialogueKey("authPixelDontGamble");
+
+    const loopForever = () => {
+      runTrip("right", () => {
+        runTrip("left", () => {
+          if (!cancelled) loopForever();
+        });
+      });
+    };
+
+    loopForever();
 
     return () => {
-      mountedRef.current = false;
-      scanProgress.removeListener(scanListenerId);
-      stopAnimatedValue(scanProgress);
-      stopAnimatedValue(chartDrift);
-      stopAnimatedValue(bullBreath);
-      stopAnimatedValue(hornThink);
-      stopAnimatedValue(indicatorPop);
-      breathLoopRef.current?.stop();
-      scanLoopRef.current?.stop();
-      driftLoopRef.current?.stop();
-      if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
-      if (thinkTimeoutRef.current) clearTimeout(thinkTimeoutRef.current);
-      if (indicatorHideRef.current) clearTimeout(indicatorHideRef.current);
+      cancelled = true;
+      bullX.stopAnimation();
+      bullY.stopAnimation();
+      facingScale.stopAnimation();
+      bodyStretch.stopAnimation();
+      bubbleOpacity.stopAnimation();
+      dustOpacity.stopAnimation();
     };
-  }, [bullBreath, chartDrift, hornThink, indicatorPop, scanProgress]);
+  }, [bodyStretch, bubbleOpacity, bullX, bullY, dustOpacity, facingScale, layout]);
+
+  const dynamicStyles = useMemo(
+    () =>
+      StyleSheet.create({
+        wrap: {
+          width: stageW,
+          height: STAGE_H,
+          alignSelf: "center",
+          marginBottom: 2,
+          overflow: "visible",
+          backgroundColor: VOID,
+        },
+        stage: {
+          width: stageW,
+          height: STAGE_H,
+          position: "relative",
+          alignItems: "center",
+          backgroundColor: VOID,
+        },
+        chartArea: {
+          position: "absolute",
+          bottom: 8,
+          width: chartW,
+          height: 118,
+          alignItems: "center",
+          zIndex: 2,
+        },
+      }),
+    [chartW, stageW],
+  );
+
+  const starMasterFor = (phase: number) => {
+    if (phase < 0.7) return starMasterA;
+    if (phase < 1.4) return starMasterB;
+    return starMasterC;
+  };
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.stage}>
-        <View style={styles.topRow}>
-          <ChartArea
-            driftX={driftX}
-            scanX={scanX}
-            activeIndex={activeIndex}
-            indicatorKind={indicatorKind}
-            indicatorVisible={indicatorVisible}
-            indicatorScale={indicatorScale}
-            indicatorOpacity={indicatorPop}
-          />
+    <View style={dynamicStyles.wrap}>
+      <View style={dynamicStyles.stage}>
+        {stars.map((star, i) => (
+          <TwinkleStar key={`star-${i}`} star={star} master={starMasterFor(star.phase)} />
+        ))}
 
-          <View style={styles.operatorArea}>
-            <Animated.View
-              style={[
-                styles.bullSlot,
-                {
-                  transform: [{ scale: bullScale }, { translateY: bullOffsetY }],
-                },
-              ]}
-            >
-              <BullOperator blink={blink} thinking={thinking} />
-              <Animated.View pointerEvents="none" style={[styles.hornTintOverlay, { opacity: hornTintOpacity }]} />
-            </Animated.View>
+        <ShootingStar
+          key={shootingStar.key}
+          startX={shootingStar.x}
+          startY={shootingStar.y}
+          progress={shootingProgress}
+        />
 
-            <View style={styles.computerSlot}>
-              <RetroComputer screenTint={thinking ? MONITOR_GLOW : MONITOR_SCREEN} />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.nearStarSparkle,
+            {
+              left: stars[0]?.x ?? 12,
+              top: (stars[0]?.y ?? 12) + 6,
+              opacity: sparkleOpacity,
+            },
+          ]}
+        />
+
+        <View style={dynamicStyles.chartArea}>
+          <ChartArea candlePhase={candlePhase} />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.bullOverlay,
+              {
+                transform: [
+                  { translateX: bullX },
+                  { translateY: bullY },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.bullCluster}>
+              <SpeechBubble text={t(dialogueKey)} opacity={bubbleOpacity} />
+              <Animated.View
+                style={{
+                  transform: [{ scaleX: facingScale }, { scaleY: bodyStretch }],
+                }}
+              >
+                <BullMascot
+                  blink={blink}
+                  tailFrame={tailFrame}
+                  legFrame={legFrame}
+                  earsPerked={earsPerked}
+                  headTilt={headTilt}
+                  pose={pose}
+                />
+                <DustPuff opacity={dustOpacity} />
+              </Animated.View>
             </View>
-          </View>
-        </View>
-
-        <View style={styles.groundLine} />
-        <View style={styles.stageLabelRow}>
-          <Text style={styles.stageLabel}>AI SCAN</Text>
-          <Text style={styles.stageLabelDim}>LIVE</Text>
+          </Animated.View>
         </View>
       </View>
     </View>
@@ -546,44 +1020,114 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 });
 
 const styles = StyleSheet.create({
-  wrap: {
-    width: STAGE_W,
-    height: STAGE_H,
-    alignSelf: "center",
-    marginBottom: 2,
-    overflow: "visible",
-    backgroundColor: VOID,
+  star: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
   },
-  stage: {
-    width: STAGE_W,
-    height: STAGE_H,
+  starH: {
+    position: "absolute",
+    height: 1,
+    backgroundColor: "rgba(184,255,26,0.85)",
+  },
+  starV: {
+    position: "absolute",
+    width: 1,
+    backgroundColor: "rgba(184,255,26,0.85)",
+  },
+  shootingStar: {
+    position: "absolute",
+    width: 10,
+    height: 2,
+    backgroundColor: "rgba(184,255,26,0.55)",
+    zIndex: 1,
+  },
+  nearStarSparkle: {
+    position: "absolute",
+    width: 4,
+    height: 4,
+    backgroundColor: "rgba(184,255,26,0.65)",
+    transform: [{ rotate: "45deg" }],
+    zIndex: 1,
+  },
+  bullOverlay: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    zIndex: 5,
+  },
+  bullCluster: {
+    alignItems: "center",
+    width: BULL_PX_W * PX + 36,
+    marginLeft: -18,
+  },
+  bullCanvas: {
+    width: BULL_PX_W * PX,
+    height: BULL_PX_H * PX,
     position: "relative",
-    backgroundColor: VOID,
   },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingTop: 18,
-    height: STAGE_H - 24,
+  dustWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: -2,
+    height: 14,
   },
-  chartArea: {
-    width: CHART_W,
-    height: CHART_H,
-    position: "relative",
-    marginTop: CHART_TOP - 18,
+  dustPixel: {
+    position: "absolute",
+    width: 3,
+    height: 3,
+    backgroundColor: DUST,
   },
-  chartFrame: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#1E2430",
-    borderRadius: 6,
-    backgroundColor: "#050608",
-    paddingHorizontal: 6,
-    paddingTop: 8,
-    paddingBottom: 6,
-    overflow: "hidden",
+  bubbleWrap: {
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  bubbleBox: {
+    borderWidth: 2,
+    borderColor: BLACK,
+    backgroundColor: WHITE,
+    borderRadius: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 132,
+    maxWidth: 188,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bubbleText: {
+    color: BLACK,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+    textAlign: "center",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  bubbleTailCol: {
+    alignItems: "center",
+    marginTop: -1,
+  },
+  bubbleTailMid: {
+    width: 10,
+    height: 8,
+    backgroundColor: WHITE,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: BLACK,
+  },
+  bubbleTailTip: {
+    width: 8,
+    height: 8,
+    backgroundColor: WHITE,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: BLACK,
+    transform: [{ rotate: "45deg" }],
+    marginTop: -6,
+    marginLeft: 8,
   },
   candleRow: {
     flexDirection: "row",
@@ -599,12 +1143,12 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   wick: {
-    width: 1,
+    width: WICK_W,
     backgroundColor: WICK,
   },
   candleBody: {
     width: CANDLE_SLOT_W - 2,
-    borderRadius: 1,
+    borderRadius: 2,
     overflow: "hidden",
   },
   candleShade: {
@@ -612,112 +1156,30 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: 2,
+    width: 3,
   },
   chartBaseline: {
-    height: 2,
+    height: BASELINE_H,
     backgroundColor: GROUND,
-    marginTop: 4,
+    marginTop: BASELINE_MT,
     borderRadius: 1,
   },
-  scannerLaser: {
-    position: "absolute",
-    left: 6,
-    top: 8,
-    width: 2,
-    height: CHART_H - 18,
-    backgroundColor: NEON_GREEN,
-    shadowColor: NEON_GREEN,
-    shadowOpacity: 0.95,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 0 },
-    zIndex: 4,
-  },
-  scannerGlowTrack: {
-    position: "absolute",
-    left: 6,
-    top: 8,
-    right: 6,
-    height: CHART_H - 18,
-    backgroundColor: "rgba(163,255,18,0.03)",
-    zIndex: 1,
-  },
-  operatorArea: {
-    width: OPERATOR_W,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "flex-end",
-    gap: 4,
-    paddingBottom: 4,
-  },
-  bullSlot: {
-    position: "relative",
-    zIndex: 3,
-  },
-  bullCanvas: {
-    width: BULL_GRID_W * PX,
-    height: BULL_GRID_H * PX,
-    position: "relative",
-  },
-  hornTintOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(192,132,252,0.22)",
-  },
-  computerSlot: {
-    zIndex: 2,
-    marginBottom: 2,
-  },
-  computerCanvas: {
-    width: COMPUTER_W * PX,
-    height: COMPUTER_H * PX,
-    position: "relative",
-  },
-  groundLine: {
-    position: "absolute",
-    bottom: 20,
-    left: STAGE_W * 0.06,
-    width: STAGE_W * 0.88,
-    height: 2,
-    backgroundColor: GROUND,
-  },
-  stageLabelRow: {
-    position: "absolute",
-    bottom: 4,
-    left: 12,
-    right: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  stageLabel: {
-    color: NEON_GREEN,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-  },
-  stageLabelDim: {
-    color: "#4B5563",
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  indicatorBubble: {
-    position: "absolute",
-    top: -16,
-    zIndex: 6,
-    minWidth: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: "rgba(163,255,18,0.18)",
-    borderWidth: 1,
-    borderColor: NEON_GREEN,
+  chartStack: {
+    width: "100%",
+    height: 118,
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 3,
+    justifyContent: "flex-end",
   },
-  indicatorText: {
-    color: NEON_GREEN,
-    fontSize: 9,
-    fontWeight: "900",
-    lineHeight: 11,
+  chartFrame: {
+    width: "100%",
+    height: CHART_FRAME_H,
+    borderWidth: 2,
+    borderColor: "#1E2430",
+    borderRadius: 10,
+    backgroundColor: "#050608",
+    paddingHorizontal: CHART_PAD_H,
+    paddingTop: CHART_PAD_TOP,
+    paddingBottom: CHART_PAD_BOTTOM,
+    overflow: "visible",
   },
 });

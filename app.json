@@ -25,8 +25,17 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.youtrader.pro",
       "usesAppleSignIn": true,
-      "buildNumber": "83",
+      "buildNumber": "90",
       "infoPlist": {
+        "CFBundleLocalizations": [
+          "en",
+          "ru",
+          "de",
+          "fr",
+          "es",
+          "it",
+          "uk"
+        ],
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "YouTrader lets you attach a screenshot of your trade to your journal.",
         "NSPhotoLibraryUsageDescription": "YouTrader lets you upload a trade screenshot from your photo library.",

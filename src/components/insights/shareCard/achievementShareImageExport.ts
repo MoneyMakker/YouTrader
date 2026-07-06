@@ -42,7 +42,7 @@ export async function generateAchievementShareCardImage(
 ) {
   const templateUri = await loadAchievementTemplateUri();
   const copy = buildAchievementRewardOverlay(item, stats);
-  const achievementLayers = buildAchievementSvgLayers(copy);
+  const achievementLayers = buildAchievementSvgLayers(copy, item);
   const uri = await enqueueStatCardRaster({
     templateUri,
     achievementLayers,

@@ -96,18 +96,49 @@ export function StatCardExportHost() {
           );
         })}
         {job.achievementLayers?.map((layer, index) => (
-          <SvgText
-            key={`export-achievement-${index}`}
-            x={layer.x}
-            y={layer.y}
-            fill={layer.fill}
-            fontSize={layer.fontSize}
-            fontWeight={layer.fontWeight}
-            textAnchor="middle"
-            letterSpacing={layer.letterSpacing}
-          >
-            {layer.text}
-          </SvgText>
+          <React.Fragment key={`export-achievement-${index}`}>
+            {layer.shadowFill ? (
+              <SvgText
+                x={layer.x}
+                y={layer.y + (layer.shadowDy ?? 2)}
+                fill={layer.shadowFill}
+                fontSize={layer.fontSize}
+                fontWeight={layer.fontWeight}
+                textAnchor="middle"
+                letterSpacing={layer.letterSpacing}
+                opacity={0.85}
+              >
+                {layer.lines?.length
+                  ? layer.lines.map((line, lineIndex) => (
+                      <TSpan
+                        key={`ach-shadow-${lineIndex}`}
+                        x={layer.x}
+                        dy={lineIndex === 0 ? 0 : layer.lineHeight ?? layer.fontSize * 1.14}
+                      >
+                        {line}
+                      </TSpan>
+                    ))
+                  : layer.text}
+              </SvgText>
+            ) : null}
+            <SvgText
+              x={layer.x}
+              y={layer.y}
+              fill={layer.fill}
+              fontSize={layer.fontSize}
+              fontWeight={layer.fontWeight}
+              textAnchor="middle"
+              letterSpacing={layer.letterSpacing}
+            >
+              {layer.lines?.length
+                ? layer.lines.map((line, lineIndex) => (
+                    <TSpan key={`ach-line-${lineIndex}`} x={layer.x} dy={lineIndex === 0 ? 0 : layer.lineHeight ?? layer.fontSize * 1.14}>
+                      {line}
+                    </TSpan>
+                  ))
+                : layer.text}
+            </SvgText>
+          </React.Fragment>
         ))}
       </Svg>
     </View>

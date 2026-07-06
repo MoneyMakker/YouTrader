@@ -67,9 +67,9 @@ export function achievementRewardOverlayStyle(): ViewStyle {
     height: art.height * frac.height,
     justifyContent: "flex-start",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 48,
+    paddingHorizontal: "10%",
+    paddingTop: "8%",
+    paddingBottom: "10%",
   };
 }
 

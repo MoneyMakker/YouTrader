@@ -1,87 +1,109 @@
+import type { Achievement } from "../../../analytics/achievements";
 import type { AchievementRewardOverlayCopy } from "./achievementHelpers";
-import { achievementTitleFontSize } from "./achievementHelpers";
-import {
-  ACHIEVEMENT_EXPORT_HEIGHT,
-  ACHIEVEMENT_EXPORT_WIDTH,
-  ACHIEVEMENT_REWARD_OVERLAY_FRACTION,
-  achievementScaledFont,
-} from "./achievementTemplateLayout";
+import { buildAchievementShareTextLayout } from "./achievementShareTextLayout";
+import { resolveAchievementTextTheme } from "./achievementTextTheme";
 
 export type AchievementSvgTextLayer = {
   text: string;
+  lines?: string[];
   x: number;
   y: number;
   fontSize: number;
+  lineHeight?: number;
   fontWeight: "500" | "600" | "700" | "900";
   fill: string;
   letterSpacing?: number;
+  shadowFill?: string;
+  shadowDy?: number;
 };
 
-const TEXT = {
-  kicker: "#B8FF00",
-  title: "#F7F8FA",
-  description: "rgba(247,248,250,0.82)",
-  detail: "#E8D4FF",
-};
-
-export function buildAchievementSvgLayers(copy: AchievementRewardOverlayCopy): AchievementSvgTextLayer[] {
-  const frac = ACHIEVEMENT_REWARD_OVERLAY_FRACTION;
-  const ox = ACHIEVEMENT_EXPORT_WIDTH * frac.left;
-  const oy = ACHIEVEMENT_EXPORT_HEIGHT * frac.top;
-  const ow = ACHIEVEMENT_EXPORT_WIDTH * frac.width;
-  const oh = ACHIEVEMENT_EXPORT_HEIGHT * frac.height;
-  const cx = ox + ow / 2;
-
-  const kickerSize = achievementScaledFont(48);
-  const titleSize = achievementScaledFont(achievementTitleFontSize(copy.title));
-  const descriptionSize = achievementScaledFont(34);
-  const detailSize = achievementScaledFont(46);
-
-  const layers: AchievementSvgTextLayer[] = [];
-  let y = oy + oh * 0.14;
-
-  layers.push({
-    text: copy.kicker,
-    x: cx,
-    y,
-    fontSize: kickerSize,
-    fontWeight: "700",
-    fill: TEXT.kicker,
-    letterSpacing: 7,
-  });
-
-  y += kickerSize * 1.15 + achievementScaledFont(32);
-  layers.push({
-    text: copy.title,
-    x: cx,
-    y,
-    fontSize: titleSize,
-    fontWeight: "900",
-    fill: TEXT.title,
-  });
-
-  if (copy.description) {
-    y += titleSize * 1.05 + achievementScaledFont(34);
+function appendLayer(
+  layers: AchievementSvgTextLayer[],
+  layer: AchievementSvgTextLayer,
+  withShadow: boolean,
+) {
+  if (withShadow && layer.shadowFill) {
     layers.push({
-      text: copy.description,
-      x: cx,
-      y,
-      fontSize: descriptionSize,
-      fontWeight: "500",
-      fill: TEXT.description,
+      ...layer,
+      fill: layer.shadowFill,
+      y: layer.y + (layer.shadowDy ?? 2),
     });
   }
+  layers.push(layer);
+}
 
-  if (copy.detail) {
-    y += descriptionSize * 1.2 + achievementScaledFont(36);
-    layers.push({
-      text: copy.detail,
-      x: cx,
-      y,
-      fontSize: detailSize,
-      fontWeight: "600",
-      fill: TEXT.detail,
-    });
+export function buildAchievementSvgLayers(
+  copy: AchievementRewardOverlayCopy,
+  item?: Achievement | null,
+): AchievementSvgTextLayer[] {
+  const layout = buildAchievementShareTextLayout(copy);
+  const theme = resolveAchievementTextTheme(item);
+  const layers: AchievementSvgTextLayer[] = [];
+
+  appendLayer(
+    layers,
+    {
+      text: copy.kicker,
+      x: layout.safe.cx,
+      y: layout.kicker.y,
+      fontSize: layout.kicker.fontSize,
+      fontWeight: "700",
+      fill: theme.kicker,
+      letterSpacing: layout.kicker.letterSpacing,
+      shadowFill: theme.titleShadow,
+    },
+    true,
+  );
+
+  appendLayer(
+    layers,
+    {
+      text: layout.title.lines.join("\n"),
+      lines: layout.title.lines,
+      x: layout.safe.cx,
+      y: layout.title.y,
+      fontSize: layout.title.fontSize,
+      lineHeight: layout.title.lineHeight,
+      fontWeight: "900",
+      fill: theme.title,
+      shadowFill: theme.titleShadow,
+      shadowDy: 3,
+    },
+    true,
+  );
+
+  if (copy.description && layout.description) {
+    appendLayer(
+      layers,
+      {
+        text: layout.description.lines.join("\n"),
+        lines: layout.description.lines,
+        x: layout.safe.cx,
+        y: layout.description.y,
+        fontSize: layout.description.fontSize,
+        lineHeight: layout.description.lineHeight,
+        fontWeight: "500",
+        fill: theme.description,
+        shadowFill: theme.titleShadow,
+        shadowDy: 2,
+      },
+      true,
+    );
+  }
+
+  if (copy.detail && layout.detail) {
+    appendLayer(
+      layers,
+      {
+        text: copy.detail,
+        x: layout.safe.cx,
+        y: layout.detail.y,
+        fontSize: layout.detail.fontSize,
+        fontWeight: "600",
+        fill: theme.detail,
+      },
+      false,
+    );
   }
 
   return layers;
