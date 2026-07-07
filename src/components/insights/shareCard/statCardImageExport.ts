@@ -1,4 +1,5 @@
 import { Asset } from "expo-asset";
+import { logger } from "../../../lib/logger";
 import * as FileSystem from "expo-file-system/legacy";
 import type { AchievementShareStats } from "./achievementHelpers";
 import { buildAchievementStatSlots } from "./achievementStatSlots";
@@ -10,7 +11,7 @@ import type { TraderShareCardData } from "./TraderShareCard";
 let templateUriCache: string | null = null;
 
 function logExport(event: string, detail?: string) {
-  console.log(`[YouTrader:export-card] ${event}${detail ? ` ${detail}` : ""}`);
+  logger.info(`[YouTrader:export-card] ${event}${detail ? ` ${detail}` : ""}`);
 }
 
 function traderDataToStats(data: TraderShareCardData): AchievementShareStats {

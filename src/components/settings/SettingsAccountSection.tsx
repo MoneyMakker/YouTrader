@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   StyleSheet,
@@ -23,6 +22,7 @@ import {
 import type { AuthProvider } from "../../auth/types";
 import { userHasPasswordSet } from "../../auth/emailPasswordAuth";
 import { GlassCard } from "../ui/GlassCard";
+import { AnimatedPressable, PremiumLoadingBar, ShimmerPlaceholder } from "../ui/premium";
 import { t } from "../../i18n";
 import { C } from "../../theme/colors";
 
@@ -45,6 +45,8 @@ type Props = {
 
 const LIME = "#A3FF12";
 const CARD_RADIUS = 28;
+const ICON_SIZE = 20;
+const ICON_STROKE = 2.4;
 
 function isApplePrivateRelayEmail(email: string | undefined): boolean {
   if (!email) return false;
@@ -86,45 +88,41 @@ function PremiumButton({
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const contentStyle = [
+    styles.premiumBtn,
+    variant === "primary" && styles.premiumBtnPrimary,
+    variant === "secondary" && styles.premiumBtnSecondary,
+    variant === "danger" && styles.premiumBtnDanger,
+    disabled && styles.premiumBtnDisabled,
+    style,
+  ];
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [
-        styles.premiumBtn,
-        variant === "primary" && styles.premiumBtnPrimary,
-        variant === "secondary" && styles.premiumBtnSecondary,
-        variant === "danger" && styles.premiumBtnDanger,
-        pressed && variant === "primary" && styles.premiumBtnPrimaryPressed,
-        pressed && variant === "secondary" && styles.premiumBtnSecondaryPressed,
-        pressed && variant === "danger" && styles.premiumBtnDangerPressed,
-        disabled && styles.premiumBtnDisabled,
-        style,
-      ]}
+      haptic
+      contentStyle={contentStyle}
     >
-      {({ pressed }) => (
-        <>
-          <Icon
-            size={18}
-            color={buttonIconColor(variant, disabled, pressed)}
-            strokeWidth={2.5}
-          />
-          <Text
-            style={[
-              styles.premiumBtnLabel,
-              variant === "primary" && styles.premiumBtnLabelPrimary,
-              variant === "danger" && (pressed ? styles.premiumBtnLabelDangerPressed : styles.premiumBtnLabelDanger),
-            ]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.85}
-            maxFontSizeMultiplier={1.25}
-          >
-            {label}
-          </Text>
-        </>
-      )}
-    </Pressable>
+      <Icon
+        size={18}
+        color={buttonIconColor(variant, disabled, false)}
+        strokeWidth={ICON_STROKE}
+      />
+      <Text
+        style={[
+          styles.premiumBtnLabel,
+          variant === "primary" && styles.premiumBtnLabelPrimary,
+          variant === "danger" && styles.premiumBtnLabelDanger,
+        ]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
+        maxFontSizeMultiplier={1.25}
+      >
+        {label}
+      </Text>
+    </AnimatedPressable>
   );
 }
 
@@ -145,7 +143,7 @@ function EmailCapsule({ email, privateRelay, compact }: { email: string; private
   return (
     <View style={styles.emailCapsule}>
       <View style={styles.emailIconWrap}>
-        <CircleUserRound size={20} color={C.purple} strokeWidth={2.2} />
+        <CircleUserRound size={ICON_SIZE} color={C.purple} strokeWidth={ICON_STROKE} />
       </View>
       <View style={styles.emailCopy}>
         <Text
@@ -175,7 +173,7 @@ function PasswordStatusRow({ hasPassword }: { hasPassword: boolean }) {
   return (
     <View style={styles.passwordCard}>
       <View style={styles.passwordIconWrap}>
-        <Lock size={18} color={hasPassword ? LIME : C.sub} strokeWidth={2.4} />
+        <Lock size={ICON_SIZE - 2} color={hasPassword ? LIME : C.sub} strokeWidth={ICON_STROKE} />
       </View>
       <View style={styles.passwordCopy}>
         <Text style={styles.fieldLabel} maxFontSizeMultiplier={1.2}>
@@ -231,9 +229,12 @@ function CloudSyncStatusCard({
       <View style={styles.syncCardTop}>
         <View style={[styles.syncIconWrap, { borderColor: `${iconColor}44`, backgroundColor: `${iconColor}14` }]}>
           {isSyncing ? (
-            <ActivityIndicator size="small" color={C.yellow} />
+            <View style={styles.syncMiniSkeleton}>
+              <ShimmerPlaceholder width={22} height={7} radius={999} tone="yellow" />
+              <ShimmerPlaceholder width={16} height={7} radius={999} tone="purple" />
+            </View>
           ) : (
-            <Cloud size={22} color={iconColor} strokeWidth={2.3} />
+            <Cloud size={ICON_SIZE + 2} color={iconColor} strokeWidth={ICON_STROKE} />
           )}
         </View>
         <View style={styles.syncCopy}>
@@ -241,7 +242,7 @@ function CloudSyncStatusCard({
             {t("accountCloudSync")}
           </Text>
           <View style={styles.syncStatusRow}>
-            {isSynced ? <Check size={14} color={LIME} strokeWidth={3} /> : null}
+            {isSynced ? <Check size={14} color={LIME} strokeWidth={ICON_STROKE} /> : null}
             <Text
               style={[
                 styles.syncStatusText,
@@ -266,6 +267,7 @@ function CloudSyncStatusCard({
           </Text>
         </View>
       ) : null}
+      {isSyncing ? <PremiumLoadingBar indeterminate height={3} tone="yellow" style={styles.syncLoadingBar} /> : null}
     </View>
   );
 }
@@ -569,6 +571,15 @@ const styles = StyleSheet.create({
   },
   fieldValueActive: { color: LIME },
   fieldValueMuted: { color: C.muted },
+  syncMiniSkeleton: {
+    width: 24,
+    alignItems: "center",
+    gap: 3,
+  },
+  syncLoadingBar: {
+    marginTop: 12,
+    opacity: 0.72,
+  },
   buttonGroup: { gap: 10 },
   premiumBtn: {
     minHeight: 54,

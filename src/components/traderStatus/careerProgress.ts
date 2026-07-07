@@ -82,11 +82,3 @@ export function missionRewardLabel(achievementId: string) {
   if (achievementId.includes("prop") || achievementId.includes("eval")) return t("rewardPropProgress");
   return t("rewardAchievementBadge");
 }
-
-export function achievementIcon(category: string, unlocked: boolean) {
-  if (category === "journal") return unlocked ? "✓" : "📝";
-  if (category === "performance") return unlocked ? "✓" : "📈";
-  if (category === "risk") return unlocked ? "✓" : "🛡️";
-  if (category === "prop_firm") return unlocked ? "✓" : "🏦";
-  return unlocked ? "✓" : "🏆";
-}

@@ -1,8 +1,12 @@
 import React from "react";
 import * as Sentry from "@sentry/react-native";
+import Constants from "expo-constants";
 
 const SENTRY_DSN = (process.env.EXPO_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN || "").trim();
 const SENTRY_ENVIRONMENT = (process.env.EXPO_PUBLIC_APP_ENV || process.env.APP_ENV || (__DEV__ ? "development" : "production")).trim();
+const APP_VERSION = Constants.expoConfig?.version || "1.5.9";
+const APP_BUILD = Constants.expoConfig?.ios?.buildNumber || "91";
+const SENTRY_RELEASE = `YouTrader@${APP_VERSION}+${APP_BUILD}`;
 
 let monitoringInitialized = false;
 
@@ -25,6 +29,8 @@ export function initializeMonitoring() {
     dsn: SENTRY_DSN,
     enabled: true,
     environment: SENTRY_ENVIRONMENT,
+    release: SENTRY_RELEASE,
+    dist: APP_BUILD,
     attachStacktrace: true,
     tracesSampleRate: __DEV__ ? 0 : 0.05,
     beforeSend(event) {
@@ -33,6 +39,16 @@ export function initializeMonitoring() {
     },
   });
   monitoringInitialized = true;
+}
+
+export function setMonitoringUser(userId: string | null) {
+  if (!SENTRY_DSN) return;
+  try {
+    initializeMonitoring();
+    Sentry.setUser(userId ? { id: userId } : null);
+  } catch {
+    // Monitoring must never affect app behavior.
+  }
 }
 
 /** Defer Sentry init until after first paint — avoids startup UI hangs. */

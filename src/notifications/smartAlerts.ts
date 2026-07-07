@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { t } from "../i18n";
+import { logger } from "../lib/logger";
 import { trackEvent } from "../observability/analytics";
 import { captureAppError } from "../observability/monitoring";
 import {
@@ -60,8 +61,8 @@ const COOLDOWN_MS: Partial<Record<SmartPushAlertId, number>> = {
 };
 
 function logSmartPush(event: string, payload?: Record<string, unknown>) {
-  if (payload) console.log(LOG, event, payload);
-  else console.log(LOG, event);
+  if (payload) logger.info(`${LOG} ${event}`, payload);
+  else logger.info(`${LOG} ${event}`);
 }
 
 function alertCopy(alertId: SmartPushAlertId) {

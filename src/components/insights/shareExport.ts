@@ -4,6 +4,7 @@ import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import type { Achievement } from "../../analytics/achievements";
+import { logger } from "../../lib/logger";
 import { t } from "../../i18n";
 import { buildWeeklyReportHtml } from "../../reports/weeklyReportHtml";
 import { ACHIEVEMENT_GALAXY_TEMPLATE } from "./shareCard/achievementTemplateLayout";
@@ -54,7 +55,7 @@ function buildAchievementFilename(item: Achievement) {
 }
 
 function logShareCard(event: string, detail?: string) {
-  console.log(`[YouTrader:share-card] ${event}${detail ? ` ${detail}` : ""}`);
+  logger.info(`[YouTrader:share-card] ${event}${detail ? ` ${detail}` : ""}`);
 }
 
 async function loadShareModules() {

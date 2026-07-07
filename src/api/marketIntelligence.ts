@@ -1,6 +1,7 @@
 import { isSupabaseConfigured, supabase } from "../config/appConfig";
 import { AI_DAILY_LIMIT_MESSAGE } from "../config/monetization";
 import { t } from "../i18n";
+import { logger } from "../lib/logger";
 
 export type MarketIntelligenceAction =
   | "market_sentiment"
@@ -156,7 +157,7 @@ export async function invokeMarketIntelligence<T>(
       return { data: fallback, usedFallback: true, message: t("marketIntelSignInPro") };
     }
 
-    console.log(`[YouTrader:brave-news] invoke ${action}`);
+    logger.info(`[YouTrader:brave-news] invoke ${action}`);
     const { data, error } = await supabase.functions.invoke("market-intelligence", {
       body: { action, payload },
     });
@@ -165,7 +166,7 @@ export async function invokeMarketIntelligence<T>(
       const message = data?.error === "quota_exceeded" || data?.message?.includes("limit")
         ? AI_DAILY_LIMIT_MESSAGE
         : data?.error || "Market intelligence is temporarily unavailable.";
-      console.warn(`[YouTrader:brave-news] invoke_failed ${action}`, message);
+      logger.warn(`[YouTrader:brave-news] invoke_failed ${action}`, { message });
       return { data: fallback, usedFallback: true, message };
     }
 

@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { Sparkles } from "lucide-react-native";
 import { fetchMarketSentiment, type MarketSentimentResult } from "../../api/marketIntelligence";
 import { t } from "../../i18n";
 import { AI_DAILY_LIMIT_MESSAGE } from "../../config/monetization";
 import { C } from "../../theme/colors";
+import { AiAnalysisLoading } from "../ai/AiAnalysisLoading";
 import { GlassCard } from "../ui/GlassCard";
 import { lightHaptic } from "../ui/haptics";
 
@@ -25,7 +26,6 @@ export function AiNewsSentimentCard({ isPremium, onUpgrade }: Props) {
     lightHaptic();
     setBusy(true);
     try {
-      console.log("[YouTrader:market-sentiment] analyze_pressed");
       const response = await fetchMarketSentiment("NQ");
       if (response.message?.includes("limit")) {
         Alert.alert(t("premiumAccess"), AI_DAILY_LIMIT_MESSAGE);
@@ -66,13 +66,11 @@ export function AiNewsSentimentCard({ isPremium, onUpgrade }: Props) {
         </View>
       ) : null}
 
+      {busy ? <AiAnalysisLoading compact style={styles.loadingCard} /> : null}
+
       <Pressable disabled={busy} onPress={() => void run()} style={[styles.btn, busy && styles.btnDisabled]}>
-        {busy ? <ActivityIndicator color={C.bg} /> : (
-          <>
-            <Sparkles size={16} color={C.bg} strokeWidth={2.4} />
-            <Text style={styles.btnText}>Analyze Market Sentiment</Text>
-          </>
-        )}
+        <Sparkles size={16} color={C.bg} strokeWidth={2.4} />
+        <Text style={styles.btnText}>{busy ? t("analyzing") : "Analyze Market Sentiment"}</Text>
       </Pressable>
     </GlassCard>
   );
@@ -103,6 +101,7 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.65 },
   btnText: { color: C.bg, fontSize: 14, fontWeight: "900" },
+  loadingCard: { marginBottom: 0 },
   result: { gap: 6 },
   sectionLabel: { color: C.sub, fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", marginTop: 6 },
   bias: { color: C.green, fontSize: 28, fontWeight: "900" },

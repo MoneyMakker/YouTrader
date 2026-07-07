@@ -137,7 +137,6 @@ export function logExportRateLimitDebug(
     storageKey: status.key,
     allowed: status.allowed,
   };
-  console.warn("[YouTrader:export-rate-limit]", payload);
   logger.warn("[YouTrader:export-rate-limit]", payload);
 }
 

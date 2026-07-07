@@ -1,6 +1,7 @@
 import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 import type { Achievement } from "../../../analytics/achievements";
+import { logger } from "../../../lib/logger";
 import { buildAchievementRewardOverlay, type AchievementShareStats } from "./achievementHelpers";
 import { buildAchievementSvgLayers } from "./achievementShareSvgBuilder";
 import {
@@ -13,7 +14,7 @@ import { enqueueStatCardRaster } from "./statCardRasterizer";
 let templateUriCache: string | null = null;
 
 function logShareCard(event: string, detail?: string) {
-  console.log(`[YouTrader:share-card] ${event}${detail ? ` ${detail}` : ""}`);
+  logger.info(`[YouTrader:share-card] ${event}${detail ? ` ${detail}` : ""}`);
 }
 
 async function loadAchievementTemplateUri() {

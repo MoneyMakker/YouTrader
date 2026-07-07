@@ -24,32 +24,41 @@ export function StatCardExportHost() {
 
   useEffect(() => {
     if (!job) return;
+    let cancelled = false;
+    const activeJob = job;
     const timer = setTimeout(() => {
+      if (cancelled) return;
       const node = svgRef.current as unknown as {
         toDataURL?: (cb: (uri: string) => void, opts?: { width?: number; height?: number }) => void;
       } | null;
       if (!node?.toDataURL) {
-        job.reject(new Error("SVG rasterizer is unavailable on this device"));
-        setJob(null);
+        activeJob.reject(new Error("SVG rasterizer is unavailable on this device"));
+        if (!cancelled) setJob(null);
         return;
       }
       node.toDataURL(
         (dataUrl) => {
           void (async () => {
             try {
-              const uri = await writePngFromDataUrl(dataUrl, job.filename);
-              job.resolve(uri);
+              const uri = await writePngFromDataUrl(dataUrl, activeJob.filename);
+              if (!cancelled) activeJob.resolve(uri);
             } catch (error) {
-              job.reject(error instanceof Error ? error : new Error(String(error)));
+              if (!cancelled) {
+                activeJob.reject(error instanceof Error ? error : new Error(String(error)));
+              }
             } finally {
-              setJob(null);
+              if (!cancelled) setJob(null);
             }
           })();
         },
-        { width: job.width, height: job.height },
+        { width: activeJob.width, height: activeJob.height },
       );
     }, 64);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      activeJob.reject(new Error("Export cancelled"));
+    };
   }, [job]);
 
   if (!job) return null;

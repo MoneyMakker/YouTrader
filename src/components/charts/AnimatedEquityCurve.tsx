@@ -1,9 +1,10 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ChartColumnIncreasing } from "lucide-react-native";
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from "react-native-svg";
-import { PremiumGlassCard } from "../ui/PremiumGlassCard";
-import { YouTraderLottie } from "../ui/YouTraderLottie";
+import { EmptyStateCard } from "../ui/premium";
 import { C } from "../../theme/colors";
+import { t } from "../../i18n";
 
 type TradeLike = {
   id?: string;
@@ -102,11 +103,13 @@ function AnimatedEquityCurveBase({ trades, period = "month", isPro = false, onPo
 
   if (!points.length) {
     return (
-      <PremiumGlassCard glow="green" style={styles.emptyCard}>
-        <YouTraderLottie slot="emptyState" />
-        <Text style={styles.emptyTitle}>No equity curve yet</Text>
-        <Text style={styles.emptyText}>Log your first trade to see a live equity curve.</Text>
-      </PremiumGlassCard>
+      <EmptyStateCard
+        tone="lime"
+        title={t("statsEmptyTitle")}
+        message={t("equityCurveEmptyMessage")}
+        icon={<ChartColumnIncreasing size={24} color={C.green} strokeWidth={2.4} />}
+        style={styles.emptyCard}
+      />
     );
   }
 
@@ -207,20 +210,6 @@ const styles = StyleSheet.create({
   emptyCard: {
     marginTop: 10,
     minHeight: 160,
-    alignItems: "center",
-  },
-  emptyTitle: {
-    color: C.text,
-    fontSize: 17,
-    fontWeight: "900",
-    marginTop: 4,
-  },
-  emptyText: {
-    color: C.sub,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 5,
-    textAlign: "center",
   },
   tooltip: {
     position: "absolute",

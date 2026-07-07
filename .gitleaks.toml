@@ -1,0 +1,22 @@
+title = "YouTrader Gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore known false positives and local-only paths"
+paths = [
+  '''\.env\.example$''',
+  '''scripts/market-intel-worker/\.env\.example$''',
+  '''ios/Podfile\.lock$''',
+  '''ios/Pods/''',
+  '''recovery-backups/''',
+  '''\.env$''',
+  '''scripts/market-intel-worker/\.env$''',
+]
+regexTarget = "match"
+regexes = [
+  '''prop-daily-risk-notification-id-v1''',
+  '''daily-prop-reminder-notification-id-v1''',
+  '''prop-risk-alert-notification-id-v1''',
+]

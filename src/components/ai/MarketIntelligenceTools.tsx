@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Sparkles } from "lucide-react-native";
 import {
   fetchMarketNarrative,
@@ -13,6 +13,7 @@ import {
 import { t } from "../../i18n";
 import { AI_DAILY_LIMIT_MESSAGE } from "../../config/monetization";
 import { C } from "../../theme/colors";
+import { AiAnalysisLoading } from "./AiAnalysisLoading";
 import { GlassCard } from "../ui/GlassCard";
 import { lightHaptic } from "../ui/haptics";
 
@@ -34,10 +35,9 @@ function ToolCard({
       <Text style={styles.toolTitle}>{title}</Text>
       <Text style={styles.toolSub}>{subtitle}</Text>
       {children}
+      {busy ? <AiAnalysisLoading compact style={styles.toolLoading} /> : null}
       <Pressable disabled={busy} onPress={onRun} style={[styles.toolBtn, busy && styles.toolBtnDisabled]}>
-        {busy ? <ActivityIndicator color={C.bg} size="small" /> : (
-          <Text style={styles.toolBtnText}>{t("generate")}</Text>
-        )}
+        <Text style={styles.toolBtnText}>{busy ? t("analyzing") : t("generate")}</Text>
       </Pressable>
     </GlassCard>
   );
@@ -82,7 +82,6 @@ export function MarketIntelligenceTools() {
         busy={busyKey === "narrative"}
         onRun={() =>
           void run("narrative", async () => {
-            console.log("[YouTrader:market-brief] narrative");
             const res = await fetchMarketNarrative();
             setNarrative(res.data.bullets);
             return res;
@@ -98,7 +97,6 @@ export function MarketIntelligenceTools() {
         busy={busyKey === "watchlist"}
         onRun={() =>
           void run("watchlist", async () => {
-            console.log("[YouTrader:watchlist-risk] scan", watchlist);
             const res = await fetchWatchlistRisk(watchlist);
             setWatchlistResult(res.data.symbols);
             return res;
@@ -144,7 +142,6 @@ export function MarketIntelligenceTools() {
         busy={busyKey === "brief"}
         onRun={() =>
           void run("brief", async () => {
-            console.log("[YouTrader:market-brief] pre_market");
             const res = await fetchPreMarketBrief();
             setBrief(`${res.data.mission}\n\n${res.data.riskSuggestion}`);
             return res;
@@ -177,7 +174,6 @@ export function MarketIntelligenceTools() {
         busy={busyKey === "sectors"}
         onRun={() =>
           void run("sectors", async () => {
-            console.log("[YouTrader:opportunity-scanner] run");
             const res = await fetchOpportunityScanner();
             setSectors(res.data.sectors);
             return res;
@@ -225,6 +221,7 @@ const styles = StyleSheet.create({
   toolCard: { borderRadius: 20, padding: 14, borderColor: "rgba(176,38,255,0.16)", gap: 8 },
   toolTitle: { color: C.text, fontSize: 15, fontWeight: "900" },
   toolSub: { color: C.sub, fontSize: 12, lineHeight: 17 },
+  toolLoading: { marginTop: 2 },
   toolBtn: {
     alignSelf: "flex-start",
     borderRadius: 999,

@@ -30,8 +30,14 @@ jobs:
         run: npm run typecheck
       - name: Security check
         run: npm run security:check
+      - name: Gitleaks
+        run: npm run security:gitleaks
+      - name: Semgrep
+        run: |
+          pip install semgrep
+          npm run security:semgrep
       - name: npm audit
-        run: npm audit --audit-level=high
+        run: npm run security:audit
       - name: Expo doctor optional
         continue-on-error: true
         run: npx expo-doctor

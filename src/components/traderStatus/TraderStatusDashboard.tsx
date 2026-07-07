@@ -4,13 +4,21 @@ import {
   Alert,
   Animated,
   Easing,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import {
+  BadgeCheck,
+  BookOpen,
+  Building2,
+  ChartColumnIncreasing,
+  Check,
+  ShieldCheck,
+  Trophy,
+} from "lucide-react-native";
 import type { Session } from "@supabase/supabase-js";
 import { t } from "../../i18n";
 import type { Achievement, TraderLevel } from "../../analytics/achievements";
@@ -18,9 +26,9 @@ import { FEATURE_LIMIT_MESSAGES, FREE_LIMITS, PRO_LIMITS } from "../../config/fe
 import { peekShareCardExportAllowed, recordShareCardExportSuccess } from "../../config/usageLimits";
 import { C } from "../../theme/colors";
 import { GlassCard } from "../ui/GlassCard";
-import { lightHaptic } from "../ui/haptics";
+import { lightHaptic, successHaptic } from "../ui/haptics";
+import { AnimatedPressable, EmptyStateCard, PremiumLoadingBar } from "../ui/premium";
 import {
-  achievementIcon,
   CAREER_TIERS,
   careerTierIndex,
   careerTierLabel,
@@ -46,6 +54,162 @@ type Props = {
 
 const RING_SIZE = 118;
 const RING_STROKE = 9;
+const ICON_SIZE = 22;
+const ICON_STROKE = 2.4;
+
+function AchievementCategoryIcon({
+  category,
+  unlocked,
+  size = ICON_SIZE,
+}: {
+  category: string;
+  unlocked: boolean;
+  size?: number;
+}) {
+  const color = unlocked ? C.green : C.purple;
+  const props = { size, color, strokeWidth: ICON_STROKE };
+  if (unlocked) return <BadgeCheck {...props} />;
+  if (category === "journal") return <BookOpen {...props} />;
+  if (category === "performance") return <ChartColumnIncreasing {...props} />;
+  if (category === "risk") return <ShieldCheck {...props} />;
+  if (category === "prop_firm") return <Building2 {...props} />;
+  return <Trophy {...props} />;
+}
+
+function AchievementUnlockedFeedback({ item, visible }: { item: Achievement | null; visible: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-10)).current;
+  const scale = useRef(new Animated.Value(0.96)).current;
+
+  useEffect(() => {
+    if (!visible || !item) return;
+    opacity.setValue(0);
+    translateY.setValue(-10);
+    scale.setValue(0.96);
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.spring(translateY, { toValue: 0, speed: 16, bounciness: 5, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, speed: 18, bounciness: 5, useNativeDriver: true }),
+      ]),
+      Animated.delay(1800),
+      Animated.timing(opacity, { toValue: 0, duration: 260, useNativeDriver: true }),
+    ]).start();
+  }, [item, opacity, scale, translateY, visible]);
+
+  if (!item) return null;
+
+  return (
+    <Animated.View style={[styles.unlockFeedback, { opacity, transform: [{ translateY }, { scale }] }]}>
+      <View style={styles.unlockFeedbackIcon}>
+        <Check size={18} color={C.green} strokeWidth={ICON_STROKE} />
+      </View>
+      <View style={styles.unlockFeedbackCopy}>
+        <Text style={styles.unlockFeedbackLabel}>{t("achievementUnlocked")}</Text>
+        <Text style={styles.unlockFeedbackTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.74}>
+          {item.title}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+function AchievementCard({
+  item,
+  index,
+  onShare,
+}: {
+  item: Achievement;
+  index: number;
+  onShare: (item: Achievement) => void;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+  const glow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(Math.min(index, 5) * 55),
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.spring(translateY, { toValue: 0, speed: 14, bounciness: 3, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [glow, index, opacity, translateY]);
+
+  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.10, 0.22] });
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      <GlassCard compact style={styles.badgeCard}>
+        <Animated.View pointerEvents="none" style={[styles.badgeEarnedGlow, { opacity: glowOpacity }]} />
+        <View style={styles.badgeTop}>
+          <View style={styles.badgeIconShell}>
+            <AchievementCategoryIcon category={item.category} unlocked size={20} />
+          </View>
+          <View style={styles.badgeBody}>
+            <Text style={styles.badgeTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.78}>
+              {item.title}
+            </Text>
+            <Text style={styles.badgeWhy} numberOfLines={3}>
+              {item.condition}
+            </Text>
+            <Text style={styles.badgeDate} numberOfLines={1}>{t("earnedVerified")}</Text>
+          </View>
+        </View>
+        <AnimatedPressable
+          accessibilityRole="button"
+          haptic
+          onPress={() => onShare(item)}
+          style={styles.shareBtnPressable}
+          contentStyle={styles.shareBtn}
+        >
+          <Text style={styles.shareBtnText}>{t("share")}</Text>
+        </AnimatedPressable>
+      </GlassCard>
+    </Animated.View>
+  );
+}
+
+function MissionProgressCard({ item }: { item: Achievement }) {
+  const pct = Math.max(0, Math.min(100, (item.progress / Math.max(1, item.target)) * 100));
+  const nearComplete = pct >= 80;
+
+  return (
+    <GlassCard compact style={[styles.missionCard, nearComplete && styles.missionCardHot]}>
+      <Text style={styles.missionEyebrow}>{nearComplete ? t("achievementClose") : t("nextTarget")}</Text>
+      <Text style={styles.missionTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.78}>
+        {item.title}
+      </Text>
+      <Text style={styles.missionDesc} numberOfLines={3}>{item.condition}</Text>
+      <View style={styles.missionProgressRow}>
+        <View style={styles.missionTrack}>
+          <View style={[styles.missionFill, { width: `${pct}%` }]} />
+          {nearComplete ? <View pointerEvents="none" style={styles.missionFillGlow} /> : null}
+        </View>
+        <Text style={styles.missionPct}>{Math.round(pct)}%</Text>
+      </View>
+      <PremiumLoadingBar progress={pct / 100} height={3} tone={nearComplete ? "lime" : "purple"} style={styles.missionPremiumBar} />
+      <Text style={styles.missionProgressLabel} numberOfLines={1}>{item.progressLabel}</Text>
+      <View style={styles.rewardBox}>
+        <Trophy size={22} color={C.green} strokeWidth={ICON_STROKE} />
+        <View style={styles.rewardCopy}>
+          <Text style={styles.rewardHeading}>{t("rewardHeading")}</Text>
+          <Text style={styles.rewardValue} numberOfLines={2}>{missionRewardLabel(item.id)}</Text>
+        </View>
+      </View>
+    </GlassCard>
+  );
+}
 
 function ScoreRing({ score, label, topLabel }: { score: number; label: string; topLabel: string }) {
   const radius = (RING_SIZE - RING_STROKE) / 2;
@@ -121,7 +285,7 @@ function CareerRoadmap({ score }: { score: number }) {
                   ]}
                 >
                   {done ? (
-                    <Text style={styles.roadmapNodeCheck}>✓</Text>
+                    <Check size={12} color={C.green} strokeWidth={ICON_STROKE} />
                   ) : (
                     <View style={[styles.roadmapNodeDot, current && styles.roadmapNodeDotCurrent]} />
                   )}
@@ -155,7 +319,9 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
   void trades;
   void selectedDate;
   const fade = useRef(new Animated.Value(0)).current;
+  const previousUnlockedIds = useRef<Set<string> | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
+  const [unlockFeedback, setUnlockFeedback] = useState<Achievement | null>(null);
 
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 560, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
@@ -175,6 +341,22 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
   const tierBandPct = tierBandProgressPercent(level.score);
   const activeTier = currentCareerTier(level.score);
 
+  useEffect(() => {
+    const ids = new Set(allUnlocked.map((item) => item.id));
+    if (previousUnlockedIds.current) {
+      const newlyUnlocked = allUnlocked.find((item) => !previousUnlockedIds.current?.has(item.id));
+      if (newlyUnlocked) {
+        setUnlockFeedback(newlyUnlocked);
+        successHaptic();
+        const timeout = setTimeout(() => setUnlockFeedback(null), 2600);
+        previousUnlockedIds.current = ids;
+        return () => clearTimeout(timeout);
+      }
+    }
+    previousUnlockedIds.current = ids;
+    return undefined;
+  }, [allUnlocked]);
+
   const exportAchievement = async (item: Achievement, action: "share" | "save") => {
     if (!item.unlocked) return;
     const allowed = await peekShareCardExportAllowed(isPremium, session?.user.id || null);
@@ -191,6 +373,7 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
         Alert.alert(t("savedTitle"), t("achievementCardSaved"));
       }
       await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+      successHaptic();
     } catch {
       Alert.alert(action === "share" ? t("shareFailed") : t("saveFailed"), t("shareCardExportFailed"));
     } finally {
@@ -209,6 +392,7 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
 
   return (
     <Animated.View style={{ opacity: fade, marginTop: 8 }}>
+      <AchievementUnlockedFeedback item={unlockFeedback} visible={Boolean(unlockFeedback)} />
       <GlassCard style={styles.heroCard} intensity={50}>
         <Text style={styles.heroEyebrow}>{t("currentRank")}</Text>
         <Text style={styles.heroRank}>{rankDisplayTitle(level.titleKey)}</Text>
@@ -229,21 +413,7 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
         <>
           <SectionLabel>{t("unlockedAchievements")}</SectionLabel>
           <View style={styles.compactList}>
-            {unlocked.map((item) => (
-              <GlassCard key={item.id} compact style={styles.badgeCard}>
-                <View style={styles.badgeTop}>
-                  <Text style={styles.badgeIcon}>{achievementIcon(item.category, true)}</Text>
-                  <View style={styles.badgeBody}>
-                    <Text style={styles.badgeTitle}>{item.title}</Text>
-                    <Text style={styles.badgeWhy}>{item.condition}</Text>
-                    <Text style={styles.badgeDate}>{t("earnedVerified")}</Text>
-                  </View>
-                </View>
-                <Pressable onPress={() => promptShare(item)} style={styles.shareBtn}>
-                  <Text style={styles.shareBtnText}>{t("share")}</Text>
-                </Pressable>
-              </GlassCard>
-            ))}
+            {unlocked.map((item, index) => <AchievementCard key={item.id} item={item} index={index} onShare={promptShare} />)}
           </View>
           {freeUnlockLimitReached ? (
             <Text style={styles.limitNote}>
@@ -252,42 +422,19 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
           ) : null}
         </>
       ) : (
-        <Text style={styles.empty}>{t("keepLoggingAchievement")}</Text>
+        <EmptyStateCard
+          tone="purple"
+          title={t("traderStatusEmptyTitle")}
+          message={t("traderStatusEmptyMessage")}
+          icon={<Trophy size={24} color={C.purple} strokeWidth={2.4} />}
+        />
       )}
 
       {missions.length ? (
         <>
           <SectionLabel accent>{t("currentMissions")}</SectionLabel>
           <View style={styles.compactList}>
-            {missions.map((item) => {
-              const pct = Math.max(0, Math.min(100, (item.progress / Math.max(1, item.target)) * 100));
-              const nearComplete = pct >= 80;
-              return (
-                <GlassCard
-                  key={item.id}
-                  compact
-                  style={[styles.missionCard, nearComplete && styles.missionCardHot]}
-                >
-                  <Text style={styles.missionEyebrow}>{t("nextTarget")}</Text>
-                  <Text style={styles.missionTitle}>{item.title}</Text>
-                  <Text style={styles.missionDesc}>{item.condition}</Text>
-                  <View style={styles.missionProgressRow}>
-                    <View style={styles.missionTrack}>
-                      <View style={[styles.missionFill, { width: `${pct}%` }]} />
-                    </View>
-                    <Text style={styles.missionPct}>{Math.round(pct)}%</Text>
-                  </View>
-                  <Text style={styles.missionProgressLabel}>{item.progressLabel}</Text>
-                  <View style={styles.rewardBox}>
-                    <Text style={styles.rewardIcon}>🏆</Text>
-                    <View style={styles.rewardCopy}>
-                      <Text style={styles.rewardHeading}>{t("rewardHeading")}</Text>
-                      <Text style={styles.rewardValue}>{missionRewardLabel(item.id)}</Text>
-                    </View>
-                  </View>
-                </GlassCard>
-              );
-            })}
+            {missions.map((item) => <MissionProgressCard key={item.id} item={item} />)}
           </View>
         </>
       ) : null}
@@ -304,7 +451,7 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
               <View key={item.id} style={styles.milestoneChip}>
                 <View style={styles.milestoneChipTop}>
                   <View style={styles.milestoneCheck}>
-                    <Text style={styles.milestoneCheckText}>✔</Text>
+                    <Check size={12} color={C.green} strokeWidth={ICON_STROKE} />
                   </View>
                   <Text style={styles.milestoneEarned}>{t("earnedVerified")}</Text>
                 </View>
@@ -370,6 +517,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 1.3,
   },
+  unlockFeedback: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.38)",
+    backgroundColor: "rgba(6,12,8,0.92)",
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: C.green,
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  unlockFeedbackIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(163,255,18,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.38)",
+  },
+  unlockFeedbackIconText: { color: C.green, fontSize: 16, fontWeight: "900" },
+  unlockFeedbackCopy: { flex: 1, minWidth: 0 },
+  unlockFeedbackLabel: {
+    color: C.green,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  unlockFeedbackTitle: { color: C.text, fontSize: 15, fontWeight: "900", marginTop: 2 },
   heroCard: {
     borderRadius: 26,
     padding: 20,
@@ -489,21 +672,55 @@ const styles = StyleSheet.create({
   careerNextMeta: { color: C.green, fontSize: 14, fontWeight: "800", marginTop: 2 },
   careerMaxed: { color: C.green, fontSize: 14, fontWeight: "800", textAlign: "center" },
   compactList: { gap: 12 },
-  badgeCard: { borderRadius: 20, padding: 14, borderColor: "rgba(163,255,18,0.18)", gap: 12 },
+  badgeCard: {
+    borderRadius: 20,
+    padding: 14,
+    borderColor: "rgba(163,255,18,0.28)",
+    backgroundColor: "rgba(163,255,18,0.035)",
+    gap: 12,
+    overflow: "hidden",
+    shadowColor: C.green,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 2,
+  },
+  badgeEarnedGlow: {
+    position: "absolute",
+    right: -36,
+    top: -44,
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    backgroundColor: C.green,
+  },
   badgeTop: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  badgeIcon: { color: C.green, fontSize: 18, fontWeight: "900", width: 24, textAlign: "center" },
+  badgeIconShell: {
+    width: 34,
+    height: 34,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(163,255,18,0.11)",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.28)",
+  },
+  badgeIcon: { color: C.green, fontSize: 16, fontWeight: "900", textAlign: "center" },
   badgeBody: { flex: 1, minWidth: 0, gap: 4 },
-  badgeTitle: { color: C.text, fontSize: 15, fontWeight: "900" },
+  badgeTitle: { color: C.text, fontSize: 15, lineHeight: 19, fontWeight: "900" },
   badgeWhy: { color: C.sub, fontSize: 12, lineHeight: 17 },
   badgeDate: { color: C.muted, fontSize: 11, fontWeight: "700" },
+  shareBtnPressable: { alignSelf: "flex-end" },
   shareBtn: {
-    alignSelf: "flex-end",
+    minHeight: 38,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
     borderColor: "rgba(176,38,255,0.35)",
     backgroundColor: "rgba(176,38,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   shareBtnText: { color: C.purple, fontSize: 12, fontWeight: "900" },
   missionCard: {
@@ -534,7 +751,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   missionFill: { height: 9, borderRadius: 999, backgroundColor: C.green },
+  missionFillGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(163,255,18,0.16)",
+  },
   missionPct: { color: C.green, fontSize: 15, fontWeight: "900", minWidth: 42, textAlign: "right" },
+  missionPremiumBar: { opacity: 0.76 },
   missionProgressLabel: { color: C.text, fontSize: 14, fontWeight: "800" },
   rewardBox: {
     flexDirection: "row",
