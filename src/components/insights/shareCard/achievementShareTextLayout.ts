@@ -7,15 +7,15 @@ import {
 } from "./achievementTemplateLayout";
 
 /** Design px at native template width (664) — maps to ~18–32 / 12–18 on export. */
-export const ACHIEVEMENT_LABEL_DESIGN = 14;
-export const ACHIEVEMENT_TITLE_DESIGN_MAX = 32;
-export const ACHIEVEMENT_TITLE_DESIGN_MIN = 18;
-export const ACHIEVEMENT_DESC_DESIGN_MAX = 18;
-export const ACHIEVEMENT_DESC_DESIGN_MIN = 12;
-export const ACHIEVEMENT_DATE_DESIGN = 13;
+export const ACHIEVEMENT_LABEL_DESIGN = 16;
+export const ACHIEVEMENT_TITLE_DESIGN_MAX = 38;
+export const ACHIEVEMENT_TITLE_DESIGN_MIN = 20;
+export const ACHIEVEMENT_DESC_DESIGN_MAX = 20;
+export const ACHIEVEMENT_DESC_DESIGN_MIN = 14;
+export const ACHIEVEMENT_DATE_DESIGN = 14;
 
 export const ACHIEVEMENT_TITLE_MAX_LINES = 3;
-export const ACHIEVEMENT_DESC_MAX_LINES = 3;
+export const ACHIEVEMENT_DESC_MAX_LINES = 2;
 
 const H_PAD_RATIO = 0.1;
 const V_PAD_TOP_RATIO = 0.08;

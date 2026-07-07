@@ -72,7 +72,7 @@ export function StatCardExportHost() {
           y={0}
           width={job.width}
           height={job.height}
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid meet"
         />
         {job.layers?.map((layer, index) => {
           const cx = layer.rect.x + layer.rect.w / 2;

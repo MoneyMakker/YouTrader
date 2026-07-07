@@ -1,7 +1,6 @@
-import type { Achievement } from "../../../analytics/achievements";
 import type { AchievementRewardOverlayCopy } from "./achievementHelpers";
 import { buildAchievementShareTextLayout } from "./achievementShareTextLayout";
-import { resolveAchievementTextTheme } from "./achievementTextTheme";
+import { ACHIEVEMENT_SHARE_EXPORT_THEME } from "./achievementTextTheme";
 
 export type AchievementSvgTextLayer = {
   text: string;
@@ -32,12 +31,9 @@ function appendLayer(
   layers.push(layer);
 }
 
-export function buildAchievementSvgLayers(
-  copy: AchievementRewardOverlayCopy,
-  item?: Achievement | null,
-): AchievementSvgTextLayer[] {
+export function buildAchievementSvgLayers(copy: AchievementRewardOverlayCopy): AchievementSvgTextLayer[] {
   const layout = buildAchievementShareTextLayout(copy);
-  const theme = resolveAchievementTextTheme(item);
+  const theme = ACHIEVEMENT_SHARE_EXPORT_THEME;
   const layers: AchievementSvgTextLayer[] = [];
 
   appendLayer(

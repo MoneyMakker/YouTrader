@@ -9,6 +9,16 @@ export type AchievementTextTheme = {
   accent: string;
 };
 
+/** Fixed share-card typography — matches branded collectible export spec. */
+export const ACHIEVEMENT_SHARE_EXPORT_THEME: AchievementTextTheme = {
+  accent: "#B14CFF",
+  kicker: "#B14CFF",
+  title: "#FFFFFF",
+  titleShadow: "rgba(0,0,0,0.58)",
+  description: "#FFFFFF",
+  detail: "#B8BCC6",
+};
+
 const THEMES = {
   common: {
     accent: "#B8FF00",

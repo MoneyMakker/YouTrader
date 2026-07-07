@@ -7,10 +7,10 @@ export const ACHIEVEMENT_TEMPLATE_NATIVE = {
 } as const;
 
 /**
- * Export canvas matches template aspect ratio at 2048px wide.
- * Edge-to-edge artwork — no letterboxing, no crop, no distortion.
+ * High-res export at native card aspect ratio (664×1024 → 1080×1665).
+ * Keeps artwork proportions — no stretch or crop.
  */
-export const ACHIEVEMENT_EXPORT_WIDTH = 2048;
+export const ACHIEVEMENT_EXPORT_WIDTH = 1080;
 export const ACHIEVEMENT_EXPORT_HEIGHT = Math.round(
   (ACHIEVEMENT_EXPORT_WIDTH * ACHIEVEMENT_TEMPLATE_NATIVE.height) / ACHIEVEMENT_TEMPLATE_NATIVE.width,
 );
@@ -21,12 +21,12 @@ export const ACHIEVEMENT_GALAXY_TEMPLATE = require("../../../../assets/share-tem
 /** @deprecated Use ACHIEVEMENT_GALAXY_TEMPLATE */
 export const ACHIEVEMENT_TEMPLATE = ACHIEVEMENT_GALAXY_TEMPLATE;
 
-/** Text overlay as a fraction of the full artwork (below YOUTRADER plaque). */
+/** Text overlay below the YOUTRADER plaque — inside frame safe area. */
 export const ACHIEVEMENT_REWARD_OVERLAY_FRACTION = {
-  left: 0.06,
-  top: 0.625,
-  width: 0.88,
-  height: 0.28,
+  left: 0.08,
+  top: 0.64,
+  width: 0.84,
+  height: 0.26,
 } as const;
 
 export const ACHIEVEMENT_TEMPLATE_LAYOUT = {

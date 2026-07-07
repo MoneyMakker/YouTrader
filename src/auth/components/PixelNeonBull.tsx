@@ -26,61 +26,66 @@ const HOOF = "#1A2E04";
 const WHITE = "#FFFFFF";
 const BLACK = "#000000";
 const VOID = "#000000";
-const WICK = "#2A3040";
-const GROUND = "#1A1F2A";
-const CANDLE_GREEN = "#3DDB4A";
-const CANDLE_GREEN_DARK = "#2A9E34";
-const CANDLE_RED = "#FF3B5F";
-const CANDLE_RED_DARK = "#CC2F4C";
 const DUST = "#6B7280";
 
 const STAGE_H = 228;
-const CHART_FRAME_H = 108;
-const CHART_PAD_H = 10;
-const CHART_PAD_TOP = 10;
-const CHART_PAD_BOTTOM = 8;
-const BASELINE_H = 2;
-const BASELINE_MT = 6;
-
 const READ_PAUSE_MS = 2800;
 const JUMP_MS = 1280;
 const CROUCH_MS = 240;
 const LAND_SQUASH_MS = 190;
 const RECOVER_MS = 320;
 const TURN_MS = 520;
-const JUMP_ARC = 52;
-
-const CANDLE_SLOT_W = 15;
-const CANDLE_GAP = 6;
-const WICK_W = 3;
+const JUMP_ARC = 44;
 
 const BULL_PX_W = 32;
 const BULL_PX_H = 28;
+const BULL_RENDER_H = BULL_PX_H * PX;
+const BULL_CLUSTER_W = BULL_PX_W * PX + 40;
 
 type PixelSpec = { x: number; y: number; w: number; h: number; c: string };
 type BullPose = "idle" | "crouch" | "airborne" | "land";
 type DialogueKey = "authPixelDontGamble" | "authPixelTradeDiscipline";
+type StarTone = "lime" | "purple" | "muted";
+type StarKind = "cross" | "dot";
 
-type CandleDef = {
-  bullish: boolean;
-  bodyH: number;
-  wickTop: number;
-  wickBottom: number;
+type StarDef = {
+  x: number;
+  y: number;
+  size: number;
+  phase: number;
+  pulse: boolean;
+  tone: StarTone;
+  kind: StarKind;
 };
 
-const CANDLES: CandleDef[] = [
-  { bullish: true, bodyH: 26, wickTop: 7, wickBottom: 5 },
-  { bullish: false, bodyH: 18, wickTop: 5, wickBottom: 7 },
-  { bullish: true, bodyH: 38, wickTop: 9, wickBottom: 5 },
-  { bullish: true, bodyH: 24, wickTop: 6, wickBottom: 4 },
-  { bullish: false, bodyH: 30, wickTop: 7, wickBottom: 6 },
-  { bullish: true, bodyH: 32, wickTop: 8, wickBottom: 5 },
-  { bullish: false, bodyH: 20, wickTop: 6, wickBottom: 6 },
-  { bullish: true, bodyH: 42, wickTop: 10, wickBottom: 5 },
-];
+const STAR_PALETTE: Record<StarTone, { cross: string; dot: string }> = {
+  lime: { cross: "rgba(163,255,18,0.88)", dot: "rgba(163,255,18,0.72)" },
+  purple: { cross: "rgba(176,38,255,0.82)", dot: "rgba(176,38,255,0.58)" },
+  muted: { cross: "rgba(210,214,224,0.55)", dot: "rgba(160,166,178,0.42)" },
+};
 
-const CHART_AREA_H = 118;
-const CHART_TOP_IN_AREA = CHART_AREA_H - CHART_FRAME_H;
+const STAR_SEEDS: Array<Omit<StarDef, "x"> & { xf: number }> = [
+  { xf: 0.05, y: 10, size: 4, phase: 0, pulse: true, tone: "lime", kind: "cross" },
+  { xf: 0.14, y: 34, size: 2, phase: 1.1, pulse: false, tone: "muted", kind: "dot" },
+  { xf: 0.22, y: 18, size: 3, phase: 0.6, pulse: false, tone: "purple", kind: "cross" },
+  { xf: 0.31, y: 52, size: 2, phase: 1.8, pulse: true, tone: "lime", kind: "dot" },
+  { xf: 0.38, y: 8, size: 2, phase: 0.3, pulse: false, tone: "muted", kind: "dot" },
+  { xf: 0.44, y: 28, size: 3, phase: 1.4, pulse: true, tone: "purple", kind: "cross" },
+  { xf: 0.5, y: 62, size: 2, phase: 2.1, pulse: false, tone: "muted", kind: "dot" },
+  { xf: 0.56, y: 14, size: 2, phase: 0.9, pulse: false, tone: "lime", kind: "dot" },
+  { xf: 0.62, y: 44, size: 4, phase: 1.2, pulse: true, tone: "lime", kind: "cross" },
+  { xf: 0.68, y: 22, size: 2, phase: 2.4, pulse: false, tone: "purple", kind: "dot" },
+  { xf: 0.74, y: 58, size: 3, phase: 0.5, pulse: false, tone: "muted", kind: "cross" },
+  { xf: 0.8, y: 12, size: 3, phase: 1.6, pulse: true, tone: "purple", kind: "cross" },
+  { xf: 0.86, y: 36, size: 2, phase: 2.8, pulse: false, tone: "lime", kind: "dot" },
+  { xf: 0.92, y: 20, size: 4, phase: 0.2, pulse: false, tone: "lime", kind: "cross" },
+  { xf: 0.1, y: 72, size: 2, phase: 1.9, pulse: false, tone: "purple", kind: "dot" },
+  { xf: 0.28, y: 88, size: 2, phase: 0.7, pulse: false, tone: "muted", kind: "dot" },
+  { xf: 0.47, y: 78, size: 3, phase: 2.2, pulse: true, tone: "purple", kind: "cross" },
+  { xf: 0.66, y: 92, size: 2, phase: 1.0, pulse: false, tone: "lime", kind: "dot" },
+  { xf: 0.84, y: 74, size: 2, phase: 2.6, pulse: false, tone: "muted", kind: "dot" },
+  { xf: 0.94, y: 54, size: 2, phase: 0.4, pulse: true, tone: "purple", kind: "dot" },
+];
 
 const Pixel = memo(function Pixel({ x, y, w, h, c }: PixelSpec) {
   return (
@@ -270,14 +275,6 @@ const SpeechBubble = memo(function SpeechBubble({
   );
 });
 
-type StarDef = {
-  x: number;
-  y: number;
-  size: number;
-  phase: number;
-  pulse: boolean;
-};
-
 const TwinkleStar = memo(function TwinkleStar({
   star,
   master,
@@ -285,10 +282,30 @@ const TwinkleStar = memo(function TwinkleStar({
   star: StarDef;
   master: Animated.Value;
 }) {
+  const color = STAR_PALETTE[star.tone].cross;
   const opacity = master.interpolate({
     inputRange: [0, 0.35, 0.7, 1],
-    outputRange: star.pulse ? [0.42, 1, 0.55, 0.42] : [0.4, 0.72, 0.48, 0.4],
+    outputRange: star.pulse ? [0.34, 0.95, 0.48, 0.34] : [0.28, 0.62, 0.38, 0.28],
   });
+
+  if (star.kind === "dot") {
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.pixelDot,
+          {
+            left: star.x,
+            top: star.y,
+            width: star.size,
+            height: star.size,
+            backgroundColor: STAR_PALETTE[star.tone].dot,
+            opacity,
+          },
+        ]}
+      />
+    );
+  }
 
   return (
     <Animated.View
@@ -298,53 +315,9 @@ const TwinkleStar = memo(function TwinkleStar({
         { left: star.x, top: star.y, width: star.size, height: star.size, opacity },
       ]}
     >
-      <View style={[styles.starH, { width: star.size }]} />
-      <View style={[styles.starV, { height: star.size }]} />
+      <View style={[styles.starH, { width: star.size, backgroundColor: color }]} />
+      <View style={[styles.starV, { height: star.size, backgroundColor: color }]} />
     </Animated.View>
-  );
-});
-
-const ChartCandle = memo(function ChartCandle({
-  def,
-  bobY,
-}: {
-  def: CandleDef;
-  bobY: Animated.AnimatedInterpolation<number>;
-}) {
-  const bodyColor = def.bullish ? CANDLE_GREEN : CANDLE_RED;
-  const shade = def.bullish ? CANDLE_GREEN_DARK : CANDLE_RED_DARK;
-
-  return (
-    <Animated.View style={[styles.candleSlot, { transform: [{ translateY: bobY }] }]}>
-      <View style={[styles.wick, { height: def.wickTop }]} />
-      <View style={[styles.candleBody, { height: def.bodyH, backgroundColor: bodyColor }]}>
-        <View style={[styles.candleShade, { backgroundColor: shade }]} />
-      </View>
-      <View style={[styles.wick, { height: def.wickBottom }]} />
-    </Animated.View>
-  );
-});
-
-const ChartArea = memo(function ChartArea({
-  candlePhase,
-}: {
-  candlePhase: Animated.Value;
-}) {
-  return (
-    <View style={styles.chartStack}>
-      <View style={styles.chartFrame}>
-        <View style={styles.candleRow}>
-          {CANDLES.map((def, i) => {
-            const bobY = candlePhase.interpolate({
-              inputRange: [0, 0.25, 0.5, 0.75, 1],
-              outputRange: [0, i % 2 === 0 ? -0.5 : 0.25, 0, i % 2 === 0 ? 0.25 : -0.5, 0],
-            });
-            return <ChartCandle key={`candle-${i}`} def={def} bobY={bobY} />;
-          })}
-        </View>
-        <View style={styles.chartBaseline} />
-      </View>
-    </View>
   );
 });
 
@@ -354,26 +327,24 @@ function stopAnimatedValue(value: Animated.Value) {
 }
 
 function bullGroundY(): number {
-  const baselineTop = CHART_TOP_IN_AREA + CHART_FRAME_H - CHART_PAD_BOTTOM - BASELINE_H - BASELINE_MT;
-  return baselineTop - BULL_PX_H * PX + 2;
+  return STAGE_H - BULL_RENDER_H - 28;
 }
 
-function bullLeftStandX(): number {
-  return Math.max(2, CHART_PAD_H - 6);
+function bullLeftStandX(stageW: number): number {
+  return Math.max(8, Math.round(stageW * 0.08));
 }
 
-function bullRightStandX(chartW: number): number {
-  return chartW - CHART_PAD_H - BULL_PX_W * PX + 6;
+function bullRightStandX(stageW: number): number {
+  return Math.max(bullLeftStandX(stageW) + 48, Math.round(stageW * 0.92 - BULL_CLUSTER_W));
 }
 
-/** Premium pixel mascot — bull leaps across the candlestick chart with discipline messaging. */
+/** Premium pixel mascot — bull leaps across a starfield with discipline messaging. */
 export const PixelNeonBull = memo(function PixelNeonBull() {
   const { width: screenW } = useWindowDimensions();
   const stageW = Math.min(screenW - 32, 360);
-  const chartW = stageW * 0.88;
 
-  const leftX = bullLeftStandX();
-  const rightX = bullRightStandX(chartW);
+  const leftX = bullLeftStandX(stageW);
+  const rightX = bullRightStandX(stageW);
   const groundY = bullGroundY();
 
   const bullX = useRef(new Animated.Value(leftX)).current;
@@ -383,7 +354,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   const squashY = useRef(new Animated.Value(1)).current;
   const bubbleOpacity = useRef(new Animated.Value(0)).current;
   const dustOpacity = useRef(new Animated.Value(0)).current;
-  const candlePhase = useRef(new Animated.Value(0)).current;
   const starMasterA = useRef(new Animated.Value(0)).current;
   const starMasterB = useRef(new Animated.Value(0)).current;
   const starMasterC = useRef(new Animated.Value(0)).current;
@@ -400,14 +370,16 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   const scaleX = useMemo(() => Animated.multiply(facingScale, squashX), [facingScale, squashX]);
 
   const stars = useMemo<StarDef[]>(
-    () => [
-      { x: stageW * 0.05, y: 12, size: 4, phase: 0, pulse: true },
-      { x: stageW * 0.92, y: 18, size: 3, phase: 1, pulse: false },
-      { x: stageW * 0.08, y: 52, size: 3, phase: 2, pulse: true },
-      { x: stageW * 0.88, y: 48, size: 4, phase: 0.5, pulse: false },
-      { x: stageW * 0.42, y: 8, size: 2, phase: 1.2, pulse: false },
-      { x: stageW * 0.62, y: 28, size: 2, phase: 0.8, pulse: true },
-    ],
+    () =>
+      STAR_SEEDS.map((seed) => ({
+        x: Math.round(stageW * seed.xf),
+        y: seed.y,
+        size: seed.size,
+        phase: seed.phase,
+        pulse: seed.pulse,
+        tone: seed.tone,
+        kind: seed.kind,
+      })),
     [stageW],
   );
 
@@ -424,28 +396,18 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   useEffect(() => {
     mountedRef.current = true;
 
-    const candleLoop = Animated.loop(
-      Animated.timing(candlePhase, {
-        toValue: 1,
-        duration: 6400,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true,
-        isInteraction: false,
-      }),
-    );
-
     const starLoopA = Animated.loop(
       Animated.sequence([
         Animated.timing(starMasterA, {
           toValue: 1,
-          duration: 3000,
+          duration: 3200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
         }),
         Animated.timing(starMasterA, {
           toValue: 0,
-          duration: 3000,
+          duration: 3200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
@@ -455,17 +417,17 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 
     const starLoopB = Animated.loop(
       Animated.sequence([
-        Animated.delay(900),
+        Animated.delay(1100),
         Animated.timing(starMasterB, {
           toValue: 1,
-          duration: 3600,
+          duration: 3800,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
         }),
         Animated.timing(starMasterB, {
           toValue: 0,
-          duration: 3600,
+          duration: 3800,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
@@ -475,17 +437,17 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 
     const starLoopC = Animated.loop(
       Animated.sequence([
-        Animated.delay(1800),
+        Animated.delay(2100),
         Animated.timing(starMasterC, {
           toValue: 1,
-          duration: 4200,
+          duration: 4400,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
         }),
         Animated.timing(starMasterC, {
           toValue: 0,
-          duration: 4200,
+          duration: 4400,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
@@ -493,7 +455,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       ]),
     );
 
-    candleLoop.start();
     starLoopA.start();
     starLoopB.start();
     starLoopC.start();
@@ -515,7 +476,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 
     return () => {
       mountedRef.current = false;
-      stopAnimatedValue(candlePhase);
       stopAnimatedValue(starMasterA);
       stopAnimatedValue(starMasterB);
       stopAnimatedValue(starMasterC);
@@ -526,7 +486,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       stopAnimatedValue(squashY);
       stopAnimatedValue(bubbleOpacity);
       stopAnimatedValue(dustOpacity);
-      candleLoop.stop();
       starLoopA.stop();
       starLoopB.stop();
       starLoopC.stop();
@@ -535,7 +494,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       poseTimersRef.current.forEach(clearTimeout);
       poseTimersRef.current = [];
     };
-  }, [bullX, bullY, bubbleOpacity, candlePhase, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC]);
+  }, [bullX, bullY, bubbleOpacity, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC]);
 
   useEffect(() => {
     let cancelled = false;
@@ -791,16 +750,16 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
           alignItems: "center",
           backgroundColor: VOID,
         },
-        chartArea: {
+        heroArea: {
           position: "absolute",
-          bottom: 8,
-          width: chartW,
-          height: CHART_AREA_H,
-          alignItems: "center",
+          left: 0,
+          top: 0,
+          width: stageW,
+          height: STAGE_H,
           zIndex: 2,
         },
       }),
-    [chartW, stageW],
+    [stageW],
   );
 
   const starMasterFor = (phase: number) => {
@@ -813,13 +772,11 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
     <View style={dynamicStyles.wrap}>
       <View style={dynamicStyles.stage}>
         {stars.map((star, i) => (
-          <TwinkleStar key={`star-${i}`} star={star} master={starMasterFor(star.phase)} />
+          <TwinkleStar key={`star-${star.x}-${star.y}-${i}`} star={star} master={starMasterFor(star.phase)} />
         ))}
 
-        <View style={dynamicStyles.chartArea}>
-          <ChartArea candlePhase={candlePhase} />
+        <View style={dynamicStyles.heroArea} pointerEvents="none">
           <Animated.View
-            pointerEvents="none"
             style={[
               styles.bullOverlay,
               {
@@ -851,12 +808,14 @@ const styles = StyleSheet.create({
   starH: {
     position: "absolute",
     height: 1,
-    backgroundColor: "rgba(163,255,18,0.85)",
   },
   starV: {
     position: "absolute",
     width: 1,
-    backgroundColor: "rgba(163,255,18,0.85)",
+  },
+  pixelDot: {
+    position: "absolute",
+    zIndex: 1,
   },
   bullOverlay: {
     position: "absolute",
@@ -866,7 +825,7 @@ const styles = StyleSheet.create({
   },
   bullCluster: {
     alignItems: "center",
-    width: BULL_PX_W * PX + 40,
+    width: BULL_CLUSTER_W,
     marginLeft: -20,
   },
   bullCanvas: {
@@ -968,58 +927,5 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "45deg" }],
     marginTop: -6,
     marginLeft: 8,
-  },
-  candleRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    flex: 1,
-    gap: CANDLE_GAP,
-  },
-  candleSlot: {
-    width: CANDLE_SLOT_W,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    position: "relative",
-  },
-  wick: {
-    width: WICK_W,
-    backgroundColor: WICK,
-  },
-  candleBody: {
-    width: CANDLE_SLOT_W - 2,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  candleShade: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-  },
-  chartBaseline: {
-    height: BASELINE_H,
-    backgroundColor: GROUND,
-    marginTop: BASELINE_MT,
-    borderRadius: 1,
-  },
-  chartStack: {
-    width: "100%",
-    height: CHART_AREA_H,
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  chartFrame: {
-    width: "100%",
-    height: CHART_FRAME_H,
-    borderWidth: 2,
-    borderColor: "#1E2430",
-    borderRadius: 10,
-    backgroundColor: "#050608",
-    paddingHorizontal: CHART_PAD_H,
-    paddingTop: CHART_PAD_TOP,
-    paddingBottom: CHART_PAD_BOTTOM,
-    overflow: "visible",
   },
 });

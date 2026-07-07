@@ -6,7 +6,7 @@ import {
   type AchievementShareStats,
 } from "./achievementHelpers";
 import { buildAchievementShareTextLayout } from "./achievementShareTextLayout";
-import { resolveAchievementTextTheme } from "./achievementTextTheme";
+import { ACHIEVEMENT_SHARE_EXPORT_THEME } from "./achievementTextTheme";
 import {
   ACHIEVEMENT_EXPORT_HEIGHT,
   ACHIEVEMENT_EXPORT_WIDTH,
@@ -37,7 +37,7 @@ export function AchievementShareCard({
   const journal = journalStats ?? stats;
   const copy = buildAchievementRewardOverlay(reward, journal);
   const layout = useMemo(() => buildAchievementShareTextLayout(copy), [copy]);
-  const textTheme = useMemo(() => resolveAchievementTextTheme(reward), [reward]);
+  const textTheme = ACHIEVEMENT_SHARE_EXPORT_THEME;
 
   return (
     <View style={styles.root} collapsable={false}>
@@ -47,7 +47,6 @@ export function AchievementShareCard({
         resizeMode="stretch"
       />
       <View style={achievementRewardOverlayStyle()} collapsable={false}>
-        <View style={styles.textScrim} />
         <View style={styles.textStack}>
           <Text
             style={[styles.kicker, { color: textTheme.kicker }]}
@@ -126,12 +125,7 @@ const styles = StyleSheet.create({
     width: ACHIEVEMENT_EXPORT_WIDTH,
     height: ACHIEVEMENT_EXPORT_HEIGHT,
     overflow: "hidden",
-    backgroundColor: "#0a0614",
-  },
-  textScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.22)",
-    borderRadius: 20,
+    backgroundColor: "#000000",
   },
   textStack: {
     width: "100%",
