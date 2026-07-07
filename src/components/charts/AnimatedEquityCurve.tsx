@@ -24,7 +24,6 @@ type EquityPoint = {
 
 type Props = {
   trades: TradeLike[];
-  period?: "day" | "week" | "month" | "year";
   isPro?: boolean;
   onPointPress?: (point: EquityPoint) => void;
 };
@@ -58,7 +57,7 @@ function buildDailyEquity(trades: TradeLike[]) {
     });
 }
 
-function AnimatedEquityCurveBase({ trades, period = "month", isPro = false, onPointPress }: Props) {
+function AnimatedEquityCurveBase({ trades, isPro = false, onPointPress }: Props) {
   const { width } = useWindowDimensions();
   const progress = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState<EquityPoint | null>(null);
@@ -68,7 +67,7 @@ function AnimatedEquityCurveBase({ trades, period = "month", isPro = false, onPo
   const pad = 18;
 
   const points = useMemo(() => {
-    const rows = buildDailyEquity(trades).slice(period === "year" ? -120 : -54);
+    const rows = buildDailyEquity(trades);
     if (!rows.length) return [];
     const values = rows.map((point) => point.cumulative);
     const min = Math.min(0, ...values);
@@ -81,7 +80,7 @@ function AnimatedEquityCurveBase({ trades, period = "month", isPro = false, onPo
       x: pad + (rows.length === 1 ? innerWidth / 2 : (index / (rows.length - 1)) * innerWidth),
       y: pad + innerHeight - ((point.cumulative - min) / range) * innerHeight,
     }));
-  }, [chartHeight, chartWidth, period, trades]);
+  }, [chartHeight, chartWidth, trades]);
 
   useEffect(() => {
     progress.setValue(0);

@@ -5,7 +5,7 @@ import Constants from "expo-constants";
 const SENTRY_DSN = (process.env.EXPO_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN || "").trim();
 const SENTRY_ENVIRONMENT = (process.env.EXPO_PUBLIC_APP_ENV || process.env.APP_ENV || (__DEV__ ? "development" : "production")).trim();
 const APP_VERSION = Constants.expoConfig?.version || "1.5.9";
-const APP_BUILD = Constants.expoConfig?.ios?.buildNumber || "91";
+const APP_BUILD = Constants.expoConfig?.ios?.buildNumber || "92";
 const SENTRY_RELEASE = `YouTrader@${APP_VERSION}+${APP_BUILD}`;
 
 let monitoringInitialized = false;

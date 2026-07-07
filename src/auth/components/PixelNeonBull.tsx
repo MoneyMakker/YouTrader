@@ -11,14 +11,18 @@ import {
 import { t } from "../../i18n";
 
 const PX = 3;
-const LIME = "#B8FF1A";
-const LIME_BRIGHT = "#D4FF5C";
-const LIME_MID = "#8ECC12";
-const LIME_DARK = "#5A9908";
-const LIME_DEEP = "#3D6B06";
+const LIME = "#A3FF12";
+const LIME_BRIGHT = "#C8FF4A";
+const LIME_MID = "#7ACC0A";
+const LIME_DARK = "#4A8808";
+const LIME_DEEP = "#2E5A06";
 const HORN = "#6BB010";
-const HORN_DARK = "#4A7808";
-const HOOF = "#2E4A06";
+const HORN_TIP = "#D4FF5C";
+const HORN_DARK = "#3D6B06";
+const PURPLE_EYE = "#B026FF";
+const PURPLE_GLOW = "#7A18BF";
+const PURPLE_CORE = "#D580FF";
+const HOOF = "#1A2E04";
 const WHITE = "#FFFFFF";
 const BLACK = "#000000";
 const VOID = "#000000";
@@ -38,21 +42,23 @@ const CHART_PAD_BOTTOM = 8;
 const BASELINE_H = 2;
 const BASELINE_MT = 6;
 
-const JUMP_MS = 940;
-const PAUSE_MS = 350;
-const TURN_MS = 560;
-const JUMP_ARC = 22;
-const LAND_BOUNCE_MS = 120;
+const READ_PAUSE_MS = 2800;
+const JUMP_MS = 1280;
+const CROUCH_MS = 240;
+const LAND_SQUASH_MS = 190;
+const RECOVER_MS = 320;
+const TURN_MS = 520;
+const JUMP_ARC = 52;
 
 const CANDLE_SLOT_W = 15;
 const CANDLE_GAP = 6;
 const WICK_W = 3;
 
-const BULL_PX_W = 26;
-const BULL_PX_H = 22;
+const BULL_PX_W = 32;
+const BULL_PX_H = 28;
 
 type PixelSpec = { x: number; y: number; w: number; h: number; c: string };
-type BullPose = "idle" | "takeoff" | "airborne" | "land";
+type BullPose = "idle" | "crouch" | "airborne" | "land";
 type DialogueKey = "authPixelDontGamble" | "authPixelTradeDiscipline";
 
 type CandleDef = {
@@ -73,38 +79,8 @@ const CANDLES: CandleDef[] = [
   { bullish: true, bodyH: 42, wickTop: 10, wickBottom: 5 },
 ];
 
-const CANDLE_COUNT = CANDLES.length;
-const CANDLE_ROW_H = CHART_FRAME_H - CHART_PAD_TOP - CHART_PAD_BOTTOM - BASELINE_H - BASELINE_MT;
-
-type CandleLayout = {
-  x: number;
-  bodyTop: number;
-  centerX: number;
-};
-
-function buildCandleLayout(chartW: number): CandleLayout[] {
-  const innerW = chartW - CHART_PAD_H * 2;
-  return CANDLES.map((def, i) => {
-    const x =
-      CANDLE_COUNT === 1
-        ? CHART_PAD_H
-        : CHART_PAD_H + (i / (CANDLE_COUNT - 1)) * (innerW - CANDLE_SLOT_W);
-    const totalH = def.wickTop + def.bodyH + def.wickBottom;
-    const bodyTop = CHART_PAD_TOP + CANDLE_ROW_H - totalH + def.wickTop;
-    return { x, bodyTop, centerX: x + CANDLE_SLOT_W / 2 };
-  });
-}
-
 const CHART_AREA_H = 118;
 const CHART_TOP_IN_AREA = CHART_AREA_H - CHART_FRAME_H;
-
-function bullStandY(layout: CandleLayout): number {
-  return CHART_TOP_IN_AREA + layout.bodyTop - BULL_PX_H * PX;
-}
-
-function bullStandX(layout: CandleLayout): number {
-  return layout.centerX - (BULL_PX_W * PX) / 2;
-}
 
 const Pixel = memo(function Pixel({ x, y, w, h, c }: PixelSpec) {
   return (
@@ -131,164 +107,127 @@ const PixelGroup = memo(function PixelGroup({ specs }: { specs: PixelSpec[] }) {
   );
 });
 
-function legSpecs(frame: number, pose: BullPose): PixelSpec[] {
-  const f = frame % 3;
-  const stride = pose === "takeoff" ? 1 : pose === "airborne" ? 2 : 0;
-  const specs: PixelSpec[] = [];
-
-  const frontShift = f === 0 ? 0 : f === 1 ? stride : -stride;
-  const backShift = f === 0 ? 0 : f === 1 ? -stride : stride;
-
-  specs.push(
-    { x: 8 + backShift, y: 16, w: 2, h: 3, c: LIME_DARK },
-    { x: 11 + backShift, y: 17, w: 2, h: 2, c: HOOF },
-    { x: 14 + frontShift, y: 16, w: 2, h: 3, c: LIME_DARK },
-    { x: 17 + frontShift, y: 17, w: 2, h: 2, c: HOOF },
-    { x: 10 + backShift, y: 15, w: 2, h: 2, c: LIME_DEEP },
-    { x: 16 + frontShift, y: 15, w: 2, h: 2, c: LIME_DEEP },
-  );
-
-  if (pose === "takeoff") {
-    specs.push(
-      { x: 13, y: 17, w: 2, h: 1, c: HOOF },
-      { x: 15, y: 16, w: 2, h: 1, c: LIME_DARK },
-    );
-  }
-
-  return specs;
-}
-
-function tailSpecs(frame: number): PixelSpec[] {
-  const f = frame % 4;
-  if (f === 0) {
+function legSpecs(pose: BullPose): PixelSpec[] {
+  if (pose === "airborne") {
     return [
-      { x: 1, y: 11, w: 2, h: 1, c: LIME_MID },
-      { x: 0, y: 12, w: 2, h: 1, c: LIME },
-      { x: -1, y: 13, w: 2, h: 1, c: LIME_BRIGHT },
-      { x: -2, y: 14, w: 2, h: 1, c: LIME_MID },
-      { x: -1, y: 15, w: 1, h: 1, c: LIME_DARK },
+      { x: 9, y: 22, w: 3, h: 2, c: LIME_DARK },
+      { x: 20, y: 22, w: 3, h: 2, c: LIME_DARK },
+      { x: 10, y: 23, w: 2, h: 1, c: HOOF },
+      { x: 21, y: 23, w: 2, h: 1, c: HOOF },
     ];
   }
-  if (f === 1) {
+  if (pose === "crouch") {
     return [
-      { x: 1, y: 10, w: 2, h: 1, c: LIME_MID },
-      { x: 0, y: 11, w: 2, h: 1, c: LIME },
-      { x: -1, y: 10, w: 2, h: 1, c: LIME_BRIGHT },
-      { x: -2, y: 9, w: 2, h: 1, c: LIME },
-      { x: -3, y: 8, w: 1, h: 1, c: LIME_MID },
+      { x: 8, y: 23, w: 3, h: 3, c: LIME_DARK },
+      { x: 11, y: 24, w: 3, h: 2, c: HOOF },
+      { x: 18, y: 23, w: 3, h: 3, c: LIME_DARK },
+      { x: 21, y: 24, w: 3, h: 2, c: HOOF },
+      { x: 9, y: 22, w: 2, h: 2, c: LIME_DEEP },
+      { x: 19, y: 22, w: 2, h: 2, c: LIME_DEEP },
     ];
   }
-  if (f === 2) {
+  if (pose === "land") {
     return [
-      { x: 1, y: 9, w: 2, h: 1, c: LIME_MID },
-      { x: 0, y: 8, w: 2, h: 1, c: LIME },
-      { x: -1, y: 7, w: 2, h: 1, c: LIME_BRIGHT },
-      { x: -2, y: 6, w: 2, h: 1, c: LIME },
-      { x: -1, y: 5, w: 1, h: 1, c: LIME_MID },
+      { x: 6, y: 23, w: 4, h: 3, c: LIME_DARK },
+      { x: 10, y: 24, w: 3, h: 2, c: HOOF },
+      { x: 19, y: 23, w: 4, h: 3, c: LIME_DARK },
+      { x: 23, y: 24, w: 3, h: 2, c: HOOF },
+      { x: 7, y: 22, w: 3, h: 2, c: LIME_DEEP },
+      { x: 20, y: 22, w: 3, h: 2, c: LIME_DEEP },
     ];
   }
   return [
-    { x: 1, y: 10, w: 2, h: 1, c: LIME_MID },
-    { x: 0, y: 11, w: 2, h: 1, c: LIME },
-    { x: -1, y: 12, w: 2, h: 1, c: LIME_BRIGHT },
-    { x: -2, y: 11, w: 2, h: 1, c: LIME },
-    { x: -3, y: 10, w: 1, h: 1, c: LIME_DARK },
+    { x: 9, y: 22, w: 3, h: 4, c: LIME_DARK },
+    { x: 10, y: 25, w: 3, h: 2, c: HOOF },
+    { x: 20, y: 22, w: 3, h: 4, c: LIME_DARK },
+    { x: 21, y: 25, w: 3, h: 2, c: HOOF },
+    { x: 10, y: 21, w: 2, h: 2, c: LIME_DEEP },
+    { x: 21, y: 21, w: 2, h: 2, c: LIME_DEEP },
   ];
 }
 
-function bullBodySpecs({
-  blink,
-  tailFrame,
-  legFrame,
-  earsPerked,
-  headTilt,
-  pose,
-}: {
-  blink: boolean;
-  tailFrame: number;
-  legFrame: number;
-  earsPerked: boolean;
-  headTilt: -1 | 0 | 1;
-  pose: BullPose;
-}): PixelSpec[] {
+function buildBullSpecs(pose: BullPose, blink: boolean): PixelSpec[] {
   const specs: PixelSpec[] = [];
-  const tilt = headTilt;
-  const y = (row: number) => row + tilt;
+  const yOff = pose === "crouch" ? 1 : pose === "airborne" ? -1 : 0;
+  const y = (row: number) => row + yOff;
 
   specs.push(
-    { x: 15, y: y(0), w: 2, h: 2, c: HORN },
-    { x: 17, y: y(0), w: 2, h: 2, c: HORN },
-    { x: 14, y: y(1), w: 2, h: 1, c: HORN_DARK },
-    { x: 18, y: y(1), w: 2, h: 1, c: HORN_DARK },
-    { x: 16, y: y(2), w: 1, h: 1, c: HORN_DARK },
-    { x: 17, y: y(2), w: 1, h: 1, c: HORN_DARK },
+    { x: 5, y: y(0), w: 3, h: 2, c: HORN_TIP },
+    { x: 7, y: y(0), w: 2, h: 2, c: HORN },
+    { x: 8, y: y(1), w: 2, h: 2, c: HORN },
+    { x: 9, y: y(2), w: 2, h: 1, c: HORN_DARK },
+    { x: 10, y: y(3), w: 1, h: 1, c: HORN_DARK },
+    { x: 22, y: y(0), w: 3, h: 2, c: HORN_TIP },
+    { x: 23, y: y(0), w: 2, h: 2, c: HORN },
+    { x: 21, y: y(1), w: 2, h: 2, c: HORN },
+    { x: 20, y: y(2), w: 2, h: 1, c: HORN_DARK },
+    { x: 19, y: y(3), w: 1, h: 1, c: HORN_DARK },
   );
 
   specs.push(
-    { x: earsPerked ? 12 : 13, y: y(3), w: 2, h: 1, c: LIME_MID },
-    { x: earsPerked ? 17 : 16, y: y(3), w: 2, h: 1, c: LIME_MID },
-  );
-
-  specs.push(
-    { x: 12, y: y(4), w: 8, h: 1, c: LIME_BRIGHT },
-    { x: 11, y: y(5), w: 10, h: 1, c: LIME },
-    { x: 12, y: y(6), w: 9, h: 1, c: LIME_MID },
-    { x: 13, y: y(7), w: 2, h: 2, c: LIME_DARK },
-    { x: 17, y: y(7), w: 2, h: 2, c: LIME_DARK },
-    { x: 18, y: y(8), w: 3, h: 1, c: LIME_MID },
-    { x: 19, y: y(9), w: 2, h: 1, c: LIME_DARK },
+    { x: 10, y: y(4), w: 2, h: 1, c: LIME_MID },
+    { x: 20, y: y(4), w: 2, h: 1, c: LIME_MID },
+    { x: 11, y: y(5), w: 10, h: 1, c: LIME_BRIGHT },
+    { x: 10, y: y(6), w: 12, h: 1, c: LIME },
+    { x: 11, y: y(7), w: 10, h: 1, c: LIME_MID },
   );
 
   if (blink) {
     specs.push(
-      { x: 13, y: y(6), w: 3, h: 1, c: LIME_DEEP },
-      { x: 17, y: y(6), w: 3, h: 1, c: LIME_DEEP },
+      { x: 12, y: y(7), w: 4, h: 1, c: LIME_DEEP },
+      { x: 18, y: y(7), w: 4, h: 1, c: LIME_DEEP },
     );
   } else {
     specs.push(
-      { x: 13, y: y(5), w: 3, h: 3, c: WHITE },
-      { x: 17, y: y(5), w: 3, h: 3, c: WHITE },
-      { x: 14, y: y(7), w: 2, h: 2, c: BLACK },
-      { x: 18, y: y(7), w: 2, h: 2, c: BLACK },
-      { x: 14, y: y(7), w: 1, h: 1, c: WHITE },
+      { x: 11, y: y(6), w: 1, h: 1, c: PURPLE_GLOW },
+      { x: 12, y: y(5), w: 5, h: 5, c: PURPLE_GLOW },
+      { x: 13, y: y(6), w: 3, h: 3, c: PURPLE_EYE },
+      { x: 14, y: y(7), w: 1, h: 1, c: PURPLE_CORE },
+      { x: 15, y: y(6), w: 1, h: 1, c: WHITE },
+      { x: 17, y: y(6), w: 1, h: 1, c: PURPLE_GLOW },
+      { x: 18, y: y(5), w: 5, h: 5, c: PURPLE_GLOW },
+      { x: 19, y: y(6), w: 3, h: 3, c: PURPLE_EYE },
+      { x: 20, y: y(7), w: 1, h: 1, c: PURPLE_CORE },
+      { x: 21, y: y(6), w: 1, h: 1, c: WHITE },
     );
   }
 
-  const bodyStretch = pose === "takeoff" || pose === "airborne" ? 1 : 0;
   specs.push(
-    { x: 5, y: y(8 + bodyStretch), w: 12, h: 1, c: LIME_BRIGHT },
-    { x: 4, y: y(9 + bodyStretch), w: 14, h: 1, c: LIME },
-    { x: 4, y: y(10 + bodyStretch), w: 14, h: 2, c: LIME_MID },
-    { x: 5, y: y(12 + bodyStretch), w: 12, h: 1, c: LIME },
-    { x: 6, y: y(13 + bodyStretch), w: 10, h: 1, c: LIME_DARK },
-    { x: 7, y: y(14 + bodyStretch), w: 8, h: 1, c: LIME_DEEP },
+    { x: 13, y: y(8), w: 6, h: 1, c: LIME_DARK },
+    { x: 14, y: y(9), w: 4, h: 1, c: LIME_DEEP },
+    { x: 24, y: y(8), w: 3, h: 2, c: LIME_MID },
+    { x: 25, y: y(9), w: 2, h: 1, c: LIME_DARK },
+    { x: 26, y: y(10), w: 1, h: 1, c: LIME_DEEP },
   );
 
-  specs.push(...legSpecs(legFrame, pose));
-  specs.push(...tailSpecs(tailFrame));
+  const bodyDrop = pose === "crouch" ? 1 : 0;
+  specs.push(
+    { x: 6, y: y(10 + bodyDrop), w: 18, h: 1, c: LIME_BRIGHT },
+    { x: 5, y: y(11 + bodyDrop), w: 20, h: 1, c: LIME },
+    { x: 5, y: y(12 + bodyDrop), w: 20, h: 2, c: LIME_MID },
+    { x: 6, y: y(14 + bodyDrop), w: 18, h: 1, c: LIME },
+    { x: 7, y: y(15 + bodyDrop), w: 16, h: 1, c: LIME_DARK },
+    { x: 8, y: y(16 + bodyDrop), w: 14, h: 1, c: LIME_DEEP },
+    { x: 4, y: y(13 + bodyDrop), w: 2, h: 2, c: LIME_MID },
+    { x: 24, y: y(13 + bodyDrop), w: 2, h: 2, c: LIME_MID },
+  );
+
+  specs.push(
+    { x: 2, y: y(12 + bodyDrop), w: 2, h: 1, c: LIME_MID },
+    { x: 1, y: y(13 + bodyDrop), w: 2, h: 1, c: LIME },
+    { x: 0, y: y(14 + bodyDrop), w: 2, h: 1, c: LIME_BRIGHT },
+    { x: -1, y: y(15 + bodyDrop), w: 2, h: 1, c: LIME_MID },
+  );
+
+  specs.push(...legSpecs(pose));
   return specs;
 }
 
-const BullMascot = memo(function BullMascot({
-  blink,
-  tailFrame,
-  legFrame,
-  earsPerked,
-  headTilt,
-  pose,
-}: {
-  blink: boolean;
-  tailFrame: number;
-  legFrame: number;
-  earsPerked: boolean;
-  headTilt: -1 | 0 | 1;
-  pose: BullPose;
-}) {
+const BullMascot = memo(function BullMascot({ pose, blink }: { pose: BullPose; blink: boolean }) {
+  const specs = useMemo(() => buildBullSpecs(pose, blink), [pose, blink]);
   return (
     <View style={styles.bullCanvas}>
-      <PixelGroup
-        specs={bullBodySpecs({ blink, tailFrame, legFrame, earsPerked, headTilt, pose })}
-      />
+      <PixelGroup specs={specs} />
     </View>
   );
 });
@@ -296,10 +235,11 @@ const BullMascot = memo(function BullMascot({
 const DustPuff = memo(function DustPuff({ opacity }: { opacity: Animated.Value }) {
   return (
     <Animated.View pointerEvents="none" style={[styles.dustWrap, { opacity }]}>
-      <View style={[styles.dustPixel, { left: 4, top: 8 }]} />
-      <View style={[styles.dustPixel, { left: 12, top: 10 }]} />
-      <View style={[styles.dustPixel, { left: 20, top: 7 }]} />
-      <View style={[styles.dustPixel, { left: 28, top: 11, opacity: 0.7 }]} />
+      <View style={[styles.dustPixel, { left: 2, top: 8 }]} />
+      <View style={[styles.dustPixel, { left: 10, top: 10 }]} />
+      <View style={[styles.dustPixel, { left: 18, top: 7 }]} />
+      <View style={[styles.dustPixel, { left: 26, top: 11, opacity: 0.7 }]} />
+      <View style={[styles.dustPixel, { left: 34, top: 9, opacity: 0.55 }]} />
     </Animated.View>
   );
 });
@@ -314,7 +254,11 @@ const SpeechBubble = memo(function SpeechBubble({
   return (
     <Animated.View style={[styles.bubbleWrap, { opacity }]}>
       <View style={styles.bubbleBox}>
-        <Text style={styles.bubbleText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+        <View style={styles.bubbleCornerTL} />
+        <View style={styles.bubbleCornerTR} />
+        <View style={styles.bubbleCornerBL} />
+        <View style={styles.bubbleCornerBR} />
+        <Text style={styles.bubbleText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.82}>
           {text}
         </Text>
       </View>
@@ -332,7 +276,6 @@ type StarDef = {
   size: number;
   phase: number;
   pulse: boolean;
-  twinkleMs: number;
 };
 
 const TwinkleStar = memo(function TwinkleStar({
@@ -344,9 +287,7 @@ const TwinkleStar = memo(function TwinkleStar({
 }) {
   const opacity = master.interpolate({
     inputRange: [0, 0.35, 0.7, 1],
-    outputRange: star.pulse
-      ? [0.42, 1, 0.55, 0.42]
-      : [0.4, 0.72, 0.48, 0.4],
+    outputRange: star.pulse ? [0.42, 1, 0.55, 0.42] : [0.4, 0.72, 0.48, 0.4],
   });
 
   return (
@@ -360,35 +301,6 @@ const TwinkleStar = memo(function TwinkleStar({
       <View style={[styles.starH, { width: star.size }]} />
       <View style={[styles.starV, { height: star.size }]} />
     </Animated.View>
-  );
-});
-
-const ShootingStar = memo(function ShootingStar({
-  startX,
-  startY,
-  progress,
-}: {
-  startX: number;
-  startY: number;
-  progress: Animated.Value;
-}) {
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [0, 72] });
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [0, 18] });
-  const opacity = progress.interpolate({ inputRange: [0, 0.15, 0.85, 1], outputRange: [0, 0.55, 0.35, 0] });
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.shootingStar,
-        {
-          left: startX,
-          top: startY,
-          opacity,
-          transform: [{ translateX }, { translateY }],
-        },
-      ]}
-    />
   );
 });
 
@@ -441,60 +353,73 @@ function stopAnimatedValue(value: Animated.Value) {
   value.removeAllListeners();
 }
 
-function dialogueForLanding(landingIndex: number): DialogueKey {
-  return landingIndex % 2 === 1 ? "authPixelDontGamble" : "authPixelTradeDiscipline";
+function bullGroundY(): number {
+  const baselineTop = CHART_TOP_IN_AREA + CHART_FRAME_H - CHART_PAD_BOTTOM - BASELINE_H - BASELINE_MT;
+  return baselineTop - BULL_PX_H * PX + 2;
 }
 
-/** Playful pixel mascot — bull hops candle to candle on a live chart. */
+function bullLeftStandX(): number {
+  return Math.max(2, CHART_PAD_H - 6);
+}
+
+function bullRightStandX(chartW: number): number {
+  return chartW - CHART_PAD_H - BULL_PX_W * PX + 6;
+}
+
+/** Premium pixel mascot — bull leaps across the candlestick chart with discipline messaging. */
 export const PixelNeonBull = memo(function PixelNeonBull() {
   const { width: screenW } = useWindowDimensions();
   const stageW = Math.min(screenW - 32, 360);
   const chartW = stageW * 0.88;
-  const layout = useMemo(() => buildCandleLayout(chartW), [chartW]);
 
-  const bullX = useRef(new Animated.Value(bullStandX(layout[0]))).current;
-  const bullY = useRef(new Animated.Value(bullStandY(layout[0]))).current;
+  const leftX = bullLeftStandX();
+  const rightX = bullRightStandX(chartW);
+  const groundY = bullGroundY();
+
+  const bullX = useRef(new Animated.Value(leftX)).current;
+  const bullY = useRef(new Animated.Value(groundY)).current;
   const facingScale = useRef(new Animated.Value(1)).current;
-  const bodyStretch = useRef(new Animated.Value(1)).current;
+  const squashX = useRef(new Animated.Value(1)).current;
+  const squashY = useRef(new Animated.Value(1)).current;
   const bubbleOpacity = useRef(new Animated.Value(0)).current;
   const dustOpacity = useRef(new Animated.Value(0)).current;
   const candlePhase = useRef(new Animated.Value(0)).current;
-
   const starMasterA = useRef(new Animated.Value(0)).current;
   const starMasterB = useRef(new Animated.Value(0)).current;
   const starMasterC = useRef(new Animated.Value(0)).current;
-  const shootingProgress = useRef(new Animated.Value(0)).current;
-  const sparkleOpacity = useRef(new Animated.Value(0)).current;
 
   const [blink, setBlink] = useState(false);
-  const [tailFrame, setTailFrame] = useState(0);
-  const [legFrame, setLegFrame] = useState(0);
-  const [earsPerked, setEarsPerked] = useState(false);
-  const [headTilt, setHeadTilt] = useState<0 | 1 | -1>(0);
   const [pose, setPose] = useState<BullPose>("idle");
   const [dialogueKey, setDialogueKey] = useState<DialogueKey>("authPixelDontGamble");
-  const [shootingStar, setShootingStar] = useState({ x: stageW * 0.12, y: 16, key: 0 });
 
   const mountedRef = useRef(true);
-  const landingCounterRef = useRef(1);
   const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tailIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const legIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const earsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const headIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const shootingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const poseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const poseTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const scaleX = useMemo(() => Animated.multiply(facingScale, squashX), [facingScale, squashX]);
 
   const stars = useMemo<StarDef[]>(
     () => [
-      { x: stageW * 0.05, y: 12, size: 4, phase: 0, pulse: true, twinkleMs: 2800 },
-      { x: stageW * 0.92, y: 18, size: 3, phase: 1, pulse: false, twinkleMs: 3400 },
-      { x: stageW * 0.08, y: 52, size: 3, phase: 2, pulse: true, twinkleMs: 3100 },
-      { x: stageW * 0.88, y: 48, size: 4, phase: 0.5, pulse: false, twinkleMs: 3600 },
-      { x: stageW * 0.42, y: 8, size: 2, phase: 1.2, pulse: false, twinkleMs: 4200 },
-      { x: stageW * 0.62, y: 28, size: 2, phase: 0.8, pulse: true, twinkleMs: 3900 },
+      { x: stageW * 0.05, y: 12, size: 4, phase: 0, pulse: true },
+      { x: stageW * 0.92, y: 18, size: 3, phase: 1, pulse: false },
+      { x: stageW * 0.08, y: 52, size: 3, phase: 2, pulse: true },
+      { x: stageW * 0.88, y: 48, size: 4, phase: 0.5, pulse: false },
+      { x: stageW * 0.42, y: 8, size: 2, phase: 1.2, pulse: false },
+      { x: stageW * 0.62, y: 28, size: 2, phase: 0.8, pulse: true },
     ],
     [stageW],
   );
+
+  const setPoseSafe = (next: BullPose, resetMs?: number) => {
+    setPose(next);
+    if (poseTimeoutRef.current) clearTimeout(poseTimeoutRef.current);
+    if (resetMs && resetMs > 0) {
+      poseTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) setPose("idle");
+      }, resetMs);
+    }
+  };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -568,34 +493,14 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       ]),
     );
 
-    const sparkleLoop = Animated.loop(
-      Animated.sequence([
-        Animated.delay(5200),
-        Animated.timing(sparkleOpacity, {
-          toValue: 1,
-          duration: 420,
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
-        Animated.timing(sparkleOpacity, {
-          toValue: 0,
-          duration: 520,
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
-        Animated.delay(6800),
-      ]),
-    );
-
     candleLoop.start();
     starLoopA.start();
     starLoopB.start();
     starLoopC.start();
-    sparkleLoop.start();
 
     const scheduleBlink = () => {
       if (!mountedRef.current) return;
-      const delay = 2800 + Math.random() * 3400;
+      const delay = 3200 + Math.random() * 2800;
       blinkTimeoutRef.current = setTimeout(() => {
         if (!mountedRef.current) return;
         setBlink(true);
@@ -603,55 +508,10 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
           if (!mountedRef.current) return;
           setBlink(false);
           scheduleBlink();
-        }, 110);
+        }, 120);
       }, delay);
     };
     scheduleBlink();
-
-    tailIntervalRef.current = setInterval(() => {
-      if (mountedRef.current) setTailFrame((v) => (v + 1) % 4);
-    }, 320);
-
-    legIntervalRef.current = setInterval(() => {
-      if (mountedRef.current) setLegFrame((v) => (v + 1) % 3);
-    }, 220);
-
-    earsIntervalRef.current = setInterval(() => {
-      if (!mountedRef.current) return;
-      setEarsPerked(true);
-      setTimeout(() => {
-        if (mountedRef.current) setEarsPerked(false);
-      }, 160);
-    }, 1600);
-
-    headIntervalRef.current = setInterval(() => {
-      if (!mountedRef.current) return;
-      const tilts: Array<0 | 1 | -1> = [0, 1, 0, -1, 0];
-      const pick = tilts[Math.floor(Math.random() * tilts.length)];
-      setHeadTilt(pick);
-    }, 1800);
-
-    const scheduleShootingStar = () => {
-      if (!mountedRef.current) return;
-      const delay = 10000 + Math.random() * 5000;
-      shootingTimeoutRef.current = setTimeout(() => {
-        if (!mountedRef.current) return;
-        setShootingStar({
-          x: stageW * (0.08 + Math.random() * 0.55),
-          y: 8 + Math.random() * 36,
-          key: Date.now(),
-        });
-        shootingProgress.setValue(0);
-        Animated.timing(shootingProgress, {
-          toValue: 1,
-          duration: 680,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-          isInteraction: false,
-        }).start(() => scheduleShootingStar());
-      }, delay);
-    };
-    scheduleShootingStar();
 
     return () => {
       mountedRef.current = false;
@@ -659,135 +519,82 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       stopAnimatedValue(starMasterA);
       stopAnimatedValue(starMasterB);
       stopAnimatedValue(starMasterC);
-      stopAnimatedValue(shootingProgress);
-      stopAnimatedValue(sparkleOpacity);
       stopAnimatedValue(bullX);
       stopAnimatedValue(bullY);
       stopAnimatedValue(facingScale);
-      stopAnimatedValue(bodyStretch);
+      stopAnimatedValue(squashX);
+      stopAnimatedValue(squashY);
       stopAnimatedValue(bubbleOpacity);
       stopAnimatedValue(dustOpacity);
       candleLoop.stop();
       starLoopA.stop();
       starLoopB.stop();
       starLoopC.stop();
-      sparkleLoop.stop();
       if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
-      if (tailIntervalRef.current) clearInterval(tailIntervalRef.current);
-      if (legIntervalRef.current) clearInterval(legIntervalRef.current);
-      if (earsIntervalRef.current) clearInterval(earsIntervalRef.current);
-      if (headIntervalRef.current) clearInterval(headIntervalRef.current);
-      if (shootingTimeoutRef.current) clearTimeout(shootingTimeoutRef.current);
+      if (poseTimeoutRef.current) clearTimeout(poseTimeoutRef.current);
+      poseTimersRef.current.forEach(clearTimeout);
+      poseTimersRef.current = [];
     };
-  }, [
-    bodyStretch,
-    bullX,
-    bullY,
-    bubbleOpacity,
-    candlePhase,
-    dustOpacity,
-    facingScale,
-    shootingProgress,
-    sparkleOpacity,
-    stageW,
-    starMasterA,
-    starMasterB,
-    starMasterC,
-  ]);
+  }, [bullX, bullY, bubbleOpacity, candlePhase, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC]);
 
   useEffect(() => {
     let cancelled = false;
 
-    const showBubbleOnCandle = (): Animated.CompositeAnimation =>
-      Animated.sequence([
+    const clearPoseTimers = () => {
+      poseTimersRef.current.forEach(clearTimeout);
+      poseTimersRef.current = [];
+    };
+
+    const schedulePose = (fn: () => void, ms: number) => {
+      const id = setTimeout(() => {
+        if (!cancelled && mountedRef.current) fn();
+      }, ms);
+      poseTimersRef.current.push(id);
+    };
+
+    const showBubble = (key: DialogueKey): Animated.CompositeAnimation => {
+      setDialogueKey(key);
+      bubbleOpacity.setValue(0);
+      return Animated.sequence([
         Animated.timing(bubbleOpacity, {
           toValue: 1,
-          duration: 120,
+          duration: 160,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
           isInteraction: false,
         }),
-        Animated.delay(PAUSE_MS),
+        Animated.delay(READ_PAUSE_MS),
         Animated.timing(bubbleOpacity, {
           toValue: 0,
-          duration: 180,
+          duration: 220,
           useNativeDriver: true,
           isInteraction: false,
         }),
       ]);
+    };
 
-    const landOnCandle = (candleIndex: number): Animated.CompositeAnimation => {
-      const targetX = bullStandX(layout[candleIndex]);
-      const targetY = bullStandY(layout[candleIndex]);
-      const key = dialogueForLanding(landingCounterRef.current);
-      landingCounterRef.current += 1;
-      setDialogueKey(key);
-      setPose("land");
-      setTimeout(() => {
-        if (!cancelled) setPose("idle");
-      }, 320);
+    const jumpAcross = (fromX: number, toX: number): Animated.CompositeAnimation => {
+      const apexY = groundY - JUMP_ARC;
+      bullX.setValue(fromX);
+      bullY.setValue(groundY);
 
       return Animated.sequence([
         Animated.parallel([
-          Animated.timing(bullX, {
-            toValue: targetX,
-            duration: LAND_BOUNCE_MS,
+          Animated.timing(squashY, {
+            toValue: 0.84,
+            duration: CROUCH_MS,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
             isInteraction: false,
           }),
-          Animated.sequence([
-            Animated.timing(bullY, {
-              toValue: targetY + 3,
-              duration: 60,
-              useNativeDriver: true,
-              isInteraction: false,
-            }),
-            Animated.timing(bullY, {
-              toValue: targetY - 3,
-              duration: 80,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-              isInteraction: false,
-            }),
-            Animated.timing(bullY, {
-              toValue: targetY,
-              duration: 70,
-              useNativeDriver: true,
-              isInteraction: false,
-            }),
-          ]),
-          Animated.sequence([
-            Animated.timing(dustOpacity, { toValue: 0.65, duration: 40, useNativeDriver: true }),
-            Animated.timing(dustOpacity, { toValue: 0, duration: 220, useNativeDriver: true }),
-          ]),
+          Animated.timing(squashX, {
+            toValue: 1.12,
+            duration: CROUCH_MS,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+            isInteraction: false,
+          }),
         ]),
-        showBubbleOnCandle(),
-      ]);
-    };
-
-    const hopToCandle = (fromIndex: number, toIndex: number): Animated.CompositeAnimation => {
-      const fromX = bullStandX(layout[fromIndex]);
-      const fromY = bullStandY(layout[fromIndex]);
-      const toX = bullStandX(layout[toIndex]);
-      const toY = bullStandY(layout[toIndex]);
-      const apexY = Math.min(fromY, toY) - JUMP_ARC;
-
-      bullX.setValue(fromX);
-      bullY.setValue(fromY);
-      bubbleOpacity.setValue(0);
-      setPose("takeoff");
-      setTimeout(() => {
-        if (!cancelled) setPose("airborne");
-      }, 160);
-
-      return Animated.sequence([
-        Animated.timing(bodyStretch, {
-          toValue: 1.08,
-          duration: 120,
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
         Animated.parallel([
           Animated.timing(bullX, {
             toValue: toX,
@@ -799,44 +606,88 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
           Animated.sequence([
             Animated.timing(bullY, {
               toValue: apexY,
-              duration: Math.round(JUMP_MS * 0.48),
+              duration: Math.round(JUMP_MS * 0.46),
               easing: Easing.out(Easing.quad),
               useNativeDriver: true,
               isInteraction: false,
             }),
             Animated.timing(bullY, {
-              toValue: toY,
-              duration: Math.round(JUMP_MS * 0.52),
+              toValue: groundY,
+              duration: Math.round(JUMP_MS * 0.54),
               easing: Easing.in(Easing.quad),
               useNativeDriver: true,
               isInteraction: false,
             }),
           ]),
           Animated.sequence([
-            Animated.delay(Math.round(JUMP_MS * 0.35)),
-            Animated.timing(bodyStretch, {
-              toValue: 0.94,
-              duration: 140,
+            Animated.timing(squashY, { toValue: 1.05, duration: 120, useNativeDriver: true, isInteraction: false }),
+            Animated.timing(squashY, { toValue: 1, duration: 160, useNativeDriver: true, isInteraction: false }),
+            Animated.timing(squashX, { toValue: 1, duration: 160, useNativeDriver: true, isInteraction: false }),
+          ]),
+        ]),
+        Animated.parallel([
+          Animated.sequence([
+            Animated.timing(bullY, {
+              toValue: groundY + 4,
+              duration: 70,
               useNativeDriver: true,
               isInteraction: false,
             }),
-            Animated.timing(bodyStretch, {
+            Animated.timing(bullY, {
+              toValue: groundY - 2,
+              duration: 100,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.timing(bullY, {
+              toValue: groundY,
+              duration: 90,
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+          ]),
+          Animated.sequence([
+            Animated.timing(squashY, {
+              toValue: 0.88,
+              duration: LAND_SQUASH_MS,
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.timing(squashX, {
+              toValue: 1.1,
+              duration: LAND_SQUASH_MS,
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.timing(squashY, {
               toValue: 1,
-              duration: 120,
+              duration: RECOVER_MS,
+              easing: Easing.out(Easing.quad),
               useNativeDriver: true,
               isInteraction: false,
             }),
+            Animated.timing(squashX, {
+              toValue: 1,
+              duration: RECOVER_MS,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+          ]),
+          Animated.sequence([
+            Animated.timing(dustOpacity, { toValue: 0.7, duration: 50, useNativeDriver: true, isInteraction: false }),
+            Animated.timing(dustOpacity, { toValue: 0, duration: 260, useNativeDriver: true, isInteraction: false }),
           ]),
         ]),
       ]);
     };
 
-    const turnAround = (nextScale: number, atIndex: number): Animated.CompositeAnimation => {
-      const standY = bullStandY(layout[atIndex]);
-      setPose("idle");
+    const turnAround = (nextScale: number): Animated.CompositeAnimation => {
+      setPoseSafe("idle");
       return Animated.sequence([
         Animated.timing(bullY, {
-          toValue: standY + 2,
+          toValue: groundY + 2,
           duration: 140,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
@@ -850,73 +701,77 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
           isInteraction: false,
         }),
         Animated.timing(bullY, {
-          toValue: standY,
-          duration: 160,
-          easing: Easing.out(Easing.bounce),
+          toValue: groundY,
+          duration: 180,
+          easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
           isInteraction: false,
         }),
-        Animated.delay(200),
+        Animated.delay(180),
       ]);
     };
 
-    const runTrip = (direction: "right" | "left", onDone: () => void) => {
-      if (cancelled) return;
-
-      const startIndex = direction === "right" ? 0 : CANDLE_COUNT - 1;
-      const step = direction === "right" ? 1 : -1;
-      facingScale.setValue(direction === "right" ? 1 : -1);
-
-      const steps: Animated.CompositeAnimation[] = [
-        landOnCandle(startIndex),
-      ];
-
-      for (let i = startIndex; i !== startIndex + step * CANDLE_COUNT; i += step) {
-        const next = i + step;
-        if (next < 0 || next >= CANDLE_COUNT) break;
-        steps.push(
-          Animated.sequence([
-            hopToCandle(i, next),
-            landOnCandle(next),
-          ]),
-        );
-      }
-
-      const endIndex = direction === "right" ? CANDLE_COUNT - 1 : 0;
-      const nextScale = direction === "right" ? -1 : 1;
-      steps.push(turnAround(nextScale, endIndex));
-
-      Animated.sequence(steps).start(({ finished }) => {
+    const beginJump = (fromX: number, toX: number, onDone: () => void) => {
+      clearPoseTimers();
+      setPoseSafe("crouch");
+      schedulePose(() => setPoseSafe("airborne"), CROUCH_MS + 90);
+      schedulePose(() => setPoseSafe("land", 360), CROUCH_MS + JUMP_MS);
+      jumpAcross(fromX, toX).start(({ finished }) => {
         if (finished && !cancelled) onDone();
       });
     };
 
-    bullX.setValue(bullStandX(layout[0]));
-    bullY.setValue(bullStandY(layout[0]));
-    facingScale.setValue(1);
-    landingCounterRef.current = 1;
-    setDialogueKey("authPixelDontGamble");
+    const beginBubble = (key: DialogueKey, onDone: () => void) => {
+      showBubble(key).start(({ finished }) => {
+        if (finished && !cancelled) onDone();
+      });
+    };
 
-    const loopForever = () => {
-      runTrip("right", () => {
-        runTrip("left", () => {
-          if (!cancelled) loopForever();
+    const beginTurn = (nextScale: number, onDone: () => void) => {
+      turnAround(nextScale).start(({ finished }) => {
+        if (finished && !cancelled) onDone();
+      });
+    };
+
+    const runCycle = () => {
+      if (cancelled) return;
+
+      bullX.setValue(leftX);
+      bullY.setValue(groundY);
+      facingScale.setValue(1);
+      squashX.setValue(1);
+      squashY.setValue(1);
+      setPoseSafe("idle");
+
+      beginBubble("authPixelDontGamble", () => {
+        beginJump(leftX, rightX, () => {
+          beginTurn(-1, () => {
+            beginBubble("authPixelTradeDiscipline", () => {
+              beginJump(rightX, leftX, () => {
+                beginTurn(1, () => {
+                  if (!cancelled) runCycle();
+                });
+              });
+            });
+          });
         });
       });
     };
 
-    loopForever();
+    runCycle();
 
     return () => {
       cancelled = true;
+      clearPoseTimers();
       bullX.stopAnimation();
       bullY.stopAnimation();
       facingScale.stopAnimation();
-      bodyStretch.stopAnimation();
+      squashX.stopAnimation();
+      squashY.stopAnimation();
       bubbleOpacity.stopAnimation();
       dustOpacity.stopAnimation();
     };
-  }, [bodyStretch, bubbleOpacity, bullX, bullY, dustOpacity, facingScale, layout]);
+  }, [bubbleOpacity, bullX, bullY, dustOpacity, facingScale, groundY, leftX, rightX, squashX, squashY]);
 
   const dynamicStyles = useMemo(
     () =>
@@ -940,7 +795,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
           position: "absolute",
           bottom: 8,
           width: chartW,
-          height: 118,
+          height: CHART_AREA_H,
           alignItems: "center",
           zIndex: 2,
         },
@@ -961,25 +816,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
           <TwinkleStar key={`star-${i}`} star={star} master={starMasterFor(star.phase)} />
         ))}
 
-        <ShootingStar
-          key={shootingStar.key}
-          startX={shootingStar.x}
-          startY={shootingStar.y}
-          progress={shootingProgress}
-        />
-
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.nearStarSparkle,
-            {
-              left: stars[0]?.x ?? 12,
-              top: (stars[0]?.y ?? 12) + 6,
-              opacity: sparkleOpacity,
-            },
-          ]}
-        />
-
         <View style={dynamicStyles.chartArea}>
           <ChartArea candlePhase={candlePhase} />
           <Animated.View
@@ -987,28 +823,14 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
             style={[
               styles.bullOverlay,
               {
-                transform: [
-                  { translateX: bullX },
-                  { translateY: bullY },
-                ],
+                transform: [{ translateX: bullX }, { translateY: bullY }],
               },
             ]}
           >
             <View style={styles.bullCluster}>
               <SpeechBubble text={t(dialogueKey)} opacity={bubbleOpacity} />
-              <Animated.View
-                style={{
-                  transform: [{ scaleX: facingScale }, { scaleY: bodyStretch }],
-                }}
-              >
-                <BullMascot
-                  blink={blink}
-                  tailFrame={tailFrame}
-                  legFrame={legFrame}
-                  earsPerked={earsPerked}
-                  headTilt={headTilt}
-                  pose={pose}
-                />
+              <Animated.View style={{ transform: [{ scaleX }, { scaleY: squashY }] }}>
+                <BullMascot pose={pose} blink={blink} />
                 <DustPuff opacity={dustOpacity} />
               </Animated.View>
             </View>
@@ -1029,27 +851,12 @@ const styles = StyleSheet.create({
   starH: {
     position: "absolute",
     height: 1,
-    backgroundColor: "rgba(184,255,26,0.85)",
+    backgroundColor: "rgba(163,255,18,0.85)",
   },
   starV: {
     position: "absolute",
     width: 1,
-    backgroundColor: "rgba(184,255,26,0.85)",
-  },
-  shootingStar: {
-    position: "absolute",
-    width: 10,
-    height: 2,
-    backgroundColor: "rgba(184,255,26,0.55)",
-    zIndex: 1,
-  },
-  nearStarSparkle: {
-    position: "absolute",
-    width: 4,
-    height: 4,
-    backgroundColor: "rgba(184,255,26,0.65)",
-    transform: [{ rotate: "45deg" }],
-    zIndex: 1,
+    backgroundColor: "rgba(163,255,18,0.85)",
   },
   bullOverlay: {
     position: "absolute",
@@ -1059,8 +866,8 @@ const styles = StyleSheet.create({
   },
   bullCluster: {
     alignItems: "center",
-    width: BULL_PX_W * PX + 36,
-    marginLeft: -18,
+    width: BULL_PX_W * PX + 40,
+    marginLeft: -20,
   },
   bullCanvas: {
     width: BULL_PX_W * PX,
@@ -1069,10 +876,10 @@ const styles = StyleSheet.create({
   },
   dustWrap: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    left: -4,
+    right: -4,
     bottom: -2,
-    height: 14,
+    height: 16,
   },
   dustPixel: {
     position: "absolute",
@@ -1082,25 +889,58 @@ const styles = StyleSheet.create({
   },
   bubbleWrap: {
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   bubbleBox: {
     borderWidth: 2,
     borderColor: BLACK,
     backgroundColor: WHITE,
-    borderRadius: 2,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minWidth: 132,
-    maxWidth: 188,
+    borderRadius: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    minWidth: 148,
+    maxWidth: 196,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+  },
+  bubbleCornerTL: {
+    position: "absolute",
+    top: -2,
+    left: -2,
+    width: 4,
+    height: 4,
+    backgroundColor: BLACK,
+  },
+  bubbleCornerTR: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 4,
+    height: 4,
+    backgroundColor: BLACK,
+  },
+  bubbleCornerBL: {
+    position: "absolute",
+    bottom: -2,
+    left: -2,
+    width: 4,
+    height: 4,
+    backgroundColor: BLACK,
+  },
+  bubbleCornerBR: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 4,
+    height: 4,
+    backgroundColor: BLACK,
   },
   bubbleText: {
     color: BLACK,
     fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 0.3,
+    letterSpacing: 0.35,
     textAlign: "center",
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
@@ -1166,7 +1006,7 @@ const styles = StyleSheet.create({
   },
   chartStack: {
     width: "100%",
-    height: 118,
+    height: CHART_AREA_H,
     alignItems: "center",
     justifyContent: "flex-end",
   },

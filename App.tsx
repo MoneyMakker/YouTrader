@@ -76,10 +76,12 @@ import {
   Lock,
   Mic,
   Newspaper,
+  Share2,
   ShieldCheck,
   Sparkles,
   Settings as SettingsIcon,
   Target,
+  Trophy,
   Unlock,
 } from "lucide-react-native";
 import Svg, {
@@ -210,6 +212,16 @@ import { buildSessionHeatmap, type HourHeatmapCell } from "./src/analytics/sessi
 import { calculateTradingScore, type TradingScoreResult } from "./src/analytics/tradingScore";
 import { buildAIAnalyticsContext } from "./src/analytics/aiContextBuilder";
 import { buildUnifiedTradeAnalytics, drawdownControlFromMetrics, infinitySafeMetric } from "./src/analytics/tradeMetrics";
+import {
+  filterTradesByTimeRange,
+  resolveTimeRangeStart,
+  STATS_TIME_RANGES,
+  StatsTimeRangeProvider,
+  statsTimeRangeToLegacyPeriod,
+  useFilteredTrades,
+  useStatsTimeRange,
+  type StatsTimeRange,
+} from "./src/analytics/timeRange";
 import { calculatePassProbability, type PassProbabilityResult } from "./src/ai/passProbabilityEngine";
 import { detectRevengeTrading, type RevengeTradingResult } from "./src/ai/revengeTradingDetector";
 import { detectHiddenLeaks, type HiddenLeak } from "./src/ai/hiddenLeakDetector";
@@ -2677,7 +2689,7 @@ function primarySetupLabel(trade: Trade) {
 function buildTradeAnalysisPayload(
   trades: Trade[],
   stats: ReturnType<typeof calcStats>,
-  period: "day" | "week" | "month" | "year",
+  period: StatsTimeRange,
   context?: {
     passProbability?: ReturnType<typeof calculatePassProbability>;
     propSnapshot?: ReturnType<typeof computePropRiskSnapshot>;
@@ -2690,7 +2702,7 @@ function buildTradeAnalysisPayload(
   const wins = trades.filter((trade) => trade.pnl > 0);
   const losses = trades.filter((trade) => trade.pnl < 0);
   return {
-    period,
+    period: statsTimeRangeToLegacyPeriod(period),
     totalTrades: stats.count,
     totalPnl: roundMetric(stats.pnl),
     winRate: Number(stats.wr.toFixed(2)),
@@ -2757,22 +2769,6 @@ function buildLocalTradeAnalysisResult(
 
 function toDateStart(value: Date) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-}
-
-function periodPnlFromTrades(
-  trades: Trade[],
-  selectedDateISO: string,
-  period: "week" | "month",
-) {
-  const selected = safeDateFromISO(selectedDateISO);
-  const start = toDateStart(
-    period === "week"
-      ? addDays(selected, -selected.getUTCDay())
-      : new Date(selected.getUTCFullYear(), selected.getUTCMonth(), 1),
-  );
-  return trades
-    .filter((trade) => toDateStart(safeDateFromISO(trade.date)) >= start)
-    .reduce((sum, trade) => sum + trade.pnl, 0);
 }
 
 function PerformanceBreakdown({
@@ -3548,15 +3544,11 @@ function PropTemplateSelector({
 function StatsMetricDashboard({
   stats,
   trades,
-  weekPnl,
-  monthPnl,
   consistency,
   isPremium,
 }: {
   stats: ReturnType<typeof calcStats>;
   trades: Trade[];
-  weekPnl: number;
-  monthPnl: number;
   consistency: number;
   isPremium: boolean;
 }) {
@@ -3576,8 +3568,6 @@ function StatsMetricDashboard({
     { label: t("winRate"), value: `${stats.wr.toFixed(0)}%`, numericValue: stats.wr, formatValue: (value) => `${value.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
     { label: t("trades"), value: String(stats.count), numericValue: stats.count, tone: "grey" },
     { label: t("winLoss"), value: `${wins} / ${losses}`, tone: wins >= losses ? "green" : "red" },
-    { label: t("monthPnl"), value: moneyCompact(monthPnl), numericValue: monthPnl, formatValue: moneyCompact, tone: monthPnl >= 0 ? "green" : "red" },
-    { label: t("weekPnl"), value: moneyCompact(weekPnl), numericValue: weekPnl, formatValue: moneyCompact, tone: weekPnl >= 0 ? "green" : "red" },
     { label: t("biggestWin"), value: moneyCompact(biggestWin), numericValue: biggestWin, formatValue: moneyCompact, tone: "green" },
     { label: t("biggestLoss"), value: moneyCompact(biggestLoss), numericValue: biggestLoss, formatValue: moneyCompact, tone: biggestLoss < 0 ? "red" : "grey" },
     { label: t("profitFactor"), value: stats.pf ? stats.pf.toFixed(2) : "—", numericValue: stats.pf || undefined, decimals: 2, tone: stats.pf >= 1.5 ? "green" : "purple", pro: true },
@@ -3692,21 +3682,6 @@ function BottomSheetPanel({
   );
 }
 
-type EquityRange = "7D" | "30D" | "90D" | "YTD" | "ALL";
-const EQUITY_RANGES: EquityRange[] = ["7D", "30D", "90D", "YTD", "ALL"];
-
-function filteredByEquityRange(trades: Trade[], range: EquityRange) {
-  if (range === "ALL") return trades;
-  const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
-  const lastDate = sorted[sorted.length - 1]?.date;
-  if (!lastDate) return trades;
-  const end = safeDateFromISO(lastDate);
-  const start = new Date(end);
-  if (range === "YTD") start.setUTCMonth(0, 1);
-  else start.setUTCDate(start.getUTCDate() - Number(range.replace("D", "")));
-  return trades.filter((trade) => safeDateFromISO(trade.date) >= start);
-}
-
 function buildEquityPoints(trades: Trade[], width: number, height: number) {
   const daily = buildDailySeries(trades);
   let cumulative = 0;
@@ -3737,14 +3712,14 @@ function smoothPath(points: { x: number; y: number }[]) {
   }, "");
 }
 
-function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: Trade[]; stats: ReturnType<typeof calcStats>; weekPnl: number; monthPnl: number }) {
+function TerminalEquitySection({ trades, stats }: { trades: Trade[]; stats: ReturnType<typeof calcStats> }) {
   const { width } = useWindowDimensions();
-  const [range, setRange] = useState<EquityRange>("30D");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const chartWidth = Math.max(300, Math.min(720, width - 56));
   const chartHeight = 250;
-  const rangedTrades = useMemo(() => filteredByEquityRange(trades, range), [range, trades]);
-  const points = useMemo(() => buildEquityPoints(rangedTrades, chartWidth, chartHeight), [chartHeight, chartWidth, rangedTrades]);
+  const points = useMemo(() => buildEquityPoints(trades, chartWidth, chartHeight), [chartHeight, chartWidth, trades]);
+  const dailySeries = useMemo(() => buildDailySeries(trades), [trades]);
+  const avgDay = dailySeries.length ? stats.pnl / dailySeries.length : 0;
   const selected = selectedIndex != null ? points[selectedIndex] : points[points.length - 1];
   const path = smoothPath(points);
   const fillPath = points.length ? `${path} L${points[points.length - 1].x},${chartHeight - 12} L${points[0].x},${chartHeight - 12} Z` : "";
@@ -3779,7 +3754,6 @@ function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: T
           <Text style={styles.terminalSub}>Net P&L</Text>
         </View>
       </View>
-      <SegmentedTimeFilter options={EQUITY_RANGES} value={range} onChange={(value) => setRange(value as EquityRange)} />
       <View style={styles.terminalChartWrap} {...panResponder.panHandlers}>
         <Svg width={chartWidth} height={chartHeight}>
           <Defs>
@@ -3812,12 +3786,12 @@ function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: T
       </View>
       <MetricPillRow
         items={[
-          { label: t("microToday"), value: moneyCompact(trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0)), tone: trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0) >= 0 ? "green" : "red" },
-          { label: t("microWeekly"), value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
-          { label: t("microMonthly"), value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
+          { label: t("trades"), value: String(stats.count), tone: "grey" },
+          { label: t("winRate"), value: `${stats.wr.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
           { label: t("microMaxDd"), value: moneyCompact(stats.maxDd), tone: stats.maxDd < 0 ? "red" : "grey" },
-          { label: t("microAvgDay"), value: moneyCompact(buildDailySeries(trades).length ? stats.pnl / buildDailySeries(trades).length : 0), tone: "grey" },
+          { label: t("microAvgDay"), value: moneyCompact(avgDay), tone: avgDay >= 0 ? "green" : "red" },
           { label: t("microPF"), value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple" },
+          { label: t("avgWinLoss"), value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", tone: stats.avgWinLoss >= 1.5 ? "green" : "purple" },
         ]}
       />
     </TerminalGlassCard>
@@ -5042,8 +5016,6 @@ function Stats({
   const consistency = s.consistency;
   const recoveryFactor = s.recoveryFactor;
   const drawdownControl = s.drawdownControl;
-  const monthPnl = periodPnlFromTrades(visibleTrades, selectedDate, "month");
-  const weekPnl = periodPnlFromTrades(visibleTrades, selectedDate, "week");
 
   return (
     <View style={styles.terminalScreenStack}>
@@ -5056,12 +5028,10 @@ function Stats({
           style={styles.emptyStateSpacing}
         />
       ) : null}
-      <TerminalEquitySection trades={visibleTrades} stats={s} weekPnl={weekPnl} monthPnl={monthPnl} />
+      <TerminalEquitySection trades={visibleTrades} stats={s} />
       <StatsMetricDashboard
         stats={s}
         trades={visibleTrades}
-        weekPnl={weekPnl}
-        monthPnl={monthPnl}
         consistency={consistency}
         isPremium={isPremium}
       />
@@ -5128,17 +5098,15 @@ function StatsScreen({
   onRestore: () => void;
   session: Session | null;
 }) {
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "year">("month");
-  const [selectedDate] = useState(todayISO());
+  const { range, setRange, anchorDate } = useStatsTimeRange();
+  const [selectedDate] = useState(anchorDate);
   const [exportBusy, setExportBusy] = useState(false);
   const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "usage_limit", title: "YouTrader Pro", message: t("unlockPremiumExports") });
   const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
   const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
   const [tradeAnalysisError, setTradeAnalysisError] = useState("");
-  const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
+  const periodTrades = useFilteredTrades(trades);
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
-  const weekPnl = periodPnlFromTrades(trades, selectedDate, "week");
-  const monthPnl = periodPnlFromTrades(trades, selectedDate, "month");
   const safePropTemplates = propTemplates;
   const [propTemplateKey, setPropTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
@@ -5205,7 +5173,7 @@ function StatsScreen({
       const bestTrade = periodTrades.length ? Math.max(0, ...periodTrades.map((trade) => trade.pnl)) : 0;
       const greenDays = buildDailySeries(periodTrades).filter((day) => day.value > 0).length;
       return {
-      periodLabel: `${period.toUpperCase()} • ${selectedDate}`,
+      periodLabel: `${range} • ${selectedDate}`,
       netPnl: periodStats.pnl,
       winRate: periodStats.wr,
       profitFactor: periodStats.pf,
@@ -5218,8 +5186,8 @@ function StatsScreen({
       riskControl: periodStats.drawdownControl,
       tradingScore: tradingScore.score,
       dateLabel: achievementShareDateLabel(selectedDate),
-      weekPnl,
-      monthPnl,
+      weekPnl: periodStats.pnl,
+      monthPnl: periodStats.pnl,
       trades: periodStats.count,
       bestSession: periodStats.session[0]?.label || "N/A",
       dailyBuffer: propMeta.dailyBuffer,
@@ -5229,7 +5197,7 @@ function StatsScreen({
       greenDays,
     };
     },
-    [period, selectedDate, periodStats, periodTrades, weekPnl, monthPnl, propSnapshot, tradingScore.score],
+    [range, selectedDate, periodStats, periodTrades, propSnapshot, tradingScore.score],
   );
 
   const openRadarUpgrade = () => {
@@ -5298,7 +5266,7 @@ function StatsScreen({
       const cardMeta = {
         userId: session?.user.id || null,
         action: action as "share" | "save",
-        period,
+        period: range,
       };
       const cardExport = { card: shareCardData, meta: cardMeta };
       if (action === "share") {
@@ -5312,7 +5280,7 @@ function StatsScreen({
         } else {
           logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "share_sheet_unavailable"), "runExport:share:skipped");
         }
-        trackEvent("share_card_exported", { action: "share", period, trade_count: periodTrades.length, is_pro: isPremium, shared: result.shared });
+        trackEvent("share_card_exported", { action: "share", period: range, trade_count: periodTrades.length, is_pro: isPremium, shared: result.shared });
         return;
       }
       if (action === "save") {
@@ -5320,51 +5288,52 @@ function StatsScreen({
         await saveCapturedViewToPhotos(null, { data: cardExport });
         const consumed = await consumeClientRateLimit("export:generate", "stats-local");
         logExportRateLimitDebug(consumed, "runExport:save:success");
-        trackEvent("share_card_exported", { action: "save", period, trade_count: periodTrades.length, is_pro: isPremium });
+        trackEvent("share_card_exported", { action: "save", period: range, trade_count: periodTrades.length, is_pro: isPremium });
         Alert.alert(t("savedTitle"), t("pnlCardSaved"));
         await recordShareCardExportSuccess(session?.user.id || null, isPremium);
         successHaptic();
         return;
       }
-      const exportKey = { action, period, selectedDate, count: periodTrades.length, pnl: periodStats.pnl, ts: Date.now() };
-      const monthTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "month"));
-      const monthStats = calcStats(monthTrades);
-      const monthWins = monthTrades.filter((trade) => trade.pnl > 0).length;
-      const monthLosses = monthTrades.filter((trade) => trade.pnl < 0).length;
-      const best = monthStats.weekday[0];
-      const worst = [...monthStats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
-      const bestSession = monthStats.session[0];
-      const worstSession = [...monthStats.session].sort((a, b) => a.pnl - b.pnl)[0];
+      const exportKey = { action, period: range, selectedDate, count: periodTrades.length, pnl: periodStats.pnl, ts: Date.now() };
+      const reportTrades = periodTrades;
+      const reportStats = periodStats;
+      const reportWins = reportTrades.filter((trade) => trade.pnl > 0).length;
+      const reportLosses = reportTrades.filter((trade) => trade.pnl < 0).length;
+      const best = reportStats.weekday[0];
+      const worst = [...reportStats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
+      const bestSession = reportStats.session[0];
+      const worstSession = [...reportStats.session].sort((a, b) => a.pnl - b.pnl)[0];
       const formatDayLabel = (row?: { label: string; pnl: number }) =>
         row && row.pnl !== 0 ? `${fullWeekdayName(row.label)} · ${moneyCompact(row.pnl)}` : row ? fullWeekdayName(row.label) : "N/A";
       const formatSessionLabel = (row?: { label: string; pnl: number }) =>
         row && row.pnl !== 0 ? `${row.label} · ${moneyCompact(row.pnl)}` : row?.label || "N/A";
-      const monthScore = tradingScoreForTrades(monthTrades);
-      const start = periodStart(safeDateFromISO(selectedDate), "month");
-      const end = addDays(addMonths(start, 1), -1);
+      const reportScore = tradingScoreForTrades(reportTrades);
+      const rangeStart = resolveTimeRangeStart(range, selectedDate);
+      const start = rangeStart ? safeDateFromISO(rangeStart) : reportTrades.length ? safeDateFromISO(reportTrades[0].date) : safeDateFromISO(selectedDate);
+      const end = safeDateFromISO(selectedDate);
       const result = await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
         lang,
         title: t("monthlyPerformanceReport"),
         rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
-        netPnl: monthStats.pnl,
-        winRate: monthStats.wr,
-        profitFactor: monthStats.pf,
-        trades: monthStats.count,
-        wins: monthWins,
-        losses: monthLosses,
-        expectancy: monthStats.exp,
-        avgWin: monthStats.avgWin,
-        avgLoss: monthStats.avgLoss,
-        avgWinLoss: monthStats.avgWinLoss,
-        equityCurve: monthStats.curve,
-        drawdown: monthStats.maxDd,
-        consistency: monthStats.consistency,
-        recoveryFactor: monthStats.recoveryFactor,
-        riskControl: monthStats.drawdownControl,
+        netPnl: reportStats.pnl,
+        winRate: reportStats.wr,
+        profitFactor: reportStats.pf,
+        trades: reportStats.count,
+        wins: reportWins,
+        losses: reportLosses,
+        expectancy: reportStats.exp,
+        avgWin: reportStats.avgWin,
+        avgLoss: reportStats.avgLoss,
+        avgWinLoss: reportStats.avgWinLoss,
+        equityCurve: reportStats.curve,
+        drawdown: reportStats.maxDd,
+        consistency: reportStats.consistency,
+        recoveryFactor: reportStats.recoveryFactor,
+        riskControl: reportStats.drawdownControl,
         bestDay: formatDayLabel(best),
         worstDay: formatDayLabel(worst),
-        tradingScore: monthScore.score,
-        grade: monthScore.grade,
+        tradingScore: reportScore.score,
+        grade: reportScore.grade,
         bestSession: formatSessionLabel(bestSession),
         worstSession: formatSessionLabel(worstSession),
         watermarked: !isPremium,
@@ -5375,8 +5344,8 @@ function StatsScreen({
       } else {
         logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "duplicate_pdf_skipped"), "runExport:pdf:duplicate");
       }
-      trackEvent("pdf_exported", { period: "month", trade_count: monthTrades.length, is_pro: isPremium, watermarked: !isPremium });
-      trackEvent("weekly_report_opened", { period: "month", trade_count: monthTrades.length, is_pro: isPremium });
+      trackEvent("pdf_exported", { period: range, trade_count: reportTrades.length, is_pro: isPremium, watermarked: !isPremium });
+      trackEvent("weekly_report_opened", { period: range, trade_count: reportTrades.length, is_pro: isPremium });
       successHaptic();
       if (!isPremium) await incrementMonthlyUsageCount("pdf-previews", session?.user.id || null);
     } catch (error) {
@@ -5404,23 +5373,23 @@ function StatsScreen({
     try {
       setTradeAnalysisBusy(true);
       setTradeAnalysisError("");
-      trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
-      trackEvent("ai_analysis_opened", { period, trade_count: periodTrades.length });
-      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { propSnapshot });
+      trackEvent("ai_trade_analysis_opened", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_analysis_opened", { period: range, trade_count: periodTrades.length });
+      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, range, { propSnapshot });
       const result = await analyzeTrades(payload);
       setTradeAnalysis(result);
       successHaptic();
-      trackEvent("ai_trade_analysis_generated", { period, source: "edge_function", trade_count: periodTrades.length });
+      trackEvent("ai_trade_analysis_generated", { period: range, source: "edge_function", trade_count: periodTrades.length });
       trackEvent("ai_pattern_detective_generated", {
-        period,
+        period: range,
         trade_count: periodTrades.length,
         detective_score: result.detectiveScore,
       });
       recordMetric("ai_trade_analysis_completed", 1, { source: "edge_function" });
     } catch (error) {
-      trackEvent("ai_trade_analysis_failed", { period, trade_count: periodTrades.length });
-      trackEvent("ai_pattern_detective_failed", { period, trade_count: periodTrades.length });
-      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
+      trackEvent("ai_trade_analysis_failed", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_failed", { period: range, trade_count: periodTrades.length });
+      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period: range });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
       setTradeAnalysis(fallback);
       setTradeAnalysisError(t("aiUnavailableLocal"));
@@ -5456,14 +5425,14 @@ function StatsScreen({
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
       <View style={[styles.segment, { marginTop: 0 }]}>
-        {(["day", "week", "month", "year"] as const).map((item) => (
+        {STATS_TIME_RANGES.map((item) => (
           <Pressable
             key={item}
-            onPress={() => setPeriod(item)}
-            style={[styles.segBtn, period === item && styles.segActive]}
+            onPress={() => setRange(item)}
+            style={[styles.segBtn, range === item && styles.segActive]}
           >
-            <Text style={[styles.segText, period === item && styles.segTextActive]}>
-              {item.toUpperCase()}
+            <Text style={[styles.segText, range === item && styles.segTextActive]}>
+              {item}
             </Text>
           </Pressable>
         ))}
@@ -6643,8 +6612,8 @@ function AiAnalysisScreen({
   onRestore: () => void;
   session: Session | null;
 }) {
-  const period: "month" = "month";
-  const [selectedDate] = useState(todayISO());
+  const { range, anchorDate } = useStatsTimeRange();
+  const [selectedDate] = useState(anchorDate);
   const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
   const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
   const [tradeAnalysisError, setTradeAnalysisError] = useState("");
@@ -6700,9 +6669,9 @@ function AiAnalysisScreen({
     AsyncStorage.setItem("prop-risk-mode-v1", mode).catch(() => {});
   }, []);
 
-  const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
-  const weekTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "week"));
+  const periodTrades = useFilteredTrades(trades);
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
+  const weekTrades = useMemo(() => filterTradesByTimeRange(trades, "7D", anchorDate), [trades, anchorDate]);
   const weekStats = useMemo(() => calcStats(weekTrades), [weekTrades]);
   const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
   const patterns = useMemo(() => detectTradingPatterns(periodTrades), [periodTrades]);
@@ -6774,11 +6743,11 @@ function AiAnalysisScreen({
   const hiddenLeaks = useMemo(() => detectHiddenLeaks(trades), [trades]);
   const aiCoachPayload = useMemo(
     () => ({
-      period,
+      period: range,
       selectedDate,
       stats: periodStats,
       analyticsContext: buildAIAnalyticsContext(periodTrades),
-      tradeAnalysisPayload: buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot }),
+      tradeAnalysisPayload: buildTradeAnalysisPayload(periodTrades, periodStats, range, { passProbability, propSnapshot }),
       propSnapshot,
       passProbability,
       revengeTrading,
@@ -6940,24 +6909,24 @@ function AiAnalysisScreen({
     try {
       setTradeAnalysisBusy(true);
       setTradeAnalysisError("");
-      trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
-      trackEvent("ai_analysis_opened", { period, trade_count: periodTrades.length });
-      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot });
+      trackEvent("ai_trade_analysis_opened", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_analysis_opened", { period: range, trade_count: periodTrades.length });
+      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, range, { passProbability, propSnapshot });
       const result = await analyzeTrades(payload);
       if (!screenActiveRef.current) return;
       setTradeAnalysis(result);
       successHaptic();
-      trackEvent("ai_trade_analysis_generated", { period, source: "edge_function", trade_count: periodTrades.length });
+      trackEvent("ai_trade_analysis_generated", { period: range, source: "edge_function", trade_count: periodTrades.length });
       trackEvent("ai_pattern_detective_generated", {
-        period,
+        period: range,
         trade_count: periodTrades.length,
         detective_score: result.detectiveScore,
       });
       recordMetric("ai_trade_analysis_completed", 1, { source: "edge_function" });
     } catch (error) {
-      trackEvent("ai_trade_analysis_failed", { period, trade_count: periodTrades.length });
-      trackEvent("ai_pattern_detective_failed", { period, trade_count: periodTrades.length });
-      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
+      trackEvent("ai_trade_analysis_failed", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_failed", { period: range, trade_count: periodTrades.length });
+      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period: range });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
       if (screenActiveRef.current) {
         setTradeAnalysis(fallback);
@@ -7072,37 +7041,6 @@ function AiAnalysisScreen({
     </ScrollView>
   );
 }
-function periodStart(date: Date, period: "day" | "week" | "month" | "year") {
-  const d = new Date(date);
-  if (period === "day")
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  if (period === "week") {
-    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    x.setDate(x.getDate() - x.getDay());
-    return x;
-  }
-  if (period === "month") return new Date(d.getFullYear(), d.getMonth(), 1);
-  return new Date(d.getFullYear(), 0, 1);
-}
-function periodFilter(
-  trade: Trade,
-  selectedDate: string,
-  period: "day" | "week" | "month" | "year",
-) {
-  const d = new Date(selectedDate + "T00:00:00");
-  const start = periodStart(d, period);
-  const end =
-    period === "day"
-      ? addDays(start, 1)
-      : period === "week"
-        ? addDays(start, 7)
-        : period === "month"
-          ? addMonths(start, 1)
-          : new Date(start.getFullYear() + 1, 0, 1);
-  const td = new Date(trade.date + "T00:00:00");
-  return td >= start && td < end;
-}
-
 function InstrumentButton({
   symbol,
   active,
@@ -7258,9 +7196,10 @@ function JournalScreen({
     () => trades.filter((x) => x.date === selectedDate),
     [trades, selectedDate],
   );
+  const rangedTrades = useFilteredTrades(trades);
   const monthlyTradeCount = useMemo(() => monthlyLoggedTradeCount(trades), [trades]);
-  const journalStats = useMemo(() => calcStats(trades), [trades]);
-  const firstInsight = useMemo(() => buildFirstInsight(trades, journalStats), [trades, journalStats]);
+  const journalStats = useMemo(() => calcStats(rangedTrades), [rangedTrades]);
+  const firstInsight = useMemo(() => buildFirstInsight(rangedTrades, journalStats), [rangedTrades, journalStats]);
   const lockedInsightKey = `locked-insight-dismissed:${usageMonthKey()}`;
   const firstInsightVisible = !firstInsightDismissed && !!firstInsight;
   const lockedInsightVisible = !isPremium && !lockedInsightDismissed && trades.length >= 7 && trades.length <= 10;
@@ -7826,6 +7765,18 @@ function JournalScreen({
       <Text style={styles.tradesTodayTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
         {t("tradesToday")} • {eventDateLabel(selectedDate)}
       </Text>
+      {firstInsightVisible && firstInsight ? (
+        <GlassCard style={styles.freeInsightCard} intensity={34}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
+            <Pressable onPress={dismissFirstInsight}>
+              <Text style={styles.valueModalLaterText}>{t("dismiss")}</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
+          <Text style={styles.freeInsightCta}>{t("firstInsightProCta")}</Text>
+        </GlassCard>
+      ) : null}
       {filtered.map((tr) => (
         <AnimatedPressable key={tr.id} onPress={() => openEdit(tr)} onLongPress={() => openDeleteDayConfirm(tr.date)} delayLongPress={3000}>
           <Card animated={false}>
@@ -7881,29 +7832,6 @@ function JournalScreen({
           </Card>
         </AnimatedPressable>
       ))}
-      {!filtered.length ? (
-        <EmptyStateCard
-          tone="lime"
-          title={t("journalEmptyTitle")}
-          message={t("journalEmptyMessage")}
-          actionLabel={t("journalEmptyCta")}
-          onActionPress={() => openNew(selectedDate)}
-          icon={<BookOpen size={24} color={C.green} strokeWidth={2.4} />}
-          style={styles.emptyStateSpacing}
-        />
-      ) : null}
-      {firstInsightVisible && firstInsight ? (
-        <GlassCard style={styles.freeInsightCard} intensity={34}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
-            <Pressable onPress={dismissFirstInsight}>
-              <Text style={styles.valueModalLaterText}>{t("dismiss")}</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
-          <Text style={styles.freeInsightCta}>{t("firstInsightProCta")}</Text>
-        </GlassCard>
-      ) : null}
       {lockedInsightVisible ? (
         <GlassCard style={styles.lockedInsightCard} intensity={36}>
           <Text style={styles.freeInsightTitle}>{t("lockedInsightTitle")}</Text>
@@ -8711,6 +8639,51 @@ function CalcScreen({ lang }: { lang: Lang }) {
     </ScrollView>
   );
 }
+type ProBenefitTone = "purple" | "lime";
+
+const PRO_BENEFIT_SECTIONS: Array<{
+  titleKey: string;
+  bodyKey: string;
+  tone: ProBenefitTone;
+  Icon: typeof BrainCircuit;
+}> = [
+  { titleKey: "paywallBenefitCoachTitle", bodyKey: "paywallBenefitCoachBody", tone: "purple", Icon: BrainCircuit },
+  { titleKey: "paywallBenefitLeaksTitle", bodyKey: "paywallBenefitLeaksBody", tone: "lime", Icon: Target },
+  { titleKey: "paywallBenefitPropTitle", bodyKey: "paywallBenefitPropBody", tone: "purple", Icon: ShieldCheck },
+  { titleKey: "paywallBenefitJournalTitle", bodyKey: "paywallBenefitJournalBody", tone: "lime", Icon: FileText },
+  { titleKey: "paywallBenefitAnalyticsTitle", bodyKey: "paywallBenefitAnalyticsBody", tone: "purple", Icon: ChartColumnIncreasing },
+  { titleKey: "paywallBenefitPatternsTitle", bodyKey: "paywallBenefitPatternsBody", tone: "lime", Icon: Sparkles },
+  { titleKey: "paywallBenefitMarketTitle", bodyKey: "paywallBenefitMarketBody", tone: "purple", Icon: Newspaper },
+  { titleKey: "paywallBenefitExportTitle", bodyKey: "paywallBenefitExportBody", tone: "lime", Icon: Share2 },
+  { titleKey: "paywallBenefitProgressTitle", bodyKey: "paywallBenefitProgressBody", tone: "purple", Icon: Trophy },
+];
+
+function ProBenefitSectionList({ compact = false }: { compact?: boolean }) {
+  return (
+    <View style={compact ? styles.proBenefitStack : styles.paywallFeatureGrid}>
+      {PRO_BENEFIT_SECTIONS.map((item) => (
+        <PremiumCard
+          key={item.titleKey}
+          tone={item.tone}
+          compact
+          style={[styles.paywallFeatureCard, compact && styles.proBenefitStackCard]}
+          contentStyle={[styles.paywallFeatureContent, compact && styles.proBenefitStackContent]}
+        >
+          <View style={[styles.paywallFeatureIcon, item.tone === "lime" ? styles.paywallFeatureIconLime : styles.paywallFeatureIconPurple]}>
+            <item.Icon size={18} color={item.tone === "lime" ? C.green : C.purple} strokeWidth={UI_ICON_STROKE} />
+          </View>
+          <Text style={styles.paywallFeatureTitle} numberOfLines={2}>
+            {t(item.titleKey)}
+          </Text>
+          <Text style={styles.paywallFeatureBody} numberOfLines={compact ? 2 : 3}>
+            {t(item.bodyKey)}
+          </Text>
+        </PremiumCard>
+      ))}
+    </View>
+  );
+}
+
 function PremiumScreen({
   lang,
   onClose,
@@ -8743,17 +8716,6 @@ function PremiumScreen({
     : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
   const entrance = useRef(new Animated.Value(0)).current;
   const primaryPrice = packagePrice(monthly);
-  const featureCards = [
-    { title: t("paywallFeatureAiTitle"), body: t("paywallFeatureAiBody"), tone: "purple" as const, Icon: BrainCircuit },
-    { title: t("paywallFeatureRiskTitle"), body: t("paywallFeatureRiskBody"), tone: "lime" as const, Icon: ShieldCheck },
-    { title: t("paywallFeatureJournalTitle"), body: t("paywallFeatureJournalBody"), tone: "purple" as const, Icon: FileText },
-    { title: t("paywallFeatureMarketTitle"), body: t("paywallFeatureMarketBody"), tone: "lime" as const, Icon: Sparkles },
-  ];
-  const comparisonRows = [
-    { label: t("paywallCompareAi"), free: t("paywallCompareLimited"), pro: t("paywallCompareIncluded") },
-    { label: t("paywallCompareMedia"), free: t("paywallCompareBasic"), pro: t("paywallCompareIncluded") },
-    { label: t("paywallCompareReports"), free: t("paywallComparePreview"), pro: t("paywallCompareFull") },
-  ];
 
   useEffect(() => {
     trackEvent("paywall_viewed", { screen: "premium_screen" });
@@ -8814,35 +8776,7 @@ function PremiumScreen({
             </PremiumCard>
           ) : null}
 
-          <View style={styles.paywallFeatureGrid}>
-            {featureCards.map((item) => (
-              <PremiumCard key={item.title} tone={item.tone} compact style={styles.paywallFeatureCard} contentStyle={styles.paywallFeatureContent}>
-                <View style={[styles.paywallFeatureIcon, item.tone === "lime" ? styles.paywallFeatureIconLime : styles.paywallFeatureIconPurple]}>
-                  <item.Icon
-                    size={18}
-                    color={item.tone === "lime" ? C.green : C.purple}
-                    strokeWidth={UI_ICON_STROKE}
-                  />
-                </View>
-                <Text style={styles.paywallFeatureTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.paywallFeatureBody} numberOfLines={3}>{item.body}</Text>
-              </PremiumCard>
-            ))}
-          </View>
-
-          <View style={styles.paywallCompareBox}>
-            <View style={styles.paywallCompareHeader}>
-              <Text style={styles.paywallCompareTitle}>{t("paywallCompareTitle")}</Text>
-              <Text style={styles.paywallComparePro}>{t("premiumAccess")}</Text>
-            </View>
-            {comparisonRows.map((row) => (
-              <View key={row.label} style={styles.paywallCompareRow}>
-                <Text style={styles.paywallCompareLabel} numberOfLines={2}>{row.label}</Text>
-                <Text style={styles.paywallCompareFree} numberOfLines={1}>{row.free}</Text>
-                <Text style={styles.paywallCompareIncluded} numberOfLines={1}>{row.pro}</Text>
-              </View>
-            ))}
-          </View>
+          <ProBenefitSectionList compact />
 
           <NeonDivider tone="purple" style={styles.paywallDivider} />
 
@@ -9086,25 +9020,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
           </View>
           {!isPremium && (
             <>
-              <SettingsBenefitLine>{t("settingsProBenefit1")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit2")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit3")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit4")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit5")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit6")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit7")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit8")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit9")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit10")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit11")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit12")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit13")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit14")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit15")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit16")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit17")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit18")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit19")}</SettingsBenefitLine>
+              <ProBenefitSectionList compact />
               <SubscriptionLegalDisclosure
                 monthlyPackage={packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null}
                 monthlyProduct={storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null}
@@ -10858,7 +10774,9 @@ function AppRoot() {
 
   const app = (
     <AppErrorBoundary>
-      <App />
+      <StatsTimeRangeProvider>
+        <App />
+      </StatsTimeRangeProvider>
     </AppErrorBoundary>
   );
   if (!posthogClient) return app;
@@ -14871,6 +14789,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
+  },
+  proBenefitStack: {
+    gap: 8,
+    marginBottom: 4,
+  },
+  proBenefitStackCard: {
+    width: "100%",
+    minWidth: 0,
+  },
+  proBenefitStackContent: {
+    minHeight: 78,
+    gap: 6,
   },
   paywallFeatureCard: {
     width: "48%",

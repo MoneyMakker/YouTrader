@@ -149,7 +149,7 @@ export function userFacingBillingError(message?: string) {
 
 export function appVersionDisplayLabel() {
   const version = Constants.expoConfig?.version || "1.5.9";
-  const build = Constants.expoConfig?.ios?.buildNumber || "91";
+  const build = Constants.expoConfig?.ios?.buildNumber || "92";
   return `Version ${version} (${build})`;
 }
 
