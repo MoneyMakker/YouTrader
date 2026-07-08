@@ -29,15 +29,16 @@ const VOID = "#000000";
 const DUST = "#6B7280";
 
 const STAGE_H = 228;
-const SPEED = 1 / 1.2;
+const SPEED = 1 / 1.45;
 const ms = (value: number) => Math.round(value * SPEED);
-const READ_PAUSE_MS = ms(2800);
+const READ_PAUSE_MS = ms(2300);
 const JUMP_MS = ms(1280);
 const CROUCH_MS = ms(240);
 const LAND_SQUASH_MS = ms(190);
 const RECOVER_MS = ms(320);
 const TURN_MS = ms(520);
 const JUMP_ARC = 44;
+const STAR_COUNT = 114;
 
 const BULL_PX_W = 36;
 const BULL_PX_H = 30;
@@ -47,7 +48,7 @@ const BULL_CLUSTER_W = BULL_PX_W * PX + 40;
 type PixelSpec = { x: number; y: number; w: number; h: number; c: string };
 type BullPose = "idle" | "crouch" | "airborne" | "land";
 type DialogueKey = "authPixelDontGamble" | "authPixelTradeDiscipline";
-type StarTone = "lime" | "purple" | "muted";
+type StarTone = "lime" | "purple" | "violet" | "white";
 type StarKind = "dot" | "cross" | "sparkle";
 
 type StarDef = {
@@ -56,15 +57,17 @@ type StarDef = {
   size: number;
   phase: number;
   pulse: boolean;
+  glow: boolean;
   tone: StarTone;
   kind: StarKind;
   brightness: number;
 };
 
 const STAR_PALETTE: Record<StarTone, { cross: string; dot: string; glow: string }> = {
-  lime: { cross: "rgba(166,255,46,0.92)", dot: "rgba(166,255,46,0.78)", glow: "rgba(166,255,46,0.45)" },
-  purple: { cross: "rgba(177,76,255,0.88)", dot: "rgba(177,76,255,0.62)", glow: "rgba(177,76,255,0.38)" },
-  muted: { cross: "rgba(255,255,255,0.72)", dot: "rgba(255,255,255,0.48)", glow: "rgba(255,255,255,0.28)" },
+  lime: { cross: "rgba(166,255,46,0.96)", dot: "rgba(166,255,46,0.84)", glow: "rgba(166,255,46,0.44)" },
+  purple: { cross: "rgba(177,76,255,0.92)", dot: "rgba(177,76,255,0.74)", glow: "rgba(177,76,255,0.40)" },
+  violet: { cross: "rgba(140,92,255,0.90)", dot: "rgba(140,92,255,0.68)", glow: "rgba(140,92,255,0.30)" },
+  white: { cross: "rgba(255,255,255,0.90)", dot: "rgba(255,255,255,0.66)", glow: "rgba(255,255,255,0.20)" },
 };
 
 function seededUnit(index: number, salt: number) {
@@ -74,9 +77,10 @@ function seededUnit(index: number, salt: number) {
 
 function pickStarTone(index: number): StarTone {
   const roll = seededUnit(index, 3.1);
-  if (roll < 0.7) return "muted";
-  if (roll < 0.9) return "lime";
-  return "purple";
+  if (roll < 0.32) return "lime";
+  if (roll < 0.54) return "purple";
+  if (roll < 0.76) return "violet";
+  return "white";
 }
 
 function pickStarKind(index: number, size: number): StarKind {
@@ -90,24 +94,27 @@ function buildStarSeeds(count: number): Array<Omit<StarDef, "x"> & { xf: number 
   const seeds: Array<Omit<StarDef, "x"> & { xf: number }> = [];
   for (let i = 0; i < count; i += 1) {
     const sizeRoll = seededUnit(i, 1.3);
-    const size = sizeRoll < 0.42 ? 1 : sizeRoll < 0.72 ? 2 : sizeRoll < 0.9 ? 3 : sizeRoll < 0.97 ? 4 : 5;
+    const size = sizeRoll < 0.24 ? 1 : sizeRoll < 0.48 ? 2 : sizeRoll < 0.72 ? 3 : sizeRoll < 0.9 ? 4 : 5;
     const tone = pickStarTone(i);
     const kind = pickStarKind(i, size);
+    const pulse = size >= 2 && seededUnit(i, 7.5) > 0.38;
+    const glow = (tone === "lime" || tone === "purple") && size >= 2 && seededUnit(i, 11.4) > 0.42;
     seeds.push({
       xf: 0.03 + seededUnit(i, 2.2) * 0.94,
       y: Math.round(4 + seededUnit(i, 4.4) * (STAGE_H - 12)),
       size,
-      phase: seededUnit(i, 6.8) * 3,
-      pulse: size >= 3 && seededUnit(i, 7.5) > 0.45,
+      phase: seededUnit(i, 6.8) * 4,
+      pulse,
+      glow,
       tone,
       kind,
-      brightness: 0.35 + seededUnit(i, 8.2) * 0.55,
+      brightness: 0.52 + seededUnit(i, 8.2) * 0.46,
     });
   }
   return seeds;
 }
 
-const STAR_SEEDS = buildStarSeeds(76);
+const STAR_SEEDS = buildStarSeeds(STAR_COUNT);
 
 const Pixel = memo(function Pixel({ x, y, w, h, c }: PixelSpec) {
   return (
@@ -305,6 +312,31 @@ const BullMascot = memo(function BullMascot({
   );
 });
 
+const BullMotionGhost = memo(function BullMotionGhost({
+  pose,
+  blink,
+  tailRotate,
+  scaleX,
+  squashY,
+  tint,
+}: {
+  pose: BullPose;
+  blink: boolean;
+  tailRotate: Animated.AnimatedInterpolation<string>;
+  scaleX: Animated.AnimatedMultiplication<number>;
+  squashY: Animated.Value;
+  tint: string;
+}) {
+  return (
+    <View style={styles.trailGhostCluster}>
+      <Animated.View style={{ transform: [{ scaleX }, { scaleY: squashY }] }}>
+        <BullMascot pose={pose} blink={blink} tailRotate={tailRotate} />
+      </Animated.View>
+      <View pointerEvents="none" style={[styles.trailGhostTint, { backgroundColor: tint }]} />
+    </View>
+  );
+});
+
 const DustPuff = memo(function DustPuff({ opacity }: { opacity: Animated.Value }) {
   return (
     <Animated.View pointerEvents="none" style={[styles.dustWrap, { opacity }]}>
@@ -351,19 +383,23 @@ const TwinkleStar = memo(function TwinkleStar({
   master: Animated.Value;
 }) {
   const palette = STAR_PALETTE[star.tone];
-  const low = star.brightness * 0.55;
+  const low = star.brightness * 0.58;
   const mid = star.brightness;
-  const high = Math.min(1, star.brightness + (star.pulse ? 0.28 : 0.14));
+  const high = Math.min(1, star.brightness + (star.pulse ? 0.32 : 0.16));
   const opacity = master.interpolate({
     inputRange: [0, 0.35, 0.7, 1],
-    outputRange: star.pulse ? [low, high, mid, low] : [low * 0.9, mid, low, low * 0.9],
+    outputRange: star.pulse ? [low, high, mid, low] : [low * 0.88, mid, low * 0.92, low * 0.88],
+  });
+  const scale = master.interpolate({
+    inputRange: [0, 0.45, 1],
+    outputRange: star.pulse ? [0.92, 1.08, 0.94] : [0.96, 1.04, 0.96],
   });
   const glowStyle =
-    star.pulse && star.size >= 3
+    star.glow
       ? {
           shadowColor: palette.glow,
-          shadowOpacity: 0.55,
-          shadowRadius: star.size + 2,
+          shadowOpacity: star.size >= 4 ? 0.62 : 0.42,
+          shadowRadius: star.size + (star.pulse ? 3 : 1),
           shadowOffset: { width: 0, height: 0 },
         }
       : null;
@@ -382,6 +418,7 @@ const TwinkleStar = memo(function TwinkleStar({
             height: star.size,
             backgroundColor: palette.dot,
             opacity,
+            transform: [{ scale }],
           },
         ]}
       />
@@ -395,7 +432,14 @@ const TwinkleStar = memo(function TwinkleStar({
       style={[
         styles.star,
         glowStyle,
-        { left: star.x, top: star.y, width: arm, height: arm, opacity },
+        {
+          left: star.x,
+          top: star.y,
+          width: arm,
+          height: arm,
+          opacity,
+          transform: [{ scale }],
+        },
       ]}
     >
       <View style={[styles.starH, { width: arm, backgroundColor: palette.cross }]} />
@@ -444,6 +488,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   const bubbleOpacity = useRef(new Animated.Value(0)).current;
   const dustOpacity = useRef(new Animated.Value(0)).current;
   const tailSwing = useRef(new Animated.Value(0)).current;
+  const trailOpacity = useRef(new Animated.Value(0)).current;
   const starMasterA = useRef(new Animated.Value(0)).current;
   const starMasterB = useRef(new Animated.Value(0)).current;
   const starMasterC = useRef(new Animated.Value(0)).current;
@@ -467,6 +512,18 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       }),
     [tailSwing],
   );
+  const trailBackOffset1 = useMemo(() => Animated.multiply(facingScale, -13), [facingScale]);
+  const trailBackOffset2 = useMemo(() => Animated.multiply(facingScale, -24), [facingScale]);
+  const ghostTrailX1 = useMemo(() => Animated.add(bullX, trailBackOffset1), [bullX, trailBackOffset1]);
+  const ghostTrailX2 = useMemo(() => Animated.add(bullX, trailBackOffset2), [bullX, trailBackOffset2]);
+  const ghostTrailOpacity1 = useMemo(
+    () => trailOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.24] }),
+    [trailOpacity],
+  );
+  const ghostTrailOpacity2 = useMemo(
+    () => trailOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.13] }),
+    [trailOpacity],
+  );
 
   const stars = useMemo<StarDef[]>(
     () =>
@@ -476,6 +533,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
         size: seed.size,
         phase: seed.phase,
         pulse: seed.pulse,
+        glow: seed.glow,
         tone: seed.tone,
         kind: seed.kind,
         brightness: seed.brightness,
@@ -500,14 +558,14 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       Animated.sequence([
         Animated.timing(starMasterA, {
           toValue: 1,
-          duration: 3200,
+          duration: 2700,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
         }),
         Animated.timing(starMasterA, {
           toValue: 0,
-          duration: 3200,
+          duration: 2700,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
@@ -517,17 +575,17 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 
     const starLoopB = Animated.loop(
       Animated.sequence([
-        Animated.delay(1100),
+        Animated.delay(900),
         Animated.timing(starMasterB, {
           toValue: 1,
-          duration: 3800,
+          duration: 3200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
         }),
         Animated.timing(starMasterB, {
           toValue: 0,
-          duration: 3800,
+          duration: 3200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
@@ -537,17 +595,17 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 
     const starLoopC = Animated.loop(
       Animated.sequence([
-        Animated.delay(2100),
+        Animated.delay(1700),
         Animated.timing(starMasterC, {
           toValue: 1,
-          duration: 4400,
+          duration: 3700,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
         }),
         Animated.timing(starMasterC, {
           toValue: 0,
-          duration: 4400,
+          duration: 3700,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
@@ -557,17 +615,17 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 
     const starLoopD = Animated.loop(
       Animated.sequence([
-        Animated.delay(2800),
+        Animated.delay(2300),
         Animated.timing(starMasterD, {
           toValue: 1,
-          duration: 5100,
+          duration: 4300,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
         }),
         Animated.timing(starMasterD, {
           toValue: 0,
-          duration: 5100,
+          duration: 4300,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
           isInteraction: false,
@@ -602,6 +660,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       stopAnimatedValue(starMasterC);
       stopAnimatedValue(starMasterD);
       stopAnimatedValue(tailSwing);
+      stopAnimatedValue(trailOpacity);
       stopAnimatedValue(bullX);
       stopAnimatedValue(bullY);
       stopAnimatedValue(facingScale);
@@ -618,7 +677,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       poseTimersRef.current.forEach(clearTimeout);
       poseTimersRef.current = [];
     };
-  }, [bullX, bullY, bubbleOpacity, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC, starMasterD, tailSwing]);
+  }, [bullX, bullY, bubbleOpacity, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC, starMasterD, tailSwing, trailOpacity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -641,7 +700,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       return Animated.sequence([
         Animated.timing(bubbleOpacity, {
           toValue: 1,
-          duration: ms(160),
+          duration: ms(130),
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
           isInteraction: false,
@@ -649,7 +708,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
         Animated.delay(READ_PAUSE_MS),
         Animated.timing(bubbleOpacity, {
           toValue: 0,
-          duration: ms(220),
+          duration: ms(175),
           useNativeDriver: true,
           isInteraction: false,
         }),
@@ -662,6 +721,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       bullX.setValue(fromX);
       bullY.setValue(groundY);
       tailSwing.setValue(0);
+      trailOpacity.setValue(0);
 
       return Animated.sequence([
         Animated.parallel([
@@ -715,6 +775,22 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
             Animated.timing(tailSwing, { toValue: 1, duration: halfJump, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
             Animated.timing(tailSwing, { toValue: -0.65, duration: halfJump, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
             Animated.timing(tailSwing, { toValue: 0, duration: ms(180), easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }),
+          ]),
+          Animated.sequence([
+            Animated.timing(trailOpacity, {
+              toValue: 1,
+              duration: ms(55),
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
+            Animated.delay(Math.max(0, JUMP_MS - ms(55) - ms(120))),
+            Animated.timing(trailOpacity, {
+              toValue: 0,
+              duration: ms(120),
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+              isInteraction: false,
+            }),
           ]),
         ]),
         Animated.parallel([
@@ -806,7 +882,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
           useNativeDriver: true,
           isInteraction: false,
         }),
-        Animated.delay(ms(180)),
+        Animated.delay(ms(95)),
       ]);
     };
 
@@ -870,8 +946,9 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       bubbleOpacity.stopAnimation();
       dustOpacity.stopAnimation();
       tailSwing.stopAnimation();
+      trailOpacity.stopAnimation();
     };
-  }, [bubbleOpacity, bullX, bullY, dustOpacity, facingScale, groundY, leftX, rightX, squashX, squashY, tailSwing]);
+  }, [bubbleOpacity, bullX, bullY, dustOpacity, facingScale, groundY, leftX, rightX, squashX, squashY, tailSwing, trailOpacity]);
 
   const dynamicStyles = useMemo(
     () =>
@@ -919,6 +996,44 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
         ))}
 
         <View style={dynamicStyles.heroArea} pointerEvents="none">
+          <Animated.View
+            style={[
+              styles.bullOverlay,
+              styles.trailGhostLayer,
+              {
+                opacity: ghostTrailOpacity2,
+                transform: [{ translateX: ghostTrailX2 }, { translateY: bullY }],
+              },
+            ]}
+          >
+            <BullMotionGhost
+              pose={pose}
+              blink={blink}
+              tailRotate={tailRotate}
+              scaleX={scaleX}
+              squashY={squashY}
+              tint="rgba(177,76,255,0.50)"
+            />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.bullOverlay,
+              styles.trailGhostLayer,
+              {
+                opacity: ghostTrailOpacity1,
+                transform: [{ translateX: ghostTrailX1 }, { translateY: bullY }],
+              },
+            ]}
+          >
+            <BullMotionGhost
+              pose={pose}
+              blink={blink}
+              tailRotate={tailRotate}
+              scaleX={scaleX}
+              squashY={squashY}
+              tint="rgba(166,255,46,0.46)"
+            />
+          </Animated.View>
           <Animated.View
             style={[
               styles.bullOverlay,
@@ -975,6 +1090,17 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     zIndex: 5,
+  },
+  trailGhostLayer: {
+    zIndex: 4,
+  },
+  trailGhostCluster: {
+    alignItems: "center",
+    width: BULL_CLUSTER_W,
+    marginLeft: -20,
+  },
+  trailGhostTint: {
+    ...StyleSheet.absoluteFillObject,
   },
   bullCluster: {
     alignItems: "center",

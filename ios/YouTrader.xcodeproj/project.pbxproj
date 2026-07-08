@@ -376,7 +376,7 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 94;
+				CURRENT_PROJECT_VERSION = 95;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -417,7 +417,7 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 94;
+				CURRENT_PROJECT_VERSION = 95;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				INFOPLIST_FILE = YouTrader/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = YouTrader;

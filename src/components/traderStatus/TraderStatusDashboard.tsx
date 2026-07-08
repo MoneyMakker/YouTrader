@@ -4,7 +4,6 @@ import {
   Alert,
   Animated,
   Easing,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,7 +22,6 @@ import {
 import type { Session } from "@supabase/supabase-js";
 import { t } from "../../i18n";
 import type { Achievement, TraderLevel } from "../../analytics/achievements";
-import { getAchievementCardSource } from "../../achievements/achievementCardAssets";
 import { FEATURE_LIMIT_MESSAGES, FREE_LIMITS, PRO_LIMITS } from "../../config/featureLimits";
 import { peekShareCardExportAllowed, recordShareCardExportSuccess } from "../../config/usageLimits";
 import { C } from "../../theme/colors";
@@ -117,8 +115,7 @@ function AchievementCard({
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       <GlassCard compact style={styles.badgeCard}>
         <Animated.View pointerEvents="none" style={[styles.badgeEarnedGlow, { opacity: glowOpacity }]} />
-        <Image source={getAchievementCardSource(item.id)} style={styles.badgeCardArt} resizeMode="contain" />
-        <View style={styles.badgeTop}>
+        <View style={styles.badgeRow}>
           <View style={styles.badgeIconShell}>
             <AchievementCategoryIcon category={item.category} unlocked size={20} />
           </View>
@@ -126,21 +123,21 @@ function AchievementCard({
             <Text style={styles.badgeTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.78}>
               {item.title}
             </Text>
-            <Text style={styles.badgeWhy} numberOfLines={3}>
+            <Text style={styles.badgeWhy} numberOfLines={2}>
               {item.condition}
             </Text>
             <Text style={styles.badgeDate} numberOfLines={1}>{t("earnedVerified")}</Text>
           </View>
+          <AnimatedPressable
+            accessibilityRole="button"
+            haptic
+            onPress={() => onShare(item)}
+            style={styles.shareBtnPressable}
+            contentStyle={styles.shareBtn}
+          >
+            <Text style={styles.shareBtnText}>{t("share")}</Text>
+          </AnimatedPressable>
         </View>
-        <AnimatedPressable
-          accessibilityRole="button"
-          haptic
-          onPress={() => onShare(item)}
-          style={styles.shareBtnPressable}
-          contentStyle={styles.shareBtn}
-        >
-          <Text style={styles.shareBtnText}>{t("share")}</Text>
-        </AnimatedPressable>
       </GlassCard>
     </Animated.View>
   );
@@ -644,22 +641,16 @@ const styles = StyleSheet.create({
   compactList: { gap: 12 },
   badgeCard: {
     borderRadius: 20,
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderColor: "rgba(163,255,18,0.28)",
     backgroundColor: "rgba(163,255,18,0.035)",
-    gap: 12,
     overflow: "hidden",
     shadowColor: C.green,
     shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
     elevation: 2,
-  },
-  badgeCardArt: {
-    width: "100%",
-    aspectRatio: 664 / 1024,
-    borderRadius: 12,
-    marginBottom: 2,
   },
   badgeEarnedGlow: {
     position: "absolute",
@@ -670,23 +661,24 @@ const styles = StyleSheet.create({
     borderRadius: 59,
     backgroundColor: C.green,
   },
-  badgeTop: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  badgeRow: { flexDirection: "row", gap: 12, alignItems: "center" },
   badgeIconShell: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(163,255,18,0.11)",
     borderWidth: 1,
     borderColor: "rgba(163,255,18,0.28)",
+    flexShrink: 0,
   },
   badgeIcon: { color: C.green, fontSize: 16, fontWeight: "900", textAlign: "center" },
-  badgeBody: { flex: 1, minWidth: 0, gap: 4 },
-  badgeTitle: { color: C.text, fontSize: 15, lineHeight: 19, fontWeight: "900" },
-  badgeWhy: { color: C.sub, fontSize: 12, lineHeight: 17 },
-  badgeDate: { color: C.muted, fontSize: 11, fontWeight: "700" },
-  shareBtnPressable: { alignSelf: "flex-end" },
+  badgeBody: { flex: 1, minWidth: 0, gap: 3 },
+  badgeTitle: { color: C.text, fontSize: 14, lineHeight: 18, fontWeight: "900" },
+  badgeWhy: { color: C.sub, fontSize: 11, lineHeight: 15 },
+  badgeDate: { color: C.muted, fontSize: 10, fontWeight: "700", marginTop: 1 },
+  shareBtnPressable: { flexShrink: 0, alignSelf: "center" },
   shareBtn: {
     minHeight: 38,
     borderRadius: 999,
