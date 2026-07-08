@@ -69,10 +69,12 @@ import {
   BrainCircuit,
   Calculator as CalculatorIcon,
   CalendarDays,
+  Camera,
   ChartColumnIncreasing,
   Check,
   ChevronDown,
   FileText,
+  ImagePlus,
   Lock,
   Mic,
   Newspaper,
@@ -199,6 +201,7 @@ import { AiAnalyticsProScreen } from "./src/components/traderStatus/AiAnalyticsP
 import { TraderStatusDashboard } from "./src/components/traderStatus/TraderStatusDashboard";
 import { AiNewsSentimentCard } from "./src/components/news/AiNewsSentimentCard";
 import { AiAnalysisLoading } from "./src/components/ai/AiAnalysisLoading";
+import { JournalTradeSwipeCard } from "./src/components/journal/JournalTradeSwipeCard";
 import {
   FREE_MONTHLY_PDF_PREVIEW_LIMIT,
   FREE_MONTHLY_TRADE_LIMIT,
@@ -7151,6 +7154,10 @@ function JournalScreen({
   const [lockedInsightDismissed, setLockedInsightDismissed] = useState(false);
   const [deleteDayDate, setDeleteDayDate] = useState<string | null>(null);
   const [deleteDayBusy, setDeleteDayBusy] = useState(false);
+  const [tradeActionTarget, setTradeActionTarget] = useState<Trade | null>(null);
+  const [deleteToastVisible, setDeleteToastVisible] = useState(false);
+  const deleteToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const journalMountedRef = useRef(true);
   const lastSaveAtRef = useRef(0);
   const firstInsightSeenRef = useRef(false);
   const lockedInsightSeenRef = useRef(false);
@@ -7191,6 +7198,21 @@ function JournalScreen({
         }
       } catch {}
     })();
+  }, []);
+  useEffect(() => {
+    journalMountedRef.current = true;
+    return () => {
+      journalMountedRef.current = false;
+      if (deleteToastTimerRef.current) clearTimeout(deleteToastTimerRef.current);
+    };
+  }, []);
+  const showDeleteToast = useCallback(() => {
+    if (deleteToastTimerRef.current) clearTimeout(deleteToastTimerRef.current);
+    if (!journalMountedRef.current) return;
+    setDeleteToastVisible(true);
+    deleteToastTimerRef.current = setTimeout(() => {
+      if (journalMountedRef.current) setDeleteToastVisible(false);
+    }, 2200);
   }, []);
   const filtered = useMemo(
     () => trades.filter((x) => x.date === selectedDate),
@@ -7346,6 +7368,42 @@ function JournalScreen({
     });
     setModal(true);
   };
+  const executeTradeDelete = useCallback(
+    async (tradeId: string) => {
+      const limit = await checkClientRateLimit("trade:delete", "journal-local");
+      if (!limit.allowed) {
+        Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
+        return;
+      }
+      onTradeDeleted(tradeId);
+      setTrades((prev) => prev.filter((x) => x.id !== tradeId));
+      trackEvent("trade_deleted", { source: "manual" });
+      if (editId === tradeId) setModal(false);
+      successHaptic();
+      showDeleteToast();
+    },
+    [editId, onTradeDeleted, setTrades, showDeleteToast],
+  );
+  const confirmDeleteTrade = useCallback(
+    (tradeId: string) => {
+      Alert.alert(t("deleteQuestion"), t("journalDeleteTradeBody"), [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("deleteTrade"),
+          style: "destructive",
+          onPress: () => {
+            warningHaptic();
+            void executeTradeDelete(tradeId);
+          },
+        },
+      ]);
+    },
+    [executeTradeDelete],
+  );
+  const openTradeActions = useCallback((tr: Trade) => {
+    lightHaptic();
+    setTradeActionTarget(tr);
+  }, []);
   const calcPnl = () => {
     if (form.pnl.trim()) {
       const amount = Math.min(MAX_ABS_PNL, Math.abs(toNum(form.pnl)));
@@ -7459,24 +7517,7 @@ function JournalScreen({
   };
   const remove = () => {
     if (!editId) return;
-    Alert.alert(t("deleteQuestion"), t("cannotUndo"), [
-      { text: t("close"), style: "cancel" },
-      {
-        text: t("deleteTrade"),
-        style: "destructive",
-        onPress: async () => {
-          const limit = await checkClientRateLimit("trade:delete", "journal-local");
-          if (!limit.allowed) {
-            Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
-            return;
-          }
-          onTradeDeleted(editId);
-          setTrades((prev) => prev.filter((x) => x.id !== editId));
-          trackEvent("trade_deleted", { source: "manual" });
-          setModal(false);
-        },
-      },
-    ]);
+    confirmDeleteTrade(editId);
   };
   const pnlPreview = calcPnl();
   const pickImage = async (camera: boolean) => {
@@ -7619,6 +7660,7 @@ function JournalScreen({
     }
   };
   return (
+    <View style={styles.journalScreenRoot}>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[
@@ -7778,8 +7820,14 @@ function JournalScreen({
         </GlassCard>
       ) : null}
       {filtered.map((tr) => (
-        <AnimatedPressable key={tr.id} onPress={() => openEdit(tr)} onLongPress={() => openDeleteDayConfirm(tr.date)} delayLongPress={3000}>
-          <Card animated={false}>
+        <JournalTradeSwipeCard
+          key={tr.id}
+          onPress={() => openEdit(tr)}
+          onLongPress={() => openTradeActions(tr)}
+          onDeletePress={() => confirmDeleteTrade(tr.id)}
+          onSwipeReveal={lightHaptic}
+        >
+          <Card animated={false} style={styles.journalSwipeCardInner}>
             <View style={styles.rowBetween}>
               <Text style={styles.tradeSymbolTitle}>{tr.symbol}</Text>
               <Pill
@@ -7830,7 +7878,7 @@ function JournalScreen({
             ) : null}
             <Text style={styles.tapHint}>{t("tapToViewEdit")}</Text>
           </Card>
-        </AnimatedPressable>
+        </JournalTradeSwipeCard>
       ))}
       {lockedInsightVisible ? (
         <GlassCard style={styles.lockedInsightCard} intensity={36}>
@@ -7846,6 +7894,37 @@ function JournalScreen({
           </View>
         </GlassCard>
       ) : null}
+      <BottomSheetPanel
+        visible={!!tradeActionTarget}
+        title={t("journalTradeActions")}
+        onClose={() => setTradeActionTarget(null)}
+      >
+        <Pressable
+          style={styles.tradeSheetAction}
+          onPress={() => {
+            const target = tradeActionTarget;
+            setTradeActionTarget(null);
+            if (target) openEdit(target);
+          }}
+        >
+          <Text style={styles.tradeSheetActionText}>{t("journalGestureEditTrade")}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tradeSheetAction, styles.tradeSheetActionDestructive]}
+          onPress={() => {
+            const target = tradeActionTarget;
+            setTradeActionTarget(null);
+            if (target) confirmDeleteTrade(target.id);
+          }}
+        >
+          <Text style={[styles.tradeSheetActionText, styles.tradeSheetActionDestructiveText]}>
+            {t("deleteTrade")}
+          </Text>
+        </Pressable>
+        <Pressable style={styles.tradeSheetCancel} onPress={() => setTradeActionTarget(null)}>
+          <Text style={styles.tradeSheetCancelText}>{t("cancel")}</Text>
+        </Pressable>
+      </BottomSheetPanel>
       <Modal visible={!!deleteDayDate} transparent animationType="fade">
         <View style={styles.deleteDayBackdrop}>
           <View style={styles.deleteDayCard}>
@@ -8037,110 +8116,172 @@ function JournalScreen({
                 onChangeText={(v: string) => setForm({ ...form, notes: v.slice(0, MAX_NOTES_LENGTH) })}
                 multiline
               />
-              <Text style={styles.label}>{t("voiceNote")}</Text>
-              <View style={styles.row}>
-                <Pressable style={[styles.secondaryPhoto, styles.purpleAction, recorderState.isRecording && { borderColor: C.red, backgroundColor: C.redSoft }]} onPress={pickAudio}>
-                  <Text style={[styles.secondaryText, recorderState.isRecording && { color: C.red }]}>{recorderState.isRecording ? t("stopRecording") : t("recordVoice")}</Text>
-                </Pressable>
-                {form.voiceUri ? (
-                  <Pressable style={[styles.secondaryPhoto, styles.purpleAction]} onPress={() => Linking.openURL(form.voiceUri)}>
-                    <Text style={styles.secondaryText}>{t("openAudio")}</Text>
+              <View style={styles.journalMediaSection}>
+                <PremiumCard tone="purple" compact style={styles.journalMediaCard} contentStyle={styles.journalMediaCardContent}>
+                  <View style={styles.journalMediaCardHeader}>
+                    <Mic size={15} color={C.purple} strokeWidth={2.2} />
+                    <Text style={styles.journalMediaCardTitle}>{t("voiceNote")}</Text>
+                  </View>
+                  {!form.voiceUri && !recorderState.isRecording ? (
+                    <Text style={styles.journalMediaStatus}>{t("noAudio")}</Text>
+                  ) : null}
+                  <Pressable
+                    style={[
+                      styles.journalVoiceBtn,
+                      styles.purpleAction,
+                      recorderState.isRecording && styles.journalVoiceRecording,
+                      form.voiceUri && !recorderState.isRecording && styles.journalVoiceDone,
+                    ]}
+                    onPress={pickAudio}
+                  >
+                    <Mic
+                      size={16}
+                      color={
+                        recorderState.isRecording
+                          ? C.red
+                          : form.voiceUri
+                            ? C.purple
+                            : C.text
+                      }
+                      strokeWidth={2.2}
+                    />
+                    <Text
+                      style={[
+                        styles.journalVoiceBtnText,
+                        recorderState.isRecording && { color: C.red },
+                        form.voiceUri && !recorderState.isRecording && { color: C.purple },
+                      ]}
+                    >
+                      {recorderState.isRecording
+                        ? t("journalFormRecording")
+                        : form.voiceUri
+                          ? t("journalFormVoiceAdded")
+                          : t("journalFormRecordVoiceNote")}
+                    </Text>
                   </Pressable>
-                ) : (
-                  <Text style={styles.sub}>{t("noAudio")}</Text>
-                )}
-              </View>
-              <Text style={styles.label}>{t("photo")}</Text>
-              <View style={styles.row}>
-                {form.photoUri ? (
-                  <Image
-                    source={{ uri: form.photoUri }}
-                    style={styles.tradePhoto}
+                  <Text style={styles.journalMediaHint}>
+                    {recorderState.isRecording
+                      ? t("stopRecording")
+                      : form.voiceUri
+                        ? t("journalFormAudioAttached")
+                        : t("journalFormVoiceHint")}
+                  </Text>
+                  {form.voiceUri ? (
+                    <Pressable
+                      style={styles.journalOpenAudioLink}
+                      onPress={() => Linking.openURL(form.voiceUri)}
+                    >
+                      <Text style={styles.journalOpenAudioText}>{t("openAudio")}</Text>
+                    </Pressable>
+                  ) : null}
+                </PremiumCard>
+
+                <PremiumCard tone="neutral" compact style={styles.journalMediaCard} contentStyle={styles.journalMediaCardContent}>
+                  <Text style={styles.journalMediaCardTitle}>{t("photo")}</Text>
+                  {form.photoUri ? (
+                    <Image source={{ uri: form.photoUri }} style={styles.tradePhoto} />
+                  ) : null}
+                  <View style={styles.journalActionPair}>
+                    <Pressable
+                      style={[styles.journalActionCard, styles.purpleAction]}
+                      onPress={() => pickImage(true)}
+                    >
+                      <Camera size={18} color={C.purple} strokeWidth={2.2} />
+                      <Text style={styles.journalActionCardTitle}>{t("journalFormTakeScreenshot")}</Text>
+                      <Text style={styles.journalActionCardHint}>{t("journalFormCaptureSetup")}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.journalActionCard, styles.purpleAction]}
+                      onPress={() => pickImage(false)}
+                    >
+                      <ImagePlus size={18} color={C.purple} strokeWidth={2.2} />
+                      <Text style={styles.journalActionCardTitle}>{t("journalFormUploadChart")}</Text>
+                      <Text style={styles.journalActionCardHint}>{t("journalFormImportPhotos")}</Text>
+                    </Pressable>
+                  </View>
+                </PremiumCard>
+
+                <Text style={styles.journalSectionEyebrow}>{t("journalFormTradeResult")}</Text>
+                <View style={styles.pnlToggleRow}>
+                  <Pressable
+                    onPress={() => setPnlSide("plus")}
+                    style={[
+                      styles.pnlToggle,
+                      pnlSide !== "plus" && styles.pnlTogglePlusIdle,
+                      pnlSide === "plus" && styles.pnlPlusActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pnlToggleText,
+                        pnlSide === "plus" && { color: C.bg },
+                      ]}
+                    >
+                      + {t("plusPnl")}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setPnlSide("minus")}
+                    style={[
+                      styles.pnlToggle,
+                      pnlSide !== "minus" && styles.pnlToggleMinusIdle,
+                      pnlSide === "minus" && styles.pnlMinusActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pnlToggleText,
+                        pnlSide === "minus" && { color: C.white },
+                      ]}
+                    >
+                      − {t("minusPnl")}
+                    </Text>
+                  </Pressable>
+                </View>
+                <View
+                  style={[
+                    styles.resultBox,
+                    pnlPreview < 0 && styles.resultBoxRed,
+                  ]}
+                >
+                  <Text style={styles.label}>{t("pnl")}</Text>
+                  <TextInput
+                    keyboardType="decimal-pad"
+                    value={form.pnl}
+                    onChangeText={(v: string) => setForm({ ...form, pnl: v })}
+                    placeholder={money(Math.abs(pnlPreview))}
+                    placeholderTextColor={pnlPreview < 0 ? C.red : C.green}
+                    style={[
+                      styles.resultInput,
+                      pnlPreview < 0 && { color: C.red },
+                    ]}
+                    textAlign="center"
                   />
-                ) : null}
-                <Pressable
-                  style={[styles.secondaryPhoto, styles.purpleAction]}
-                  onPress={() => pickImage(true)}
-                >
-                  <Text style={styles.secondaryText}>{t("takePhoto")}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.secondaryPhoto, styles.purpleAction]}
-                  onPress={() => pickImage(false)}
-                >
-                  <Text style={styles.secondaryText}>{t("uploadPhoto")}</Text>
-                </Pressable>
-              </View>
-              <View style={styles.pnlToggleRow}>
-                <Pressable
-                  onPress={() => setPnlSide("plus")}
-                  style={[
-                    styles.pnlToggle,
-                    pnlSide === "plus" && styles.pnlPlusActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pnlToggleText,
-                      pnlSide === "plus" && { color: C.bg },
-                    ]}
-                  >
-                    + {t("plusPnl")}
+                  <Text style={styles.journalPnlHint}>
+                    {String(form.pnl || "").trim()
+                      ? t("journalFormPnlHintManual")
+                      : t("journalFormPnlHintAuto")}
                   </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setPnlSide("minus")}
-                  style={[
-                    styles.pnlToggle,
-                    pnlSide === "minus" && styles.pnlMinusActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pnlToggleText,
-                      pnlSide === "minus" && { color: C.white },
-                    ]}
-                  >
-                    − {t("minusPnl")}
+                </View>
+
+                <Pressable style={styles.primaryBig} onPress={save}>
+                  <Text style={styles.primaryText}>
+                    {editId ? t("updateTrade") : t("saveTrade")}
                   </Text>
+                  <Text style={styles.journalSaveHint}>{t("journalFormSaveHint")}</Text>
+                </Pressable>
+                {editId && (
+                  <Pressable style={styles.deleteBig} onPress={remove}>
+                    <Text style={styles.deleteText}>{t("deleteTrade")}</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={[styles.secondaryBig, styles.journalCloseSecondary]}
+                  onPress={() => setModal(false)}
+                >
+                  <Text style={styles.journalCloseText}>{t("close")}</Text>
                 </Pressable>
               </View>
-              <View
-                style={[
-                  styles.resultBox,
-                  pnlPreview < 0 && styles.resultBoxRed,
-                ]}
-              >
-                <Text style={styles.label}>{t("pnl")}</Text>
-                <TextInput
-                  keyboardType="decimal-pad"
-                  value={form.pnl}
-                  onChangeText={(v: string) => setForm({ ...form, pnl: v })}
-                  placeholder={money(Math.abs(pnlPreview))}
-                  placeholderTextColor={pnlPreview < 0 ? C.red : C.green}
-                  style={[
-                    styles.resultInput,
-                    pnlPreview < 0 && { color: C.red },
-                  ]}
-                  textAlign="center"
-                />
-              </View>
-              <Pressable style={styles.primaryBig} onPress={save}>
-                <Text style={styles.primaryText}>
-                  {editId ? t("updateTrade") : t("saveTrade")}
-                </Text>
-              </Pressable>
-              {editId && (
-                <Pressable style={styles.deleteBig} onPress={remove}>
-                  <Text style={styles.deleteText}>{t("deleteTrade")}</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={styles.secondaryBig}
-                onPress={() => setModal(false)}
-              >
-                <Text style={styles.secondaryText}>{t("close")}</Text>
-              </Pressable>
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -8167,6 +8308,14 @@ function JournalScreen({
         </SafeAreaView>
       </Modal>
     </ScrollView>
+    {deleteToastVisible ? (
+      <View style={styles.journalDeleteToastWrap} pointerEvents="none">
+        <View style={styles.journalDeleteToast}>
+          <Text style={styles.journalDeleteToastText}>{t("journalTradeDeletedToast")}</Text>
+        </View>
+      </View>
+    ) : null}
+    </View>
   );
 }
 
@@ -10844,6 +10993,29 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg, width: "100%" },
   content: { padding: 16, paddingBottom: 24, width: "100%", maxWidth: 980, alignSelf: "center" },
   journalContent: { flexGrow: 1, paddingTop: 8, paddingBottom: 46 },
+  journalScreenRoot: { flex: 1 },
+  journalSwipeCardInner: { marginBottom: 0 },
+  journalDeleteToastWrap: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 22,
+    alignItems: "center",
+    zIndex: 20,
+  },
+  journalDeleteToast: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: "rgba(13,14,20,0.96)",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  journalDeleteToastText: {
+    color: C.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   journalTabletContent: { paddingTop: 0, maxWidth: 1280 },
   calendarTabletContent: { maxWidth: 1280, paddingHorizontal: 24, paddingTop: 22 },
   calendarLiveHeader: {
@@ -11695,11 +11867,136 @@ const styles = StyleSheet.create({
     padding: 0,
     marginTop: 4,
   },
+  journalMediaSection: {
+    marginTop: 6,
+    gap: 12,
+  },
+  journalMediaCard: {
+    marginTop: 0,
+  },
+  journalMediaCardContent: {
+    padding: 14,
+    gap: 10,
+  },
+  journalMediaCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  journalMediaCardTitle: {
+    color: C.text,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  journalMediaStatus: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: -2,
+  },
+  journalVoiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+  },
+  journalVoiceRecording: {
+    borderColor: C.red,
+    backgroundColor: C.redSoft,
+  },
+  journalVoiceDone: {
+    borderColor: "rgba(176,38,255,0.55)",
+  },
+  journalVoiceBtnText: {
+    color: C.text,
+    fontWeight: "900",
+    fontSize: 14,
+  },
+  journalMediaHint: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 15,
+    textAlign: "center",
+  },
+  journalOpenAudioLink: {
+    alignSelf: "center",
+    paddingVertical: 4,
+  },
+  journalOpenAudioText: {
+    color: C.purple,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  journalActionPair: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  journalActionCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    gap: 6,
+  },
+  journalActionCardTitle: {
+    color: C.text,
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  journalActionCardHint: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 13,
+  },
+  journalSectionEyebrow: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginTop: 2,
+    marginBottom: -4,
+  },
+  journalPnlHint: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 15,
+    textAlign: "center",
+    marginTop: 8,
+    paddingHorizontal: 8,
+  },
+  journalSaveHint: {
+    color: "rgba(5,7,10,0.62)",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  journalCloseSecondary: {
+    marginTop: 6,
+    paddingVertical: 14,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "transparent",
+  },
+  journalCloseText: {
+    color: C.sub,
+    fontWeight: "800",
+    fontSize: 15,
+  },
   pnlToggleRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 6,
-    marginBottom: 10,
+    marginTop: 0,
+    marginBottom: 0,
   },
   pnlToggle: {
     flex: 1,
@@ -11709,6 +12006,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: "center",
     backgroundColor: C.card2,
+  },
+  pnlTogglePlusIdle: {
+    borderColor: "rgba(163,255,18,0.28)",
+  },
+  pnlToggleMinusIdle: {
+    borderColor: "rgba(255,59,92,0.28)",
   },
   pnlPlusActive: { backgroundColor: C.green, borderColor: C.green },
   pnlMinusActive: { backgroundColor: C.red, borderColor: C.red },
@@ -13910,6 +14213,38 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontWeight: "800",
     marginTop: 10,
+  },
+  tradeSheetAction: {
+    marginTop: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card2,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  tradeSheetActionDestructive: {
+    borderColor: "rgba(255,59,92,0.42)",
+    backgroundColor: C.redSoft,
+  },
+  tradeSheetActionText: {
+    color: C.text,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  tradeSheetActionDestructiveText: {
+    color: C.red,
+  },
+  tradeSheetCancel: {
+    marginTop: 10,
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  tradeSheetCancelText: {
+    color: C.sub,
+    fontSize: 15,
+    fontWeight: "800",
   },
   dnaHero: {
     marginTop: 16,

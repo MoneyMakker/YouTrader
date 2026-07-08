@@ -29,16 +29,18 @@ const VOID = "#000000";
 const DUST = "#6B7280";
 
 const STAGE_H = 228;
-const READ_PAUSE_MS = 2800;
-const JUMP_MS = 1280;
-const CROUCH_MS = 240;
-const LAND_SQUASH_MS = 190;
-const RECOVER_MS = 320;
-const TURN_MS = 520;
+const SPEED = 1 / 1.2;
+const ms = (value: number) => Math.round(value * SPEED);
+const READ_PAUSE_MS = ms(2800);
+const JUMP_MS = ms(1280);
+const CROUCH_MS = ms(240);
+const LAND_SQUASH_MS = ms(190);
+const RECOVER_MS = ms(320);
+const TURN_MS = ms(520);
 const JUMP_ARC = 44;
 
-const BULL_PX_W = 32;
-const BULL_PX_H = 28;
+const BULL_PX_W = 36;
+const BULL_PX_H = 30;
 const BULL_RENDER_H = BULL_PX_H * PX;
 const BULL_CLUSTER_W = BULL_PX_W * PX + 40;
 
@@ -46,7 +48,7 @@ type PixelSpec = { x: number; y: number; w: number; h: number; c: string };
 type BullPose = "idle" | "crouch" | "airborne" | "land";
 type DialogueKey = "authPixelDontGamble" | "authPixelTradeDiscipline";
 type StarTone = "lime" | "purple" | "muted";
-type StarKind = "cross" | "dot";
+type StarKind = "dot" | "cross" | "sparkle";
 
 type StarDef = {
   x: number;
@@ -56,36 +58,56 @@ type StarDef = {
   pulse: boolean;
   tone: StarTone;
   kind: StarKind;
+  brightness: number;
 };
 
-const STAR_PALETTE: Record<StarTone, { cross: string; dot: string }> = {
-  lime: { cross: "rgba(163,255,18,0.88)", dot: "rgba(163,255,18,0.72)" },
-  purple: { cross: "rgba(176,38,255,0.82)", dot: "rgba(176,38,255,0.58)" },
-  muted: { cross: "rgba(210,214,224,0.55)", dot: "rgba(160,166,178,0.42)" },
+const STAR_PALETTE: Record<StarTone, { cross: string; dot: string; glow: string }> = {
+  lime: { cross: "rgba(166,255,46,0.92)", dot: "rgba(166,255,46,0.78)", glow: "rgba(166,255,46,0.45)" },
+  purple: { cross: "rgba(177,76,255,0.88)", dot: "rgba(177,76,255,0.62)", glow: "rgba(177,76,255,0.38)" },
+  muted: { cross: "rgba(255,255,255,0.72)", dot: "rgba(255,255,255,0.48)", glow: "rgba(255,255,255,0.28)" },
 };
 
-const STAR_SEEDS: Array<Omit<StarDef, "x"> & { xf: number }> = [
-  { xf: 0.05, y: 10, size: 4, phase: 0, pulse: true, tone: "lime", kind: "cross" },
-  { xf: 0.14, y: 34, size: 2, phase: 1.1, pulse: false, tone: "muted", kind: "dot" },
-  { xf: 0.22, y: 18, size: 3, phase: 0.6, pulse: false, tone: "purple", kind: "cross" },
-  { xf: 0.31, y: 52, size: 2, phase: 1.8, pulse: true, tone: "lime", kind: "dot" },
-  { xf: 0.38, y: 8, size: 2, phase: 0.3, pulse: false, tone: "muted", kind: "dot" },
-  { xf: 0.44, y: 28, size: 3, phase: 1.4, pulse: true, tone: "purple", kind: "cross" },
-  { xf: 0.5, y: 62, size: 2, phase: 2.1, pulse: false, tone: "muted", kind: "dot" },
-  { xf: 0.56, y: 14, size: 2, phase: 0.9, pulse: false, tone: "lime", kind: "dot" },
-  { xf: 0.62, y: 44, size: 4, phase: 1.2, pulse: true, tone: "lime", kind: "cross" },
-  { xf: 0.68, y: 22, size: 2, phase: 2.4, pulse: false, tone: "purple", kind: "dot" },
-  { xf: 0.74, y: 58, size: 3, phase: 0.5, pulse: false, tone: "muted", kind: "cross" },
-  { xf: 0.8, y: 12, size: 3, phase: 1.6, pulse: true, tone: "purple", kind: "cross" },
-  { xf: 0.86, y: 36, size: 2, phase: 2.8, pulse: false, tone: "lime", kind: "dot" },
-  { xf: 0.92, y: 20, size: 4, phase: 0.2, pulse: false, tone: "lime", kind: "cross" },
-  { xf: 0.1, y: 72, size: 2, phase: 1.9, pulse: false, tone: "purple", kind: "dot" },
-  { xf: 0.28, y: 88, size: 2, phase: 0.7, pulse: false, tone: "muted", kind: "dot" },
-  { xf: 0.47, y: 78, size: 3, phase: 2.2, pulse: true, tone: "purple", kind: "cross" },
-  { xf: 0.66, y: 92, size: 2, phase: 1.0, pulse: false, tone: "lime", kind: "dot" },
-  { xf: 0.84, y: 74, size: 2, phase: 2.6, pulse: false, tone: "muted", kind: "dot" },
-  { xf: 0.94, y: 54, size: 2, phase: 0.4, pulse: true, tone: "purple", kind: "dot" },
-];
+function seededUnit(index: number, salt: number) {
+  const x = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function pickStarTone(index: number): StarTone {
+  const roll = seededUnit(index, 3.1);
+  if (roll < 0.7) return "muted";
+  if (roll < 0.9) return "lime";
+  return "purple";
+}
+
+function pickStarKind(index: number, size: number): StarKind {
+  const roll = seededUnit(index, 9.7);
+  if (size >= 4 && roll > 0.55) return "sparkle";
+  if (roll > 0.78) return "cross";
+  return "dot";
+}
+
+function buildStarSeeds(count: number): Array<Omit<StarDef, "x"> & { xf: number }> {
+  const seeds: Array<Omit<StarDef, "x"> & { xf: number }> = [];
+  for (let i = 0; i < count; i += 1) {
+    const sizeRoll = seededUnit(i, 1.3);
+    const size = sizeRoll < 0.42 ? 1 : sizeRoll < 0.72 ? 2 : sizeRoll < 0.9 ? 3 : sizeRoll < 0.97 ? 4 : 5;
+    const tone = pickStarTone(i);
+    const kind = pickStarKind(i, size);
+    seeds.push({
+      xf: 0.03 + seededUnit(i, 2.2) * 0.94,
+      y: Math.round(4 + seededUnit(i, 4.4) * (STAGE_H - 12)),
+      size,
+      phase: seededUnit(i, 6.8) * 3,
+      pulse: size >= 3 && seededUnit(i, 7.5) > 0.45,
+      tone,
+      kind,
+      brightness: 0.35 + seededUnit(i, 8.2) * 0.55,
+    });
+  }
+  return seeds;
+}
+
+const STAR_SEEDS = buildStarSeeds(76);
 
 const Pixel = memo(function Pixel({ x, y, w, h, c }: PixelSpec) {
   return (
@@ -151,23 +173,46 @@ function legSpecs(pose: BullPose): PixelSpec[] {
   ];
 }
 
-function buildBullSpecs(pose: BullPose, blink: boolean): PixelSpec[] {
-  const specs: PixelSpec[] = [];
-  const yOff = pose === "crouch" ? 1 : pose === "airborne" ? -1 : 0;
-  const y = (row: number) => row + yOff;
-
-  specs.push(
+function hornSpecs(y: (row: number) => number): PixelSpec[] {
+  return [
+    { x: 4, y: y(-1), w: 2, h: 1, c: HORN_TIP },
     { x: 5, y: y(0), w: 3, h: 2, c: HORN_TIP },
     { x: 7, y: y(0), w: 2, h: 2, c: HORN },
     { x: 8, y: y(1), w: 2, h: 2, c: HORN },
     { x: 9, y: y(2), w: 2, h: 1, c: HORN_DARK },
     { x: 10, y: y(3), w: 1, h: 1, c: HORN_DARK },
+    { x: 11, y: y(4), w: 1, h: 1, c: HORN_DARK },
+    { x: 21, y: y(-1), w: 2, h: 1, c: HORN_TIP },
     { x: 22, y: y(0), w: 3, h: 2, c: HORN_TIP },
     { x: 23, y: y(0), w: 2, h: 2, c: HORN },
     { x: 21, y: y(1), w: 2, h: 2, c: HORN },
     { x: 20, y: y(2), w: 2, h: 1, c: HORN_DARK },
     { x: 19, y: y(3), w: 1, h: 1, c: HORN_DARK },
-  );
+    { x: 18, y: y(4), w: 1, h: 1, c: HORN_DARK },
+  ];
+}
+
+function tailSpecs(bodyDrop: number, y: (row: number) => number): PixelSpec[] {
+  const d = bodyDrop;
+  return [
+    { x: 2, y: y(12 + d), w: 2, h: 1, c: LIME_MID },
+    { x: 1, y: y(13 + d), w: 2, h: 1, c: LIME },
+    { x: 0, y: y(14 + d), w: 2, h: 1, c: LIME_BRIGHT },
+    { x: -1, y: y(15 + d), w: 2, h: 1, c: LIME_MID },
+    { x: -2, y: y(16 + d), w: 2, h: 1, c: LIME },
+    { x: -3, y: y(17 + d), w: 2, h: 1, c: LIME_MID },
+    { x: -4, y: y(18 + d), w: 2, h: 1, c: LIME_DARK },
+    { x: -5, y: y(17 + d), w: 2, h: 1, c: LIME_MID },
+    { x: -6, y: y(16 + d), w: 1, h: 1, c: LIME_DEEP },
+  ];
+}
+
+function buildBullSpecs(pose: BullPose, blink: boolean): { body: PixelSpec[]; tail: PixelSpec[] } {
+  const specs: PixelSpec[] = [];
+  const yOff = pose === "crouch" ? 1 : pose === "airborne" ? -1 : 0;
+  const y = (row: number) => row + yOff;
+
+  specs.push(...hornSpecs(y));
 
   specs.push(
     { x: 10, y: y(4), w: 2, h: 1, c: LIME_MID },
@@ -200,6 +245,8 @@ function buildBullSpecs(pose: BullPose, blink: boolean): PixelSpec[] {
   specs.push(
     { x: 13, y: y(8), w: 6, h: 1, c: LIME_DARK },
     { x: 14, y: y(9), w: 4, h: 1, c: LIME_DEEP },
+    { x: 14, y: y(10), w: 4, h: 1, c: WHITE },
+    { x: 15, y: y(11), w: 2, h: 1, c: WHITE },
     { x: 24, y: y(8), w: 3, h: 2, c: LIME_MID },
     { x: 25, y: y(9), w: 2, h: 1, c: LIME_DARK },
     { x: 26, y: y(10), w: 1, h: 1, c: LIME_DEEP },
@@ -217,22 +264,43 @@ function buildBullSpecs(pose: BullPose, blink: boolean): PixelSpec[] {
     { x: 24, y: y(13 + bodyDrop), w: 2, h: 2, c: LIME_MID },
   );
 
-  specs.push(
-    { x: 2, y: y(12 + bodyDrop), w: 2, h: 1, c: LIME_MID },
-    { x: 1, y: y(13 + bodyDrop), w: 2, h: 1, c: LIME },
-    { x: 0, y: y(14 + bodyDrop), w: 2, h: 1, c: LIME_BRIGHT },
-    { x: -1, y: y(15 + bodyDrop), w: 2, h: 1, c: LIME_MID },
-  );
-
   specs.push(...legSpecs(pose));
-  return specs;
+  const tail = tailSpecs(bodyDrop, y);
+  return { body: specs, tail };
 }
 
-const BullMascot = memo(function BullMascot({ pose, blink }: { pose: BullPose; blink: boolean }) {
-  const specs = useMemo(() => buildBullSpecs(pose, blink), [pose, blink]);
+const TAIL_PIVOT_X = 2 * PX + 4;
+const TAIL_PIVOT_Y = 14 * PX;
+
+const BullMascot = memo(function BullMascot({
+  pose,
+  blink,
+  tailRotate,
+}: {
+  pose: BullPose;
+  blink: boolean;
+  tailRotate: Animated.AnimatedInterpolation<string>;
+}) {
+  const { body, tail } = useMemo(() => buildBullSpecs(pose, blink), [pose, blink]);
   return (
     <View style={styles.bullCanvas}>
-      <PixelGroup specs={specs} />
+      <Animated.View
+        style={[
+          styles.tailLayer,
+          {
+            transform: [
+              { translateX: TAIL_PIVOT_X },
+              { translateY: TAIL_PIVOT_Y },
+              { rotate: tailRotate },
+              { translateX: -TAIL_PIVOT_X },
+              { translateY: -TAIL_PIVOT_Y },
+            ],
+          },
+        ]}
+      >
+        <PixelGroup specs={tail} />
+      </Animated.View>
+      <PixelGroup specs={body} />
     </View>
   );
 });
@@ -282,11 +350,23 @@ const TwinkleStar = memo(function TwinkleStar({
   star: StarDef;
   master: Animated.Value;
 }) {
-  const color = STAR_PALETTE[star.tone].cross;
+  const palette = STAR_PALETTE[star.tone];
+  const low = star.brightness * 0.55;
+  const mid = star.brightness;
+  const high = Math.min(1, star.brightness + (star.pulse ? 0.28 : 0.14));
   const opacity = master.interpolate({
     inputRange: [0, 0.35, 0.7, 1],
-    outputRange: star.pulse ? [0.34, 0.95, 0.48, 0.34] : [0.28, 0.62, 0.38, 0.28],
+    outputRange: star.pulse ? [low, high, mid, low] : [low * 0.9, mid, low, low * 0.9],
   });
+  const glowStyle =
+    star.pulse && star.size >= 3
+      ? {
+          shadowColor: palette.glow,
+          shadowOpacity: 0.55,
+          shadowRadius: star.size + 2,
+          shadowOffset: { width: 0, height: 0 },
+        }
+      : null;
 
   if (star.kind === "dot") {
     return (
@@ -294,12 +374,13 @@ const TwinkleStar = memo(function TwinkleStar({
         pointerEvents="none"
         style={[
           styles.pixelDot,
+          glowStyle,
           {
             left: star.x,
             top: star.y,
             width: star.size,
             height: star.size,
-            backgroundColor: STAR_PALETTE[star.tone].dot,
+            backgroundColor: palette.dot,
             opacity,
           },
         ]}
@@ -307,16 +388,24 @@ const TwinkleStar = memo(function TwinkleStar({
     );
   }
 
+  const arm = star.kind === "sparkle" ? Math.max(2, star.size) : star.size;
   return (
     <Animated.View
       pointerEvents="none"
       style={[
         styles.star,
-        { left: star.x, top: star.y, width: star.size, height: star.size, opacity },
+        glowStyle,
+        { left: star.x, top: star.y, width: arm, height: arm, opacity },
       ]}
     >
-      <View style={[styles.starH, { width: star.size, backgroundColor: color }]} />
-      <View style={[styles.starV, { height: star.size, backgroundColor: color }]} />
+      <View style={[styles.starH, { width: arm, backgroundColor: palette.cross }]} />
+      <View style={[styles.starV, { height: arm, backgroundColor: palette.cross }]} />
+      {star.kind === "sparkle" ? (
+        <>
+          <View style={[styles.starDiagA, { width: arm * 0.72, backgroundColor: palette.cross }]} />
+          <View style={[styles.starDiagB, { width: arm * 0.72, backgroundColor: palette.cross }]} />
+        </>
+      ) : null}
     </Animated.View>
   );
 });
@@ -354,9 +443,11 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   const squashY = useRef(new Animated.Value(1)).current;
   const bubbleOpacity = useRef(new Animated.Value(0)).current;
   const dustOpacity = useRef(new Animated.Value(0)).current;
+  const tailSwing = useRef(new Animated.Value(0)).current;
   const starMasterA = useRef(new Animated.Value(0)).current;
   const starMasterB = useRef(new Animated.Value(0)).current;
   const starMasterC = useRef(new Animated.Value(0)).current;
+  const starMasterD = useRef(new Animated.Value(0)).current;
 
   const [blink, setBlink] = useState(false);
   const [pose, setPose] = useState<BullPose>("idle");
@@ -368,6 +459,14 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   const poseTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const scaleX = useMemo(() => Animated.multiply(facingScale, squashX), [facingScale, squashX]);
+  const tailRotate = useMemo(
+    () =>
+      tailSwing.interpolate({
+        inputRange: [-1, 0, 1],
+        outputRange: ["-14deg", "0deg", "14deg"],
+      }),
+    [tailSwing],
+  );
 
   const stars = useMemo<StarDef[]>(
     () =>
@@ -379,6 +478,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
         pulse: seed.pulse,
         tone: seed.tone,
         kind: seed.kind,
+        brightness: seed.brightness,
       })),
     [stageW],
   );
@@ -455,9 +555,30 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       ]),
     );
 
+    const starLoopD = Animated.loop(
+      Animated.sequence([
+        Animated.delay(2800),
+        Animated.timing(starMasterD, {
+          toValue: 1,
+          duration: 5100,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(starMasterD, {
+          toValue: 0,
+          duration: 5100,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+      ]),
+    );
+
     starLoopA.start();
     starLoopB.start();
     starLoopC.start();
+    starLoopD.start();
 
     const scheduleBlink = () => {
       if (!mountedRef.current) return;
@@ -479,6 +600,8 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       stopAnimatedValue(starMasterA);
       stopAnimatedValue(starMasterB);
       stopAnimatedValue(starMasterC);
+      stopAnimatedValue(starMasterD);
+      stopAnimatedValue(tailSwing);
       stopAnimatedValue(bullX);
       stopAnimatedValue(bullY);
       stopAnimatedValue(facingScale);
@@ -489,12 +612,13 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       starLoopA.stop();
       starLoopB.stop();
       starLoopC.stop();
+      starLoopD.stop();
       if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
       if (poseTimeoutRef.current) clearTimeout(poseTimeoutRef.current);
       poseTimersRef.current.forEach(clearTimeout);
       poseTimersRef.current = [];
     };
-  }, [bullX, bullY, bubbleOpacity, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC]);
+  }, [bullX, bullY, bubbleOpacity, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC, starMasterD, tailSwing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -517,7 +641,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       return Animated.sequence([
         Animated.timing(bubbleOpacity, {
           toValue: 1,
-          duration: 160,
+          duration: ms(160),
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
           isInteraction: false,
@@ -525,7 +649,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
         Animated.delay(READ_PAUSE_MS),
         Animated.timing(bubbleOpacity, {
           toValue: 0,
-          duration: 220,
+          duration: ms(220),
           useNativeDriver: true,
           isInteraction: false,
         }),
@@ -534,8 +658,10 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
 
     const jumpAcross = (fromX: number, toX: number): Animated.CompositeAnimation => {
       const apexY = groundY - JUMP_ARC;
+      const halfJump = Math.round(JUMP_MS * 0.5);
       bullX.setValue(fromX);
       bullY.setValue(groundY);
+      tailSwing.setValue(0);
 
       return Animated.sequence([
         Animated.parallel([
@@ -579,29 +705,36 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
             }),
           ]),
           Animated.sequence([
-            Animated.timing(squashY, { toValue: 1.05, duration: 120, useNativeDriver: true, isInteraction: false }),
-            Animated.timing(squashY, { toValue: 1, duration: 160, useNativeDriver: true, isInteraction: false }),
-            Animated.timing(squashX, { toValue: 1, duration: 160, useNativeDriver: true, isInteraction: false }),
+            Animated.timing(squashY, { toValue: 0.94, duration: ms(90), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(squashX, { toValue: 1.08, duration: ms(90), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(squashY, { toValue: 1.04, duration: ms(100), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(squashY, { toValue: 1, duration: ms(130), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(squashX, { toValue: 1, duration: ms(130), useNativeDriver: true, isInteraction: false }),
+          ]),
+          Animated.sequence([
+            Animated.timing(tailSwing, { toValue: 1, duration: halfJump, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(tailSwing, { toValue: -0.65, duration: halfJump, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(tailSwing, { toValue: 0, duration: ms(180), easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }),
           ]),
         ]),
         Animated.parallel([
           Animated.sequence([
             Animated.timing(bullY, {
               toValue: groundY + 4,
-              duration: 70,
+              duration: ms(70),
               useNativeDriver: true,
               isInteraction: false,
             }),
             Animated.timing(bullY, {
               toValue: groundY - 2,
-              duration: 100,
+              duration: ms(100),
               easing: Easing.out(Easing.quad),
               useNativeDriver: true,
               isInteraction: false,
             }),
             Animated.timing(bullY, {
               toValue: groundY,
-              duration: 90,
+              duration: ms(90),
               useNativeDriver: true,
               isInteraction: false,
             }),
@@ -635,8 +768,8 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
             }),
           ]),
           Animated.sequence([
-            Animated.timing(dustOpacity, { toValue: 0.7, duration: 50, useNativeDriver: true, isInteraction: false }),
-            Animated.timing(dustOpacity, { toValue: 0, duration: 260, useNativeDriver: true, isInteraction: false }),
+            Animated.timing(dustOpacity, { toValue: 0.7, duration: ms(50), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(dustOpacity, { toValue: 0, duration: ms(260), useNativeDriver: true, isInteraction: false }),
           ]),
         ]),
       ]);
@@ -647,26 +780,33 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       return Animated.sequence([
         Animated.timing(bullY, {
           toValue: groundY + 2,
-          duration: 140,
+          duration: ms(140),
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
           isInteraction: false,
         }),
-        Animated.timing(facingScale, {
-          toValue: nextScale,
-          duration: TURN_MS,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-          isInteraction: false,
-        }),
+        Animated.parallel([
+          Animated.timing(facingScale, {
+            toValue: nextScale,
+            duration: TURN_MS,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+            isInteraction: false,
+          }),
+          Animated.sequence([
+            Animated.timing(tailSwing, { toValue: 0.45, duration: ms(160), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(tailSwing, { toValue: -0.35, duration: ms(180), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(tailSwing, { toValue: 0, duration: ms(160), useNativeDriver: true, isInteraction: false }),
+          ]),
+        ]),
         Animated.timing(bullY, {
           toValue: groundY,
-          duration: 180,
+          duration: ms(180),
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
           isInteraction: false,
         }),
-        Animated.delay(180),
+        Animated.delay(ms(180)),
       ]);
     };
 
@@ -674,7 +814,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       clearPoseTimers();
       setPoseSafe("crouch");
       schedulePose(() => setPoseSafe("airborne"), CROUCH_MS + 90);
-      schedulePose(() => setPoseSafe("land", 360), CROUCH_MS + JUMP_MS);
+      schedulePose(() => setPoseSafe("land", ms(360)), CROUCH_MS + JUMP_MS);
       jumpAcross(fromX, toX).start(({ finished }) => {
         if (finished && !cancelled) onDone();
       });
@@ -729,8 +869,9 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       squashY.stopAnimation();
       bubbleOpacity.stopAnimation();
       dustOpacity.stopAnimation();
+      tailSwing.stopAnimation();
     };
-  }, [bubbleOpacity, bullX, bullY, dustOpacity, facingScale, groundY, leftX, rightX, squashX, squashY]);
+  }, [bubbleOpacity, bullX, bullY, dustOpacity, facingScale, groundY, leftX, rightX, squashX, squashY, tailSwing]);
 
   const dynamicStyles = useMemo(
     () =>
@@ -763,9 +904,11 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   );
 
   const starMasterFor = (phase: number) => {
-    if (phase < 0.7) return starMasterA;
-    if (phase < 1.4) return starMasterB;
-    return starMasterC;
+    const bucket = Math.floor(phase) % 4;
+    if (bucket === 0) return starMasterA;
+    if (bucket === 1) return starMasterB;
+    if (bucket === 2) return starMasterC;
+    return starMasterD;
   };
 
   return (
@@ -787,7 +930,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
             <View style={styles.bullCluster}>
               <SpeechBubble text={t(dialogueKey)} opacity={bubbleOpacity} />
               <Animated.View style={{ transform: [{ scaleX }, { scaleY: squashY }] }}>
-                <BullMascot pose={pose} blink={blink} />
+                <BullMascot pose={pose} blink={blink} tailRotate={tailRotate} />
                 <DustPuff opacity={dustOpacity} />
               </Animated.View>
             </View>
@@ -813,6 +956,16 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: 1,
   },
+  starDiagA: {
+    position: "absolute",
+    height: 1,
+    transform: [{ rotate: "45deg" }],
+  },
+  starDiagB: {
+    position: "absolute",
+    height: 1,
+    transform: [{ rotate: "-45deg" }],
+  },
   pixelDot: {
     position: "absolute",
     zIndex: 1,
@@ -832,6 +985,10 @@ const styles = StyleSheet.create({
     width: BULL_PX_W * PX,
     height: BULL_PX_H * PX,
     position: "relative",
+    overflow: "visible",
+  },
+  tailLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   dustWrap: {
     position: "absolute",

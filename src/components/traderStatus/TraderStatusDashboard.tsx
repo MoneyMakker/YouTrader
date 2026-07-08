@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   Easing,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,6 +23,7 @@ import {
 import type { Session } from "@supabase/supabase-js";
 import { t } from "../../i18n";
 import type { Achievement, TraderLevel } from "../../analytics/achievements";
+import { getAchievementCardSource } from "../../achievements/achievementCardAssets";
 import { FEATURE_LIMIT_MESSAGES, FREE_LIMITS, PRO_LIMITS } from "../../config/featureLimits";
 import { peekShareCardExportAllowed, recordShareCardExportSuccess } from "../../config/usageLimits";
 import { C } from "../../theme/colors";
@@ -39,6 +41,7 @@ import {
   rankDisplayTitle,
   tierBandProgressPercent,
 } from "./careerProgress";
+import { AchievementRevealModal } from "./AchievementRevealModal";
 
 type TradeLike = { date?: string; pnl?: number; createdAt?: number };
 
@@ -74,44 +77,6 @@ function AchievementCategoryIcon({
   if (category === "risk") return <ShieldCheck {...props} />;
   if (category === "prop_firm") return <Building2 {...props} />;
   return <Trophy {...props} />;
-}
-
-function AchievementUnlockedFeedback({ item, visible }: { item: Achievement | null; visible: boolean }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(-10)).current;
-  const scale = useRef(new Animated.Value(0.96)).current;
-
-  useEffect(() => {
-    if (!visible || !item) return;
-    opacity.setValue(0);
-    translateY.setValue(-10);
-    scale.setValue(0.96);
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-        Animated.spring(translateY, { toValue: 0, speed: 16, bounciness: 5, useNativeDriver: true }),
-        Animated.spring(scale, { toValue: 1, speed: 18, bounciness: 5, useNativeDriver: true }),
-      ]),
-      Animated.delay(1800),
-      Animated.timing(opacity, { toValue: 0, duration: 260, useNativeDriver: true }),
-    ]).start();
-  }, [item, opacity, scale, translateY, visible]);
-
-  if (!item) return null;
-
-  return (
-    <Animated.View style={[styles.unlockFeedback, { opacity, transform: [{ translateY }, { scale }] }]}>
-      <View style={styles.unlockFeedbackIcon}>
-        <Check size={18} color={C.green} strokeWidth={ICON_STROKE} />
-      </View>
-      <View style={styles.unlockFeedbackCopy}>
-        <Text style={styles.unlockFeedbackLabel}>{t("achievementUnlocked")}</Text>
-        <Text style={styles.unlockFeedbackTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.74}>
-          {item.title}
-        </Text>
-      </View>
-    </Animated.View>
-  );
 }
 
 function AchievementCard({
@@ -152,6 +117,7 @@ function AchievementCard({
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       <GlassCard compact style={styles.badgeCard}>
         <Animated.View pointerEvents="none" style={[styles.badgeEarnedGlow, { opacity: glowOpacity }]} />
+        <Image source={getAchievementCardSource(item.id)} style={styles.badgeCardArt} resizeMode="contain" />
         <View style={styles.badgeTop}>
           <View style={styles.badgeIconShell}>
             <AchievementCategoryIcon category={item.category} unlocked size={20} />
@@ -321,7 +287,7 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
   const fade = useRef(new Animated.Value(0)).current;
   const previousUnlockedIds = useRef<Set<string> | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
-  const [unlockFeedback, setUnlockFeedback] = useState<Achievement | null>(null);
+  const [revealItem, setRevealItem] = useState<Achievement | null>(null);
 
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 560, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
@@ -346,11 +312,8 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
     if (previousUnlockedIds.current) {
       const newlyUnlocked = allUnlocked.find((item) => !previousUnlockedIds.current?.has(item.id));
       if (newlyUnlocked) {
-        setUnlockFeedback(newlyUnlocked);
+        setRevealItem(newlyUnlocked);
         successHaptic();
-        const timeout = setTimeout(() => setUnlockFeedback(null), 2600);
-        previousUnlockedIds.current = ids;
-        return () => clearTimeout(timeout);
       }
     }
     previousUnlockedIds.current = ids;
@@ -392,7 +355,14 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
 
   return (
     <Animated.View style={{ opacity: fade, marginTop: 8 }}>
-      <AchievementUnlockedFeedback item={unlockFeedback} visible={Boolean(unlockFeedback)} />
+      <AchievementRevealModal
+        item={revealItem}
+        visible={Boolean(revealItem)}
+        busy={shareBusy}
+        onClose={() => setRevealItem(null)}
+        onShare={(item) => void exportAchievement(item, "share")}
+        onSave={(item) => void exportAchievement(item, "save")}
+      />
       <GlassCard style={styles.heroCard} intensity={50}>
         <Text style={styles.heroEyebrow}>{t("currentRank")}</Text>
         <Text style={styles.heroRank}>{rankDisplayTitle(level.titleKey)}</Text>
@@ -684,6 +654,12 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 0 },
     elevation: 2,
+  },
+  badgeCardArt: {
+    width: "100%",
+    aspectRatio: 664 / 1024,
+    borderRadius: 12,
+    marginBottom: 2,
   },
   badgeEarnedGlow: {
     position: "absolute",
