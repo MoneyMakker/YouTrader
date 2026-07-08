@@ -25,7 +25,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.youtrader.pro",
       "usesAppleSignIn": true,
-      "buildNumber": "95",
+      "buildNumber": "97",
       "infoPlist": {
         "CFBundleLocalizations": [
           "en",

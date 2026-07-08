@@ -24,6 +24,7 @@ import { t } from "../../i18n";
 import type { Achievement, TraderLevel } from "../../analytics/achievements";
 import { FEATURE_LIMIT_MESSAGES, FREE_LIMITS, PRO_LIMITS } from "../../config/featureLimits";
 import { peekShareCardExportAllowed, recordShareCardExportSuccess } from "../../config/usageLimits";
+import { logger } from "../../lib/logger";
 import { C } from "../../theme/colors";
 import { GlassCard } from "../ui/GlassCard";
 import { lightHaptic, successHaptic } from "../ui/haptics";
@@ -43,6 +44,8 @@ import { AchievementRevealModal } from "./AchievementRevealModal";
 
 type TradeLike = { date?: string; pnl?: number; createdAt?: number };
 
+type AchievementRevealSource = "real_unlock" | "share_button" | "save_button";
+
 type Props = {
   achievements: Achievement[];
   level: TraderLevel;
@@ -51,6 +54,8 @@ type Props = {
   isPremium: boolean;
   session: Session | null;
   shareStats: import("../insights/shareCard").AchievementShareStats;
+  revealSuppressToken?: number;
+  journalTradesSignature?: string;
 };
 
 const RING_SIZE = 118;
@@ -278,13 +283,42 @@ function CareerRoadmap({ score }: { score: number }) {
   );
 }
 
-export function TraderStatusDashboard({ achievements, level, trades, selectedDate, isPremium, session, shareStats }: Props) {
+export function TraderStatusDashboard({
+  achievements,
+  level,
+  trades,
+  selectedDate,
+  isPremium,
+  session,
+  shareStats,
+  revealSuppressToken = 0,
+  journalTradesSignature = "",
+}: Props) {
   void trades;
   void selectedDate;
   const fade = useRef(new Animated.Value(0)).current;
-  const previousUnlockedIds = useRef<Set<string> | null>(null);
+  const seenUnlockedIds = useRef<Set<string> | null>(null);
+  const lastJournalTradesSignature = useRef<string | null>(null);
+  const lastRevealSuppressToken = useRef(revealSuppressToken);
   const [shareBusy, setShareBusy] = useState(false);
   const [revealItem, setRevealItem] = useState<Achievement | null>(null);
+
+  const openAchievementReveal = (item: Achievement, source: AchievementRevealSource) => {
+    if (__DEV__) {
+      logger.info("[YouTrader:achievement-reveal]", { source, achievementId: item.id, title: item.title });
+    }
+    setRevealItem(item);
+  };
+
+  const syncSeenUnlockedIds = (currentIds: string[]) => {
+    if (seenUnlockedIds.current === null) {
+      seenUnlockedIds.current = new Set(currentIds);
+      return;
+    }
+    for (const id of currentIds) {
+      seenUnlockedIds.current.add(id);
+    }
+  };
 
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 560, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
@@ -305,17 +339,35 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
   const activeTier = currentCareerTier(level.score);
 
   useEffect(() => {
-    const ids = new Set(allUnlocked.map((item) => item.id));
-    if (previousUnlockedIds.current) {
-      const newlyUnlocked = allUnlocked.find((item) => !previousUnlockedIds.current?.has(item.id));
-      if (newlyUnlocked) {
-        setRevealItem(newlyUnlocked);
-        successHaptic();
-      }
+    if (revealSuppressToken !== lastRevealSuppressToken.current) {
+      lastRevealSuppressToken.current = revealSuppressToken;
+      setRevealItem(null);
+      syncSeenUnlockedIds(allUnlocked.map((item) => item.id));
+      return;
     }
-    previousUnlockedIds.current = ids;
-    return undefined;
-  }, [allUnlocked]);
+
+    const currentIds = allUnlocked.map((item) => item.id);
+    const journalChanged = journalTradesSignature !== lastJournalTradesSignature.current;
+
+    if (seenUnlockedIds.current === null) {
+      seenUnlockedIds.current = new Set(currentIds);
+      lastJournalTradesSignature.current = journalTradesSignature;
+      return;
+    }
+
+    if (!journalChanged) {
+      syncSeenUnlockedIds(currentIds);
+      return;
+    }
+
+    lastJournalTradesSignature.current = journalTradesSignature;
+    const newlyUnlocked = allUnlocked.find((item) => !seenUnlockedIds.current!.has(item.id));
+    syncSeenUnlockedIds(currentIds);
+    if (newlyUnlocked) {
+      openAchievementReveal(newlyUnlocked, "real_unlock");
+      successHaptic();
+    }
+  }, [allUnlocked, journalTradesSignature, revealSuppressToken]);
 
   const exportAchievement = async (item: Achievement, action: "share" | "save") => {
     if (!item.unlocked) return;
@@ -357,8 +409,14 @@ export function TraderStatusDashboard({ achievements, level, trades, selectedDat
         visible={Boolean(revealItem)}
         busy={shareBusy}
         onClose={() => setRevealItem(null)}
-        onShare={(item) => void exportAchievement(item, "share")}
-        onSave={(item) => void exportAchievement(item, "save")}
+        onShare={(item) => {
+          if (__DEV__) logger.info("[YouTrader:achievement-reveal]", { source: "share_button", achievementId: item.id });
+          void exportAchievement(item, "share");
+        }}
+        onSave={(item) => {
+          if (__DEV__) logger.info("[YouTrader:achievement-reveal]", { source: "save_button", achievementId: item.id });
+          void exportAchievement(item, "save");
+        }}
       />
       <GlassCard style={styles.heroCard} intensity={50}>
         <Text style={styles.heroEyebrow}>{t("currentRank")}</Text>

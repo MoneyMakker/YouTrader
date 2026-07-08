@@ -202,6 +202,7 @@ import { TraderStatusDashboard } from "./src/components/traderStatus/TraderStatu
 import { AiNewsSentimentCard } from "./src/components/news/AiNewsSentimentCard";
 import { AiAnalysisLoading } from "./src/components/ai/AiAnalysisLoading";
 import { JournalTradeSwipeCard } from "./src/components/journal/JournalTradeSwipeCard";
+import { JournalCalendarDayPressable } from "./src/components/journal/JournalCalendarDayPressable";
 import {
   FREE_MONTHLY_PDF_PREVIEW_LIMIT,
   FREE_MONTHLY_TRADE_LIMIT,
@@ -4996,6 +4997,8 @@ function Stats({
   achievements,
   traderLevel,
   shareStats,
+  revealSuppressToken,
+  journalTradesSignature,
 }: {
   trades: Trade[];
   lang: Lang;
@@ -5013,6 +5016,8 @@ function Stats({
   achievements: Achievement[];
   traderLevel: TraderLevel;
   shareStats: ReturnType<typeof buildAchievementShareStats>;
+  revealSuppressToken: number;
+  journalTradesSignature: string;
 }) {
   const visibleTrades = trades;
   const s = useMemo(() => calcStats(visibleTrades), [visibleTrades]);
@@ -5056,6 +5061,8 @@ function Stats({
         isPremium={isPremium}
         session={session}
         shareStats={shareStats}
+        revealSuppressToken={revealSuppressToken}
+        journalTradesSignature={journalTradesSignature}
       />
 
       {!isPremium && (
@@ -5102,6 +5109,11 @@ function StatsScreen({
   session: Session | null;
 }) {
   const { range, setRange, anchorDate } = useStatsTimeRange();
+  const [revealSuppressToken, setRevealSuppressToken] = useState(0);
+  const handleStatsRangeSelect = useCallback((next: StatsTimeRange) => {
+    setRevealSuppressToken((token) => token + 1);
+    setRange(next);
+  }, [setRange]);
   const [selectedDate] = useState(anchorDate);
   const [exportBusy, setExportBusy] = useState(false);
   const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "usage_limit", title: "YouTrader Pro", message: t("unlockPremiumExports") });
@@ -5145,25 +5157,28 @@ function StatsScreen({
     [trades, selectedDate, activePropTemplate],
   );
   const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
+  const lifetimeStats = useMemo(() => calcStats(trades), [trades]);
+  const lifetimeTradingScore = useMemo(() => tradingScoreForTrades(trades), [trades]);
+  const journalTradesSignature = useMemo(() => trades.map((trade) => trade.id).join("|"), [trades]);
   const achievementList = useMemo(
     () =>
       calculateAchievements({
-        trades: periodTrades,
+        trades,
         selectedDate,
-        tradingScore: tradingScore.score,
-        winRate: periodStats.wr,
-        profitFactor: periodStats.pf,
-        riskControl: periodStats.drawdownControl,
+        tradingScore: lifetimeTradingScore.score,
+        winRate: lifetimeStats.wr,
+        profitFactor: lifetimeStats.pf,
+        riskControl: lifetimeStats.drawdownControl,
         propSurvivalScore: passProbability.probability,
         propTargetRemainingPct:
           propSnapshot && propSnapshot.template.evaluationTarget > 0
             ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
             : 100,
-        monthlyPnl: periodStats.pnl,
-        bestMonthPnl: Math.max(0, periodStats.pnl),
+        monthlyPnl: lifetimeStats.pnl,
+        bestMonthPnl: Math.max(0, lifetimeStats.pnl),
         dailyLossLimit: propSnapshot?.template.dailyLossLimit ?? 0,
       }),
-    [passProbability.probability, periodStats, periodTrades, propSnapshot, selectedDate, tradingScore.score],
+    [lifetimeStats, lifetimeTradingScore.score, passProbability.probability, propSnapshot, selectedDate, trades],
   );
   const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
   const achievementShareStats = useMemo(() => buildAchievementShareStats(periodTrades, selectedDate), [periodTrades, selectedDate]);
@@ -5427,53 +5442,55 @@ function StatsScreen({
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
-      <View style={[styles.segment, { marginTop: 0 }]}>
-        {STATS_TIME_RANGES.map((item) => (
+      <View style={styles.statsHeaderControls} pointerEvents="box-none">
+        <View style={[styles.segment, { marginTop: 0 }]}>
+          {STATS_TIME_RANGES.map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => handleStatsRangeSelect(item)}
+              style={[styles.segBtn, range === item && styles.segActive]}
+            >
+              <Text style={[styles.segText, range === item && styles.segTextActive]}>
+                {item}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.statsActionsRow}>
           <Pressable
-            key={item}
-            onPress={() => setRange(item)}
-            style={[styles.segBtn, range === item && styles.segActive]}
+            disabled={exportBusy}
+            onPress={() => {
+              void runExport("share");
+            }}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
           >
-            <Text style={[styles.segText, range === item && styles.segTextActive]}>
-              {item}
+            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+              {t("sharePnlCard")}
             </Text>
           </Pressable>
-        ))}
-      </View>
-      <View style={styles.statsActionsRow}>
-        <Pressable
-          disabled={exportBusy}
-          onPress={() => {
-            void runExport("share");
-          }}
-          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-        >
-          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {t("sharePnlCard")}
-          </Text>
-        </Pressable>
-        <Pressable
-          disabled={exportBusy}
-          onPress={() => {
-            void runExport("save");
-          }}
-          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-        >
-          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {t("saveImage")}
-          </Text>
-        </Pressable>
-        <Pressable
-          disabled={exportBusy}
-          onPress={() => {
-            void runExport("pdf");
-          }}
-          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-        >
-          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {t("monthlyPdf")}
-          </Text>
-        </Pressable>
+          <Pressable
+            disabled={exportBusy}
+            onPress={() => {
+              void runExport("save");
+            }}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+              {t("saveImage")}
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={exportBusy}
+            onPress={() => {
+              void runExport("pdf");
+            }}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+              {t("monthlyPdf")}
+            </Text>
+          </Pressable>
+        </View>
       </View>
       <ProValueModal
         lang={lang}
@@ -5505,6 +5522,8 @@ function StatsScreen({
         achievements={achievementList}
         traderLevel={traderLevel}
         shareStats={achievementShareStats}
+        revealSuppressToken={revealSuppressToken}
+        journalTradesSignature={journalTradesSignature}
       />
     </ScrollView>
   );
@@ -7155,7 +7174,7 @@ function JournalScreen({
   const [deleteDayDate, setDeleteDayDate] = useState<string | null>(null);
   const [deleteDayBusy, setDeleteDayBusy] = useState(false);
   const [tradeActionTarget, setTradeActionTarget] = useState<Trade | null>(null);
-  const [deleteToastVisible, setDeleteToastVisible] = useState(false);
+  const [deleteToastKey, setDeleteToastKey] = useState<string | null>(null);
   const deleteToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const journalMountedRef = useRef(true);
   const lastSaveAtRef = useRef(0);
@@ -7206,12 +7225,12 @@ function JournalScreen({
       if (deleteToastTimerRef.current) clearTimeout(deleteToastTimerRef.current);
     };
   }, []);
-  const showDeleteToast = useCallback(() => {
+  const showDeleteToast = useCallback((messageKey = "journalTradeDeletedToast") => {
     if (deleteToastTimerRef.current) clearTimeout(deleteToastTimerRef.current);
     if (!journalMountedRef.current) return;
-    setDeleteToastVisible(true);
+    setDeleteToastKey(messageKey);
     deleteToastTimerRef.current = setTimeout(() => {
-      if (journalMountedRef.current) setDeleteToastVisible(false);
+      if (journalMountedRef.current) setDeleteToastKey(null);
     }, 2200);
   }, []);
   const filtered = useMemo(
@@ -7288,34 +7307,10 @@ function JournalScreen({
   const openDeleteDayConfirm = useCallback((date: string) => {
     const dayTrades = trades.filter((trade) => trade.date === date);
     if (!dayTrades.length) return;
-    warningHaptic();
+    lightHaptic();
     setSelectedDate(date);
     setDeleteDayDate(date);
   }, [trades]);
-
-  const confirmDeleteDay = useCallback(async () => {
-    if (!deleteDayDate || deleteDayBusy) return;
-    const dayTrades = trades.filter((trade) => trade.date === deleteDayDate);
-    if (!dayTrades.length) {
-      setDeleteDayDate(null);
-      return;
-    }
-    setDeleteDayBusy(true);
-    try {
-      const limit = await checkClientRateLimit("trade:delete", "journal-local");
-      if (!limit.allowed) {
-        Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
-        return;
-      }
-      await recordSecurityEvent("delete_trading_day_confirmed", "trade:delete", "journal-local");
-      dayTrades.forEach((trade) => onTradeDeleted(trade.id));
-      setTrades((prev) => prev.filter((trade) => trade.date !== deleteDayDate));
-      trackEvent("day_deleted", { trade_count: dayTrades.length });
-      setDeleteDayDate(null);
-    } finally {
-      setDeleteDayBusy(false);
-    }
-  }, [deleteDayBusy, deleteDayDate, onTradeDeleted, setTrades, trades]);
 
   const monthDays = useMemo(() => {
     const y = viewMonth.getFullYear();
@@ -7369,18 +7364,25 @@ function JournalScreen({
     setModal(true);
   };
   const executeTradeDelete = useCallback(
-    async (tradeId: string) => {
+    async (tradeId: string, opts?: { suppressFeedback?: boolean }): Promise<boolean> => {
       const limit = await checkClientRateLimit("trade:delete", "journal-local");
       if (!limit.allowed) {
         Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
-        return;
+        return false;
       }
-      onTradeDeleted(tradeId);
-      setTrades((prev) => prev.filter((x) => x.id !== tradeId));
-      trackEvent("trade_deleted", { source: "manual" });
-      if (editId === tradeId) setModal(false);
-      successHaptic();
-      showDeleteToast();
+      try {
+        onTradeDeleted(tradeId);
+        setTrades((prev) => prev.filter((x) => x.id !== tradeId));
+        trackEvent("trade_deleted", { source: "manual" });
+        if (editId === tradeId) setModal(false);
+        if (!opts?.suppressFeedback) {
+          successHaptic();
+          showDeleteToast();
+        }
+        return true;
+      } catch {
+        return false;
+      }
     },
     [editId, onTradeDeleted, setTrades, showDeleteToast],
   );
@@ -7400,6 +7402,39 @@ function JournalScreen({
     },
     [executeTradeDelete],
   );
+  const confirmDeleteDay = useCallback(async () => {
+    if (!deleteDayDate || deleteDayBusy) return;
+    const dayTrades = trades.filter((trade) => trade.date === deleteDayDate);
+    if (!dayTrades.length) {
+      setDeleteDayDate(null);
+      return;
+    }
+    warningHaptic();
+    setDeleteDayBusy(true);
+    const tradeIds = dayTrades.map((trade) => trade.id);
+    try {
+      await recordSecurityEvent("delete_trading_day_confirmed", "trade:delete", "journal-local");
+      let deletedCount = 0;
+      for (const tradeId of tradeIds) {
+        const ok = await executeTradeDelete(tradeId, { suppressFeedback: true });
+        if (!ok) break;
+        deletedCount += 1;
+      }
+      if (deletedCount === tradeIds.length) {
+        trackEvent("day_deleted", { trade_count: tradeIds.length });
+        successHaptic();
+        showDeleteToast("journalDayDeletedToast");
+        setDeleteDayDate(null);
+      } else {
+        showDeleteToast("journalDayDeleteFailedToast");
+        if (deletedCount > 0) setDeleteDayDate(null);
+      }
+    } catch {
+      showDeleteToast("journalDayDeleteFailedToast");
+    } finally {
+      setDeleteDayBusy(false);
+    }
+  }, [deleteDayBusy, deleteDayDate, executeTradeDelete, showDeleteToast, trades]);
   const openTradeActions = useCallback((tr: Trade) => {
     lightHaptic();
     setTradeActionTarget(tr);
@@ -7716,9 +7751,10 @@ function JournalScreen({
                 const pnl = dayTrades.reduce((a, x) => a + x.pnl, 0);
                 const active = d === selectedDate;
                 return (
-                  <Pressable
+                  <JournalCalendarDayPressable
                     key={d}
-                    onPress={() => {
+                    hasTrades={dayTrades.length > 0}
+                    onDayPress={() => {
                       if (dayTrades.length === 0) {
                         openNew(d);
                       } else if (selectedDate === d) {
@@ -7727,8 +7763,7 @@ function JournalScreen({
                         setSelectedDate(d);
                       }
                     }}
-                    onLongPress={() => openDeleteDayConfirm(d)}
-                    delayLongPress={3000}
+                    onDayLongPress={() => openDeleteDayConfirm(d)}
                     style={[
                       styles.day,
                       { width: dayCellWidth, height: dayCellHeight },
@@ -7755,7 +7790,7 @@ function JournalScreen({
                         <SafeText style={styles.todayMiniBadgeText} minScale={0.7}>TODAY</SafeText>
                       </View>
                     ) : null}
-                  </Pressable>
+                  </JournalCalendarDayPressable>
                 );
               })}
             </View>
@@ -8308,10 +8343,10 @@ function JournalScreen({
         </SafeAreaView>
       </Modal>
     </ScrollView>
-    {deleteToastVisible ? (
+    {deleteToastKey ? (
       <View style={styles.journalDeleteToastWrap} pointerEvents="none">
         <View style={styles.journalDeleteToast}>
-          <Text style={styles.journalDeleteToastText}>{t("journalTradeDeletedToast")}</Text>
+          <Text style={styles.journalDeleteToastText}>{t(deleteToastKey)}</Text>
         </View>
       </View>
     ) : null}
@@ -11360,6 +11395,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   journalHeader: { display: "none" },
+  statsHeaderControls: {
+    position: "relative",
+    zIndex: 4,
+    elevation: 4,
+  },
   statsActionsRow: {
     flexDirection: "row",
     gap: 8,

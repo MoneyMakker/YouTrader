@@ -31,12 +31,13 @@ const DUST = "#6B7280";
 const STAGE_H = 228;
 const SPEED = 1 / 1.45;
 const ms = (value: number) => Math.round(value * SPEED);
-const READ_PAUSE_MS = ms(2300);
+const READ_PAUSE_MS = ms(1900);
 const JUMP_MS = ms(1280);
 const CROUCH_MS = ms(240);
 const LAND_SQUASH_MS = ms(190);
-const RECOVER_MS = ms(320);
-const TURN_MS = ms(520);
+const RECOVER_MS = ms(280);
+const TURN_MS = ms(360);
+const TURN_SETTLE_MS = ms(40);
 const JUMP_ARC = 44;
 const STAR_COUNT = 114;
 
@@ -312,31 +313,6 @@ const BullMascot = memo(function BullMascot({
   );
 });
 
-const BullMotionGhost = memo(function BullMotionGhost({
-  pose,
-  blink,
-  tailRotate,
-  scaleX,
-  squashY,
-  tint,
-}: {
-  pose: BullPose;
-  blink: boolean;
-  tailRotate: Animated.AnimatedInterpolation<string>;
-  scaleX: Animated.AnimatedMultiplication<number>;
-  squashY: Animated.Value;
-  tint: string;
-}) {
-  return (
-    <View style={styles.trailGhostCluster}>
-      <Animated.View style={{ transform: [{ scaleX }, { scaleY: squashY }] }}>
-        <BullMascot pose={pose} blink={blink} tailRotate={tailRotate} />
-      </Animated.View>
-      <View pointerEvents="none" style={[styles.trailGhostTint, { backgroundColor: tint }]} />
-    </View>
-  );
-});
-
 const DustPuff = memo(function DustPuff({ opacity }: { opacity: Animated.Value }) {
   return (
     <Animated.View pointerEvents="none" style={[styles.dustWrap, { opacity }]}>
@@ -488,7 +464,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
   const bubbleOpacity = useRef(new Animated.Value(0)).current;
   const dustOpacity = useRef(new Animated.Value(0)).current;
   const tailSwing = useRef(new Animated.Value(0)).current;
-  const trailOpacity = useRef(new Animated.Value(0)).current;
   const starMasterA = useRef(new Animated.Value(0)).current;
   const starMasterB = useRef(new Animated.Value(0)).current;
   const starMasterC = useRef(new Animated.Value(0)).current;
@@ -511,18 +486,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
         outputRange: ["-14deg", "0deg", "14deg"],
       }),
     [tailSwing],
-  );
-  const trailBackOffset1 = useMemo(() => Animated.multiply(facingScale, -13), [facingScale]);
-  const trailBackOffset2 = useMemo(() => Animated.multiply(facingScale, -24), [facingScale]);
-  const ghostTrailX1 = useMemo(() => Animated.add(bullX, trailBackOffset1), [bullX, trailBackOffset1]);
-  const ghostTrailX2 = useMemo(() => Animated.add(bullX, trailBackOffset2), [bullX, trailBackOffset2]);
-  const ghostTrailOpacity1 = useMemo(
-    () => trailOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.24] }),
-    [trailOpacity],
-  );
-  const ghostTrailOpacity2 = useMemo(
-    () => trailOpacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.13] }),
-    [trailOpacity],
   );
 
   const stars = useMemo<StarDef[]>(
@@ -660,7 +623,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       stopAnimatedValue(starMasterC);
       stopAnimatedValue(starMasterD);
       stopAnimatedValue(tailSwing);
-      stopAnimatedValue(trailOpacity);
       stopAnimatedValue(bullX);
       stopAnimatedValue(bullY);
       stopAnimatedValue(facingScale);
@@ -677,7 +639,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       poseTimersRef.current.forEach(clearTimeout);
       poseTimersRef.current = [];
     };
-  }, [bullX, bullY, bubbleOpacity, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC, starMasterD, tailSwing, trailOpacity]);
+  }, [bullX, bullY, bubbleOpacity, dustOpacity, facingScale, squashX, squashY, starMasterA, starMasterB, starMasterC, starMasterD, tailSwing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -721,7 +683,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       bullX.setValue(fromX);
       bullY.setValue(groundY);
       tailSwing.setValue(0);
-      trailOpacity.setValue(0);
 
       return Animated.sequence([
         Animated.parallel([
@@ -775,22 +736,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
             Animated.timing(tailSwing, { toValue: 1, duration: halfJump, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
             Animated.timing(tailSwing, { toValue: -0.65, duration: halfJump, easing: Easing.inOut(Easing.sin), useNativeDriver: true, isInteraction: false }),
             Animated.timing(tailSwing, { toValue: 0, duration: ms(180), easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }),
-          ]),
-          Animated.sequence([
-            Animated.timing(trailOpacity, {
-              toValue: 1,
-              duration: ms(55),
-              useNativeDriver: true,
-              isInteraction: false,
-            }),
-            Animated.delay(Math.max(0, JUMP_MS - ms(55) - ms(120))),
-            Animated.timing(trailOpacity, {
-              toValue: 0,
-              duration: ms(120),
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-              isInteraction: false,
-            }),
           ]),
         ]),
         Animated.parallel([
@@ -856,7 +801,7 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       return Animated.sequence([
         Animated.timing(bullY, {
           toValue: groundY + 2,
-          duration: ms(140),
+          duration: ms(90),
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
           isInteraction: false,
@@ -870,19 +815,19 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
             isInteraction: false,
           }),
           Animated.sequence([
-            Animated.timing(tailSwing, { toValue: 0.45, duration: ms(160), useNativeDriver: true, isInteraction: false }),
-            Animated.timing(tailSwing, { toValue: -0.35, duration: ms(180), useNativeDriver: true, isInteraction: false }),
-            Animated.timing(tailSwing, { toValue: 0, duration: ms(160), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(tailSwing, { toValue: 0.45, duration: ms(100), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(tailSwing, { toValue: -0.35, duration: ms(115), useNativeDriver: true, isInteraction: false }),
+            Animated.timing(tailSwing, { toValue: 0, duration: ms(100), useNativeDriver: true, isInteraction: false }),
           ]),
         ]),
         Animated.timing(bullY, {
           toValue: groundY,
-          duration: ms(180),
+          duration: ms(110),
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
           isInteraction: false,
         }),
-        Animated.delay(ms(95)),
+        Animated.delay(TURN_SETTLE_MS),
       ]);
     };
 
@@ -946,9 +891,8 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
       bubbleOpacity.stopAnimation();
       dustOpacity.stopAnimation();
       tailSwing.stopAnimation();
-      trailOpacity.stopAnimation();
     };
-  }, [bubbleOpacity, bullX, bullY, dustOpacity, facingScale, groundY, leftX, rightX, squashX, squashY, tailSwing, trailOpacity]);
+  }, [bubbleOpacity, bullX, bullY, dustOpacity, facingScale, groundY, leftX, rightX, squashX, squashY, tailSwing]);
 
   const dynamicStyles = useMemo(
     () =>
@@ -996,44 +940,6 @@ export const PixelNeonBull = memo(function PixelNeonBull() {
         ))}
 
         <View style={dynamicStyles.heroArea} pointerEvents="none">
-          <Animated.View
-            style={[
-              styles.bullOverlay,
-              styles.trailGhostLayer,
-              {
-                opacity: ghostTrailOpacity2,
-                transform: [{ translateX: ghostTrailX2 }, { translateY: bullY }],
-              },
-            ]}
-          >
-            <BullMotionGhost
-              pose={pose}
-              blink={blink}
-              tailRotate={tailRotate}
-              scaleX={scaleX}
-              squashY={squashY}
-              tint="rgba(177,76,255,0.50)"
-            />
-          </Animated.View>
-          <Animated.View
-            style={[
-              styles.bullOverlay,
-              styles.trailGhostLayer,
-              {
-                opacity: ghostTrailOpacity1,
-                transform: [{ translateX: ghostTrailX1 }, { translateY: bullY }],
-              },
-            ]}
-          >
-            <BullMotionGhost
-              pose={pose}
-              blink={blink}
-              tailRotate={tailRotate}
-              scaleX={scaleX}
-              squashY={squashY}
-              tint="rgba(166,255,46,0.46)"
-            />
-          </Animated.View>
           <Animated.View
             style={[
               styles.bullOverlay,
@@ -1090,17 +996,6 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     zIndex: 5,
-  },
-  trailGhostLayer: {
-    zIndex: 4,
-  },
-  trailGhostCluster: {
-    alignItems: "center",
-    width: BULL_CLUSTER_W,
-    marginLeft: -20,
-  },
-  trailGhostTint: {
-    ...StyleSheet.absoluteFillObject,
   },
   bullCluster: {
     alignItems: "center",
