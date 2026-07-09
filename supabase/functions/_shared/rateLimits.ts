@@ -73,7 +73,7 @@ export async function checkRateLimitBucket(
 
 export async function recordRateLimitUsage(
   supabaseAdmin: SupabaseClient,
-  input: { userId: string; action: string; periodKey: string; provider: string; usedFallback: boolean; source: string },
+  input: { userId: string; action: string; periodKey: string; provider: string; usedFallback: boolean; source: string; metadata?: Record<string, unknown> },
 ) {
   const { error } = await supabaseAdmin.from("ai_usage_events").insert({
     user_id: input.userId,
@@ -81,7 +81,7 @@ export async function recordRateLimitUsage(
     period_key: input.periodKey,
     provider: input.provider,
     used_fallback: input.usedFallback,
-    metadata: { source: input.source, bucket: bucketForAction(input.action) },
+    metadata: { source: input.source, bucket: bucketForAction(input.action), ...(input.metadata || {}) },
   });
   if (error) {
     console.error("[YouTrader:subscription] usage_record_failed", { action: input.action, code: error.code });

@@ -6,6 +6,13 @@ import {
 } from "./aiSchemas.ts";
 import { traceAIEvent } from "./langfuse.ts";
 import { retrieveKnowledgeContext, type RetrievalContext } from "./retrievalService.ts";
+import {
+  buildAnalyticsMetadata,
+  buildSystemPrompt,
+  createRequestId,
+  isRouterEnabled,
+  routeAIRequest,
+} from "./aiPlatform/index.ts";
 
 type GenerateInput = {
   action: AICoachAction;
@@ -22,6 +29,7 @@ type ProviderResult = {
   usedFallback: boolean;
   message?: string;
   retrieval?: RetrievalContext;
+  platformMetadata?: Record<string, unknown>;
 };
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -100,17 +108,16 @@ function userContent(input: GenerateInput) {
   });
 }
 
-function systemPrompt(action: AICoachAction) {
-  return [
-    "You are YouTrader AI Coach for a fintech trading journal.",
-    "Return only strict JSON. No markdown. No prose outside JSON.",
-    "Use only the user's journal/stat/news payload and knowledge_context when present.",
-    "If knowledge_context.lowConfidence is true or context is empty, say the source confidence is too low inside the relevant JSON field and do not invent prop firm rules.",
-    "When discussing prop firm, exchange, economic calendar, risk-management, or journaling rules, ground the answer in knowledge_context only.",
-    "Do not provide financial advice. Do not provide buy/sell/hold signals.",
-    "Focus on discipline, risk, consistency, journaling behavior, and execution process.",
-    `JSON schema: ${schemaInstruction(action)}`,
-  ].join("\n");
+function legacySystemPrompt(action: AICoachAction) {
+  return buildSystemPrompt(action, schemaInstruction(action));
+}
+
+function mapRouterProvider(provider: string): Exclude<ProviderName, "local"> {
+  if (provider === "openai") return "openrouter";
+  if (provider === "openrouter" || provider === "gemini" || provider === "anthropic" || provider === "nvidia") {
+    return provider;
+  }
+  return "openrouter";
 }
 
 function fallbackBase(action: AICoachAction, payload: Record<string, unknown>) {
@@ -202,7 +209,7 @@ async function callOpenAICompatible(input: GenerateInput, provider: "openrouter"
         temperature: 0.2,
         max_tokens: 900,
         messages: [
-          { role: "system", content: systemPrompt(input.action) },
+          { role: "system", content: legacySystemPrompt(input.action) },
           { role: "user", content: userContent(input) },
         ],
       }),
@@ -238,7 +245,7 @@ async function callGemini(input: GenerateInput, attempt = 0): Promise<Record<str
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt(input.action) }] },
+        systemInstruction: { parts: [{ text: legacySystemPrompt(input.action) }] },
         contents: [{ role: "user", parts: [{ text: userContent(input) }] }],
         generationConfig: { temperature: 0.2, maxOutputTokens: 900 },
       }),
@@ -279,7 +286,7 @@ async function callAnthropic(input: GenerateInput, attempt = 0): Promise<Record<
         model,
         max_tokens: 900,
         temperature: 0.2,
-        system: systemPrompt(input.action),
+        system: legacySystemPrompt(input.action),
         messages: [{ role: "user", content: userContent(input) }],
       }),
     });
@@ -300,7 +307,7 @@ async function callAnthropic(input: GenerateInput, attempt = 0): Promise<Record<
   }
 }
 
-async function callConfiguredProvider(input: GenerateInput): Promise<{ data: Record<string, unknown>; provider: Exclude<ProviderName, "local"> }> {
+async function callLegacyConfiguredProvider(input: GenerateInput): Promise<{ data: Record<string, unknown>; provider: Exclude<ProviderName, "local"> }> {
   const provider = configuredProvider();
   if (provider === "openrouter") return { data: await callOpenAICompatible(input, "openrouter"), provider };
   if (provider === "gemini") return { data: await callGemini(input), provider };
@@ -327,6 +334,31 @@ async function callConfiguredProvider(input: GenerateInput): Promise<{ data: Rec
     }
   }
   throw lastError || new Error("No AI provider configured");
+}
+
+async function callPlatformRouter(input: GenerateInput, userTier: "free" | "pro"): Promise<{
+  data: Record<string, unknown>;
+  provider: Exclude<ProviderName, "local">;
+  platformMetadata: Record<string, unknown>;
+}> {
+  const userText = userContent(input);
+  const routerResponse = await routeAIRequest({
+    requestId: createRequestId(),
+    endpoint: input.action,
+    userTier,
+    messages: [
+      { role: "system", content: buildSystemPrompt(input.action, schemaInstruction(input.action)) },
+      { role: "user", content: userText },
+    ],
+    jsonMode: true,
+    cacheKey: `${input.action}:${input.period}:${userText}`,
+  });
+
+  return {
+    data: normalizeAIOutput(input.action, safeParseJsonObject(routerResponse.content)),
+    provider: mapRouterProvider(routerResponse.provider),
+    platformMetadata: buildAnalyticsMetadata(routerResponse),
+  };
 }
 
 export async function generateAI(input: GenerateInput, allowNvidia: boolean): Promise<ProviderResult> {
@@ -364,7 +396,10 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
   }
 
   try {
-    const result = await callConfiguredProvider(groundedInput);
+    const result = isRouterEnabled()
+      ? await callPlatformRouter(groundedInput, userTier)
+      : await callLegacyConfiguredProvider(groundedInput);
+
     await traceAIEvent({
       action: input.action,
       period: input.period,
@@ -382,6 +417,7 @@ export async function generateAI(input: GenerateInput, allowNvidia: boolean): Pr
       usedFallback: false,
       message: retrieval?.lowConfidence ? "Knowledge source confidence is low. Verify current prop firm rules before acting." : undefined,
       retrieval: retrieval || undefined,
+      platformMetadata: "platformMetadata" in result ? result.platformMetadata : undefined,
     };
   } catch (error) {
     console.error("cloud_ai_fallback", {

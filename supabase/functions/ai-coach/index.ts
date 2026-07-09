@@ -123,6 +123,10 @@ Deno.serve(async (req) => {
     periodKey: periodKey(body.action, body.period),
     provider: result.provider,
     usedFallback: result.usedFallback,
+    metadata: {
+      source: "ai-coach",
+      ...(result.platformMetadata || {}),
+    },
   });
 
   return jsonResponse({
