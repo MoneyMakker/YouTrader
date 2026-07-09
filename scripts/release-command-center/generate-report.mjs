@@ -94,6 +94,12 @@ export function generateTestFlightDoc({ mode, steps, notes, checklistSections, b
   md += `| Status | ${buildResult?.status || "n/a"} |\n`;
   md += `| Duration | ${buildResult?.durationMs ? Math.round(buildResult.durationMs / 1000) + "s" : "n/a"} |\n`;
   md += `| URL | ${buildResult?.url || "see EAS dashboard"} |\n`;
+  if (buildResult?.blockReason) {
+    md += `| Block reason | ${buildResult.blockReason} |\n`;
+  }
+  if (buildResult?.quotaResetDate) {
+    md += `| Quota reset | ${buildResult.quotaResetDate} |\n`;
+  }
 
   md += `\n---\n\n## Final gate status\n\n\`\`\`\n${finalStatus}\n\`\`\`\n\n`;
 

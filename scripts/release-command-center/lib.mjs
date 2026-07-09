@@ -41,23 +41,28 @@ export function run(cmd, args, opts = {}) {
 export function tryRun(cmd, args, opts = {}) {
   try {
     const out = run(cmd, args, opts);
-    return { ok: true, out, code: 0 };
+    return { ok: true, out, err: "", code: 0 };
   } catch (e) {
+    const out = String(e.stdout || "");
+    const err = String(e.stderr || e.message || "");
     return {
       ok: false,
-      out: String(e.stdout || ""),
-      err: String(e.stderr || e.message || ""),
+      out,
+      err,
+      combined: [out, err].filter(Boolean).join("\n").trim(),
       code: e.status ?? 1,
     };
   }
 }
 
-export function stepResult(id, title, checks, blockers = []) {
+export function stepResult(id, title, checks, blockers = [], options = {}) {
   const fails = checks.filter((c) => c.status === "FAIL").length;
   const warns = checks.filter((c) => c.status === "WARNING").length;
-  let status = "PASS";
-  if (fails > 0 || blockers.length > 0) status = "FAIL";
-  else if (warns > 0) status = "WARNING";
+  let status = options.status || "PASS";
+  if (!options.status) {
+    if (fails > 0 || blockers.length > 0) status = "FAIL";
+    else if (warns > 0) status = "WARNING";
+  }
   return { id, title, status, checks, fails, warns, blockers };
 }
 
@@ -66,7 +71,7 @@ export function check(id, name, status, detail = "") {
 }
 
 export function sectionBlocked(step) {
-  return step.status === "FAIL";
+  return step.status === "FAIL" || step.status === "BLOCKED";
 }
 
 export function collectBlockers(steps) {
@@ -74,17 +79,26 @@ export function collectBlockers(steps) {
   for (const s of steps) {
     if (s.blockers?.length) blockers.push(...s.blockers.map((b) => `[${s.title}] ${b}`));
     for (const c of s.checks || []) {
-      if (c.status === "FAIL") blockers.push(`[${s.title}] ${c.name}${c.detail ? `: ${c.detail}` : ""}`);
+      if (c.status === "FAIL" || c.status === "BLOCKED") {
+        blockers.push(`[${s.title}] ${c.name}${c.detail ? `: ${c.detail}` : ""}`);
+      }
     }
   }
   return blockers;
 }
 
+function stepStatusIcon(status) {
+  if (status === "PASS") return "✅";
+  if (status === "BLOCKED") return "🚫";
+  if (status === "FAIL") return "❌";
+  return "⚠️";
+}
+
 export function printStep(step) {
-  const icon = step.status === "PASS" ? "✅" : step.status === "FAIL" ? "❌" : "⚠️";
+  const icon = stepStatusIcon(step.status);
   console.log(`\n${icon} ${step.title} — ${step.status} (${step.fails} fail, ${step.warns} warn)`);
   for (const c of step.checks || []) {
-    const ci = c.status === "PASS" ? "✅" : c.status === "FAIL" ? "❌" : "⚠️";
+    const ci = stepStatusIcon(c.status);
     console.log(`  ${ci} ${c.name}${c.detail ? ` — ${c.detail}` : ""}`);
   }
   if (step.blockers?.length) {
