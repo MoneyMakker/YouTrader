@@ -175,7 +175,7 @@ Use this prompt at the start of future Codex/Cursor sessions:
 
 ```text
 You are continuing YouTrader in /Users/valentynborovyk/Projects/youtrader-final.
-Read docs/CODEX_CONTINUATION.md, MASTER_CONTEXT.md, CONTINUATION.md, docs/MY_UI.md, and docs/AI_DEV_WORKFLOW.md.
+Read docs/CODEX_CONTINUATION.md, MASTER_CONTEXT.md, CONTINUATION.md, docs/MY_UI.md, docs/AI_DEV_WORKFLOW.md, and docs/AI_DEV_TOOLS_SETUP.md when using 9Router/Parallel Code/DeerFlow.
 Run git status first.
 Use Caveman to keep diffs small and avoid token waste.
 Use Context7 before changing code that touches Expo, React Native, Supabase, RevenueCat, Sentry, PostHog, EAS, or Apple APIs.
@@ -215,3 +215,12 @@ ios-deploy --bundle /path/to/YouTrader.ipa
 ```
 
 Transporter upload uses the generated `.ipa`; do not commit build artifacts.
+
+## Local AI Dev Tools (Outside App Repo)
+
+Installed 2026-07-08 at `~/Projects/ai-dev-tools` (9Router, Parallel Code, DeerFlow). Full guide: `docs/AI_DEV_TOOLS_SETUP.md`.
+
+- OpenRouter key for **dev tools only**: `~/.config/youtrader-ai/.env` — never `EXPO_PUBLIC_*` or Expo app env.
+- Start: `~/Projects/ai-dev-tools/scripts/start-9router.sh`, `start-parallel-code.sh`, `start-deerflow.sh`
+- Agent presets: `~/Projects/ai-dev-tools/youtrader/agents/`
+- Safety: no auto-edits, no `git push`, no production builds from agent sessions without explicit approval.

@@ -2,6 +2,8 @@
 
 Last updated: 2026-07-02
 
+> **Release orchestration:** For the CEO → Release Manager hierarchy and 25-step `Prepare Release` workflow, see **[AI_DEVELOPMENT_WORKFLOW.md](./AI_DEVELOPMENT_WORKFLOW.md)**.
+
 This document describes free or near-zero-cost AI development tools for YouTrader. These tools are for Codex/Cursor/developer workflow only. They must not be bundled into the Expo mobile app, must not add runtime dependencies, and must not store secrets in the repository.
 
 ## Installed Or Project-Configured
