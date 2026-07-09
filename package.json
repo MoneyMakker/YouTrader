@@ -34,7 +34,10 @@
     "translations:check": "node scripts/check-translations.mjs",
     "test:maestro": "maestro test .maestro",
     "test:maestro:launch": "maestro test .maestro/01_app_launch.yaml",
-    "test:ai-safety": "npx promptfoo@latest eval -c promptfoo.config.yaml"
+    "test:ai-safety": "npx promptfoo@latest eval -c promptfoo.config.yaml",
+    "prepare:testflight": "node scripts/release-command-center/run.mjs testflight",
+    "prepare:production": "node scripts/release-command-center/run.mjs production",
+    "prepare:release": "node scripts/release-command-center/run.mjs release"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
