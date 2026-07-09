@@ -2,7 +2,7 @@
   "expo": {
     "name": "YouTrader",
     "slug": "youtrader-pro",
-    "version": "1.5.9",
+    "version": "1.6.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -25,7 +25,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.youtrader.pro",
       "usesAppleSignIn": true,
-      "buildNumber": "97",
+      "buildNumber": "98",
       "infoPlist": {
         "CFBundleLocalizations": [
           "en",

@@ -217,7 +217,6 @@ import { calculateTradingScore, type TradingScoreResult } from "./src/analytics/
 import { buildAIAnalyticsContext } from "./src/analytics/aiContextBuilder";
 import { buildUnifiedTradeAnalytics, drawdownControlFromMetrics, infinitySafeMetric } from "./src/analytics/tradeMetrics";
 import {
-  filterTradesByTimeRange,
   resolveTimeRangeStart,
   STATS_TIME_RANGES,
   StatsTimeRangeProvider,
@@ -230,18 +229,15 @@ import { calculatePassProbability, type PassProbabilityResult } from "./src/ai/p
 import { detectRevengeTrading, type RevengeTradingResult } from "./src/ai/revengeTradingDetector";
 import { detectHiddenLeaks, type HiddenLeak } from "./src/ai/hiddenLeakDetector";
 import {
-  buildAiDailyMission,
   buildAiAchievements,
-  buildBenchmarkProfile,
   buildAiInsights,
-  buildImprovementTimeline,
-  buildTradingDNAProfile,
-  buildAiWeeklyReport,
+  buildAiOperatingSystem,
   type AiDailyMission,
   type AiDailyMissionStatus,
   type AiBenchmarkProfile,
   type AiImprovementTimeline,
   type AiInsight,
+  type AiOperatingSystem,
   type AiTradingAchievement,
   type AiTradingDNAProfile,
   type AiWeeklyReport,
@@ -284,11 +280,6 @@ markAppStart();
 const LazyStatCardExportHost = React.lazy(() =>
   import("./src/components/insights/shareCard/StatCardExportHost").then((mod) => ({
     default: mod.StatCardExportHost,
-  })),
-);
-const LazyMarketIntelligenceTools = React.lazy(() =>
-  import("./src/components/ai/MarketIntelligenceTools").then((mod) => ({
-    default: mod.MarketIntelligenceTools,
   })),
 );
 
@@ -6196,6 +6187,519 @@ function AIInsightCard({ insight }: { insight: AiInsight }) {
   );
 }
 
+function aiOsConfidenceLabel(confidence: AiOperatingSystem["confidence"]) {
+  return confidence === "empty" ? "NO DATA" : confidence === "low" ? "LOW" : confidence === "medium" ? "MEDIUM" : "HIGH";
+}
+
+function aiOsStateIsLow(state: "empty" | "low_confidence" | "ready") {
+  return state === "empty" || state === "low_confidence";
+}
+
+function AiOperatingSystemTodaySection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const today = operatingSystem.today;
+  const lowConfidence = aiOsStateIsLow(today.state);
+  const score = today.tradingScore ?? 0;
+  const tone = lowConfidence ? C.purple : score >= 70 ? C.green : score >= 50 ? C.purple : C.red;
+  const ctaLabel = today.primaryCta === "mark_today_complete" ? "Mark Today Complete" : today.primaryCta === "start_trading_day" ? "Start Trading Day" : "Log More Trades";
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>TODAY</Text>
+          <Text style={styles.terminalSectionTitle}>What should I do today?</Text>
+          <Text style={styles.terminalSub}>
+            {lowConfidence
+              ? today.emptyState?.message || "AI Trading OS needs more journal evidence before it can give a strong plan."
+              : today.recommendation?.action || today.mission?.reason || "Follow the mission built from your current journal sample."}
+          </Text>
+        </View>
+        <AppleRing
+          label={lowConfidence ? "DATA" : "FOCUS"}
+          value={lowConfidence ? Math.max(8, operatingSystem.sample.tradeCount * 12) : score}
+          display={lowConfidence ? aiOsConfidenceLabel(today.confidence) : `${score}`}
+          size={112}
+          color={tone}
+        />
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Best Session", value: today.bestSession || "Need data", tone: today.bestSession ? "green" : "grey" },
+          { label: "Max Trades", value: today.maxTrades != null ? String(today.maxTrades) : "Need data", tone: today.maxTrades != null ? "purple" : "grey" },
+          { label: "Daily Loss", value: today.dailyLossLimit != null ? moneyCompact(-Math.abs(today.dailyLossLimit)) : "Not set", tone: today.dailyLossLimit != null ? "red" : "grey" },
+          { label: "Confidence", value: aiOsConfidenceLabel(today.confidence), tone: lowConfidence ? "purple" : "green" },
+          { label: "Sample", value: `${operatingSystem.sample.tradeCount}T / ${operatingSystem.sample.tradingDays}D`, tone: operatingSystem.sample.tradeCount >= 5 ? "green" : "grey" },
+        ]}
+      />
+      {lowConfidence ? (
+        <WarningCard
+          title={today.emptyState?.title || "Low-confidence AI Analytics sample"}
+          body={today.emptyState?.message || "Add more saved trades across multiple trading days to unlock a reliable daily plan."}
+        />
+      ) : today.mission ? (
+        <View style={styles.propCoachAdviceCard}>
+          <Text style={styles.terminalSmallLabel}>TODAY'S MISSION</Text>
+          <Text style={styles.propCoachHeadline}>{today.mission.title}</Text>
+          <BulletList items={today.mission.checklist.map((item) => item.text).slice(0, 3)} />
+        </View>
+      ) : null}
+      {today.evidence.length ? (
+        <View style={{ gap: 6, marginTop: 12 }}>
+          <Text style={styles.terminalSmallLabel}>Evidence</Text>
+          {today.evidence.slice(0, 3).map((item) => (
+            <Text key={`today-${item}`} style={styles.aiBulletText}>• {item}</Text>
+          ))}
+        </View>
+      ) : null}
+      <Pressable disabled style={[styles.primaryBig, { opacity: lowConfidence ? 0.65 : 1 }]}>
+        <Text style={styles.primaryText}>{ctaLabel}</Text>
+      </Pressable>
+    </TerminalGlassCard>
+  );
+}
+
+function AiCoachOperatingSystemPoint({
+  label,
+  item,
+}: {
+  label: string;
+  item: AiOperatingSystem["coach"]["biggestEdge"];
+}) {
+  if (!item) return null;
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(177,66,255,0.22)", backgroundColor: "rgba(177,66,255,0.055)", padding: 13, gap: 8 }}>
+      <Text style={styles.terminalSmallLabel}>{label} · {aiOsConfidenceLabel(item.confidence)}</Text>
+      <Text style={styles.propCoachHeadline}>{item.title}</Text>
+      <Text style={styles.terminalSub}>{item.action}</Text>
+      <View style={{ gap: 5 }}>
+        {item.evidence.slice(0, 3).map((evidence) => (
+          <Text key={`${label}-${evidence}`} style={styles.aiBulletText}>• {evidence}</Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function AiOperatingSystemCoachSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const coach = operatingSystem.coach;
+  const lowConfidence = aiOsStateIsLow(coach.state);
+  const seenActions = new Set<string>();
+  const points = [
+    { label: "Biggest Edge", item: coach.biggestEdge },
+    { label: "Biggest Mistake", item: coach.biggestMistake },
+    { label: "Next Improvement", item: coach.nextImprovement },
+  ].filter(({ item }) => {
+    if (!item) return false;
+    const key = item.action.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (seenActions.has(key)) return false;
+    seenActions.add(key);
+    return true;
+  });
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>AI COACH</Text>
+      <Text style={styles.terminalSectionTitle}>What should I improve on the next trade?</Text>
+      <Text style={styles.terminalSub}>
+        {lowConfidence
+          ? coach.emptyState?.message || "The next-trade coach is waiting for a larger saved trade sample."
+          : "One edge, one mistake, one improvement. Each point is tied to journal evidence."}
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={coach.emptyState?.title || "Low-confidence coach"}
+          body={coach.emptyState?.message || "Log at least 5 trades across 2 trading days before relying on next-trade coaching."}
+        />
+      ) : (
+        <View style={{ gap: 10, marginTop: 14 }}>
+          {points.length ? (
+            points.map(({ label, item }) => <AiCoachOperatingSystemPoint key={label} label={label} item={item} />)
+          ) : (
+            <Text style={styles.terminalSub}>No strong next-trade recommendation yet. Keep journaling with setup, mood, and notes.</Text>
+          )}
+        </View>
+      )}
+      {!lowConfidence && coach.evidence.length ? (
+        <View style={{ gap: 6, marginTop: 12 }}>
+          <Text style={styles.terminalSmallLabel}>Coach Evidence</Text>
+          {coach.evidence.slice(0, 4).map((item) => (
+            <Text key={`coach-${item}`} style={styles.aiBulletText}>• {item}</Text>
+          ))}
+        </View>
+      ) : null}
+    </TerminalGlassCard>
+  );
+}
+
+function aiOsUniqueList(items: string[], limit = 4) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const clean = item.trim();
+    const key = clean.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(clean);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function AiOsTextBlock({ title, items }: { title: string; items: string[] }) {
+  const visible = aiOsUniqueList(items, 4);
+  if (!visible.length) return null;
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 6 }}>
+      <Text style={styles.terminalSmallLabel}>{title}</Text>
+      {visible.map((item) => (
+        <Text key={`${title}-${item}`} style={styles.aiBulletText}>• {item}</Text>
+      ))}
+    </View>
+  );
+}
+
+function AiOperatingSystemTradingDnaSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const dna = operatingSystem.tradingDna;
+  const profile = dna.profile;
+  const lowConfidence = aiOsStateIsLow(dna.state) || !profile || !profile.enoughData;
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>TRADING DNA</Text>
+          <Text style={styles.terminalSectionTitle}>What type of trader am I?</Text>
+          <Text style={styles.terminalSub}>
+            {lowConfidence
+              ? dna.emptyState?.message || "Not enough journal history yet. Trading DNA needs a larger sample before classifying your style."
+              : profile.summary}
+          </Text>
+        </View>
+        <AppleRing
+          label="DNA"
+          value={lowConfidence ? Math.max(8, operatingSystem.sample.tradeCount * 10) : profile?.metrics.consistency || 0}
+          display={aiOsConfidenceLabel(operatingSystem.confidence)}
+          size={104}
+          color={lowConfidence ? C.purple : C.green}
+        />
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Trader Type", value: profile?.traderType || "Building", tone: lowConfidence ? "grey" : "green" },
+          { label: "Sample", value: `${operatingSystem.sample.tradeCount}T / ${operatingSystem.sample.tradingDays}D`, tone: operatingSystem.sample.tradeCount >= 10 ? "green" : "grey" },
+          { label: "Best Symbol", value: profile?.metrics.bestSymbol || "Need data", tone: profile?.metrics.bestSymbol && profile.metrics.bestSymbol !== "Need data" ? "green" : "grey" },
+          { label: "Best Session", value: profile?.metrics.bestSession || "Need data", tone: profile?.metrics.bestSession && profile.metrics.bestSession !== "Need data" ? "purple" : "grey" },
+          { label: "Confidence", value: aiOsConfidenceLabel(operatingSystem.confidence), tone: lowConfidence ? "purple" : "green" },
+        ]}
+      />
+      {lowConfidence ? (
+        <WarningCard
+          title="Not enough journal history yet"
+          body={dna.emptyState?.message || "Log at least 10 trades with symbols, sessions, setup tags, and notes before using Trading DNA as a decision guide."}
+        />
+      ) : profile ? (
+        <View style={{ gap: 10, marginTop: 14 }}>
+          <RuleImpactCard title="Risk Profile" rule={profile.metrics.drawdownBehavior} evidence={`Recovery: ${profile.metrics.recoveryAfterLosses} · Emotional behavior: ${profile.metrics.emotionalBehavior}`} />
+          <AiOsTextBlock title="Ideal Conditions" items={profile.bestConditions} />
+          <AiOsTextBlock title="Worst Conditions" items={profile.dangerZones} />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AiOsTextBlock title="Strengths" items={profile.strengths} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AiOsTextBlock title="Weaknesses" items={profile.weaknesses} />
+            </View>
+          </View>
+        </View>
+      ) : null}
+    </TerminalGlassCard>
+  );
+}
+
+function AiOperatingSystemEvidenceSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const evidence = operatingSystem.evidence;
+  const lowConfidence = aiOsStateIsLow(evidence.state);
+  const metrics = aiOsUniqueList(
+    evidence.metrics.filter((metric) => !["trade_count", "net_pnl", "win_rate"].includes(metric)),
+    8,
+  );
+  const sections = [
+    { title: "Session Impact", items: evidence.sessionImpact },
+    { title: "Weekday Impact", items: evidence.weekdayImpact },
+    { title: "Instrument Impact", items: evidence.instrumentImpact },
+    { title: "Setup Impact", items: evidence.setupImpact },
+    { title: "Behavior Patterns", items: evidence.behaviorPatterns },
+  ].filter((section) => aiOsUniqueList(section.items, 3).length > 0);
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>EVIDENCE</Text>
+      <Text style={styles.terminalSectionTitle}>Why does AI say this?</Text>
+      <Text style={styles.terminalSub}>
+        {lowConfidence
+          ? evidence.emptyState?.message || "Evidence is limited until more saved trades are available."
+          : "Compact proof from saved journal trades, grouped by what actually moved your results."}
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={evidence.emptyState?.title || "Evidence sample is weak"}
+          body={evidence.emptyState?.message || "Add more saved trades across multiple sessions before relying on detailed evidence breakdowns."}
+        />
+      ) : (
+        <View style={{ gap: 10, marginTop: 14 }}>
+          {sections.map((section) => (
+            <AiOsTextBlock key={section.title} title={section.title} items={section.items} />
+          ))}
+          {metrics.length ? (
+            <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(150,255,0,0.20)", backgroundColor: "rgba(150,255,0,0.045)", padding: 13, gap: 8 }}>
+              <Text style={styles.terminalSmallLabel}>Metrics Tied To Recommendations</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {metrics.map((metric) => (
+                  <Text key={metric} style={styles.tradeMetaChip}>{metric.replace(/_/g, " ").toUpperCase()}</Text>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {!sections.length && !metrics.length ? (
+            <Text style={styles.terminalSub}>No compact evidence groups yet. Add more trades with symbols, sessions, setup tags, and notes.</Text>
+          ) : null}
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+type AiOsPropMode = keyof AiOperatingSystem["propFirm"]["recommendations"];
+
+const aiOsPropModeLabels: Record<AiOsPropMode, string> = {
+  evaluation: "Evaluation",
+  funded: "Funded",
+  live: "Live",
+  consistency: "Consistency",
+  payout_protection: "Payout Protection",
+};
+
+const aiOsPropModeQuestions: Record<AiOsPropMode, string> = {
+  evaluation: "Pass phase objective, target progress, drawdown left, and today's max-loss plan.",
+  funded: "Protect the account, lower rule-violation risk, and preserve payout safety.",
+  live: "Compound safely with a defined risk budget and drawdown protection.",
+  consistency: "Control trade count, size consistency, rule adherence, and outlier days.",
+  payout_protection: "Reduce risk near payout, avoid trailing drawdown traps, and stop after rule breaks.",
+};
+
+const aiOsPropModeMetricLabels: Record<AiOsPropMode, string[]> = {
+  evaluation: ["Pass objective", "Current progress", "Remaining target", "Daily drawdown left", "Max drawdown left", "Suggested risk", "Today's goal", "Maximum loss"],
+  funded: ["Account protection", "Rule violation risk", "Daily risk cap", "Payout safety"],
+  live: ["Compounding safely", "Risk budget", "Suggested risk %", "Monthly target", "Drawdown protection"],
+  consistency: ["Trade count control", "Average size consistency", "Rule adherence", "Avoid outlier days"],
+  payout_protection: ["Payout eligibility", "Reduced size", "Trailing drawdown traps", "Stop after rule breaks"],
+};
+
+function aiOsEvidenceValue(evidence: string[], pattern: RegExp) {
+  return evidence.find((item) => pattern.test(item)) || null;
+}
+
+function AiOperatingSystemPropFirmSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const propFirm = operatingSystem.propFirm;
+  const [mode, setMode] = useState<AiOsPropMode>(propFirm.mode);
+  const recommendation = propFirm.recommendations[mode];
+  const lowConfidence = propFirm.state === "empty" || propFirm.state === "low_confidence";
+  const notConfigured = propFirm.state === "not_configured";
+  const evidence = aiOsUniqueList([...(recommendation?.evidence || []), ...propFirm.evidence], 6);
+  const status = aiOsEvidenceValue(evidence, /^Status/i) || (notConfigured ? "No prop firm template selected" : "Status needs synced prop data");
+  const dailyBuffer = aiOsEvidenceValue(evidence, /Daily buffer/i) || "Daily drawdown left needs prop data";
+  const accountBuffer = aiOsEvidenceValue(evidence, /Account buffer|Drawdown/i) || "Max drawdown left needs prop data";
+  const probability = aiOsEvidenceValue(evidence, /Pass probability/i) || "Probability needs more trade history";
+  const modeMetrics = aiOsPropModeMetricLabels[mode].slice(0, 4).map((label, index) => {
+    const values = [status, probability, dailyBuffer, accountBuffer];
+    return { label, value: values[index] || "Needs prop data", tone: index === 0 ? "purple" as const : "grey" as const };
+  });
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>PROP FIRM COACH</Text>
+      <Text style={styles.terminalSectionTitle}>How do I pass/protect my account?</Text>
+      <Text style={styles.terminalSub}>
+        {notConfigured
+          ? "Select a synced prop firm template to unlock mode-based prop coaching."
+          : lowConfidence
+            ? propFirm.emptyState?.message || "Prop coaching needs more journal history before making strong recommendations."
+            : aiOsPropModeQuestions[mode]}
+      </Text>
+      <View style={styles.propModeRail}>
+        {(Object.keys(aiOsPropModeLabels) as AiOsPropMode[]).map((item) => {
+          const active = item === mode;
+          return (
+            <Pressable key={item} onPress={() => setMode(item)} style={[styles.propModeChip, active && styles.propModeChipActive]}>
+              <Text style={[styles.propModeChipText, active && styles.propModeChipTextActive]}>{aiOsPropModeLabels[item]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {notConfigured || lowConfidence || !recommendation ? (
+        <WarningCard
+          title={notConfigured ? "Prop account setup needed" : propFirm.emptyState?.title || "Low-confidence prop sample"}
+          body={notConfigured ? "Prop Firm Coach will stay in setup mode until a synced prop template and journal sample are available." : propFirm.emptyState?.message || "Add more saved trades before relying on mode-specific prop coaching."}
+        />
+      ) : (
+        <View style={{ gap: 12, marginTop: 14 }}>
+          <MetricPillRow items={modeMetrics} />
+          <View style={styles.propCoachAdviceCard}>
+            <Text style={styles.terminalSmallLabel}>{aiOsPropModeLabels[mode].toUpperCase()} MODE</Text>
+            <Text style={styles.propCoachHeadline}>{recommendation.title}</Text>
+            <Text style={styles.terminalSub}>{recommendation.action}</Text>
+          </View>
+          <AiOsTextBlock title="Mode Evidence" items={evidence} />
+          <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 8 }}>
+            <Text style={styles.terminalSmallLabel}>Mode Focus</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {aiOsPropModeMetricLabels[mode].map((item) => (
+                <Text key={`${mode}-${item}`} style={styles.tradeMetaChip}>{item.toUpperCase()}</Text>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+function AiOperatingSystemGrowthSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const growth = operatingSystem.growth;
+  const lowConfidence = aiOsStateIsLow(growth.state) || !growth.timeline;
+  const evidence = aiOsUniqueList(growth.evidence, 6);
+  const evidenceValue = (pattern: RegExp) => {
+    const match = aiOsEvidenceValue(evidence, pattern);
+    return match ? match.replace(pattern, "").replace(/^[:\s-]+/, "").trim() || match : "Needs more history";
+  };
+  const growthMetrics = [
+    { label: "Consistency", value: evidenceValue(/Consistency/i), tone: evidence.some((item) => /Consistency/i.test(item)) ? "green" as const : "grey" as const },
+    { label: "Rule Following", value: evidenceValue(/Rule|discipline|adherence/i), tone: evidence.some((item) => /Rule|discipline|adherence/i.test(item)) ? "purple" as const : "grey" as const },
+    { label: "Risk Control", value: evidenceValue(/Risk control/i), tone: evidence.some((item) => /Risk control/i.test(item)) ? "green" as const : "grey" as const },
+    { label: "Emotional Stability", value: evidenceValue(/Emotional|revenge|tilt/i), tone: evidence.some((item) => /Emotional|revenge|tilt/i.test(item)) ? "purple" as const : "grey" as const },
+    { label: "Execution Quality", value: growth.recommendation?.action || "Needs more history", tone: growth.recommendation ? "green" as const : "grey" as const },
+  ];
+  const timelineWindows = growth.timeline?.windows || [];
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>GROWTH</Text>
+      <Text style={styles.terminalSectionTitle}>Am I becoming a better trader?</Text>
+      <Text style={styles.terminalSub}>
+        {lowConfidence
+          ? growth.emptyState?.message || "Growth needs enough saved trades across time periods before comparing progress."
+          : "Progress is based on journal evidence and period-to-period behavior, not vanity badges."}
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={growth.emptyState?.title || "Not enough progress history"}
+          body={growth.emptyState?.message || "Keep saving trades with notes, mood, mistakes, and setups to unlock growth comparisons."}
+        />
+      ) : (
+        <View style={{ gap: 12, marginTop: 14 }}>
+          <MetricPillRow items={growthMetrics} />
+          {timelineWindows.length ? (
+            <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(150,255,0,0.20)", backgroundColor: "rgba(150,255,0,0.045)", padding: 13, gap: 8 }}>
+              <Text style={styles.terminalSmallLabel}>Comparison vs Previous Period</Text>
+              {timelineWindows.slice(0, 4).map((window) => (
+                <View key={window.label} style={styles.terminalHeaderRow}>
+                  <Text style={[styles.terminalSub, { flex: 1 }]}>{window.label}</Text>
+                  <Text style={[styles.metricPillValue, { color: window.improved ? C.green : C.red, fontSize: 16 }]}>
+                    {window.improved ? "+" : ""}{Math.round(window.delta)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {growth.recommendation ? (
+            <RuleImpactCard
+              title={growth.recommendation.title}
+              rule={growth.recommendation.action}
+              evidence={aiOsUniqueList(growth.recommendation.evidence, 3).join(" · ")}
+            />
+          ) : null}
+          <AiOsTextBlock title="Growth Evidence" items={evidence} />
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+type AiOsMarketActionId = AiOperatingSystem["marketAssistant"]["actions"][number]["id"];
+
+const aiOsMarketActionToCoachKey: Partial<Record<AiOsMarketActionId, keyof AIResultMap>> = {
+  summarize_today: "journalSummary",
+  risk_for_mes: "riskPredictor",
+  pre_market_plan: "dailyPlan",
+  prop_preparation: "dailyChallenge",
+};
+
+function AiOperatingSystemMarketAssistantSection({
+  operatingSystem,
+  aiBusy,
+  onAction,
+}: {
+  operatingSystem: AiOperatingSystem;
+  aiBusy: Record<keyof AIResultMap, boolean>;
+  onAction: (id: AiOsMarketActionId) => void;
+}) {
+  const assistant = operatingSystem.marketAssistant;
+  const lowConfidence = assistant.state === "empty" || assistant.state === "low_confidence";
+  const evidence = aiOsUniqueList(assistant.evidence, 4);
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>AI MARKET ASSISTANT</Text>
+      <Text style={styles.terminalSectionTitle}>What market help do I need right now?</Text>
+      <Text style={styles.terminalSub}>
+        One action hub for market and journal-assisted workflows. Existing AI actions keep their current payloads.
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={assistant.state === "empty" ? "Journal evidence needed" : "Limited journal evidence"}
+          body="Journal-based actions stay cautious until more saved trades are available. Market-only actions can still be reviewed below."
+        />
+      ) : null}
+      <View style={{ gap: 10, marginTop: 14 }}>
+        {assistant.actions.map((action) => {
+          const coachKey = aiOsMarketActionToCoachKey[action.id];
+          const wired = Boolean(coachKey);
+          const disabled = !action.enabled || !wired || (coachKey ? aiBusy[coachKey] : false);
+          const status = !action.enabled ? "Needs evidence" : wired ? (coachKey && aiBusy[coachKey] ? "Working" : "Ready") : "View below";
+          return (
+            <Pressable
+              key={action.id}
+              disabled={disabled}
+              onPress={() => onAction(action.id)}
+              style={{
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: wired && action.enabled ? "rgba(150,255,0,0.24)" : "rgba(255,255,255,0.10)",
+                backgroundColor: wired && action.enabled ? "rgba(150,255,0,0.045)" : "rgba(255,255,255,0.035)",
+                padding: 13,
+                opacity: disabled && wired ? 0.62 : 1,
+              }}
+            >
+              <View style={styles.terminalHeaderRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.propCoachHeadline}>{action.label}</Text>
+                  <Text style={styles.terminalSub}>
+                    {action.source.replace(/_/g, " ").toUpperCase()} · {action.requiresJournalEvidence ? "Uses journal evidence" : "Market context"}
+                  </Text>
+                </View>
+                <Text style={[styles.tradeMetaChip, !wired || !action.enabled ? { color: C.sub, borderColor: "rgba(255,255,255,0.14)", backgroundColor: "rgba(255,255,255,0.04)" } : null]}>
+                  {status.toUpperCase()}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      {evidence.length ? (
+        <View style={{ marginTop: 14 }}>
+          <AiOsTextBlock title="Assistant Evidence" items={evidence} />
+        </View>
+      ) : null}
+    </TerminalGlassCard>
+  );
+}
+
 function AchievementDetailModal({ achievement, onClose }: { achievement: AiTradingAchievement | null; onClose: () => void }) {
   if (!achievement) return null;
   const pctDone = Math.round((achievement.progress / Math.max(1, achievement.target)) * 100);
@@ -6653,8 +7157,6 @@ function AiAnalysisScreen({
     journalSummary: false,
     dailyChallenge: false,
   });
-  const [dailyMissionStatus, setDailyMissionStatus] = useState<AiDailyMissionStatus>("active");
-  const [dailyMissionChecked, setDailyMissionChecked] = useState<Record<string, boolean>>({});
   const safeAnalysisTemplates = propTemplates;
   const [analysisTemplateKey, setAnalysisTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
@@ -6693,11 +7195,8 @@ function AiAnalysisScreen({
 
   const periodTrades = useFilteredTrades(trades);
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
-  const weekTrades = useMemo(() => filterTradesByTimeRange(trades, "7D", anchorDate), [trades, anchorDate]);
-  const weekStats = useMemo(() => calcStats(weekTrades), [weekTrades]);
   const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
   const patterns = useMemo(() => detectTradingPatterns(periodTrades), [periodTrades]);
-  const weekPatterns = useMemo(() => detectTradingPatterns(weekTrades), [weekTrades]);
   const activeTemplate =
     analysisTemplateKey
       ? safeAnalysisTemplates.find((template) => template.key === analysisTemplateKey) || null
@@ -6799,30 +7298,6 @@ function AiAnalysisScreen({
       }),
     [aiPropContext, patterns, periodStats, periodTrades, revengeTrading],
   );
-  const weeklyReport = useMemo(
-    () =>
-      buildAiWeeklyReport({
-        trades: weekTrades,
-        stats: weekStats,
-        prop: aiPropContext,
-        patterns: weekPatterns,
-        revengeRisk: revengeTrading,
-        createdAt: `${selectedDate}T00:00:00.000Z`,
-      }),
-    [aiPropContext, revengeTrading, selectedDate, weekPatterns, weekStats, weekTrades],
-  );
-  const dailyMission = useMemo(
-    () =>
-      buildAiDailyMission({
-        trades: periodTrades,
-        stats: periodStats,
-        prop: aiPropContext,
-        patterns,
-        revengeRisk: revengeTrading,
-        createdAt: `${selectedDate}T00:00:00.000Z`,
-      }),
-    [aiPropContext, patterns, periodStats, periodTrades, revengeTrading, selectedDate],
-  );
   const aiAchievements = useMemo(
     () =>
       buildAiAchievements({
@@ -6834,50 +7309,18 @@ function AiAnalysisScreen({
       }),
     [aiPropContext, patterns, periodStats, periodTrades, revengeTrading],
   );
-  const tradingDna = useMemo(
-    () => buildTradingDNAProfile({ trades: periodTrades, stats: periodStats, patterns, revengeRisk: revengeTrading }),
-    [patterns, periodStats, periodTrades, revengeTrading],
+  const operatingSystem = useMemo(
+    () =>
+      buildAiOperatingSystem({
+        trades: periodTrades,
+        stats: periodStats,
+        prop: aiPropContext,
+        patterns,
+        revengeRisk: revengeTrading,
+        createdAt: `${selectedDate}T00:00:00.000Z`,
+      }),
+    [aiPropContext, patterns, periodStats, periodTrades, revengeTrading, selectedDate],
   );
-  const benchmarkProfile = useMemo(() => buildBenchmarkProfile(), []);
-  const improvementTimeline = useMemo(
-    () => buildImprovementTimeline({ trades, stats: periodStats, patterns, revengeRisk: revengeTrading, createdAt: `${selectedDate}T00:00:00.000Z` }),
-    [patterns, periodStats, revengeTrading, selectedDate, trades],
-  );
-
-  useEffect(() => {
-    let mounted = true;
-    AsyncStorage.getItem(`ai-daily-mission-v1-${dailyMission.id}`).then((raw) => {
-      if (!mounted) return;
-      if (!raw) {
-        setDailyMissionStatus("active");
-        setDailyMissionChecked({});
-        return;
-      }
-      try {
-        const parsed = JSON.parse(raw) as { status?: AiDailyMissionStatus; checked?: Record<string, boolean> };
-        setDailyMissionStatus(parsed.status || "active");
-        setDailyMissionChecked(parsed.checked || {});
-      } catch {
-        setDailyMissionStatus("active");
-        setDailyMissionChecked({});
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [dailyMission.id]);
-
-  const persistDailyMission = useCallback((status: AiDailyMissionStatus, checked: Record<string, boolean>) => {
-    setDailyMissionStatus(status);
-    setDailyMissionChecked(checked);
-    AsyncStorage.setItem(`ai-daily-mission-v1-${dailyMission.id}`, JSON.stringify({ status, checked })).catch(() => {});
-  }, [dailyMission.id]);
-
-  const toggleDailyMissionItem = useCallback((id: string) => {
-    const next = { ...dailyMissionChecked, [id]: !dailyMissionChecked[id] };
-    const done = dailyMission.checklist.length > 0 && dailyMission.checklist.every((item) => next[item.id]);
-    persistDailyMission(done ? "completed" : dailyMissionStatus === "completed" ? "active" : dailyMissionStatus, next);
-  }, [dailyMission.checklist, dailyMissionChecked, dailyMissionStatus, persistDailyMission]);
 
   const runCoachFeature = async (key: keyof AIResultMap) => {
     if (!isPremium || !getLimitsForUser(isPremium).paidAiAnalysis) {
@@ -6914,6 +7357,12 @@ function AiAnalysisScreen({
         setAiBusy((prev) => ({ ...prev, [key]: false }));
       }
     }
+  };
+
+  const runMarketAssistantAction = (id: AiOsMarketActionId) => {
+    const coachKey = aiOsMarketActionToCoachKey[id];
+    if (!coachKey) return;
+    runCoachFeature(coachKey);
   };
 
   const runTradeAnalysis = async () => {
@@ -6965,31 +7414,12 @@ function AiAnalysisScreen({
     <View style={styles.terminalScreenStack}>
       <Text style={styles.terminalSectionTitle}>{t("freeLocalCoach")}</Text>
       <Text style={styles.terminalSub}>Rule-based insights from your journal — no paid AI API calls.</Text>
-      <AIWeeklyReportCard report={weeklyReport} />
-      <DailyMissionCard
-        mission={dailyMission}
-        status={dailyMissionStatus}
-        checked={dailyMissionChecked}
-        onToggle={toggleDailyMissionItem}
-        onStatusChange={(status) => persistDailyMission(status, dailyMissionChecked)}
-      />
       <AchievementSystemCard achievements={aiAchievements} />
-      <TradingDNACard profile={tradingDna} />
-      <BenchmarkCard benchmark={benchmarkProfile} />
-      <ImprovementCard timeline={improvementTimeline} />
       <View style={{ gap: 10 }}>
         {unifiedInsights.primary.slice(0, 2).map((insight) => (
           <AIInsightCard key={insight.id} insight={insight} />
         ))}
       </View>
-      <TerminalGlassCard>
-        <Text style={styles.terminalSectionTitle}>{t("evidenceMap")}</Text>
-        <Text style={styles.terminalSub}>{t("evidenceMapSub")}</Text>
-        <View style={{ gap: 12, marginTop: 14 }}>
-          <SessionHeatmap stats={periodStats} />
-          <CalendarImpact stats={periodStats} />
-        </View>
-      </TerminalGlassCard>
     </View>
   );
 
@@ -7026,37 +7456,23 @@ function AiAnalysisScreen({
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
+      <View style={styles.terminalScreenStack}>
+        <AiOperatingSystemTodaySection operatingSystem={operatingSystem} />
+        <AiOperatingSystemCoachSection operatingSystem={operatingSystem} />
+        <AiOperatingSystemTradingDnaSection operatingSystem={operatingSystem} />
+        <AiOperatingSystemEvidenceSection operatingSystem={operatingSystem} />
+        <AiOperatingSystemPropFirmSection operatingSystem={operatingSystem} />
+        <AiOperatingSystemGrowthSection operatingSystem={operatingSystem} />
+        <AiOperatingSystemMarketAssistantSection operatingSystem={operatingSystem} aiBusy={aiBusy} onAction={runMarketAssistantAction} />
+      </View>
       {localCoachStack}
       <View style={styles.terminalScreenStack}>
-        <View style={{ gap: 10 }}>
-          <Text style={styles.terminalSectionTitle}>{t("propFirmRiskAssistant")}</Text>
-          {safeAnalysisTemplates.length ? (
-            <PropFirmCoachSection
-              templates={safeAnalysisTemplates}
-              value={analysisTemplateKey || activeTemplate?.key || ""}
-              mode={propMode}
-              snapshot={selectedPropSnapshot}
-              stats={periodStats}
-              passProbability={passProbability}
-              revengeTrading={revengeTrading}
-              onTemplateChange={changeAnalysisTemplate}
-              onModeChange={changePropMode}
-            />
-          ) : (
-            <TerminalGlassCard>
-              <Text style={styles.terminalSub}>{t("syncFirmTemplates")}</Text>
-            </TerminalGlassCard>
-          )}
-        </View>
         <TerminalPatternDetective stats={periodStats} />
         <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
         {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
       </View>
 
       <View style={styles.terminalScreenStack}>
-        <React.Suspense fallback={null}>
-          <LazyMarketIntelligenceTools />
-        </React.Suspense>
         <MarketIntelligencePanel lang={lang} />
         <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
       </View>

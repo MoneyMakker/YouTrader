@@ -131,6 +131,19 @@ export type AiInsightEngineResult = {
   insights: AiInsight[];
   primary: AiInsight[];
   groups: Record<AiInsightCategory, AiInsight[]>;
+  confidence: "empty" | "low" | "medium" | "high";
+  sample: {
+    tradeCount: number;
+    tradingDays: number;
+    hasSessionEvidence: boolean;
+    hasSetupEvidence: boolean;
+    hasPropEvidence: boolean;
+  };
+  emptyState?: {
+    title: string;
+    message: string;
+    requiredTrades: number;
+  };
 };
 
 export type AiWeeklyReport = {
@@ -274,6 +287,75 @@ const rowLabel = (row: PerformanceRow | undefined, fallback: string) =>
 
 const clampScore = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
 
+const normalizeTextKey = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const uniqueStrings = (items: string[], limit = 4) => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const clean = item.trim();
+    if (!clean) continue;
+    const key = normalizeTextKey(clean);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(clean);
+    if (result.length >= limit) break;
+  }
+  return result;
+};
+
+const uniqueMetrics = (items: string[]) => uniqueStrings(items, 8);
+
+const normalizeEvidence = (items: string[]) =>
+  uniqueStrings(
+    items.filter((item) =>
+      /\d|\$|%|status|severity|buffer|trades|session|setup|day|pf|expectancy|drawdown|consistency|win rate/i.test(item),
+    ),
+    4,
+  );
+
+const uniqueDates = (trades: TradeLike[]) =>
+  [...new Set(trades.map((trade) => trade.date).filter(Boolean) as string[])];
+
+const rowsWithEvidence = (rows: PerformanceRow[] | undefined, minCount = 2) =>
+  (rows || []).filter((row) => (row.count || 0) >= minCount);
+
+const rowEvidence = (prefix: string, row?: PerformanceRow) => {
+  if (!row || !(row.count || 0)) return "";
+  const winRate = Number.isFinite(row.wr) ? `, WR ${pct(row.wr)}` : "";
+  return `${prefix} ${row.label}: ${money(row.pnl)} across ${row.count || 0} trades${winRate}`;
+};
+
+function buildInsightSample(input: AiInsightEngineInput) {
+  const tradeCount = input.stats.count;
+  const tradingDays = uniqueDates(input.trades).length;
+  const sessionRows = rowsWithEvidence(input.stats.session);
+  const setupRows = rowsWithEvidence(input.stats.bySetup);
+  const hasPropEvidence = Boolean(input.prop?.status || input.prop?.dailyRemaining != null || input.prop?.accountRemaining != null);
+  const confidence: AiInsightEngineResult["confidence"] =
+    tradeCount === 0
+      ? "empty"
+      : tradeCount < 5 || tradingDays < 2
+        ? "low"
+        : tradeCount >= 20 && tradingDays >= 5
+          ? "high"
+          : "medium";
+
+  return {
+    confidence,
+    sample: {
+      tradeCount,
+      tradingDays,
+      hasSessionEvidence: sessionRows.length > 0,
+      hasSetupEvidence: setupRows.length > 0,
+      hasPropEvidence,
+    },
+    sessionRows,
+    setupRows,
+  };
+}
+
 const gradeForScore = (score: number): AiWeeklyReport["grade"] =>
   score >= 82 ? "A" : score >= 68 ? "B" : score >= 52 ? "C" : "D";
 
@@ -293,22 +375,32 @@ const fallbackMistake = (stats: StatsLike, patterns?: AiInsightEngineInput["patt
 };
 
 function createInsight(input: Omit<AiInsight, "id" | "createdAt" | "relatedInsightIds"> & { createdAt: string }): AiInsight {
+  const evidence = normalizeEvidence(input.evidence);
+  if (!evidence.length) {
+    throw new Error(`AI insight "${input.title}" is missing journal/stat evidence.`);
+  }
   return {
     id: stableId(input.category, input.title, input.sourceMetrics),
     relatedInsightIds: [],
     ...input,
+    evidence,
+    sourceMetrics: uniqueMetrics(input.sourceMetrics),
   };
 }
 
 function dedupeInsights(insights: AiInsight[]) {
   const seen = new Set<string>();
+  const usedRecommendations = new Set<string>();
+  const usedMetricSets = new Set<string>();
   const result: AiInsight[] = [];
   for (const insight of insights) {
-    const key = `${insight.category}:${insight.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
-    const recommendationKey = insight.recommendation.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().slice(0, 90);
-    if (seen.has(key) || seen.has(recommendationKey)) continue;
+    const key = `${insight.category}:${normalizeTextKey(insight.title)}`;
+    const recommendationKey = normalizeTextKey(insight.recommendation).slice(0, 110);
+    const metricKey = [...insight.sourceMetrics].sort().join("|");
+    if (seen.has(key) || usedRecommendations.has(recommendationKey) || usedMetricSets.has(metricKey)) continue;
     seen.add(key);
-    seen.add(recommendationKey);
+    usedRecommendations.add(recommendationKey);
+    if (metricKey) usedMetricSets.add(metricKey);
     result.push(insight);
   }
   return result;
@@ -701,33 +793,431 @@ export function buildImprovementTimeline(input: AiInsightEngineInput): AiImprove
   };
 }
 
-export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineResult {
+export type NormalizedAiAnalytics = {
+  confidence: AiInsightEngineResult["confidence"];
+  sample: AiInsightEngineResult["sample"];
+  emptyState?: AiInsightEngineResult["emptyState"];
+  createdAt: string;
+  bestSession?: PerformanceRow;
+  worstSession?: PerformanceRow;
+  bestDay?: PerformanceRow;
+  worstDay?: PerformanceRow;
+  bestSetup?: PerformanceRow;
+  worstSetup?: PerformanceRow;
+  grossWin: number;
+  grossLoss: number;
+  winningTradeCount: number;
+  losingTradeCount: number;
+};
+
+export type AiOperatingSystemRecommendation = {
+  title: string;
+  action: string;
+  evidence: string[];
+  confidence: AiInsightEngineResult["confidence"];
+  sourceMetrics: string[];
+};
+
+export type AiOperatingSystem = {
+  today: {
+    question: "What should I do today?";
+    state: "empty" | "low_confidence" | "ready";
+    tradingScore: number | null;
+    mission: AiDailyMission | null;
+    bestSession: string | null;
+    maxTrades: number | null;
+    dailyLossLimit: number | null;
+    confidence: AiInsightEngineResult["confidence"];
+    primaryCta: "start_trading_day" | "mark_today_complete" | "log_more_trades";
+    recommendation: AiOperatingSystemRecommendation | null;
+    evidence: string[];
+    emptyState?: AiInsightEngineResult["emptyState"];
+  };
+  coach: {
+    question: "What should I improve on the next trade?";
+    state: "empty" | "low_confidence" | "ready";
+    biggestEdge: AiOperatingSystemRecommendation | null;
+    biggestMistake: AiOperatingSystemRecommendation | null;
+    nextImprovement: AiOperatingSystemRecommendation | null;
+    evidence: string[];
+    emptyState?: AiInsightEngineResult["emptyState"];
+  };
+  tradingDna: {
+    question: "What type of trader am I?";
+    state: "empty" | "low_confidence" | "ready";
+    profile: AiTradingDNAProfile | null;
+    evidence: string[];
+    emptyState?: AiInsightEngineResult["emptyState"];
+  };
+  propFirm: {
+    question: "How do I pass/protect my account?";
+    state: "empty" | "low_confidence" | "ready" | "not_configured";
+    mode: "evaluation" | "funded" | "live" | "consistency" | "payout_protection";
+    recommendations: Record<"evaluation" | "funded" | "live" | "consistency" | "payout_protection", AiOperatingSystemRecommendation | null>;
+    evidence: string[];
+    emptyState?: AiInsightEngineResult["emptyState"];
+  };
+  evidence: {
+    question: "Why does AI say this?";
+    state: "empty" | "low_confidence" | "ready";
+    sessionImpact: string[];
+    weekdayImpact: string[];
+    instrumentImpact: string[];
+    setupImpact: string[];
+    calendarNewsImpact: string[];
+    behaviorPatterns: string[];
+    metrics: string[];
+    emptyState?: AiInsightEngineResult["emptyState"];
+  };
+  growth: {
+    question: "Am I becoming a better trader?";
+    state: "empty" | "low_confidence" | "ready";
+    timeline: AiImprovementTimeline | null;
+    recommendation: AiOperatingSystemRecommendation | null;
+    evidence: string[];
+    emptyState?: AiInsightEngineResult["emptyState"];
+  };
+  marketAssistant: {
+    question: "Market intelligence tools/actions";
+    state: "available" | "low_confidence" | "empty";
+    actions: {
+      id: "summarize_today" | "risk_for_mes" | "pre_market_plan" | "watchlist_risk" | "economic_calendar" | "prop_preparation" | "top_news_only";
+      label: string;
+      source: "journal" | "market" | "calendar" | "prop_firm";
+      requiresJournalEvidence: boolean;
+      enabled: boolean;
+    }[];
+    evidence: string[];
+  };
+  confidence: AiInsightEngineResult["confidence"];
+  sample: AiInsightEngineResult["sample"];
+};
+
+export function buildNormalizedAiAnalytics(input: AiInsightEngineInput): NormalizedAiAnalytics {
   const createdAt = input.createdAt || new Date().toISOString();
+  const sample = buildInsightSample(input);
+  const losingTrades = input.trades.filter((trade) => trade.pnl < 0);
+  const winningTrades = input.trades.filter((trade) => trade.pnl > 0);
+
+  return {
+    confidence: sample.confidence,
+    sample: sample.sample,
+    emptyState: sample.confidence === "empty" || sample.confidence === "low"
+      ? {
+          title: sample.confidence === "empty" ? "No journal evidence yet" : "Low-confidence AI Analytics sample",
+          message: sample.confidence === "empty"
+            ? "Log trades before AI Analytics generates coaching insights."
+            : `Only ${sample.sample.tradeCount} trades across ${sample.sample.tradingDays} trading days. Add at least 5 trades across 2 days for reliable insights.`,
+          requiredTrades: 5,
+        }
+      : undefined,
+    createdAt,
+    bestSession: bestRow(sample.sessionRows),
+    worstSession: worstRow(sample.sessionRows),
+    bestDay: bestRow(input.stats.weekday),
+    worstDay: worstRow(input.stats.weekday),
+    bestSetup: bestRow(sample.setupRows),
+    worstSetup: worstRow(sample.setupRows),
+    grossWin: winningTrades.reduce((sum, trade) => sum + trade.pnl, 0),
+    grossLoss: Math.abs(losingTrades.reduce((sum, trade) => sum + trade.pnl, 0)),
+    winningTradeCount: winningTrades.length,
+    losingTradeCount: losingTrades.length,
+  };
+}
+
+const operatingState = (confidence: AiInsightEngineResult["confidence"]) =>
+  confidence === "empty" ? "empty" : confidence === "low" ? "low_confidence" : "ready";
+
+const recommendationFromInsight = (
+  insight: AiInsight | undefined,
+  confidence: AiInsightEngineResult["confidence"],
+): AiOperatingSystemRecommendation | null =>
+  insight
+    ? {
+        title: insight.title,
+        action: insight.recommendation,
+        evidence: insight.evidence,
+        confidence,
+        sourceMetrics: insight.sourceMetrics,
+      }
+    : null;
+
+const dailyTradeCounts = (trades: TradeLike[]) =>
+  Object.values(
+    trades.reduce<Record<string, number>>((acc, trade) => {
+      if (!trade.date) return acc;
+      acc[trade.date] = (acc[trade.date] || 0) + 1;
+      return acc;
+    }, {}),
+  );
+
+const conservativeMaxTrades = (trades: TradeLike[]) => {
+  const counts = dailyTradeCounts(trades);
+  if (!counts.length) return null;
+  const sorted = [...counts].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] || 1;
+  return Math.max(1, Math.min(4, Math.round(median)));
+};
+
+const operatingTradingScore = (stats: StatsLike) =>
+  clampScore(
+    stats.wr * 0.28 +
+    Math.min(stats.pf, 3) * 14 +
+    Math.max(0, stats.consistency) * 0.22 +
+    Math.max(0, stats.drawdownControl) * 0.22 +
+    (stats.exp > 0 ? 10 : 0),
+  );
+
+const evidenceRows = (rows: PerformanceRow[] | undefined, prefix: string, limit = 3) =>
+  rowsWithEvidence(rows)
+    .slice(0, limit)
+    .map((row) => rowEvidence(prefix, row))
+    .filter(Boolean);
+
+const symbolRows = (trades: TradeLike[]) => {
+  const map = trades.reduce<Record<string, PerformanceRow>>((acc, trade) => {
+    const key = trade.symbol || "Unknown";
+    if (!acc[key]) acc[key] = { label: key, pnl: 0, count: 0, wr: 0 };
+    acc[key].pnl += trade.pnl;
+    acc[key].count = (acc[key].count || 0) + 1;
+    acc[key].wr = (acc[key].wr || 0) + (trade.pnl > 0 ? 1 : 0);
+    return acc;
+  }, {});
+  return Object.values(map)
+    .map((row) => ({ ...row, wr: row.count ? ((row.wr || 0) / row.count) * 100 : 0 }))
+    .filter((row) => (row.count || 0) >= 2)
+    .sort((a, b) => b.pnl - a.pnl);
+};
+
+const propRecommendation = (
+  mode: keyof AiOperatingSystem["propFirm"]["recommendations"],
+  prop: PropContext | undefined,
+  stats: StatsLike,
+  confidence: AiInsightEngineResult["confidence"],
+): AiOperatingSystemRecommendation | null => {
+  if (!prop) return null;
+  const status = prop.status || "CLEAR";
+  const evidence = normalizeEvidence([
+    `Status ${status}`,
+    `Daily buffer ${money(prop.dailyRemaining)}`,
+    `Account buffer ${money(prop.accountRemaining)}`,
+    `Pass probability ${Math.round(prop.passProbability || 0)}%`,
+    `Consistency ${pct(stats.consistency)}`,
+    `Drawdown ${money(stats.maxDd)}`,
+  ]);
+  if (!evidence.length) return null;
+
+  const shared = { confidence, evidence, sourceMetrics: ["prop_status", "daily_buffer", "account_buffer", "consistency"] };
+  if (mode === "evaluation") {
+    return {
+      ...shared,
+      title: "Evaluation pass path",
+      action: prop.remainingToPass != null
+        ? `Protect drawdown first; remaining target is ${money(prop.remainingToPass)}.`
+        : "Protect drawdown first; select a synced evaluation template for target tracking.",
+    };
+  }
+  if (mode === "funded") {
+    return {
+      ...shared,
+      title: "Funded account protection",
+      action: status === "STOP" ? "Stop trading and protect the funded account." : "Keep daily risk capped and avoid rule violations before payout.",
+    };
+  }
+  if (mode === "live") {
+    return {
+      ...shared,
+      title: "Live account growth",
+      action: stats.drawdownControl >= 70 ? "Compound only with stable size and positive expectancy." : "Pause growth and rebuild drawdown control before increasing risk.",
+    };
+  }
+  if (mode === "consistency") {
+    return {
+      ...shared,
+      title: "Consistency control",
+      action: stats.consistency >= 70 ? "Keep size and trade count stable; avoid outlier days." : "Reduce trade count variance and cap the next session at a fixed number of trades.",
+    };
+  }
+  return {
+    ...shared,
+    title: "Payout protection",
+    action: prop.payoutReady ? "Protect payout eligibility: reduce size and stop after any rule break." : "Build payout safety by protecting buffer and avoiding trailing drawdown traps.",
+  };
+};
+
+export function buildAiOperatingSystem(input: AiInsightEngineInput): AiOperatingSystem {
+  const normalized = buildNormalizedAiAnalytics(input);
+  const insights = buildAiInsights(input);
+  const state = operatingState(normalized.confidence);
+  const emptyState = normalized.emptyState;
+  const mission = state === "ready" ? buildAiDailyMission(input) : null;
+  const tradingDna = state === "ready" ? buildTradingDNAProfile(input) : null;
+  const growthTimeline = state === "ready" ? buildImprovementTimeline(input) : null;
+  const score = state === "ready" ? operatingTradingScore(input.stats) : null;
+  const maxTrades = state === "ready" ? conservativeMaxTrades(input.trades) : null;
+  const primaryInsight = insights.primary[0];
+  const edgeInsight = insights.insights.find((insight) => insight.category === "timing" || insight.category === "achievement");
+  const mistakeInsight = insights.insights.find((insight) => insight.priority === "high" && (insight.category === "risk" || insight.category === "discipline"));
+  const improvementInsight = insights.insights.find((insight) => insight.category === "improvement") || primaryInsight;
+  const sessionImpact = evidenceRows(input.stats.session, "Session");
+  const weekdayImpact = evidenceRows(input.stats.weekday, "Weekday");
+  const setupImpact = evidenceRows(input.stats.bySetup, "Setup");
+  const instrumentImpact = evidenceRows(symbolRows(input.trades), "Instrument");
+  const behaviorPatterns = uniqueStrings([
+    ...(input.patterns?.strengths || []).map((item) => item.detail || item.title),
+    ...(input.patterns?.risks || []).map((item) => item.detail || item.title),
+    input.revengeRisk?.reason || "",
+  ]);
+  const metrics = uniqueMetrics(insights.insights.flatMap((insight) => insight.sourceMetrics));
+  const marketEvidence = uniqueStrings([...(input.calendarContext || []), ...(input.newsContext || [])]);
+  const todayEvidence = normalizeEvidence([
+    `${normalized.sample.tradeCount} trades across ${normalized.sample.tradingDays} trading days`,
+    normalized.bestSession ? rowEvidence("Best session", normalized.bestSession) : "",
+    `Trading score ${score ?? 0}`,
+    input.prop?.dailyLossLimit != null ? `Daily loss limit ${money(input.prop.dailyLossLimit)}` : "",
+  ]);
+  const todayRecommendation = mission && todayEvidence.length
+    ? {
+        title: mission.title,
+        action: mission.reason,
+        evidence: todayEvidence,
+        confidence: normalized.confidence,
+        sourceMetrics: uniqueMetrics(mission.relatedStats),
+      }
+    : null;
+  const growthEvidence = growthTimeline
+    ? normalizeEvidence([
+        ...growthTimeline.whatImproved,
+        ...growthTimeline.whatDeclined,
+        `Consistency ${pct(input.stats.consistency)}`,
+        `Risk control ${pct(input.stats.drawdownControl)}`,
+      ])
+    : [];
+
+  return {
+    today: {
+      question: "What should I do today?",
+      state,
+      tradingScore: score,
+      mission,
+      bestSession: normalized.bestSession?.label || null,
+      maxTrades,
+      dailyLossLimit: input.prop?.dailyLossLimit ?? null,
+      confidence: normalized.confidence,
+      primaryCta: state === "ready" ? "start_trading_day" : "log_more_trades",
+      recommendation: todayRecommendation,
+      evidence: todayEvidence,
+      emptyState,
+    },
+    coach: {
+      question: "What should I improve on the next trade?",
+      state,
+      biggestEdge: state === "ready" ? recommendationFromInsight(edgeInsight, normalized.confidence) : null,
+      biggestMistake: state === "ready" ? recommendationFromInsight(mistakeInsight, normalized.confidence) : null,
+      nextImprovement: state === "ready" ? recommendationFromInsight(improvementInsight, normalized.confidence) : null,
+      evidence: uniqueStrings(insights.primary.flatMap((insight) => insight.evidence)),
+      emptyState,
+    },
+    tradingDna: {
+      question: "What type of trader am I?",
+      state,
+      profile: tradingDna,
+      evidence: tradingDna ? uniqueStrings([`Best symbol ${tradingDna.metrics.bestSymbol}`, `Best session ${tradingDna.metrics.bestSession}`, `Consistency ${pct(tradingDna.metrics.consistency)}`]) : [],
+      emptyState,
+    },
+    propFirm: {
+      question: "How do I pass/protect my account?",
+      state: !input.prop && state === "ready" ? "not_configured" : state,
+      mode: (input.prop?.mode === "funded" ? "funded" : "evaluation"),
+      recommendations: {
+        evaluation: state === "ready" ? propRecommendation("evaluation", input.prop, input.stats, normalized.confidence) : null,
+        funded: state === "ready" ? propRecommendation("funded", input.prop, input.stats, normalized.confidence) : null,
+        live: state === "ready" ? propRecommendation("live", input.prop, input.stats, normalized.confidence) : null,
+        consistency: state === "ready" ? propRecommendation("consistency", input.prop, input.stats, normalized.confidence) : null,
+        payout_protection: state === "ready" ? propRecommendation("payout_protection", input.prop, input.stats, normalized.confidence) : null,
+      },
+      evidence: input.prop ? normalizeEvidence([`Status ${input.prop.status || "CLEAR"}`, `Daily buffer ${money(input.prop.dailyRemaining)}`, `Account buffer ${money(input.prop.accountRemaining)}`]) : [],
+      emptyState,
+    },
+    evidence: {
+      question: "Why does AI say this?",
+      state,
+      sessionImpact,
+      weekdayImpact,
+      instrumentImpact,
+      setupImpact,
+      calendarNewsImpact: marketEvidence,
+      behaviorPatterns,
+      metrics,
+      emptyState,
+    },
+    growth: {
+      question: "Am I becoming a better trader?",
+      state,
+      timeline: growthTimeline,
+      recommendation: growthTimeline && growthEvidence.length
+        ? {
+            title: "Growth focus",
+            action: growthTimeline.nextFocus,
+            evidence: growthEvidence,
+            confidence: normalized.confidence,
+            sourceMetrics: ["consistency", "risk_control", "expectancy", "emotional_control"],
+          }
+        : null,
+      evidence: growthEvidence,
+      emptyState,
+    },
+    marketAssistant: {
+      question: "Market intelligence tools/actions",
+      state: normalized.confidence === "empty" ? "empty" : normalized.confidence === "low" ? "low_confidence" : "available",
+      actions: [
+        { id: "summarize_today", label: "Summarize today", source: "journal", requiresJournalEvidence: true, enabled: normalized.sample.tradeCount > 0 },
+        { id: "risk_for_mes", label: "Risk for MES", source: "journal", requiresJournalEvidence: true, enabled: normalized.sample.tradeCount > 0 },
+        { id: "pre_market_plan", label: "Pre-market plan", source: "market", requiresJournalEvidence: false, enabled: true },
+        { id: "watchlist_risk", label: "Watchlist risk", source: "market", requiresJournalEvidence: false, enabled: true },
+        { id: "economic_calendar", label: "Economic calendar", source: "calendar", requiresJournalEvidence: false, enabled: true },
+        { id: "prop_preparation", label: "Prop preparation", source: "prop_firm", requiresJournalEvidence: true, enabled: !!input.prop && normalized.sample.tradeCount > 0 },
+        { id: "top_news_only", label: "Top news only", source: "market", requiresJournalEvidence: false, enabled: true },
+      ],
+      evidence: uniqueStrings([`${normalized.sample.tradeCount} journal trades`, ...marketEvidence]),
+    },
+    confidence: normalized.confidence,
+    sample: normalized.sample,
+  };
+}
+
+export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineResult {
+  const normalized = buildNormalizedAiAnalytics(input);
+  const { createdAt, sample } = normalized;
   const { trades, stats, patterns, prop, revengeRisk } = input;
   const insights: AiInsight[] = [];
-  const bestSession = bestRow(stats.session);
-  const worstSession = worstRow(stats.session);
-  const bestDay = bestRow(stats.weekday);
-  const worstDay = worstRow(stats.weekday);
-  const bestSetup = bestRow(stats.bySetup);
-  const worstSetup = worstRow(stats.bySetup);
-  const losingTrades = trades.filter((trade) => trade.pnl < 0);
-  const winningTrades = trades.filter((trade) => trade.pnl > 0);
-  const totalLoss = Math.abs(losingTrades.reduce((sum, trade) => sum + trade.pnl, 0));
-  const totalWin = winningTrades.reduce((sum, trade) => sum + trade.pnl, 0);
+  const {
+    bestSession,
+    worstSession,
+    bestDay,
+    worstDay,
+    bestSetup,
+    worstSetup,
+    grossLoss,
+    grossWin,
+    losingTradeCount,
+    winningTradeCount,
+  } = normalized;
 
-  if (stats.count === 0) {
-    insights.push(createInsight({
-      category: "discipline",
-      priority: "medium",
-      title: "Build the first clean sample",
-      summary: "AI Analytics needs journal evidence before it can coach risk, timing, and prop-firm behavior.",
-      evidence: ["0 logged trades in the selected month", "No session or setup sample yet"],
-      recommendation: "Log the next trade with symbol, P&L, mood, and one execution note.",
-      visualType: "rule_card",
-      sourceMetrics: ["trade_count"],
-      createdAt,
-    }));
+  if (normalized.confidence === "empty" || normalized.confidence === "low") {
+    const groups = categories.reduce((acc, category) => {
+      acc[category] = [];
+      return acc;
+    }, {} as Record<AiInsightCategory, AiInsight[]>);
+
+    return {
+      insights: [],
+      primary: [],
+      groups,
+      confidence: normalized.confidence,
+      sample,
+      emptyState: normalized.emptyState,
+    };
   }
 
   if (stats.count >= 1) {
@@ -736,23 +1226,33 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
       priority: stats.pnl >= 0 ? "medium" : "high",
       title: stats.pnl >= 0 ? "Protect the green month" : "Stabilize the current month",
       summary: `${stats.count} trades have produced ${money(stats.pnl)} with ${pct(stats.wr)} win rate and ${stats.pf.toFixed(2)} profit factor.`,
-      evidence: [`Net P&L ${money(stats.pnl)}`, `Profit factor ${stats.pf.toFixed(2)}`, `Expectancy ${money(stats.exp)}`],
+      evidence: [
+        `${stats.count} trades across ${sample.tradingDays} trading days`,
+        `Net P&L ${money(stats.pnl)}`,
+        `Win rate ${pct(stats.wr)} and PF ${stats.pf.toFixed(2)}`,
+        `Expectancy ${money(stats.exp)}`,
+      ],
       recommendation: stats.pnl >= 0
         ? "Keep size stable and avoid adding risk after green streaks."
         : "Reduce decision count and trade only the highest-quality setup until expectancy improves.",
       visualType: "progress",
-      sourceMetrics: ["net_pnl", "win_rate", "profit_factor", "expectancy"],
+      sourceMetrics: ["trade_count", "net_pnl", "win_rate", "profit_factor", "expectancy"],
       createdAt,
     }));
   }
 
-  if (stats.count >= 5 && (stats.maxDd < 0 || stats.drawdownControl < 65 || totalLoss > totalWin)) {
+  if (stats.count >= 5 && (stats.maxDd < 0 || stats.drawdownControl < 65 || grossLoss > grossWin)) {
     insights.push(createInsight({
       category: "risk",
-      priority: stats.drawdownControl < 45 || totalLoss > totalWin * 1.25 ? "high" : "medium",
+      priority: stats.drawdownControl < 45 || grossLoss > grossWin * 1.25 ? "high" : "medium",
       title: "Risk leak is the first thing to fix",
       summary: `Drawdown is ${money(stats.maxDd)} and risk control is ${pct(stats.drawdownControl)}.`,
-      evidence: [`Max drawdown ${money(stats.maxDd)}`, `Gross losses ${money(-totalLoss)}`, `Risk control ${pct(stats.drawdownControl)}`],
+      evidence: [
+        `Max drawdown ${money(stats.maxDd)}`,
+        `Gross losses ${money(-grossLoss)} from ${losingTradeCount} losing trades`,
+        `Gross wins ${money(grossWin)} from ${winningTradeCount} winning trades`,
+        `Risk control ${pct(stats.drawdownControl)}`,
+      ],
       recommendation: "Cut size after the first rule break and stop after two consecutive losses.",
       visualType: "warning",
       sourceMetrics: ["max_drawdown", "risk_control", "gross_loss"],
@@ -766,7 +1266,11 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
       priority: "high",
       title: "Average loss is overpowering wins",
       summary: `Average win/loss ratio is ${stats.avgWinLoss.toFixed(2)}, so losses are not being contained fast enough.`,
-      evidence: [`Average win ${money(stats.avgWin)}`, `Average loss ${money(stats.avgLoss)}`, `Avg win/loss ${stats.avgWinLoss.toFixed(2)}`],
+      evidence: [
+        `Average win ${money(stats.avgWin)} across ${winningTradeCount} winning trades`,
+        `Average loss ${money(stats.avgLoss)} across ${losingTradeCount} losing trades`,
+        `Avg win/loss ${stats.avgWinLoss.toFixed(2)}`,
+      ],
       recommendation: "Predefine the invalidation level before entry and do not widen the stop after the trade is live.",
       visualType: "rule_card",
       sourceMetrics: ["average_win", "average_loss", "average_win_loss"],
@@ -774,7 +1278,7 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
     }));
   }
 
-  if (bestSession || worstSession) {
+  if (sample.hasSessionEvidence && (bestSession || worstSession)) {
     insights.push(createInsight({
       category: "timing",
       priority: worstSession && worstSession.pnl < 0 ? "medium" : "low",
@@ -783,8 +1287,8 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
         ? `${bestSession.label} leads your session sample at ${money(bestSession.pnl)}.`
         : "Log more trades to reveal your best and weakest sessions.",
       evidence: [
-        bestSession ? `Best session ${bestSession.label}: ${money(bestSession.pnl)}` : "No positive session yet",
-        worstSession ? `Weakest session ${worstSession.label}: ${money(worstSession.pnl)}` : "No weak session yet",
+        rowEvidence("Best session", bestSession),
+        rowEvidence("Weakest session", worstSession),
       ],
       recommendation: worstSession && worstSession.pnl < 0
         ? `Avoid increasing size during ${worstSession.label}; use it as review-only until the sample improves.`
@@ -801,7 +1305,11 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
       priority: "medium",
       title: "Consistency is below prop-firm standard",
       summary: `Consistency is ${pct(stats.consistency)}, which means results are still coming from uneven execution days.`,
-      evidence: [`Consistency ${pct(stats.consistency)}`, bestDay ? `Best day ${bestDay.label}: ${money(bestDay.pnl)}` : "No best day yet", worstDay ? `Worst day ${worstDay.label}: ${money(worstDay.pnl)}` : "No worst day yet"],
+      evidence: [
+        `Consistency ${pct(stats.consistency)}`,
+        rowEvidence("Best day", bestDay),
+        rowEvidence("Worst day", worstDay),
+      ],
       recommendation: "Set one max-trade rule for the next session and stop once it is reached.",
       visualType: "streak",
       sourceMetrics: ["consistency", "weekday_pnl"],
@@ -832,6 +1340,7 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
         `Status ${status}`,
         `Daily buffer ${money(prop.dailyRemaining)}`,
         `Account buffer ${money(prop.accountRemaining)}`,
+        `Pass probability ${passProbability}%`,
         prop.contractRecommendation
           ? `Contracts ${prop.contractRecommendation.recommended}/${prop.contractRecommendation.maxAllowed}`
           : `Remaining to pass ${money(prop.remainingToPass)}`,
@@ -849,7 +1358,11 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
       priority: revengeRisk.severity === "HIGH" ? "high" : "medium",
       title: "Revenge trading risk is active",
       summary: revengeRisk.reason || "Recent trade behavior shows elevated emotional re-entry risk.",
-      evidence: [revengeRisk.severity ? `Severity ${revengeRisk.severity}` : "Detected revenge-risk pattern", `${stats.count} trades in current sample`],
+      evidence: [
+        revengeRisk.severity ? `Severity ${revengeRisk.severity}` : "",
+        `${stats.count} trades in current sample`,
+        `Selected date ${createdAt.slice(0, 10)}`,
+      ],
       recommendation: revengeRisk.recommendation || "Take a mandatory cooldown after losses and avoid immediate re-entry.",
       visualType: "warning",
       sourceMetrics: ["revenge_risk", "recent_sequence"],
@@ -865,7 +1378,11 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
       priority: "low",
       title: strongest.title,
       summary: strongest.detail || "Your journal is starting to reveal a repeatable strength.",
-      evidence: [`Trade sample ${stats.count}`, `Trading score inputs: win rate ${pct(stats.wr)}, PF ${stats.pf.toFixed(2)}`],
+      evidence: [
+        `Trade sample ${stats.count}`,
+        `Win rate ${pct(stats.wr)} and PF ${stats.pf.toFixed(2)}`,
+        `Consistency ${pct(stats.consistency)}`,
+      ],
       recommendation: "Keep tagging this behavior so the app can separate real edge from noise.",
       visualType: "progress",
       sourceMetrics: ["pattern_strength", "trade_count"],
@@ -879,7 +1396,11 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
       priority: weakest.tone === "red" ? "high" : "medium",
       title: weakest.title,
       summary: weakest.detail || "This pattern deserves review before the next session.",
-      evidence: [`Trade sample ${stats.count}`, bestSetup ? `Best setup ${bestSetup.label}: ${money(bestSetup.pnl)}` : "Setup tags incomplete", worstSetup ? `Weak setup ${worstSetup.label}: ${money(worstSetup.pnl)}` : "No weak setup yet"],
+      evidence: [
+        `Trade sample ${stats.count}`,
+        rowEvidence("Best setup", bestSetup),
+        rowEvidence("Weak setup", worstSetup),
+      ],
       recommendation: "Write one rule that blocks this mistake before you trade again.",
       visualType: "comparison",
       sourceMetrics: ["pattern_risk", "setup_pnl"],
@@ -897,5 +1418,8 @@ export function buildAiInsights(input: AiInsightEngineInput): AiInsightEngineRes
     insights: sorted,
     primary: sorted.slice(0, 5),
     groups,
+    confidence: normalized.confidence,
+    sample,
+    emptyState: normalized.emptyState,
   };
 }
