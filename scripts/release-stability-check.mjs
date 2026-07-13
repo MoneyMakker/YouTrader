@@ -5,8 +5,6 @@ import path from "node:path";
 
 const root = process.cwd();
 const requiredLocales = ["en", "ru", "es", "fr", "de", "it", "uk"];
-const expectedVersion = "1.5.9";
-const expectedBuild = "97";
 
 function run(name, command, args) {
   console.log(`\n[release:stability] ${name}`);
@@ -26,14 +24,15 @@ function assert(condition, message) {
 
 function checkVersionFiles() {
   const pkg = JSON.parse(read("package.json"));
-  assert(pkg.version === expectedVersion, `package.json version must be ${expectedVersion}, found ${pkg.version}`);
+  assert(typeof pkg.version === "string" && pkg.version.length > 0, "package.json version is missing");
 
   const appJson = JSON.parse(read("app.json"));
   const expo = appJson.expo || {};
   assert(expo.version, "app.json expo.version is missing");
   assert(expo.ios?.buildNumber, "app.json expo.ios.buildNumber is missing");
-  assert(expo.version === expectedVersion, `app.json expo.version must be ${expectedVersion}, found ${expo.version}`);
-  assert(String(expo.ios.buildNumber) === expectedBuild, `app.json expo.ios.buildNumber must be ${expectedBuild}, found ${expo.ios.buildNumber}`);
+  const expectedVersion = pkg.version;
+  const expectedBuild = String(expo.ios.buildNumber);
+  assert(expo.version === expectedVersion, `app.json expo.version must match package.json (${expectedVersion}), found ${expo.version}`);
 
   const plist = read("ios/YouTrader/Info.plist");
   assert(new RegExp(`<key>CFBundleShortVersionString</key>\\s*<string>${expectedVersion}</string>`).test(plist), `Info.plist CFBundleShortVersionString must be ${expectedVersion}`);

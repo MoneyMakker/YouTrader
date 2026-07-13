@@ -51,7 +51,7 @@ export function safeParseJsonObject(content: string) {
 export function schemaInstruction(action: MarketIntelligenceAction) {
   const schemas: Record<MarketIntelligenceAction, string> = {
     market_sentiment:
-      '{"overallBias":"Bearish|Bullish|Mixed","biasPercent":0,"confidence":"Low|Medium|High","drivers":[],"riskSuggestion":"","disclaimer":"This is not financial advice. Use alongside your own trading plan."}',
+      '{"marketSentiment":"","confidence":"Low|Medium|High","drivers":[],"riskSuggestion":"","symbolBiases":[{"symbol":"","bias":"","reason":""}],"timestamp":"","inputHeadlineCount":0,"disclaimer":"This is not financial advice. Use alongside your own trading plan."}',
     market_narrative: '{"title":"Today\'s Story","bullets":[],"disclaimer":"This is not financial advice."}',
     watchlist_risk:
       '{"symbols":[{"symbol":"","risk":"Low|Medium|High","explanation":""}],"disclaimer":"This is not financial advice."}',
@@ -73,11 +73,19 @@ export function normalizeMarketOutput(action: MarketIntelligenceAction, value: R
   switch (action) {
     case "market_sentiment":
       return {
-        overallBias: stringValue(value.overallBias, "Mixed"),
-        biasPercent: Math.max(0, Math.min(100, Number(value.biasPercent) || 50)),
+        marketSentiment: stringValue(value.marketSentiment || value.overallBias, "Mixed"),
         confidence: stringValue(value.confidence, "Medium"),
         drivers: stringArray(value.drivers, ["Recent headlines suggest mixed sentiment."]),
         riskSuggestion: stringValue(value.riskSuggestion, "Reduce position size and protect capital."),
+        symbolBiases: Array.isArray(value.symbolBiases)
+          ? value.symbolBiases.slice(0, 8).map((row: Record<string, unknown>) => ({
+              symbol: stringValue(row.symbol, "NQ"),
+              bias: stringValue(row.bias, "Mixed"),
+              reason: stringValue(row.reason, "Recent headline flow is mixed."),
+            }))
+          : [],
+        timestamp: stringValue(value.timestamp, new Date().toISOString()),
+        inputHeadlineCount: Math.max(0, Math.round(Number(value.inputHeadlineCount) || 0)),
         disclaimer: "This is not financial advice. Use alongside your own trading plan.",
       };
     case "market_narrative":
@@ -153,12 +161,25 @@ export function fallbackMarketOutput(action: MarketIntelligenceAction, payload: 
   const symbol = stringValue(payload.symbol, "NQ");
   switch (action) {
     case "market_sentiment":
+      const headlines = Array.isArray(payload.headlines) ? payload.headlines as Record<string, unknown>[] : [];
+      const text = headlines.map((item) => `${item.title || ""} ${item.summary || ""}`).join(" ").toLowerCase();
+      const riskWords = ["inflation", "cpi", "fed", "yield", "war", "tariff", "selloff", "recession", "jobs"];
+      const constructiveWords = ["rally", "beat", "growth", "cut", "ease", "record", "optimism"];
+      const riskScore = riskWords.reduce((sum, word) => sum + (text.includes(word) ? 1 : 0), 0);
+      const constructiveScore = constructiveWords.reduce((sum, word) => sum + (text.includes(word) ? 1 : 0), 0);
+      const marketSentiment = headlines.length < 3 ? "Mixed / low signal" : riskScore > constructiveScore ? "Risk-off" : constructiveScore > riskScore ? "Constructive" : "Mixed";
       return normalizeMarketOutput(action, {
-        overallBias: "Mixed",
-        biasPercent: 50,
-        confidence: "Medium",
-        drivers: ["Headline flow is mixed", "Macro data still settling"],
-        riskSuggestion: "Reduce position size by 50%. Avoid revenge trading. Protect capital.",
+        marketSentiment,
+        confidence: headlines.length < 3 ? "Low" : "Medium",
+        drivers: headlines.length ? headlines.slice(0, 3).map((item) => String(item.title || "Visible headline")) : ["Headline flow is mixed", "Macro data still settling"],
+        riskSuggestion: headlines.length < 3 ? "Too few fresh headlines for high confidence. Keep risk conservative." : "Use this as volatility context only. Avoid increasing size because of headlines.",
+        symbolBiases: String(payload.symbols || payload.symbol || "NQ")
+          .split(/[,\s]+/)
+          .filter(Boolean)
+          .slice(0, 5)
+          .map((item) => ({ symbol: item.toUpperCase(), bias: marketSentiment, reason: "Derived from supplied headline mix." })),
+        timestamp: new Date().toISOString(),
+        inputHeadlineCount: headlines.length,
       });
     case "market_narrative":
       return normalizeMarketOutput(action, {

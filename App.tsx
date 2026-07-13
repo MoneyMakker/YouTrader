@@ -73,6 +73,7 @@ import {
   ChartColumnIncreasing,
   Check,
   ChevronDown,
+  ChevronRight,
   FileText,
   ImagePlus,
   Lock,
@@ -83,8 +84,10 @@ import {
   Sparkles,
   Settings as SettingsIcon,
   Target,
+  TrendingUp,
   Trophy,
   Unlock,
+  Zap,
 } from "lucide-react-native";
 import Svg, {
   Circle,
@@ -100,6 +103,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { AuthScreen } from "./src/auth/AuthScreen";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./src/auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "./src/auth/userCache";
+import { hashLocalAiInput, localAiCacheKey, readLocalAiResponse, writeLocalAiResponse } from "./src/utils/localAiResponseCache";
 import { clearOfflineJobsForUser, enqueueOfflineJob } from "./src/sync/offlineQueue";
 import { useNetworkReconnect } from "./src/sync/networkReconnect";
 import { pullUserPreferences, pushUserPreferences } from "./src/sync/userPreferencesSync";
@@ -125,6 +129,7 @@ import {
   fetchAIJournalSummary,
   fetchAINewsExplainer,
   fetchAIRiskPredictor,
+  fetchAITradeVisionReview,
   fetchAIWeeklyCoach,
   type AIDailyChallenge,
   type AIDailyPlan,
@@ -133,6 +138,7 @@ import {
   type AIProviderStatus,
   type AIResponse,
   type AIRiskPredictor,
+  type AITradeVisionReview,
   type AIWeeklyCoach,
 } from "./src/api/aiCoach";
 import { trackEvent, trackScreen } from "./src/observability/analytics";
@@ -6424,7 +6430,8 @@ function AiCoachConsole({
     { key: "why", label: "Why?" },
     { key: "fix", label: "Fix this" },
     { key: "prop_intro", label: "Prop risk" },
-    { key: "trade_vision_intro", label: "Trade Vision" },
+    { key: "plan", label: "Local plan" },
+    { key: "mistake_review", label: "Review" },
   ];
   useEffect(() => {
     return () => {
@@ -6514,7 +6521,7 @@ function AiCoachConsole({
     <TerminalGlassCard style={styles.coachConversationCard}>
       <View style={styles.coachConsoleHero}>
         <View style={[styles.tradeVisionIconOrbSmall, styles.coachConversationOrb, status.tone === "red" ? styles.coachConversationOrbRed : status.tone === "purple" ? styles.coachConversationOrbPurple : status.tone === "grey" ? styles.coachConversationOrbGrey : null]}>
-          <BrainCircuit size={18} color={status.tone === "red" ? C.red : status.tone === "purple" ? C.purple : status.tone === "grey" ? C.sub : C.green} strokeWidth={2.4} />
+          <BrainCircuit size={17} color={status.tone === "red" ? C.red : status.tone === "purple" ? C.purple : status.tone === "grey" ? C.sub : C.green} strokeWidth={2.4} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.coachConversationHeaderRow}>
@@ -6523,38 +6530,25 @@ function AiCoachConsole({
               {status.label}
             </Text>
           </View>
-          <View style={styles.coachStatusLine}>
-            <View style={[styles.coachStatusDot, status.tone === "red" ? styles.coachStatusDotRed : status.tone === "purple" ? styles.coachStatusDotPurple : status.tone === "grey" ? styles.coachStatusDotGrey : null]} />
-            <Text style={styles.coachStatusLineText}>{statusLine}</Text>
-          </View>
-          <Text style={styles.coachConsoleSentence}>{coachSentence}</Text>
-          <Text style={styles.terminalSub}>{status.reason}</Text>
+          <Text style={styles.coachCompactHeadline}>{truncateCoachLine(coachSentence, 64)}</Text>
+          <Text style={styles.coachCompactSub}>{truncateCoachLine(status.reason, 80)}</Text>
         </View>
       </View>
-      <View style={styles.coachConsoleFocusCard}>
-        <Text style={styles.terminalSmallLabel}>Today's Priority</Text>
-        <Text style={styles.propCoachHeadline}>{priority}</Text>
+      <View style={styles.coachFocusGrid}>
+        <CoachFocusRow label="Today's priority" value={priority} tone="action" />
+        <CoachFocusRow label="Biggest risk" value={biggestRisk} tone="risk" />
+        <CoachFocusRow label="Best action now" value={bestAction} tone="action" />
       </View>
-      <MetricPillRow
-        items={[
-          { label: "Biggest Risk", value: biggestRisk, tone: revengeTrading.detected || biggestMistake ? "red" : "grey" },
-          { label: "Best Action Now", value: bestAction, tone: lowConfidence ? "grey" : "green" },
-          { label: "Confidence", value: aiOsConfidenceLabel(operatingSystem.confidence), tone: lowConfidence ? "purple" : "green" },
-          { label: "Sample", value: `${operatingSystem.sample.tradeCount}T / ${operatingSystem.sample.tradingDays}D`, tone: operatingSystem.sample.tradeCount >= 5 ? "green" : "grey" },
-        ]}
-      />
       {lowConfidence ? (
-        <View style={styles.coachLowConfidenceBox}>
-          <Text style={styles.terminalSmallLabel}>LOW CONFIDENCE</Text>
-          <Text style={styles.terminalSub}>Add more trades with notes, setup, and outcome before using strong coaching decisions.</Text>
-        </View>
+        <Text style={styles.coachCompactHint}>Low confidence · {operatingSystem.sample.tradeCount} trades · {operatingSystem.sample.tradingDays} days</Text>
       ) : null}
       <Pressable
         disabled={coachThinking || coachState === "session_complete"}
         onPress={() => showPanel(primaryCtaState)}
-        style={[styles.coachPrimaryCta, (coachThinking || coachState === "session_complete") && styles.disabledBtn]}
+        style={[styles.coachPrimaryCta, coachState === "session_started" && styles.coachPrimaryCtaActive, (coachThinking || coachState === "session_complete") && styles.disabledBtn]}
       >
-        <Text style={styles.coachPrimaryCtaText}>{primaryCtaLabel}</Text>
+        <Zap size={14} color={coachState === "session_complete" ? C.sub : C.green} strokeWidth={2.5} />
+        <Text style={[styles.coachPrimaryCtaText, coachState === "session_complete" && styles.coachPrimaryCtaTextDone]}>{primaryCtaLabel}</Text>
       </Pressable>
       <View style={styles.coachConsoleActionRow}>
         {actionButtons.map((action) => {
@@ -6651,69 +6645,56 @@ function AiCoachConsole({
       {coachState === "prop_intro" || coachState === "prop_simulator" || coachState === "prop_emergency" ? (
         <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
           <Text style={styles.terminalSmallLabel}>Prop risk mentor</Text>
-          <Text style={styles.propCoachHeadline}>{propAction}</Text>
+          <Text style={styles.coachCompactValue}>{truncateCoachLine(propAction, 96)}</Text>
           <MetricPillRow
             items={[
-              { label: "Prop Status", value: propStatus, tone: propStatus === "STOP" ? "red" : propStatus === "CAUTION" ? "purple" : snapshot ? "green" : "grey" },
+              { label: "Status", value: propStatus, tone: propStatus === "STOP" ? "red" : propStatus === "CAUTION" ? "purple" : snapshot ? "green" : "grey" },
               { label: "Daily Buffer", value: propDailyBuffer, tone: snapshot && snapshot.dailyRemaining > 0 ? "green" : "red" },
-              { label: "Account Buffer", value: propAccountBuffer, tone: snapshot && snapshot.accountRemaining > 0 ? "green" : "red" },
               { label: "Max Safe Loss", value: propMaxSafeLoss, tone: snapshot ? "purple" : "grey" },
             ]}
           />
           <View style={styles.coachConsoleActionRow}>
             <Pressable onPress={() => showPanel("prop_emergency")} style={[styles.coachConsoleActionChip, coachState === "prop_emergency" && styles.coachConsoleActionChipActive]}>
-              <Text style={[styles.coachConsoleActionText, coachState === "prop_emergency" && styles.coachConsoleActionTextActive]}>Protect account</Text>
+              <Text style={[styles.coachConsoleActionText, coachState === "prop_emergency" && styles.coachConsoleActionTextActive]}>Emergency mode</Text>
             </Pressable>
             <Pressable onPress={() => showPanel("prop_simulator")} style={[styles.coachConsoleActionChip, coachState === "prop_simulator" && styles.coachConsoleActionChipActive]}>
               <Text style={[styles.coachConsoleActionText, coachState === "prop_simulator" && styles.coachConsoleActionTextActive]}>Run what-if</Text>
             </Pressable>
-            <Pressable onPress={() => showPanel("prop_emergency")} style={styles.coachConsoleActionChip}>
-              <Text style={styles.coachConsoleActionText}>Emergency mode</Text>
-            </Pressable>
             <Pressable onPress={() => setRiskMathOpen((prev) => !prev)} style={styles.coachConsoleActionChip}>
-              <Text style={styles.coachConsoleActionText}>{riskMathOpen ? "Hide risk math" : "Show risk math"}</Text>
+              <Text style={styles.coachConsoleActionText}>{riskMathOpen ? "Hide evidence" : "Show evidence"}</Text>
             </Pressable>
           </View>
-          {coachState === "prop_simulator" ? (
-            <Text style={styles.terminalSub}>What-if simulator is available in Full Analytics. This branch keeps the mentor summary compact.</Text>
-          ) : null}
           {coachState === "prop_emergency" ? (
             <View style={styles.coachConsoleRulePreview}>
-              <Text style={styles.terminalSmallLabel}>Emergency Mode</Text>
-              <Text style={styles.propCoachHeadline}>{snapshot ? "Stop after one rule break. Reduce size before the next trade." : "Set up prop account rules first."}</Text>
-              <Text style={styles.terminalSub}>Local preview only. No risk lock is saved yet.</Text>
+              <Text style={styles.coachCompactValue}>{snapshot ? "Stop after one rule break. Reduce size before the next trade." : "Connect a prop template in Prop Coach below."}</Text>
             </View>
           ) : null}
           {riskMathOpen ? (
             <View style={styles.coachConsoleReveal}>
-              {propEvidence.map((item) => <Text key={`prop-math-${item}`} style={styles.aiBulletText}>• {item}</Text>)}
+              {propEvidence.slice(0, 3).map((item) => <Text key={`prop-math-${item}`} style={styles.aiBulletText}>• {item}</Text>)}
             </View>
           ) : null}
-        </Animated.View>
-      ) : null}
-      {coachState === "trade_vision_intro" ? (
-        <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
-          <Text style={styles.terminalSmallLabel}>Trade Vision branch</Text>
-          <Text style={styles.propCoachHeadline}>Upload one screenshot and ask your coach what really happened.</Text>
-          <TradeVisionCoachSection userId={userId} />
         </Animated.View>
       ) : null}
     </TerminalGlassCard>
   );
 }
 
-const TRADE_VISION_MONTHLY_LIMIT = 20;
+const TRADE_VISION_MONTHLY_LIMIT = 25;
 const TRADE_VISION_USAGE_KEY = "trade-vision-reviews";
+const TRADE_VISION_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const AI_ASSISTANT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRADE_VISION_PROMPTS = [
-  "Was my entry valid?",
-  "What mistake did I make?",
-  "Where should my stop have been?",
-  "Would you take this trade?",
-  "Is this an A+ setup?",
-  "Did I chase?",
-  "Was my stop logical?",
-  "How should I manage this next time?",
-];
+  { label: "Entry valid?", question: "Was my entry valid?" },
+  { label: "Stop logical?", question: "Was my stop logical?" },
+  { label: "A+ setup?", question: "Is this an A+ setup?" },
+  { label: "Did I chase?", question: "Did I chase?" },
+  { label: "Better entry?", question: "Where was the better entry?" },
+  { label: "Better stop?", question: "Where should my stop have been?" },
+  { label: "Risk too high?", question: "Was my risk too high?" },
+  { label: "Would you take it?", question: "Would you take this trade?" },
+  { label: "What to fix?", question: "What should I fix next time?" },
+] as const;
 const TRADE_VISION_THINKING_STEPS = [
   "Analyzing market structure...",
   "Reviewing entry...",
@@ -6721,28 +6702,176 @@ const TRADE_VISION_THINKING_STEPS = [
   "Comparing with your journal...",
   "Building coach response...",
 ];
-const TRADE_VISION_REVIEW_POINTS = [
-  "Entry quality",
-  "Stop placement",
-  "Risk management",
-  "Trade execution",
-  "A+ setup quality",
-  "Journal pattern matching",
-  "Personalized coaching",
-];
-
 type TradeVisionUiState = "empty" | "image_selected" | "loading" | "result" | "error" | "limit_reached";
+type TradeVisionDetail = "entry" | "stop" | "rr" | "mistake" | "alternative" | "evidence" | "journal";
 
-function TradeVisionCoachSection({ userId }: { userId: string | null }) {
+function tradeVisionMimeFromUri(uri: string, fallback?: string | null) {
+  if (fallback && /^image\/(jpeg|png|webp)$/i.test(fallback)) return fallback.toLowerCase();
+  const clean = uri.toLowerCase().split("?")[0];
+  if (clean.endsWith(".png")) return "image/png";
+  if (clean.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
+
+function AiIntelligencePulse({ tone = C.green }: { tone?: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+  return (
+    <Animated.View
+      style={[
+        styles.aiIntelligencePulse,
+        { borderColor: `${tone}66`, backgroundColor: `${tone}14`, shadowColor: tone },
+        {
+          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.08] }) }],
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }),
+        },
+      ]}
+    >
+      <View style={[styles.aiIntelligencePulseCore, { backgroundColor: tone }]} />
+    </Animated.View>
+  );
+}
+
+function AiFlowRail({ nodes, tone = C.purple }: { nodes: string[]; tone?: string }) {
+  const travel = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(travel, { toValue: 1, duration: 2800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [travel]);
+  return (
+    <View style={styles.aiFlowRail}>
+      <View style={[styles.aiFlowTrack, { backgroundColor: `${tone}32` }]} />
+      <Animated.View
+        style={[
+          styles.aiFlowSignal,
+          { backgroundColor: tone, shadowColor: tone },
+          { transform: [{ translateX: travel.interpolate({ inputRange: [0, 1], outputRange: [0, 220] }) }] },
+        ]}
+      />
+      <View style={styles.aiFlowNodes}>
+        {nodes.map((node) => (
+          <View key={node} style={styles.aiFlowNode}>
+            <View style={[styles.aiFlowNodeDot, { borderColor: `${tone}80`, backgroundColor: `${tone}18`, shadowColor: tone }]}>
+              <View style={[styles.aiFlowNodeCore, { backgroundColor: tone }]} />
+            </View>
+            <Text style={styles.aiFlowNodeLabel}>{node}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function AiImageScan({ active }: { active: boolean }) {
+  const scan = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!active) {
+      scan.stopAnimation();
+      scan.setValue(0);
+      return;
+    }
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scan, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(scan, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [active, scan]);
+  if (!active) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.aiImageScanLine,
+        {
+          opacity: scan.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.2, 0.9, 0.2] }),
+          transform: [{ translateY: scan.interpolate({ inputRange: [0, 1], outputRange: [8, 190] }) }],
+        },
+      ]}
+    />
+  );
+}
+
+function AiGuardianRing({ ratio, tone, label }: { ratio: number; tone: string; label: string }) {
+  const normalized = Math.max(0, Math.min(1, ratio));
+  const circumference = 2 * Math.PI * 34;
+  return (
+    <View style={styles.aiGuardianRingWrap}>
+      <Svg width={86} height={86} viewBox="0 0 86 86">
+        <Circle cx="43" cy="43" r="34" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="7" />
+        <Circle
+          cx="43"
+          cy="43"
+          r="34"
+          fill="none"
+          stroke={tone}
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={circumference * (1 - normalized)}
+          rotation="-90"
+          origin="43, 43"
+        />
+      </Svg>
+      <View style={styles.aiGuardianRingCenter}>
+        <Text style={[styles.aiGuardianRingValue, { color: tone }]}>{Math.round(normalized * 100)}%</Text>
+        <Text style={styles.aiGuardianRingLabel}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
+function AiAnimatedBar({ ratio, tone }: { ratio: number; tone: string }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const normalized = Math.max(0, Math.min(1, ratio));
+  useEffect(() => {
+    Animated.spring(progress, { toValue: normalized, damping: 18, stiffness: 130, mass: 0.8, useNativeDriver: true }).start();
+  }, [normalized, progress]);
+  return (
+    <View style={styles.aiAnimatedBarTrack}>
+      <Animated.View style={[styles.aiAnimatedBarFill, { backgroundColor: tone, transform: [{ scaleX: progress }] }]} />
+    </View>
+  );
+}
+
+function tradeVisionAnalysisKey(imageUri: string, imageBase64: string, question: string) {
+  return hashLocalAiInput({ imageUri, imageBase64, question: question.trim().toLowerCase() });
+}
+
+function TradeVisionCoachSection({
+  userId,
+  journalContext,
+}: {
+  userId: string | null;
+  journalContext?: Record<string, unknown>;
+}) {
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState("");
+  const [imageMimeType, setImageMimeType] = useState("image/jpeg");
   const [question, setQuestion] = useState("");
   const [used, setUsed] = useState(0);
   const [uiState, setUiState] = useState<TradeVisionUiState>("empty");
   const [message, setMessage] = useState("");
+  const [analysis, setAnalysis] = useState<AITradeVisionReview | null>(null);
+  const [openDetail, setOpenDetail] = useState<TradeVisionDetail | null>(null);
   const [thinkingStep, setThinkingStep] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const limitReached = used >= TRADE_VISION_MONTHLY_LIMIT;
-  const canAnalyze = !!imageUri && !!question.trim() && !limitReached && uiState !== "loading";
+  const canAnalyze = !!imageUri && !!imageBase64 && !!question.trim() && !limitReached && uiState !== "loading";
 
   useEffect(() => {
     let mounted = true;
@@ -6777,38 +6906,44 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
     const statusTimer = setInterval(() => {
       setThinkingStep((prev) => (prev + 1) % TRADE_VISION_THINKING_STEPS.length);
     }, 520);
-    const doneTimer = setTimeout(() => {
-      progress.stop();
-      setUiState("result");
-      setMessage("");
-    }, 2800);
     return () => {
       clearInterval(statusTimer);
-      clearTimeout(doneTimer);
       progress.stop();
     };
   }, [progressAnim, uiState]);
 
-  const pickTradeVisionImage = async () => {
+  const pickTradeVisionImage = async (source: "camera" | "library" = "library") => {
     if (limitReached) {
       setUiState("limit_reached");
       return;
     }
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permission =
+        source === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         setUiState("error");
-        setMessage(t("photoPermissionNeeded"));
+        setMessage(source === "camera" ? t("cameraPermissionNeeded") : t("photoPermissionNeeded"));
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        quality: 0.75,
-        allowsEditing: false,
-      });
+      const pickerOptions = { quality: 0.58, allowsEditing: false, base64: true } as const;
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync(pickerOptions)
+          : await ImagePicker.launchImageLibraryAsync(pickerOptions);
       if (result.canceled) return;
       const asset = result.assets[0];
-      if (!asset?.uri) return;
+      if (!asset?.uri || !asset.base64) {
+        setUiState("error");
+        setMessage("Could not prepare that image for AI review. Try a JPG, PNG, or WebP screenshot.");
+        return;
+      }
       setImageUri(asset.uri);
+      setImageBase64(asset.base64);
+      setImageMimeType(tradeVisionMimeFromUri(asset.uri, asset.mimeType));
+      setAnalysis(null);
+      setOpenDetail(null);
       setUiState("image_selected");
       setMessage("");
     } catch {
@@ -6823,7 +6958,7 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
     setMessage("");
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (limitReached) {
       setUiState("limit_reached");
       return;
@@ -6832,11 +6967,52 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
     lightHaptic();
     setUiState("loading");
     setMessage("");
+    const analysisKey = tradeVisionAnalysisKey(imageUri, imageBase64, question);
+    try {
+      const cacheKey = localAiCacheKey("trade-vision", userId, analysisKey);
+      const cached = await readLocalAiResponse<AITradeVisionReview>(cacheKey);
+      if (cached) {
+        setAnalysis(cached);
+        setMessage("Showing cached review for this screenshot and question.");
+        setUiState("result");
+        successHaptic();
+        return;
+      }
+      const response = await fetchAITradeVisionReview({
+        question: question.trim(),
+        imageBase64,
+        imageMimeType,
+        journalContext: journalContext || {},
+      });
+      if (response.usedFallback || response.providerStatus === "local_fallback" || response.providerStatus === "free_preview") {
+        setUiState("error");
+        setMessage(response.message || "AI Trade Analysis is unavailable right now. No review was used.");
+        warningHaptic();
+        return;
+      }
+      setAnalysis(response.data);
+      await writeLocalAiResponse(cacheKey, response.data, TRADE_VISION_CACHE_TTL_MS);
+      const nextUsed = await incrementMonthlyUsageCount(TRADE_VISION_USAGE_KEY, userId);
+      setUsed(nextUsed);
+      setUiState("result");
+      successHaptic();
+      trackEvent("ai_trade_vision_review_completed", {
+        provider_status: response.providerStatus,
+        cached: false,
+      });
+    } catch (error) {
+      logger.error(error, { feature: "ai_trade_analysis", action: "review_failed" });
+      setUiState("error");
+      setMessage("AI Trade Analysis could not review this image. No review was used.");
+      warningHaptic();
+    }
   };
 
   const resetQuestion = () => {
     setQuestion("");
     setMessage("");
+    setAnalysis(null);
+    setOpenDetail(null);
     setUiState(imageUri && !limitReached ? "image_selected" : limitReached ? "limit_reached" : "empty");
   };
 
@@ -6844,18 +7020,28 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
     inputRange: [0, 1],
     outputRange: [0.18, 1],
   });
+  const resultDetails: { key: TradeVisionDetail; label: string; items: string[] }[] = analysis
+    ? [
+        { key: "entry", label: "Entry", items: [analysis.entryQuality] },
+        { key: "stop", label: "Stop", items: [analysis.stopPlacementFeedback] },
+        { key: "rr", label: "Risk / Reward", items: [analysis.riskRewardFeedback] },
+        { key: "mistake", label: "Mistake", items: [analysis.mistakeDetected] },
+        { key: "alternative", label: "Alternative", items: [analysis.bestAlternativeAction] },
+        { key: "evidence", label: "Evidence", items: analysis.evidenceFromImage },
+        { key: "journal", label: "Journal", items: [analysis.journalBehaviorConnection] },
+      ]
+    : [];
 
   return (
     <TerminalGlassCard>
       <View style={styles.terminalHeaderRow}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.terminalSmallLabel}>TRADE VISION COACH</Text>
-          <Text style={styles.terminalSectionTitle}>Trade Vision Coach</Text>
-          <Text style={styles.terminalSub}>
-            Upload a chart, DOM, footprint, or trade screenshot. Ask your coach what really happened.
-          </Text>
+          <Text style={styles.terminalSmallLabel}>AI TRADE ANALYSIS</Text>
+          <Text style={styles.terminalSectionTitle}>AI Trade Analysis</Text>
+          <Text style={styles.terminalSub}>Upload a trade and ask what happened.</Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 5 }}>
+          <AiIntelligencePulse tone={C.purple} />
           <Text style={styles.tradeMetaChip}>{used}/{TRADE_VISION_MONTHLY_LIMIT} REVIEWS</Text>
           <Text style={styles.terminalSmallLabel}>Uses 1 AI review</Text>
         </View>
@@ -6871,8 +7057,10 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
       {imageUri ? (
         <View style={styles.tradeVisionSelectedArea}>
           <Image source={{ uri: imageUri }} style={styles.tradeVisionPreview} resizeMode="cover" />
+          <AiImageScan active={uiState === "image_selected" || uiState === "loading"} />
           <View style={styles.tradeVisionImageOverlay}>
-            <Text style={styles.tradeVisionImageBadge}>Screenshot ready</Text>
+            <Check size={12} color={C.green} strokeWidth={3} />
+            <Text style={styles.tradeVisionImageBadge}>Ready</Text>
           </View>
           <View style={styles.tradeVisionQuestionBox}>
             <Text style={styles.terminalSmallLabel}>Ask Coach</Text>
@@ -6896,24 +7084,30 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
             <ImagePlus size={25} color={C.purple} strokeWidth={2.3} />
           </View>
           <Text style={styles.propCoachHeadline}>Select one trade screenshot</Text>
-          <Text style={[styles.terminalSub, { textAlign: "center" }]}>Start with a chart, DOM, footprint, or execution screenshot. Nothing is analyzed until you tap Ask Trade Vision.</Text>
+          <Text style={[styles.terminalSub, { textAlign: "center" }]}>Chart · DOM · Footprint · Execution</Text>
+          <AiFlowRail nodes={["Entry", "Stop", "Risk", "Reward", "Execution", "Psychology", "Discipline"]} />
         </View>
       )}
 
-      <Pressable onPress={pickTradeVisionImage} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.purpleAction, (limitReached || uiState === "loading") && styles.disabledBtn]}>
-        <Text style={styles.secondaryText}>{imageUri ? "Change Screenshot" : "Select Trade"}</Text>
-      </Pressable>
+      <View style={styles.tradeVisionResultActions}>
+        <Pressable onPress={() => pickTradeVisionImage("camera")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
+          <Text style={styles.secondaryText}>Take Photo</Text>
+        </Pressable>
+        <Pressable onPress={() => pickTradeVisionImage("library")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
+          <Text style={styles.secondaryText}>Upload Screenshot</Text>
+        </Pressable>
+      </View>
 
-      <View style={styles.tradeVisionChipRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tradeVisionChipScroller} contentContainerStyle={styles.tradeVisionChipRow}>
         {TRADE_VISION_PROMPTS.map((prompt) => {
-          const active = question === prompt;
+          const active = question === prompt.question;
           return (
-            <Pressable key={prompt} onPress={() => selectPrompt(prompt)} style={[styles.tradeVisionChip, active && styles.tradeVisionChipActive]}>
-              <Text style={[styles.tradeVisionChipText, active && styles.tradeVisionChipTextActive]}>{prompt}</Text>
+            <Pressable key={prompt.question} onPress={() => selectPrompt(prompt.question)} style={[styles.tradeVisionChip, active && styles.tradeVisionChipActive]}>
+              <Text style={[styles.tradeVisionChipText, active && styles.tradeVisionChipTextActive]}>{prompt.label}</Text>
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       {uiState === "loading" ? (
         <View style={styles.tradeVisionStatusBox}>
@@ -6928,35 +7122,58 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
         </View>
       ) : null}
 
-      {uiState === "result" ? (
+      {uiState === "result" && analysis ? (
         <View style={styles.tradeVisionReadyCard}>
           <View style={styles.tradeVisionReadyTop}>
             <View style={styles.tradeVisionIconOrbSmall}>
               <Sparkles size={18} color={C.green} strokeWidth={2.4} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.propCoachHeadline}>Trade Vision is almost ready</Text>
-              <Text style={styles.terminalSub}>Your screenshot has been prepared successfully.</Text>
+              <Text style={styles.propCoachHeadline}>Trade review complete</Text>
+              <Text style={styles.terminalSub}>{message || `Confidence: ${analysis.confidence}`}</Text>
             </View>
           </View>
-          <Text style={styles.terminalSub}>The Vision AI engine will be activated once cloud analysis is enabled.</Text>
-          <AiOsTextBlock title="This feature will review" items={TRADE_VISION_REVIEW_POINTS} />
+          <MetricPillRow
+            items={[
+              { label: "Verdict", value: truncateCoachLine(analysis.verdict, 42), tone: "green" },
+              ...(analysis.confidence ? [{ label: "Confidence", value: analysis.confidence, tone: String(analysis.confidence).toLowerCase().includes("high") ? "green" as const : "purple" as const }] : []),
+            ]}
+          />
+          <View style={styles.tradeVisionNextAction}>
+            <Text style={styles.terminalSmallLabel}>NEXT ACTION</Text>
+            <Text style={styles.coachCompactValue}>{analysis.bestAlternativeAction}</Text>
+          </View>
+          <View style={styles.tradeVisionDetailRail}>
+            {resultDetails.map((detail) => {
+              const active = openDetail === detail.key;
+              return (
+                <Pressable key={detail.key} onPress={() => setOpenDetail(active ? null : detail.key)} style={[styles.tradeVisionChip, active && styles.tradeVisionChipActive]}>
+                  <Text style={[styles.tradeVisionChipText, active && styles.tradeVisionChipTextActive]}>{detail.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {openDetail ? (
+            <AiOsTextBlock
+              title={resultDetails.find((detail) => detail.key === openDetail)?.label || "Details"}
+              items={resultDetails.find((detail) => detail.key === openDetail)?.items || []}
+            />
+          ) : null}
+          <Text style={styles.coachCompactSub}>{analysis.coachNote}</Text>
           <View style={styles.tradeVisionResultActions}>
-            <Pressable onPress={pickTradeVisionImage} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton]}>
+            <Pressable onPress={() => pickTradeVisionImage("library")} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton]}>
               <Text style={styles.secondaryText}>Change Screenshot</Text>
             </Pressable>
             <Pressable onPress={resetQuestion} style={[styles.secondaryBig, styles.tradeVisionResultButton]}>
               <Text style={styles.secondaryText}>Ask Another Question</Text>
             </Pressable>
           </View>
-          <Pressable disabled style={[styles.secondaryBig, styles.restorePurchaseBtn, styles.disabledBtn]}>
-            <Text style={styles.secondaryText}>Notify me when Vision is available</Text>
-          </Pressable>
+          <Text style={styles.terminalSub}>{analysis.educationalDisclaimer}</Text>
         </View>
       ) : null}
 
       {uiState === "error" && message ? (
-        <WarningCard title="Trade Vision not active yet" body={message} />
+        <WarningCard title="AI Trade Analysis unavailable" body={message} />
       ) : null}
 
       <Pressable
@@ -6964,9 +7181,10 @@ function TradeVisionCoachSection({ userId }: { userId: string | null }) {
         onPress={handleAnalyze}
         style={[styles.primaryBig, !canAnalyze && styles.disabledBtn]}
       >
-        <Text style={styles.primaryText}>Ask Trade Vision</Text>
+        <AiIntelligencePulse tone={canAnalyze ? C.green : C.sub} />
+        <Text style={styles.primaryText}>{uiState === "loading" ? "Analyzing Trade" : "Analyze Trade"}</Text>
       </Pressable>
-      <Text style={styles.terminalSub}>Educational trade review. Not financial advice.</Text>
+      <Text style={styles.terminalSub}>Sent only after Analyze.</Text>
     </TerminalGlassCard>
   );
 }
@@ -7138,6 +7356,31 @@ function aiOsEvidenceValue(evidence: string[], pattern: RegExp) {
 }
 
 type AiOsPropTool = "limits" | "whatif" | "emergency" | "green" | "recovery";
+
+type PropAggression = "safe" | "balanced" | "aggressive";
+
+const PROP_COACH_FIRMS = ["Topstep", "Apex", "Take Profit Trader", "Lucid", "Other"] as const;
+const PROP_COACH_ACCOUNT_SIZES = [25000, 50000, 100000, 150000, 250000];
+const PROP_RULE_REVIEW_DAYS = 14;
+
+function propRuleNeedsReview(template: RiskTemplate | null) {
+  if (!template?.lastVerified) return true;
+  const verified = new Date(template.lastVerified).getTime();
+  if (!Number.isFinite(verified)) return true;
+  return Date.now() - verified > PROP_RULE_REVIEW_DAYS * 24 * 60 * 60 * 1000;
+}
+
+function propFirmMatches(template: RiskTemplate, firm: string) {
+  if (firm === "Other") return true;
+  const haystack = `${template.firm} ${template.company} ${template.label}`.toLowerCase();
+  return haystack.includes(firm.toLowerCase().replace(/\s+/g, "")) || haystack.includes(firm.toLowerCase());
+}
+
+function propAggressionLabel(aggression: PropAggression) {
+  if (aggression === "safe") return "Micros, lower daily stop, highest selectivity.";
+  if (aggression === "aggressive") return "Faster path, higher violation risk, strict stop required.";
+  return "Moderate size, controlled RR, avoid overtrading.";
+}
 
 function AiOperatingSystemPropFirmSection({
   operatingSystem,
@@ -7885,6 +8128,692 @@ function TerminalFundedPanel({
   );
 }
 
+function truncateCoachLine(value: string, max = 88) {
+  const clean = value.trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max - 1)}…`;
+}
+
+type AiAnalyticsToolId = "dna" | "evidence" | "growth" | "market" | "patterns" | "monthly";
+
+function CoachFocusRow({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "risk" | "action";
+}) {
+  const valueColor = tone === "risk" ? C.red : tone === "action" ? C.green : C.text;
+  return (
+    <View style={styles.coachFocusRow}>
+      <Text style={styles.coachFocusLabel}>{label}</Text>
+      <Text style={[styles.coachFocusValue, { color: valueColor }]} numberOfLines={2}>
+        {truncateCoachLine(value, 96)}
+      </Text>
+    </View>
+  );
+}
+
+function AiAnalyticsToolTile({
+  icon: Icon,
+  title,
+  summary,
+  active,
+  onPress,
+}: {
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  title: string;
+  summary: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[styles.analyticsToolTile, active && styles.analyticsToolTileActive]}>
+      <View style={styles.analyticsToolTileIcon}>
+        <Icon size={16} color={active ? C.green : C.purple} strokeWidth={2.3} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+        <Text style={styles.analyticsToolTileTitle}>{title}</Text>
+        <Text style={styles.analyticsToolTileSummary} numberOfLines={1}>
+          {truncateCoachLine(summary, 72)}
+        </Text>
+      </View>
+      <ChevronRight size={16} color={active ? C.green : C.sub} strokeWidth={2.4} />
+    </Pressable>
+  );
+}
+
+function AiAnalyticsToolMenu({
+  operatingSystem,
+  patterns,
+  stats,
+  tradeAnalysis,
+  activeTool,
+  onSelect,
+}: {
+  operatingSystem: AiOperatingSystem;
+  patterns: PatternDetectionResult;
+  stats: ReturnType<typeof calcStats>;
+  tradeAnalysis: TradeAnalysisResult | null;
+  activeTool: AiAnalyticsToolId | null;
+  onSelect: (tool: AiAnalyticsToolId) => void;
+}) {
+  const dnaSummary =
+    operatingSystem.tradingDna.profile?.traderType ||
+    operatingSystem.tradingDna.emptyState?.title ||
+    "Classify your trading style";
+  const evidenceSummary =
+    operatingSystem.evidence.sessionImpact[0] ||
+    operatingSystem.evidence.behaviorPatterns[0] ||
+    "Journal-backed proof";
+  const growthSummary =
+    operatingSystem.growth.recommendation?.title ||
+    operatingSystem.growth.emptyState?.title ||
+    "Track period-over-period progress";
+  const marketSummary =
+    operatingSystem.marketAssistant.actions.find((action) => action.enabled)?.label ||
+    "Market and journal actions";
+  const patternSummary =
+    patterns.risks[0]?.title ||
+    tradeAnalysis?.mistakes[0]?.title ||
+    "Scan hidden leaks and revenge risk";
+  const monthlySummary =
+    tradeAnalysis?.strengths[0]?.title ||
+    stats.bySetup[0]?.label ||
+    "Monthly performance review";
+
+  const tiles: { id: AiAnalyticsToolId; icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; title: string; summary: string }[] = [
+    { id: "dna", icon: Sparkles, title: "Trading DNA", summary: dnaSummary },
+    { id: "evidence", icon: ShieldCheck, title: "Evidence", summary: evidenceSummary },
+    { id: "growth", icon: TrendingUp, title: "Growth", summary: growthSummary },
+    { id: "market", icon: Newspaper, title: "Market Brief", summary: marketSummary },
+    { id: "patterns", icon: Target, title: "Pattern Leaks", summary: patternSummary },
+    { id: "monthly", icon: CalendarDays, title: "Monthly Review", summary: monthlySummary },
+  ];
+
+  return (
+    <TerminalGlassCard style={styles.analyticsToolMenuCard}>
+      <Text style={styles.terminalSmallLabel}>ANALYTICS TOOLS</Text>
+      <Text style={styles.coachCompactHeadline}>Open one report at a time</Text>
+      <View style={styles.analyticsToolGrid}>
+        {tiles.map((tile) => (
+          <AiAnalyticsToolTile
+            key={tile.id}
+            icon={tile.icon}
+            title={tile.title}
+            summary={tile.summary}
+            active={activeTool === tile.id}
+            onPress={() => {
+              lightHaptic();
+              onSelect(tile.id);
+            }}
+          />
+        ))}
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+type AiTradingAssistantToolId =
+  | "daily_plan"
+  | "market_sentiment"
+  | "risk_predictor"
+  | "journal_summary"
+  | "pattern_leaks"
+  | "trading_dna"
+  | "growth_check"
+  | "monthly_review";
+
+function AiTradingAssistantBlock({
+  operatingSystem,
+  patterns,
+  stats,
+  trades,
+  tradeAnalysis,
+  tradeAnalysisBusy,
+  tradeAnalysisError,
+  aiResults,
+  aiBusy,
+  onRunCoachFeature,
+  onRunTradeAnalysis,
+}: {
+  operatingSystem: AiOperatingSystem;
+  patterns: PatternDetectionResult;
+  stats: ReturnType<typeof calcStats>;
+  trades: Trade[];
+  tradeAnalysis: TradeAnalysisResult | null;
+  tradeAnalysisBusy: boolean;
+  tradeAnalysisError: string;
+  aiResults: AIResultMap;
+  aiBusy: Record<keyof AIResultMap, boolean>;
+  onRunCoachFeature: (key: keyof AIResultMap) => void;
+  onRunTradeAnalysis: () => void;
+}) {
+  const [activeTool, setActiveTool] = useState<AiTradingAssistantToolId | null>(null);
+  const [lastTool, setLastTool] = useState<AiTradingAssistantToolId | null>(null);
+  const dna = operatingSystem.tradingDna.profile;
+  const growth = operatingSystem.growth.recommendation;
+  const tiles: {
+    id: AiTradingAssistantToolId;
+    icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+    title: string;
+    summary: string;
+    action: string;
+    accent: string;
+    status: "AI Review" | "Instant" | "Live";
+    busy?: boolean;
+    run?: () => void;
+  }[] = [
+    { id: "pattern_leaks", icon: Target, title: "Review Trade", summary: patterns.risks[0]?.title || "Inspect repeat mistakes", action: tradeAnalysis ? "Open" : "Analyze", accent: "#E95BFF", status: "AI Review", busy: tradeAnalysisBusy, run: onRunTradeAnalysis },
+    { id: "daily_plan", icon: CalendarDays, title: "Plan Today", summary: operatingSystem.today.mission?.title || "Build today's plan", action: aiResults.dailyPlan ? "Open" : "Generate", accent: "#69B7FF", status: "AI Review", busy: aiBusy.dailyPlan, run: () => onRunCoachFeature("dailyPlan") },
+    { id: "risk_predictor", icon: ShieldCheck, title: "Check Risk", summary: "Read behavior and risk pressure", action: aiResults.riskPredictor ? "Open" : "Generate", accent: C.red, status: "AI Review", busy: aiBusy.riskPredictor, run: () => onRunCoachFeature("riskPredictor") },
+    { id: "market_sentiment", icon: Newspaper, title: "Analyze News", summary: "Use currently visible headlines", action: "Open", accent: "#55D8E8", status: "Live" },
+    { id: "journal_summary", icon: FileText, title: "Review Journal", summary: "Summarize recent journal patterns", action: aiResults.journalSummary ? "Open" : "Generate", accent: "#FFAD5C", status: "AI Review", busy: aiBusy.journalSummary, run: () => onRunCoachFeature("journalSummary") },
+    { id: "monthly_review", icon: BrainCircuit, title: "Monthly Review", summary: "One premium review moment", action: aiResults.weeklyCoach ? "Open" : "Generate", accent: "#F0C75E", status: "AI Review", busy: aiBusy.weeklyCoach, run: () => onRunCoachFeature("weeklyCoach") },
+    { id: "trading_dna", icon: Sparkles, title: "Trading DNA", summary: dna?.traderType || "Who you are becoming", action: "Show", accent: C.purple, status: "Instant" },
+    { id: "growth_check", icon: TrendingUp, title: "Growth", summary: growth?.title || "Compare improvement signals", action: "Show", accent: C.green, status: "Instant" },
+  ];
+
+  const openTool = (tool: typeof tiles[number]) => {
+    lightHaptic();
+    setLastTool(tool.id);
+    setActiveTool((prev) => (prev === tool.id ? null : tool.id));
+    if (tool.run && !tool.busy && !(
+      (tool.id === "daily_plan" && aiResults.dailyPlan) ||
+      (tool.id === "risk_predictor" && aiResults.riskPredictor) ||
+      (tool.id === "journal_summary" && aiResults.journalSummary) ||
+      (tool.id === "monthly_review" && aiResults.weeklyCoach) ||
+      (tool.id === "pattern_leaks" && tradeAnalysis)
+    )) {
+      tool.run();
+    }
+  };
+  const lastOpenedTool = lastTool ? tiles.find((tile) => tile.id === lastTool) || null : null;
+
+  const renderActiveResult = () => {
+    if (!activeTool) return null;
+    if (activeTool === "daily_plan") {
+      const result = aiResults.dailyPlan;
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>DAILY PLAN</Text>
+          {result ? <ProviderBadge status={result.providerStatus} /> : null}
+          <Text style={styles.coachCompactValue}>{result?.data.dailyFocus || operatingSystem.today.mission?.title || "Trade only planned setups."}</Text>
+          <AiOsTextBlock
+            title="Rules"
+            items={result?.data.tradeRules || operatingSystem.today.mission?.checklist.map((item) => item.text) || [
+              operatingSystem.today.recommendation?.action || "Trade only planned setups.",
+            ]}
+          />
+        </View>
+      );
+    }
+    if (activeTool === "market_sentiment") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>MARKET SENTIMENT</Text>
+          <Text style={styles.coachCompactValue}>Use the News tab to analyze the currently visible headlines.</Text>
+          <Text style={styles.coachCompactSub}>This avoids stale generic sentiment and keeps the result tied to real loaded news.</Text>
+        </View>
+      );
+    }
+    if (activeTool === "risk_predictor") {
+      const result = aiResults.riskPredictor;
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>RISK PREDICTOR</Text>
+          {result ? <ProviderBadge status={result.providerStatus} /> : null}
+          <Text style={styles.coachCompactValue}>{result ? `${result.data.riskLevel.toUpperCase()} · ${result.data.riskScore}/100` : "Generating risk read..."}</Text>
+          <AiOsTextBlock title="Warning Signs" items={result?.data.warningSigns || patterns.risks.map((risk) => risk.title)} />
+        </View>
+      );
+    }
+    if (activeTool === "journal_summary") {
+      const result = aiResults.journalSummary;
+      const recentTrade = trades[0] || null;
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>JOURNAL SUMMARY</Text>
+          {result ? <ProviderBadge status={result.providerStatus} /> : null}
+          <Text style={styles.coachCompactValue}>{result?.data.summary || `${stats.count} trades · ${Math.round(stats.wr)}% win rate · ${stats.pf.toFixed(2)} PF`}</Text>
+          {recentTrade ? (
+            <View style={styles.aiJournalTimeline}>
+              <View style={styles.aiJournalTimelineItem}>
+                <View style={styles.aiJournalTimelineIcon}><Target size={15} color={C.purple} strokeWidth={2.4} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>TRADE</Text><Text style={styles.coachCompactValue}>{recentTrade.symbol} · {recentTrade.direction}</Text></View>
+              </View>
+              {recentTrade.voiceUri || recentTrade.voiceCloudUri ? <View style={styles.aiJournalTimelineItem}><View style={styles.aiJournalTimelineIcon}><Mic size={15} color="#69B7FF" strokeWidth={2.4} /></View><View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>VOICE NOTE</Text><Text style={styles.coachCompactSub}>Attached to this trade</Text></View></View> : null}
+              {recentTrade.photoUri || recentTrade.photoCloudUri ? <View style={styles.aiJournalTimelineItem}><View style={styles.aiJournalTimelineIcon}><ImagePlus size={15} color="#FFAD5C" strokeWidth={2.4} /></View><View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>SCREENSHOT</Text><Text style={styles.coachCompactSub}>Chart evidence attached</Text></View></View> : null}
+              <View style={styles.aiJournalTimelineItem}>
+                <View style={styles.aiJournalTimelineIcon}><BrainCircuit size={15} color={C.purple} strokeWidth={2.4} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>EMOTION</Text><Text style={styles.coachCompactSub}>{moodLabel(recentTrade.mood)}</Text></View>
+              </View>
+              <View style={[styles.aiJournalTimelineItem, styles.aiJournalTimelineLast]}>
+                <View style={styles.aiJournalTimelineIcon}><Trophy size={15} color={recentTrade.pnl >= 0 ? C.green : C.red} strokeWidth={2.4} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>OUTCOME</Text><Text style={[styles.coachCompactValue, { color: recentTrade.pnl >= 0 ? C.green : C.red }]}>{moneyCompact(recentTrade.pnl)}</Text></View>
+              </View>
+            </View>
+          ) : null}
+          <AiOsTextBlock title="Improvement Plan" items={result?.data.improvementPlan || [operatingSystem.coach.nextImprovement?.action || "Fix one repeat leak before adding size."]} />
+        </View>
+      );
+    }
+    if (activeTool === "pattern_leaks") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>PATTERN LEAKS</Text>
+          <Text style={styles.coachCompactValue}>{typeof tradeAnalysis?.mainBlindSpot === "string" ? tradeAnalysis.mainBlindSpot : tradeAnalysis?.mainBlindSpot?.title || patterns.risks[0]?.title || "No strong leak found yet."}</Text>
+          {tradeAnalysisError ? <Text style={styles.coachCompactSub}>{tradeAnalysisError}</Text> : null}
+          <AiOsTextBlock title="Mistakes" items={tradeAnalysis?.mistakes.map((item) => item.title) || patterns.risks.map((risk) => risk.title)} />
+        </View>
+      );
+    }
+    if (activeTool === "trading_dna") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>TRADING DNA</Text>
+          <Text style={styles.coachCompactValue}>{dna?.traderType || "Not enough journal history yet."}</Text>
+          <AiOsTextBlock title="Edge / Weakness" items={[dna?.strengths[0] || "Build more sample size.", dna?.weaknesses[0] || "Keep journaling setup and emotion."]} />
+        </View>
+      );
+    }
+    if (activeTool === "growth_check") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>GROWTH CHECK</Text>
+          <Text style={styles.coachCompactValue}>{growth?.title || operatingSystem.growth.emptyState?.title || "More history needed."}</Text>
+          <AiOsTextBlock title="Next Signal" items={[growth?.action || operatingSystem.growth.emptyState?.message || "Keep journaling clean trades."]} />
+        </View>
+      );
+    }
+    const result = aiResults.weeklyCoach;
+    return (
+      <View style={styles.coachConsoleReveal}>
+        <Text style={styles.terminalSmallLabel}>MONTHLY REVIEW</Text>
+        {result ? <ProviderBadge status={result.providerStatus} /> : null}
+        <Text style={styles.coachCompactValue}>{result?.data.summary || "Generate one high-value review instead of reading every metric."}</Text>
+        <AiOsTextBlock title="Focus" items={result?.data.nextWeekFocus || [operatingSystem.coach.nextImprovement?.title || "Protect execution quality."]} />
+      </View>
+    );
+  };
+
+  return (
+    <TerminalGlassCard style={styles.analyticsToolMenuCard}>
+      <View style={styles.assistantHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSectionTitle}>AI Trading Assistant</Text>
+        </View>
+        <AiIntelligencePulse tone={C.purple} />
+      </View>
+      <View style={styles.analyticsToolGrid}>
+        {tiles.map((tile) => {
+          const Icon = tile.icon;
+          const active = activeTool === tile.id;
+          return (
+            <Pressable key={tile.id} onPress={() => openTool(tile)} disabled={tile.busy} style={({ pressed }) => [styles.analyticsToolTile, active && styles.analyticsToolTileActive, pressed && styles.analyticsToolTilePressed, tile.busy && styles.disabledBtn]}>
+              <View style={[styles.analyticsToolTileIcon, { borderColor: `${tile.accent}55`, backgroundColor: `${tile.accent}14` }]}>
+                {tile.busy ? <ActivityIndicator color={tile.accent} size="small" /> : <Icon size={17} color={active ? C.green : tile.accent} strokeWidth={2.3} />}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.analyticsToolStatus, { color: tile.accent }]}>{tile.status}</Text>
+                <Text style={styles.analyticsToolTileTitle}>{tile.title}</Text>
+                <Text style={styles.analyticsToolTileSummary} numberOfLines={1}>{tile.summary}</Text>
+              </View>
+              <Text style={[styles.tradeMetaChip, active ? { color: C.green, borderColor: "rgba(150,255,0,0.34)", backgroundColor: "rgba(150,255,0,0.08)" } : null]}>
+                {tile.busy ? "..." : tile.action}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {!activeTool && lastOpenedTool ? (
+        <Pressable onPress={() => openTool(lastOpenedTool)} style={styles.aiMemoryStrip}>
+          <View style={[styles.analyticsToolTileIcon, { borderColor: `${lastOpenedTool.accent}55`, backgroundColor: `${lastOpenedTool.accent}14` }]}>
+            <BrainCircuit size={17} color={lastOpenedTool.accent} strokeWidth={2.3} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.terminalSmallLabel}>SESSION MEMORY</Text>
+            <Text style={styles.coachCompactValue}>Continue {lastOpenedTool.title}</Text>
+          </View>
+          <ChevronRight size={17} color={C.sub} strokeWidth={2.3} />
+        </Pressable>
+      ) : null}
+      {renderActiveResult()}
+    </TerminalGlassCard>
+  );
+}
+
+function PropCoachQuickCard({
+  snapshot,
+  templates,
+  templateKey,
+  propMode,
+  operatingSystem,
+  passProbability,
+  stats,
+  trades,
+  revengeTrading,
+  onTemplateChange,
+  onModeChange,
+}: {
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
+  templates: RiskTemplate[];
+  templateKey: string;
+  propMode: FirmMode;
+  operatingSystem: AiOperatingSystem;
+  passProbability: PassProbabilityResult;
+  stats: ReturnType<typeof calcStats>;
+  trades: Trade[];
+  revengeTrading: RevengeTradingResult;
+  onTemplateChange: (key: string) => void;
+  onModeChange: (mode: FirmMode) => void;
+}) {
+  const [activeTool, setActiveTool] = useState<AiOsPropTool>("limits");
+  const [plannedContracts, setPlannedContracts] = useState("1");
+  const [expectedStop, setExpectedStop] = useState("");
+  const [expectedTarget, setExpectedTarget] = useState("");
+  const [hypotheticalLoss, setHypotheticalLoss] = useState("");
+  const [dailyTarget, setDailyTarget] = useState("");
+  const [selectedFirm, setSelectedFirm] = useState<(typeof PROP_COACH_FIRMS)[number]>("Other");
+  const [selectedAccountSizeInput, setSelectedAccountSizeInput] = useState(PROP_COACH_ACCOUNT_SIZES[0]);
+  const [aggression, setAggression] = useState<PropAggression>("balanced");
+  const notConfigured = !snapshot;
+  const contracts = Math.max(0, Math.round(Number(plannedContracts) || 0));
+  const nextLoss = Math.max(0, Math.abs(Number(hypotheticalLoss) || Math.abs(stats.avgLoss || 0)));
+  const stopDollars = Math.max(0, Math.abs(Number(expectedStop) || nextLoss));
+  const targetDollars = Math.max(0, Math.abs(Number(expectedTarget) || Number(dailyTarget) || 0));
+  const plannedLoss = Math.max(nextLoss, contracts * stopDollars);
+  const projectedDaily = snapshot ? Math.max(0, snapshot.dailyRemaining - plannedLoss) : 0;
+  const projectedAccount = snapshot ? Math.max(0, snapshot.accountRemaining - plannedLoss) : 0;
+  const revengeRiskScore = revengeTrading.severity === "HIGH" ? 85 : revengeTrading.severity === "MEDIUM" ? 60 : 20;
+  const riskStatus: "safe" | "caution" | "danger" =
+    !snapshot || projectedDaily <= 0 || projectedAccount <= 0 || revengeRiskScore >= 85
+      ? "danger"
+      : projectedDaily / Math.max(1, snapshot.template.dailyLossLimit) < 0.35 || revengeRiskScore >= 60
+        ? "caution"
+        : "safe";
+  const baseSafeLoss = snapshot ? Math.floor(Math.max(0, Math.min(snapshot.dailyRemaining, snapshot.accountRemaining) * 0.35)) : 0;
+  const maxSafeLoss =
+    aggression === "safe"
+      ? Math.floor(baseSafeLoss * 0.65)
+      : aggression === "aggressive"
+        ? Math.floor(baseSafeLoss * 1.2)
+        : baseSafeLoss;
+  const baseContracts = snapshot?.engine?.contractRecommendation.recommended ?? (riskStatus === "safe" ? Math.max(1, contracts) : 0);
+  const maxContracts = propMode === "funded" ? snapshot?.template.liveContracts : snapshot?.template.evaluationContracts;
+  const suggestedContracts =
+    aggression === "safe"
+      ? Math.max(0, Math.min(maxContracts || baseContracts, Math.floor(baseContracts / 2) || 1))
+      : aggression === "aggressive"
+        ? Math.max(0, Math.min(maxContracts || baseContracts + 1, baseContracts + 1))
+        : Math.max(0, Math.min(maxContracts || baseContracts, baseContracts));
+  const activeRuleTemplate = snapshot?.template || templates.find((template) => template.key === templateKey) || null;
+  const rulesNeedReview = propRuleNeedsReview(activeRuleTemplate);
+  const dailyBufferRatio = snapshot ? snapshot.dailyRemaining / Math.max(1, snapshot.template.dailyLossLimit) : 0;
+  const accountBufferRatio = snapshot ? snapshot.accountRemaining / Math.max(1, snapshot.template.maxLossLimit) : 0;
+  const selectedAccountSize = activeRuleTemplate?.accountSize || selectedAccountSizeInput;
+  const chooseTemplate = (firm: string, accountSize: number) => {
+    setSelectedAccountSizeInput(accountSize);
+    const match = templates.find((template) => template.accountSize === accountSize && propFirmMatches(template, firm));
+    onTemplateChange(match?.key || "");
+  };
+  const toolButtons: { key: AiOsPropTool; label: string }[] = [
+    { key: "limits", label: "Generate limits" },
+    { key: "whatif", label: "Run what-if" },
+    { key: "emergency", label: "Emergency mode" },
+    { key: "green", label: "Green day lock" },
+    { key: "recovery", label: "Recovery plan" },
+  ];
+
+  return (
+    <TerminalGlassCard style={styles.propCoachQuickCard}>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>AI PROP COACH</Text>
+          <Text style={styles.coachCompactHeadline}>{notConfigured ? "Connect prop rules" : "Next-trade prop plan"}</Text>
+          <Text style={styles.coachCompactSub}>
+            {notConfigured
+              ? "Choose a synced prop template."
+              : "Next trade limits based on journal + prop rules."}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end", gap: 6 }}>
+          <AiIntelligencePulse tone={notConfigured ? C.purple : C.green} />
+          <View style={[styles.tradeMetaChip, notConfigured ? styles.propPreviewBadge : null]}>
+            <Text style={styles.terminalSmallLabel}>{notConfigured ? "SETUP" : snapshot.status}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ gap: 10, marginTop: 12 }}>
+        <View style={styles.propModeRail}>
+          {(["evaluation", "funded"] as FirmMode[]).map((item) => (
+            <Pressable key={item} onPress={() => onModeChange(item)} style={[styles.propModeChip, propMode === item && styles.propModeChipActive]}>
+              <Text style={[styles.propModeChipText, propMode === item && styles.propModeChipTextActive]}>{item === "evaluation" ? "EVAL" : "LIVE"}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+          {PROP_COACH_FIRMS.map((firm) => {
+            const active = selectedFirm === firm;
+            return (
+              <Pressable
+                key={firm}
+                onPress={() => {
+                  setSelectedFirm(firm);
+                  chooseTemplate(firm, selectedAccountSize);
+                }}
+                style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}
+              >
+                <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>{firm}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+          {PROP_COACH_ACCOUNT_SIZES.map((size) => {
+            const active = selectedAccountSize === size;
+            return (
+              <Pressable
+                key={size}
+                onPress={() => chooseTemplate(selectedFirm, size)}
+                style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}
+              >
+                <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>${size / 1000}K</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View style={styles.propAggressionGrid}>
+          {(["safe", "balanced", "aggressive"] as PropAggression[]).map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => setAggression(item)}
+              style={({ pressed }) => [styles.propAggressionCard, aggression === item && styles.propAggressionCardActive, pressed && styles.analyticsToolTilePressed]}
+            >
+              {item === "safe" ? <ShieldCheck size={17} color={C.green} strokeWidth={2.4} /> : item === "balanced" ? <Target size={17} color={C.purple} strokeWidth={2.4} /> : <Zap size={17} color={C.red} strokeWidth={2.4} />}
+              <Text style={[styles.propAggressionTitle, { color: item === "safe" ? C.green : item === "balanced" ? C.purple : C.red }]}>{item.toUpperCase()}</Text>
+              <Text style={styles.propAggressionHint} numberOfLines={2}>{propAggressionLabel(item)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {rulesNeedReview ? (
+        <WarningCard
+          title="Rules may need review"
+          body="Prop firm rules must stay current. This template is missing a recent verification date or is older than 14 days."
+        />
+      ) : null}
+
+      {notConfigured ? (
+        <View style={{ gap: 10, marginTop: 12 }}>
+          <Text style={styles.terminalSmallLabel}>SETUP STATE</Text>
+          <Text style={styles.coachCompactSub}>No matching prop template is selected. Prop Coach will not invent firm rules. Select an available synced template or review rules first.</Text>
+          {templates.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+              {templates.map((template) => {
+                const active = template.key === templateKey;
+                return (
+                  <Pressable key={template.key} onPress={() => onTemplateChange(template.key)} style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}>
+                    <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>{template.accountSize / 1000}K</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+          <Pressable onPress={() => templates[0] && onTemplateChange(templates[0].key)} style={styles.coachPrimaryCta}>
+            <Text style={styles.coachPrimaryCtaText}>Connect Prop Template</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={{ gap: 12, marginTop: 12 }}>
+          <View style={styles.propGuardianCard}>
+            <View style={styles.propGuardianHeader}>
+              <View>
+                <Text style={styles.terminalSmallLabel}>AI PROP GUARDIAN</Text>
+                <Text style={styles.propGuardianStatus}>{snapshot.status}</Text>
+              </View>
+              <View style={[styles.tradeMetaChip, rulesNeedReview ? styles.propPreviewBadge : null]}>
+                <Text style={styles.terminalSmallLabel}>{rulesNeedReview ? "REVIEW RULES" : "RULES CURRENT"}</Text>
+              </View>
+            </View>
+            <View style={styles.propGuardianBody}>
+              <AiGuardianRing ratio={dailyBufferRatio} tone={riskStatus === "danger" ? C.red : riskStatus === "caution" ? C.purple : C.green} label="BUFFER" />
+              <View style={styles.propGuardianMetrics}>
+                <View>
+                  <Text style={styles.terminalSmallLabel}>DAILY BUFFER</Text>
+                  <Text style={styles.propGuardianMetricValue}>{moneyCompact(snapshot.dailyRemaining)}</Text>
+                </View>
+                <View style={styles.propGuardianMetricRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.terminalSmallLabel}>SAFE LOSS</Text>
+                    <Text style={styles.coachCompactValue}>{moneyCompact(maxSafeLoss)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.terminalSmallLabel}>CONTRACTS</Text>
+                    <Text style={styles.coachCompactValue}>{suggestedContracts}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View style={styles.propGuardianBarGroup}>
+              <View style={styles.propGuardianBarLabel}><Text style={styles.terminalSmallLabel}>DAILY</Text><Text style={styles.coachCompactSub}>{moneyCompact(snapshot.dailyRemaining)}</Text></View>
+              <AiAnimatedBar ratio={dailyBufferRatio} tone={dailyBufferRatio < 0.35 ? C.red : C.green} />
+              <View style={styles.propGuardianBarLabel}><Text style={styles.terminalSmallLabel}>ACCOUNT</Text><Text style={styles.coachCompactSub}>{moneyCompact(snapshot.accountRemaining)}</Text></View>
+              <AiAnimatedBar ratio={accountBufferRatio} tone={accountBufferRatio < 0.35 ? C.red : C.purple} />
+            </View>
+            {riskStatus !== "safe" ? <Text style={[styles.coachCompactHint, { color: riskStatus === "danger" ? C.red : C.purple }]}>{riskStatus === "danger" ? "Current calculated risk requires account protection." : "Current buffers call for reduced risk."}</Text> : null}
+          </View>
+          <MetricPillRow
+            items={[
+              { label: "Mode", value: propMode === "funded" ? "LIVE" : "EVAL", tone: "purple" },
+              { label: "Status", value: snapshot.status, tone: snapshot.status === "STOP" ? "red" : snapshot.status === "CAUTION" ? "purple" : "green" },
+              { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+              { label: "Max Safe Loss", value: moneyCompact(maxSafeLoss), tone: maxSafeLoss > 0 ? "purple" : "red" },
+              { label: "Contracts", value: `${suggestedContracts}`, tone: suggestedContracts > 0 ? "green" : "grey" },
+              { label: "Target RR", value: targetDollars > 0 && stopDollars > 0 ? `${(targetDollars / Math.max(1, stopDollars)).toFixed(1)}R` : "1.5R+", tone: "grey" },
+            ]}
+          />
+          <View style={styles.propCoachSignalRail}>
+            <AiFlowRail nodes={["Plan", "Risk", "Protect"]} tone={riskStatus === "danger" ? C.red : C.green} />
+          </View>
+          <View style={styles.coachConsoleActionRow}>
+            {toolButtons.map((tool) => {
+              const active = activeTool === tool.key;
+              return (
+                <Pressable key={tool.key} onPress={() => { lightHaptic(); setActiveTool(tool.key); }} style={[styles.coachConsoleActionChip, active && styles.coachConsoleActionChipActive]}>
+                  <Text style={[styles.coachConsoleActionText, active && styles.coachConsoleActionTextActive]}>{tool.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {activeTool === "whatif" ? (
+            <View style={styles.propSimulatorBox}>
+              <View style={styles.propSimulatorInputRow}>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Contracts</Text>
+                  <TextInput value={plannedContracts} onChangeText={setPlannedContracts} keyboardType="number-pad" placeholder="1" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Expected Stop $</Text>
+                  <TextInput value={expectedStop} onChangeText={setExpectedStop} keyboardType="decimal-pad" placeholder={moneyCompact(Math.abs(stats.avgLoss || 0))} placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+              </View>
+              <View style={styles.propSimulatorInputRow}>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Expected Target $</Text>
+                  <TextInput value={expectedTarget} onChangeText={setExpectedTarget} keyboardType="decimal-pad" placeholder="Target" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Hypothetical Loss</Text>
+                  <TextInput value={hypotheticalLoss} onChangeText={setHypotheticalLoss} keyboardType="decimal-pad" placeholder={moneyCompact(Math.abs(stats.avgLoss || 0))} placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+              </View>
+              <View style={styles.propSimulatorInputWrap}>
+                <Text style={styles.terminalSmallLabel}>Daily Target</Text>
+                <TextInput value={dailyTarget} onChangeText={setDailyTarget} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+              </View>
+            </View>
+          ) : null}
+          <View style={styles.coachConsoleRulePreview}>
+            <Text style={styles.terminalSmallLabel}>
+              {activeTool === "limits" ? "Today's limits" : activeTool === "whatif" ? "What-if result" : activeTool === "emergency" ? "Emergency rules" : activeTool === "green" ? "Green day protection" : "Recovery steps"}
+            </Text>
+            <Text style={styles.coachCompactValue}>
+              {activeTool === "emergency"
+                ? riskStatus === "danger"
+                  ? "Stop trading. One rule break ends the session."
+                  : "Keep a hard stop ready before the next trade."
+                : activeTool === "green"
+                  ? "If green, lock progress: reduce size and stop after one break."
+                  : activeTool === "recovery"
+                    ? `Cap size at ${Math.max(0, suggestedContracts)} contracts and rebuild with clean entries.`
+                    : activeTool === "whatif"
+                      ? `Projected buffers: ${moneyCompact(projectedDaily)} daily · ${moneyCompact(projectedAccount)} account · ${riskStatus.toUpperCase()}`
+                      : `Safe loss ${moneyCompact(maxSafeLoss)} · ${suggestedContracts} contracts · ${moneyCompact(snapshot.dailyRemaining)} buffer`}
+            </Text>
+            {activeTool === "whatif" ? (
+              <Text style={styles.coachCompactSub}>
+                Suggested action: {riskStatus === "danger" ? "Do not take this plan." : riskStatus === "caution" ? "Reduce contracts or stop size before entry." : "Plan is inside current buffers."}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+function TradeVisionEntryCard({
+  expanded,
+  onToggle,
+  userId,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  userId: string | null;
+}) {
+  return (
+    <View style={{ gap: 10 }}>
+      <Pressable onPress={onToggle} style={styles.tradeVisionEntryCard}>
+        <View style={styles.tradeVisionIconOrbSmall}>
+          <ImagePlus size={17} color={C.purple} strokeWidth={2.3} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text style={styles.terminalSmallLabel}>TRADE VISION</Text>
+          <Text style={styles.coachCompactHeadline}>Review a screenshot locally</Text>
+          <Text style={styles.coachCompactSub}>Upload one chart for an AI review. It is not used as analytics data.</Text>
+        </View>
+        <ChevronRight size={16} color={expanded ? C.green : C.sub} strokeWidth={2.4} style={{ transform: [{ rotate: expanded ? "90deg" : "0deg" }] }} />
+      </Pressable>
+      {expanded ? <TradeVisionCoachSection userId={userId} /> : null}
+    </View>
+  );
+}
+
 function AiAnalysisScreen({
   lang,
   trades,
@@ -7934,7 +8863,6 @@ function AiAnalysisScreen({
   const safeAnalysisTemplates = propTemplates;
   const [analysisTemplateKey, setAnalysisTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
-  const [fullAnalyticsOpen, setFullAnalyticsOpen] = useState(false);
   const screenActiveRef = useRef(true);
 
   useEffect(() => {
@@ -8096,6 +9024,36 @@ function AiAnalysisScreen({
       }),
     [aiPropContext, patterns, periodStats, periodTrades, revengeTrading, selectedDate],
   );
+  const tradeVisionJournalContext = useMemo(
+    () => ({
+      tradeCount: periodStats.count,
+      winRate: periodStats.wr,
+      profitFactor: periodStats.pf,
+      expectancy: periodStats.exp,
+      averageLoss: periodStats.avgLoss,
+      maxDrawdown: periodStats.maxDd,
+      bestSession: periodStats.session[0]?.label || null,
+      revengeRisk: {
+        severity: revengeTrading.severity,
+        detected: revengeTrading.detected,
+        reason: revengeTrading.reason,
+        recommendation: revengeTrading.recommendation,
+      },
+      topRisks: patterns.risks.slice(0, 3).map((risk) => ({
+        title: risk.title,
+        detail: risk.detail,
+      })),
+      recentTrades: periodTrades.slice(0, 8).map((trade) => ({
+        date: trade.date,
+        symbol: trade.symbol,
+        direction: trade.direction,
+        pnl: trade.pnl,
+        mood: trade.mood,
+        tags: trade.tags?.slice(0, 4) || [],
+      })),
+    }),
+    [patterns.risks, periodStats, periodTrades, revengeTrading],
+  );
 
   const runCoachFeature = async (key: keyof AIResultMap) => {
     if (!isPremium || !getLimitsForUser(isPremium).paidAiAnalysis) {
@@ -8109,6 +9067,19 @@ function AiAnalysisScreen({
     lightHaptic();
     setAiBusy((prev) => ({ ...prev, [key]: true }));
     try {
+      const cacheKey = localAiCacheKey(
+        `assistant-${key}`,
+        session?.user.id || null,
+        hashLocalAiInput({ key, payload: aiCoachPayload }),
+      );
+      const cached = await readLocalAiResponse<NonNullable<AIResultMap[typeof key]>>(cacheKey);
+      if (cached) {
+        if (screenActiveRef.current) {
+          setAiResults((prev) => ({ ...prev, [key]: cached }));
+        }
+        successHaptic();
+        return;
+      }
       const response =
         key === "dailyPlan"
           ? await fetchAIDailyPlan(aiCoachPayload)
@@ -8121,6 +9092,9 @@ function AiAnalysisScreen({
                 : await fetchAIDailyChallenge(aiCoachPayload);
       if (!screenActiveRef.current) return;
       setAiResults((prev) => ({ ...prev, [key]: response }));
+      if (!response.usedFallback) {
+        await writeLocalAiResponse(cacheKey, response, AI_ASSISTANT_CACHE_TTL_MS);
+      }
       successHaptic();
       trackEvent("ai_coach_feature_generated", {
         feature: key,
@@ -8132,12 +9106,6 @@ function AiAnalysisScreen({
         setAiBusy((prev) => ({ ...prev, [key]: false }));
       }
     }
-  };
-
-  const runMarketAssistantAction = (id: AiOsMarketActionId) => {
-    const coachKey = aiOsMarketActionToCoachKey[id];
-    if (!coachKey) return;
-    runCoachFeature(coachKey);
   };
 
   const runTradeAnalysis = async () => {
@@ -8185,19 +9153,6 @@ function AiAnalysisScreen({
     }
   };
 
-  const localCoachStack = (
-    <View style={styles.terminalScreenStack}>
-      <Text style={styles.terminalSectionTitle}>{t("freeLocalCoach")}</Text>
-      <Text style={styles.terminalSub}>Rule-based insights from your journal — no paid AI API calls.</Text>
-      <AchievementSystemCard achievements={aiAchievements} />
-      <View style={{ gap: 10 }}>
-        {unifiedInsights.primary.slice(0, 2).map((insight) => (
-          <AIInsightCard key={insight.id} insight={insight} />
-        ))}
-      </View>
-    </View>
-  );
-
   if (!isPremium) {
     return (
       <AiAnalyticsProScreen
@@ -8232,64 +9187,37 @@ function AiAnalysisScreen({
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
       <View style={styles.terminalScreenStack}>
-        <AiCoachConsole
-          operatingSystem={operatingSystem}
-          trades={periodTrades}
-          stats={periodStats}
-          patterns={patterns}
-          revengeTrading={revengeTrading}
-          snapshot={selectedPropSnapshot}
-          passProbability={passProbability}
+        <TradeVisionCoachSection
           userId={session?.user.id || null}
+          journalContext={tradeVisionJournalContext}
         />
-        <TerminalGlassCard style={styles.fullAnalyticsCard} intensity={28}>
-          <Pressable
-            onPress={() => {
-              lightHaptic();
-              setFullAnalyticsOpen((prev) => !prev);
-            }}
-            style={styles.fullAnalyticsToggle}
-          >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.terminalSmallLabel}>FULL ANALYTICS</Text>
-              <Text style={styles.propCoachHeadline}>{fullAnalyticsOpen ? "Close full analytics" : "Open full analytics"}</Text>
-              <Text style={styles.terminalSub}>Detailed reports and support panels stay here when you need them.</Text>
-            </View>
-            <Text style={styles.detectiveChevron}>{fullAnalyticsOpen ? "-" : "+"}</Text>
-          </Pressable>
-        </TerminalGlassCard>
+        <PropCoachQuickCard
+          snapshot={selectedPropSnapshot}
+          templates={safeAnalysisTemplates}
+          templateKey={analysisTemplateKey}
+          propMode={propMode}
+          operatingSystem={operatingSystem}
+          passProbability={passProbability}
+          stats={periodStats}
+          trades={periodTrades}
+          revengeTrading={revengeTrading}
+          onTemplateChange={changeAnalysisTemplate}
+          onModeChange={changePropMode}
+        />
+        <AiTradingAssistantBlock
+          operatingSystem={operatingSystem}
+          patterns={patterns}
+          stats={periodStats}
+          trades={periodTrades}
+          tradeAnalysis={tradeAnalysis}
+          tradeAnalysisBusy={tradeAnalysisBusy}
+          tradeAnalysisError={tradeAnalysisError}
+          aiResults={aiResults}
+          aiBusy={aiBusy}
+          onRunCoachFeature={runCoachFeature}
+          onRunTradeAnalysis={runTradeAnalysis}
+        />
       </View>
-      {fullAnalyticsOpen ? (
-        <>
-          <View style={styles.terminalScreenStack}>
-            <AiOperatingSystemTodaySection operatingSystem={operatingSystem} />
-            <AiOperatingSystemCoachSection operatingSystem={operatingSystem} />
-            <AiOperatingSystemTradingDnaSection operatingSystem={operatingSystem} />
-            <AiOperatingSystemEvidenceSection operatingSystem={operatingSystem} />
-            <AiOperatingSystemPropFirmSection
-              operatingSystem={operatingSystem}
-              snapshot={selectedPropSnapshot}
-              passProbability={passProbability}
-              stats={periodStats}
-              trades={periodTrades}
-              revengeTrading={revengeTrading}
-            />
-            <AiOperatingSystemGrowthSection operatingSystem={operatingSystem} />
-            <AiOperatingSystemMarketAssistantSection operatingSystem={operatingSystem} aiBusy={aiBusy} onAction={runMarketAssistantAction} />
-          </View>
-          {localCoachStack}
-          <View style={styles.terminalScreenStack}>
-            <TerminalPatternDetective stats={periodStats} />
-            <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
-            {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
-          </View>
-
-          <View style={styles.terminalScreenStack}>
-            <MarketIntelligencePanel lang={lang} />
-            <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
-          </View>
-        </>
-      ) : null}
     </ScrollView>
   );
 }
@@ -8767,13 +9695,19 @@ function JournalScreen({
       }
       successHaptic();
       if (!editId) {
-        trackEvent("trade_added", {
+        const analyticsProperties = {
           source: "manual",
           pnl_result: item.pnl > 0 ? "win" : item.pnl < 0 ? "loss" : "flat",
           has_screenshot: !!item.photoUri,
           has_voice: !!item.voiceUri,
           tag_count: item.tags?.length || 0,
-        });
+        };
+        trackEvent("trade_added", analyticsProperties);
+        if (trades.length === 0) {
+          trackEvent("first_trade_created", { source: "manual" });
+          trackEvent("first_journal_entry_created", { source: "manual" });
+          trackEvent("first_value_moment", { value_type: "first_journal_entry" });
+        }
       }
       setModal(false);
     } finally {
@@ -9694,10 +10628,12 @@ const MemoNewsListItem = React.memo(NewsListItem);
 function NewsScreen({
   lang,
   isPremium,
+  userId,
   onUpgrade,
 }: {
   lang: Lang;
   isPremium: boolean;
+  userId: string | null;
   onUpgrade: () => void;
 }) {
   const [items, setItems] = useState<MarketNews[]>([]);
@@ -9733,8 +10669,22 @@ function NewsScreen({
   ), []);
   const newsKeyExtractor = useCallback((item: MarketNews) => item.id, []);
   const newsListHeader = useMemo(
-    () => <AiNewsSentimentCard isPremium={isPremium} onUpgrade={onUpgrade} />,
-    [isPremium, onUpgrade],
+    () => (
+      <AiNewsSentimentCard
+        isPremium={isPremium}
+        onUpgrade={onUpgrade}
+        userId={userId}
+        headlines={items.slice(0, 8).map((item) => ({
+          title: item.title,
+          summary: item.summary,
+          source: item.source,
+          time: item.time,
+          impact: item.impact,
+          symbols: ASSETS.filter((asset) => item.bias[asset] && item.bias[asset] !== "NEUTRAL"),
+        }))}
+      />
+    ),
+    [isPremium, items, onUpgrade, userId],
   );
   const newsListEmpty = useMemo(
     () => (
@@ -12081,6 +13031,7 @@ function App() {
             <NewsScreen
               lang={lang}
               isPremium={isPremium}
+              userId={session?.user.id || null}
               onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)}
             />
           ) : tab === "calendar" ? (
@@ -13224,6 +14175,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7,10,18,0.78)",
     paddingHorizontal: 10,
     paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  aiImageScanLine: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    top: 0,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: C.green,
+    shadowColor: C.green,
+    shadowOpacity: 0.9,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
   },
   tradeVisionImageBadge: {
     color: C.green,
@@ -13242,6 +14209,112 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     marginTop: 14,
+  },
+  aiIntelligencePulse: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  aiIntelligencePulseCore: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  aiFlowRail: {
+    width: "100%",
+    position: "relative",
+    marginTop: 5,
+    paddingTop: 1,
+  },
+  aiFlowTrack: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    top: 9,
+    height: 1,
+  },
+  aiFlowSignal: {
+    position: "absolute",
+    left: 16,
+    top: 6,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    shadowOpacity: 0.75,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  aiFlowNodes: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  aiFlowNode: {
+    flex: 1,
+    alignItems: "center",
+    gap: 5,
+  },
+  aiFlowNodeDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  aiFlowNodeCore: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  aiFlowNodeLabel: {
+    color: C.sub,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    textAlign: "center",
+  },
+  aiGuardianRingWrap: {
+    width: 86,
+    height: 86,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiGuardianRingCenter: {
+    position: "absolute",
+    alignItems: "center",
+  },
+  aiGuardianRingValue: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  aiGuardianRingLabel: {
+    color: C.sub,
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  aiAnimatedBarTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    overflow: "hidden",
+  },
+  aiAnimatedBarFill: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
   },
   tradeVisionIconOrb: {
     width: 58,
@@ -13291,9 +14364,11 @@ const styles = StyleSheet.create({
   },
   tradeVisionChipRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
-    marginTop: 14,
+    paddingRight: 4,
+  },
+  tradeVisionChipScroller: {
+    marginTop: 12,
   },
   tradeVisionChip: {
     borderRadius: 999,
@@ -13443,14 +14518,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   coachPrimaryCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(150,255,0,0.48)",
     backgroundColor: "rgba(150,255,0,0.16)",
     paddingVertical: 14,
     paddingHorizontal: 16,
-    alignItems: "center",
-    justifyContent: "center",
     marginTop: 14,
     shadowColor: C.green,
     shadowOpacity: 0.16,
@@ -13464,6 +14541,317 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 0.4,
+  },
+  coachPrimaryCtaActive: {
+    borderColor: "rgba(150,255,0,0.72)",
+    backgroundColor: "rgba(150,255,0,0.22)",
+  },
+  coachPrimaryCtaTextDone: {
+    color: C.sub,
+  },
+  coachCompactHeadline: {
+    color: C.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  coachCompactSub: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  coachCompactValue: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "800",
+  },
+  coachCompactHint: {
+    color: C.purple,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    marginTop: 10,
+  },
+  coachFocusGrid: {
+    marginTop: 12,
+    gap: 8,
+  },
+  coachFocusRow: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 3,
+  },
+  coachFocusLabel: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  coachFocusValue: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "800",
+  },
+  analyticsToolMenuCard: {
+    gap: 10,
+  },
+  assistantHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  analyticsToolGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  analyticsToolTile: {
+    flexGrow: 1,
+    flexBasis: "47%",
+    minWidth: 140,
+    minHeight: 142,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 13,
+  },
+  analyticsToolTileActive: {
+    borderColor: "rgba(150,255,0,0.34)",
+    backgroundColor: "rgba(150,255,0,0.08)",
+  },
+  analyticsToolTilePressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.88,
+  },
+  analyticsToolTileIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.24)",
+    backgroundColor: "rgba(176,38,255,0.10)",
+  },
+  analyticsToolTileTitle: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  analyticsToolStatus: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  analyticsToolTileSummary: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "600",
+  },
+  aiMemoryStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.20)",
+    backgroundColor: "rgba(176,38,255,0.045)",
+    padding: 12,
+    marginTop: 4,
+  },
+  aiJournalTimeline: {
+    marginTop: 4,
+    paddingLeft: 2,
+  },
+  aiJournalTimelineItem: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 11,
+    paddingBottom: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(176,38,255,0.22)",
+    marginLeft: 16,
+    paddingLeft: 22,
+  },
+  aiJournalTimelineLast: {
+    borderLeftColor: "transparent",
+    paddingBottom: 0,
+  },
+  aiJournalTimelineIcon: {
+    position: "absolute",
+    left: -17,
+    top: -1,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(12,15,24,0.98)",
+  },
+  propCoachQuickCard: {
+    gap: 4,
+  },
+  propCoachSignalRail: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.12)",
+    backgroundColor: "rgba(150,255,0,0.025)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  propAggressionGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  propAggressionCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 104,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    padding: 10,
+    gap: 5,
+  },
+  propAggressionCardActive: {
+    borderColor: "rgba(176,38,255,0.38)",
+    backgroundColor: "rgba(176,38,255,0.075)",
+    shadowColor: C.purple,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  propAggressionTitle: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+  },
+  propAggressionHint: {
+    color: C.sub,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "600",
+  },
+  propGuardianCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.16)",
+    backgroundColor: "rgba(150,255,0,0.035)",
+    padding: 14,
+    gap: 13,
+  },
+  propGuardianHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  propGuardianStatus: {
+    color: C.text,
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  propGuardianBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  propGuardianMetrics: {
+    flex: 1,
+    gap: 11,
+  },
+  propGuardianMetricValue: {
+    color: C.text,
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "900",
+  },
+  propGuardianMetricRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  propGuardianBarGroup: {
+    gap: 7,
+  },
+  propGuardianBarLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  propPreviewBadge: {
+    borderColor: "rgba(176,38,255,0.34)",
+    backgroundColor: "rgba(176,38,255,0.12)",
+  },
+  propPreviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  propPreviewTile: {
+    flexGrow: 1,
+    flexBasis: "30%",
+    minWidth: 96,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    padding: 10,
+    gap: 4,
+  },
+  propPreviewTileLabel: {
+    color: C.text,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  propPreviewTileHint: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "600",
+  },
+  propPreviewTileBadge: {
+    color: C.purple,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
+  tradeVisionEntryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.24)",
+    backgroundColor: "rgba(176,38,255,0.06)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   coachConsoleActionRow: {
     flexDirection: "row",
@@ -13649,6 +15037,19 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
     marginTop: 12,
+  },
+  tradeVisionNextAction: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.22)",
+    backgroundColor: "rgba(150,255,0,0.055)",
+    padding: 13,
+    gap: 6,
+  },
+  tradeVisionDetailRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
   },
   tradeVisionReadyTop: {
     flexDirection: "row",

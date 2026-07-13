@@ -4,6 +4,16 @@ import { fetchBraveMarketNews, formatBraveArticlesForPrompt } from "../_shared/b
 import { generateMarketIntelligence } from "../_shared/marketAiProvider.ts";
 import { isMarketIntelligenceAction, type MarketIntelligenceAction } from "../_shared/marketAiSchemas.ts";
 import { checkRateLimitBucket, recordRateLimitUsage } from "../_shared/rateLimits.ts";
+import { resolveServerProEntitlement } from "../_shared/revenueCatEntitlement.ts";
+
+type SuppliedHeadline = {
+  title: string;
+  summary?: string;
+  source?: string;
+  time?: string;
+  impact?: string;
+  symbols?: string[];
+};
 
 function getEnv(name: string) {
   return Deno.env.get(name)?.trim() || "";
@@ -14,23 +24,35 @@ function periodKey(action: string) {
   return `${action}:${now.toISOString().slice(0, 10)}`;
 }
 
-async function hasServerProEntitlement(supabaseAdmin: ReturnType<typeof createClient>, userId: string) {
-  const entitlementId = getEnv("REVENUECAT_ENTITLEMENT_ID") || "pro";
-  const { data, error } = await supabaseAdmin
-    .from("user_subscriptions")
-    .select("status, expires_at")
-    .eq("user_id", userId)
-    .eq("entitlement_id", entitlementId)
-    .maybeSingle();
+function suppliedHeadlines(payload: Record<string, unknown>): SuppliedHeadline[] {
+  if (!Array.isArray(payload.headlines)) return [];
+  return payload.headlines
+    .slice(0, 10)
+    .map((item) => {
+      const row = item as Record<string, unknown>;
+      return {
+        title: String(row.title || "").trim().slice(0, 220),
+        summary: String(row.summary || "").trim().slice(0, 320),
+        source: String(row.source || "").trim().slice(0, 80),
+        time: String(row.time || "").trim().slice(0, 80),
+        impact: String(row.impact || "").trim().slice(0, 20),
+        symbols: Array.isArray(row.symbols) ? row.symbols.map((symbol) => String(symbol).slice(0, 12)).slice(0, 8) : [],
+      };
+    })
+    .filter((item) => item.title);
+}
 
-  if (error) {
-    console.warn("[YouTrader:subscription] pro_check_failed", { code: error.code });
-    return false;
-  }
-  if (!data) return false;
-  const status = String(data.status || "").toLowerCase();
-  const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
-  return ["active", "trialing"].includes(status) || expiresAt > Date.now();
+function formatSuppliedHeadlines(headlines: SuppliedHeadline[]) {
+  if (!headlines.length) return "";
+  return headlines.map((item, index) => [
+    `VISIBLE HEADLINE ${index + 1}`,
+    item.title,
+    item.summary || null,
+    item.source ? `Source: ${item.source}` : null,
+    item.time ? `Time: ${item.time}` : null,
+    item.impact ? `Impact: ${item.impact}` : null,
+    item.symbols?.length ? `Related symbols: ${item.symbols.join(", ")}` : null,
+  ].filter(Boolean).join("\n")).join("\n\n");
 }
 
 Deno.serve(async (req) => {
@@ -69,8 +91,8 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Unsupported market action." }, 400, req);
   }
 
-  const isPro = await hasServerProEntitlement(supabaseAdmin, userData.user.id);
-  if (!isPro) {
+  const entitlement = await resolveServerProEntitlement(supabaseAdmin, userData.user.id);
+  if (!entitlement.isPro) {
     console.log("[YouTrader:subscription] market_intel_blocked_free", { action: body.action });
     return jsonResponse({ error: "YouTrader Pro is required for this feature." }, 403, req);
   }
@@ -95,9 +117,15 @@ Deno.serve(async (req) => {
       ? `${symbol} market news today why moving`
       : undefined;
 
-  const articles = await fetchBraveMarketNews({ query, symbols, count: 5 });
-  const articlesText = formatBraveArticlesForPrompt(articles);
-  const result = await generateMarketIntelligence(body.action, payload, articlesText);
+  const visibleHeadlines = suppliedHeadlines(payload);
+  const articles = visibleHeadlines.length ? [] : await fetchBraveMarketNews({ query, symbols, count: 5 });
+  const articlesText = visibleHeadlines.length ? formatSuppliedHeadlines(visibleHeadlines) : formatBraveArticlesForPrompt(articles);
+  const enrichedPayload = {
+    ...payload,
+    headlines: visibleHeadlines.length ? visibleHeadlines : payload.headlines,
+    inputHeadlineCount: visibleHeadlines.length || articles.length,
+  };
+  const result = await generateMarketIntelligence(body.action, enrichedPayload, articlesText);
 
   await recordRateLimitUsage(supabaseAdmin, {
     userId: userData.user.id,
@@ -110,7 +138,7 @@ Deno.serve(async (req) => {
 
   return jsonResponse({
     data: result.data,
-    articles: articles.slice(0, 5),
+    articles: visibleHeadlines.length ? visibleHeadlines.slice(0, 5) : articles.slice(0, 5),
     providerStatus: result.provider,
     usedFallback: result.usedFallback,
     message: result.message,

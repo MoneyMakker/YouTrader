@@ -65,10 +65,11 @@ function main() {
   fs.writeFileSync(path.join(BACKUP_DIR, "manifest.json"), JSON.stringify(manifest, null, 2));
   fs.writeFileSync(path.join(ROOT, "scripts/ai-platform-v2/backups/LATEST"), stamp + "\n");
 
+  const credentialNameCount = manifest.secretNames.length;
   console.log("AI configuration backup created:");
   console.log(BACKUP_DIR);
   console.log(`ai-coach version before deploy: ${manifest.aiCoachVersionBefore ?? "unknown"}`);
-  console.log(`secrets tracked (names only): ${manifest.secretNames.length}`);
+  console.log(`configured credential-name count: ${credentialNameCount}`);
 }
 
 main();

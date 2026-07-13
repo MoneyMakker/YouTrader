@@ -14,11 +14,13 @@ export type MarketIntelligenceAction =
   | "why_market_moving";
 
 export type MarketSentimentResult = {
-  overallBias: string;
-  biasPercent: number;
+  marketSentiment: string;
   confidence: string;
   drivers: string[];
   riskSuggestion: string;
+  symbolBiases: { symbol: string; bias: string; reason: string }[];
+  timestamp: string;
+  inputHeadlineCount: number;
   disclaimer: string;
 };
 
@@ -77,14 +79,35 @@ export type MarketIntelResponse<T> = {
 };
 
 function localFallback<T>(action: MarketIntelligenceAction, payload: Record<string, unknown>): T {
+  const headlines = Array.isArray(payload.headlines) ? payload.headlines as Record<string, unknown>[] : [];
+  const headlineText = headlines.map((item) => `${item.title || ""} ${item.summary || ""}`).join(" ").toLowerCase();
+  const riskWords = ["inflation", "cpi", "fed", "yields", "war", "tariff", "selloff", "recession", "jobs"];
+  const positiveWords = ["rally", "beats", "growth", "cut", "eases", "record", "optimism"];
+  const riskScore = riskWords.reduce((sum, word) => sum + (headlineText.includes(word) ? 1 : 0), 0);
+  const positiveScore = positiveWords.reduce((sum, word) => sum + (headlineText.includes(word) ? 1 : 0), 0);
+  const headlineDrivenSentiment = headlines.length < 3
+    ? "Mixed"
+    : riskScore > positiveScore
+      ? "Risk-off"
+      : positiveScore > riskScore
+        ? "Constructive"
+        : "Mixed";
   switch (action) {
     case "market_sentiment":
       return {
-        overallBias: "Mixed",
-        biasPercent: 50,
-        confidence: "Medium",
-        drivers: ["Macro headlines are mixed", "Volatility may expand around data"],
-        riskSuggestion: "Reduce position size by 50%. Avoid revenge trading. Protect capital.",
+        marketSentiment: headlineDrivenSentiment,
+        confidence: headlines.length < 3 ? "Low" : "Medium",
+        drivers: headlines.length
+          ? headlines.slice(0, 3).map((item) => String(item.title || "Visible headline").slice(0, 110))
+          : ["No visible headlines were supplied", "Volatility may expand around data"],
+        riskSuggestion: headlines.length < 3 ? "Headline sample is thin. Keep risk conservative until fresh context is available." : "Use headlines as volatility context only. Reduce size if volatility expands.",
+        symbolBiases: String(payload.symbols || payload.symbol || "NQ")
+          .split(/[,\s]+/)
+          .filter(Boolean)
+          .slice(0, 5)
+          .map((symbol) => ({ symbol: symbol.toUpperCase(), bias: headlineDrivenSentiment, reason: "Derived from visible headline mix." })),
+        timestamp: new Date().toISOString(),
+        inputHeadlineCount: headlines.length,
         disclaimer: "This is not financial advice. Use alongside your own trading plan.",
       } as T;
     case "market_narrative":
@@ -190,8 +213,12 @@ export async function invokeMarketIntelligence<T>(
   }
 }
 
-export function fetchMarketSentiment(market = "NQ") {
-  return invokeMarketIntelligence<MarketSentimentResult>("market_sentiment", { symbol: market });
+export function fetchMarketSentiment(
+  market = "NQ",
+  headlines: { title: string; summary?: string; source?: string; time?: string; impact?: string; symbols?: string[] }[] = [],
+  headlineHash?: string,
+) {
+  return invokeMarketIntelligence<MarketSentimentResult>("market_sentiment", { symbol: market, headlines, headlineHash });
 }
 
 export function fetchMarketNarrative() {
