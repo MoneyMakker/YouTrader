@@ -8767,13 +8767,19 @@ function JournalScreen({
       }
       successHaptic();
       if (!editId) {
-        trackEvent("trade_added", {
+        const analyticsProperties = {
           source: "manual",
           pnl_result: item.pnl > 0 ? "win" : item.pnl < 0 ? "loss" : "flat",
           has_screenshot: !!item.photoUri,
           has_voice: !!item.voiceUri,
           tag_count: item.tags?.length || 0,
-        });
+        };
+        trackEvent("trade_added", analyticsProperties);
+        if (trades.length === 0) {
+          trackEvent("first_trade_created", { source: "manual" });
+          trackEvent("first_journal_entry_created", { source: "manual" });
+          trackEvent("first_value_moment", { value_type: "first_journal_entry" });
+        }
       }
       setModal(false);
     } finally {
