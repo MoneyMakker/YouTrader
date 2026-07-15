@@ -1,9 +1,9 @@
 # Preview Deploy Report — AI Platform V2 Phase 1
 
-**Generated:** 2026-07-09T00:37:18.863Z  
-**Environment:** Preview / Staging (`izzrlsgumyabdvlmwlwn`)  
-**Scope:** `ai-coach` Edge Function only  
-**Production deploy:** NOT APPROVED · NOT EXECUTED  
+**Generated:** 2026-07-09T00:37:18.863Z
+**Environment:** Preview / Staging (`izzrlsgumyabdvlmwlwn`)
+**Scope:** `ai-coach` Edge Function only
+**Production deploy:** NOT APPROVED · NOT EXECUTED
 **Git push/merge:** NOT DONE
 
 ---

@@ -2,7 +2,7 @@
 
 Cost observability design for AI Platform V2.
 
-**Phase 1:** Estimates in router response → `ai_usage_events.metadata`  
+**Phase 1:** Estimates in router response → `ai_usage_events.metadata`
 **Phase 3:** Dedicated `ai_platform_requests` table + dashboard (migration pending)
 
 ---

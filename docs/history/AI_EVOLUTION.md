@@ -1,7 +1,7 @@
 # YouTrader AI Evolution
 
-AI agents, prompts, workflows, and tooling improvements.  
-**Maintained by:** AI Project Historian  
+AI agents, prompts, workflows, and tooling improvements.
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 ---

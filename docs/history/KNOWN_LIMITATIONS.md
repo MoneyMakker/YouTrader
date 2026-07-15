@@ -1,7 +1,7 @@
 # YouTrader Known Limitations
 
-Documented product and engineering limits — not bugs, but accepted constraints.  
-**Maintained by:** AI Project Historian  
+Documented product and engineering limits — not bugs, but accepted constraints.
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 | ID | Area | Limitation | Reason | Workaround | Since | Review |
@@ -12,23 +12,23 @@ Documented product and engineering limits — not bugs, but accepted constraints
 
 ## Platform
 
-- 
+-
 
 ## Backend / sync
 
-- 
+-
 
 ## AI
 
-- 
+-
 
 ## Subscriptions
 
-- 
+-
 
 ## Exports / media
 
-- 
+-
 
 ---
 

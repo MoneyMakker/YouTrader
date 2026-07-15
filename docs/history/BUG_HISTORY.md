@@ -1,7 +1,7 @@
 # YouTrader Bug History
 
-Notable bugs, fixes, and recurring patterns.  
-**Maintained by:** AI Project Historian  
+Notable bugs, fixes, and recurring patterns.
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 ---
@@ -23,4 +23,4 @@ _When the same bug class appears ≥2 times, document root cause and permanent f
 
 ## Patterns & lessons
 
-- 
+-

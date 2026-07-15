@@ -1,6 +1,6 @@
 # Security Report — 1.6.0
 
-**Date:** 2026-07-08  
+**Date:** 2026-07-08
 **Reviewer:** Supabase Security Engineer (orchestrated)
 
 ---

@@ -4,7 +4,7 @@ Last updated: 2026-07-08
 
 This document describes the **local AI development stack** for YouTrader. These tools live **outside** the Expo app and must **not** modify runtime code, `package.json`, Supabase schema, RevenueCat IDs, or production secrets unless you explicitly approve.
 
-**Install location:** `~/Projects/ai-dev-tools`  
+**Install location:** `~/Projects/ai-dev-tools`
 **Full README:** `~/Projects/ai-dev-tools/README.md`
 
 ---
@@ -23,11 +23,11 @@ This document describes the **local AI development stack** for YouTrader. These 
 
 ## Critical safety rules
 
-1. **Never** put `OPENROUTER_API_KEY` in YouTrader `EXPO_PUBLIC_*`, `app.json`, or client bundles  
-2. Server-side AI for the production app stays in **Supabase Edge Function secrets** (`docs/AI_PROVIDER_SETUP.md`)  
-3. Agents must **not auto-edit** YouTrader without your confirmation  
-4. **Review all diffs** before merging Parallel Code worktrees  
-5. **No** destructive git, `git push`, or production EAS builds from agent sessions  
+1. **Never** put `OPENROUTER_API_KEY` in YouTrader `EXPO_PUBLIC_*`, `app.json`, or client bundles
+2. Server-side AI for the production app stays in **Supabase Edge Function secrets** (`docs/AI_PROVIDER_SETUP.md`)
+3. Agents must **not auto-edit** YouTrader without your confirmation
+4. **Review all diffs** before merging Parallel Code worktrees
+5. **No** destructive git, `git push`, or production EAS builds from agent sessions
 
 ---
 
@@ -148,8 +148,8 @@ Configure once — registers **15** **YouTrader · …** agents with worktree is
 | `release-manager` | YouTrader · AI Release Manager | **CEO-facing** 26-step release workflow |
 | `project-historian` | YouTrader · AI Project Historian | **CKO** — `docs/history/` only |
 
-Review report template: `docs/PARALLEL_CODE_REVIEW_REPORT.md`  
-Release workflow: `docs/AI_DEVELOPMENT_WORKFLOW.md`  
+Review report template: `docs/PARALLEL_CODE_REVIEW_REPORT.md`
+Release workflow: `docs/AI_DEVELOPMENT_WORKFLOW.md`
 Project history: `docs/AI_PROJECT_HISTORIAN.md`
 
 Copy a preset prompt into a new task:
@@ -158,8 +158,8 @@ Copy a preset prompt into a new task:
 ~/Projects/ai-dev-tools/scripts/pc-youtrader-prompt.sh senior-rn --copy
 ```
 
-Agent definitions: `~/Projects/ai-dev-tools/youtrader/agents/`  
-Generated prompts: `~/Projects/ai-dev-tools/youtrader/parallel-code/prompts/`  
+Agent definitions: `~/Projects/ai-dev-tools/youtrader/agents/`
+Generated prompts: `~/Projects/ai-dev-tools/youtrader/parallel-code/prompts/`
 Worktree context: `~/Projects/youtrader-final/.parallel-code/AGENTS.md`
 
 **Safety (enforced in every preset):** work only in the assigned worktree; never push/merge/delete branches; never touch production secrets; reviewable commits only.
@@ -195,7 +195,7 @@ Copy a workflow prompt into a new DeerFlow thread:
 ~/Projects/ai-dev-tools/scripts/df-youtrader-prompt.sh app-store-competitors --copy
 ```
 
-Skills: `~/Projects/ai-dev-tools/youtrader/deerflow/skills/public/`  
+Skills: `~/Projects/ai-dev-tools/youtrader/deerflow/skills/public/`
 Config: `~/Projects/ai-dev-tools/youtrader/deerflow-openrouter.yaml`
 
 Each workflow returns a **structured markdown report in chat** (metadata, summary, findings, recommendations, sources). No paid search APIs required.
@@ -241,7 +241,7 @@ Each workflow returns a **structured markdown report in chat** (metadata, summar
 ~/Projects/ai-dev-tools/scripts/historian-youtrader-prompt.sh why --copy
 ```
 
-Ask: `Why is cloud sync implemented this way?` or `Record decision: …`  
+Ask: `Why is cloud sync implemented this way?` or `Record decision: …`
 Docs: `docs/AI_PROJECT_HISTORIAN.md`, `docs/history/`
 
 ---

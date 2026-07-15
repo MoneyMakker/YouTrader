@@ -1,8 +1,8 @@
 # YouTrader AI Platform V2
 
-**Status:** Phase 1 implemented (AI Router) — **validation before deploy**  
-**Last updated:** 2026-07-08  
-**Owner:** Chief AI Architect  
+**Status:** Phase 1 implemented (AI Router) — **validation before deploy**
+**Last updated:** 2026-07-08
+**Owner:** Chief AI Architect
 **Deploy:** NOT DEPLOYED · NOT PUSHED · NOT MERGED
 
 ---

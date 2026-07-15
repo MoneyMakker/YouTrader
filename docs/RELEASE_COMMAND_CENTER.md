@@ -1,6 +1,6 @@
 # Release Command Center — YouTrader
 
-**Single entry point for every release.**  
+**Single entry point for every release.**
 **Never:** Production deploy · App Store submit · git push · auto-merge
 
 ---
@@ -177,7 +177,7 @@ Example with validation only:
 
 ### Step 2 — Production Readiness Gate
 
-Runs `npm run ai-platform:readiness`  
+Runs `npm run ai-platform:readiness`
 Collects PASS / WARNING / FAIL from 67 checks.
 
 ### Step 3 — AI Platform Validation
@@ -195,7 +195,7 @@ Verifies: preview deploy · rollback · feature flags · legacy · router · fal
 
 `npm run ai-platform:verify-db-permissions`
 
-Tables: `user_subscriptions`, `ai_usage_events`  
+Tables: `user_subscriptions`, `ai_usage_events`
 Roles: `service_role`, `authenticated`, `anon`
 
 ### Step 6 — Release Notes

@@ -1,8 +1,8 @@
 # Release Report — 1.6.0
 
-**Date:** 2026-07-08  
-**Release Manager:** AI Release Manager  
-**Target:** YouTrader 1.6.0  
+**Date:** 2026-07-08
+**Release Manager:** AI Release Manager
+**Target:** YouTrader 1.6.0
 **Final Status:** _PENDING_
 
 ---

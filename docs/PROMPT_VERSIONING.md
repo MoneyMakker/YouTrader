@@ -2,7 +2,7 @@
 
 Platform V2 prompt lifecycle for coach and market features.
 
-**Phase 1:** In-code registry (`prompts/registry.ts`) + env override  
+**Phase 1:** In-code registry (`prompts/registry.ts`) + env override
 **Phase 4:** Postgres `ai_prompt_versions` table (migration pending approval)
 
 ---

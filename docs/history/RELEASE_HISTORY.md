@@ -1,7 +1,7 @@
 # YouTrader Release History
 
-Complete record of every release. Updated automatically after each `Prepare Release` cycle.  
-**Maintained by:** AI Project Historian  
+Complete record of every release. Updated automatically after each `Prepare Release` cycle.
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 ---
@@ -26,7 +26,7 @@ Complete record of every release. Updated automatically after each `Prepare Rele
 
 ## {version} (build {N}) — {date}
 
-**Release date:**  
+**Release date:**
 **Status:** TestFlight | App Store | internal
 
 ### Major changes

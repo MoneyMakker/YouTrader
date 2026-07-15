@@ -1,7 +1,7 @@
 # YouTrader Roadmap History
 
-Accepted, rejected, and deferred product ideas with reasons.  
-**Maintained by:** AI Project Historian  
+Accepted, rejected, and deferred product ideas with reasons.
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 ---

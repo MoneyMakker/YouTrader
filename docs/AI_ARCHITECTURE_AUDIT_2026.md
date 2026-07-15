@@ -1,8 +1,8 @@
 # YouTrader Production AI Architecture Audit
 
-**Date:** 2026-07-08  
-**Scope:** Production mobile app + Supabase Edge Functions + background workers  
-**Method:** Static code and documentation review (no Supabase dashboard access, no live secret inspection)  
+**Date:** 2026-07-08
+**Scope:** Production mobile app + Supabase Edge Functions + background workers
+**Method:** Static code and documentation review (no Supabase dashboard access, no live secret inspection)
 **Status:** Read-only audit — no code modified
 
 ---
@@ -194,8 +194,8 @@ OpenRouter calls include headers `HTTP-Referer: https://youtrader.app` and `X-Ti
 
 **Auto-mode provider order** (`AI_PROVIDER=auto`):
 
-- **Deep tier:** OpenRouter → Anthropic → Gemini → NVIDIA  
-- **Fast tier:** OpenRouter → Gemini → NVIDIA → Anthropic  
+- **Deep tier:** OpenRouter → Anthropic → Gemini → NVIDIA
+- **Fast tier:** OpenRouter → Gemini → NVIDIA → Anthropic
 
 Skipped if the corresponding API key is missing.
 

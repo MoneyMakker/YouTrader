@@ -254,9 +254,9 @@ function writeGateDoc(status) {
 
   let body = `# Production Readiness Gate — AI Platform V2 Phase 1
 
-**Generated:** ${generatedAt}  
-**Phase:** Pre Preview Deploy  
-**Deploy status:** NOT DEPLOYED  
+**Generated:** ${generatedAt}
+**Phase:** Pre Preview Deploy
+**Deploy status:** NOT DEPLOYED
 **Pipeline:** \`npm run ai-platform:readiness\`
 
 ---

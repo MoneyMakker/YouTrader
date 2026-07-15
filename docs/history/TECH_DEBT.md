@@ -1,6 +1,6 @@
 # YouTrader Technical Debt Register
 
-**Maintained by:** AI Project Historian  
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 ## Summary

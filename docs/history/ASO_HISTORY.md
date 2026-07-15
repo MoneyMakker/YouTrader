@@ -1,7 +1,7 @@
 # YouTrader ASO History
 
-App Store metadata, keywords, creative, and conversion experiments.  
-**Maintained by:** AI Project Historian  
+App Store metadata, keywords, creative, and conversion experiments.
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 ---

@@ -1,7 +1,6 @@
 # YouTrader Engineering Decision Log
-
-Numbered architectural and engineering decisions (ADR-style).  
-**Maintained by:** AI Project Historian  
+Numbered architectural and engineering decisions (ADR-style).
+**Maintained by:** AI Project Historian
 **Last updated:** 2026-07-08
 
 **Next decision number:** 3
@@ -19,8 +18,8 @@ Numbered architectural and engineering decisions (ADR-style).
 
 ## Decision #1 — Journal is source of truth; analytics and AI explain it
 
-**Date:** Unknown — decision predates recorded history  
-**Status:** accepted  
+**Date:** Unknown — decision predates recorded history
+**Status:** accepted
 **Sources:** MASTER_CONTEXT.md §1 Project Overview
 
 ### Context
@@ -42,8 +41,8 @@ All new features must preserve deterministic analytics vs AI separation.
 
 ## Decision #2 — Large orchestrator in App.tsx with extracted src/ modules
 
-**Date:** Unknown — decision predates recorded history  
-**Status:** accepted  
+**Date:** Unknown — decision predates recorded history
+**Status:** accepted
 **Sources:** ARCHITECTURE.md
 
 ### Context
@@ -60,4 +59,3 @@ Merge conflicts on parallel agent work; TD-001 tracks extraction debt.
 
 ### Future implications
 Extract only when task scope requires; avoid big-bang rewrite.
-

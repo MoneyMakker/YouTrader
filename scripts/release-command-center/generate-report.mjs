@@ -9,10 +9,10 @@ export function generateTestFlightDoc({ mode, steps, notes, checklistSections, b
 
   let md = `# TestFlight Preparation — YouTrader ${version} (${build})
 
-**Generated:** ${new Date().toISOString()}  
-**Pipeline:** Release Command Center · \`${mode}\`  
-**Final status:** \`${finalStatus}\`  
-**Production / App Store:** NOT APPROVED · NOT SUBMITTED  
+**Generated:** ${new Date().toISOString()}
+**Pipeline:** Release Command Center · \`${mode}\`
+**Final status:** \`${finalStatus}\`
+**Production / App Store:** NOT APPROVED · NOT SUBMITTED
 **Git push / merge:** NOT PERFORMED
 
 ---

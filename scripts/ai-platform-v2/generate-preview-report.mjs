@@ -151,10 +151,10 @@ function main() {
 
   let md = `# Preview Deploy Report — AI Platform V2 Phase 1
 
-**Generated:** ${new Date().toISOString()}  
-**Environment:** Preview / Staging (\`izzrlsgumyabdvlmwlwn\`)  
-**Scope:** \`ai-coach\` Edge Function only  
-**Production deploy:** NOT APPROVED · NOT EXECUTED  
+**Generated:** ${new Date().toISOString()}
+**Environment:** Preview / Staging (\`izzrlsgumyabdvlmwlwn\`)
+**Scope:** \`ai-coach\` Edge Function only
+**Production deploy:** NOT APPROVED · NOT EXECUTED
 **Git push/merge:** NOT DONE
 
 ---

@@ -1,8 +1,8 @@
 # AI Platform V2 — Validation Report
 
-**Generated:** 2026-07-09T00:09:07.228Z  
-**Phase:** Pre-deployment validation (Phase 1)  
-**Deploy status:** NOT DEPLOYED  
+**Generated:** 2026-07-09T00:09:07.228Z
+**Phase:** Pre-deployment validation (Phase 1)
+**Deploy status:** NOT DEPLOYED
 **Pipeline:** `npm run ai-platform:validate`
 
 ---

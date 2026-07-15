@@ -1,7 +1,7 @@
 # Manual iPhone Testing — 1.6.0
 
-**Device:** _iPhone model / iOS version_  
-**Build:** _TestFlight build number_  
+**Device:** _iPhone model / iOS version_
+**Build:** _TestFlight build number_
 **Tester:**
 
 Confirm each section with Release Manager before proceeding.

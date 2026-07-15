@@ -1,7 +1,7 @@
 # YouTrader Project Timeline
 
-Chronological record of important engineering and product events.  
-**Maintained by:** AI Project Historian (Chief Knowledge Officer)  
+Chronological record of important engineering and product events.
+**Maintained by:** AI Project Historian (Chief Knowledge Officer)
 **Last updated:** 2026-07-08
 
 > Newest events at the top. Never fabricate — cite commit, release, or documented source.

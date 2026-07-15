@@ -1,8 +1,8 @@
 # Production Readiness Gate — AI Platform V2 Phase 1
 
-**Generated:** 2026-07-09T00:13:29.230Z  
-**Phase:** Pre Preview Deploy  
-**Deploy status:** NOT DEPLOYED  
+**Generated:** 2026-07-09T00:13:29.230Z
+**Phase:** Pre Preview Deploy
+**Deploy status:** NOT DEPLOYED
 **Pipeline:** `npm run ai-platform:readiness`
 
 ---

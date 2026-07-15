@@ -1,9 +1,9 @@
 # Database Permission Review — `user_subscriptions` / `service_role`
 
-**Generated:** 2026-07-09  
-**Scope:** Preview / Staging (`izzrlsgumyabdvlmwlwn`)  
-**Migration:** `supabase/migrations/20260709203000_grant_service_role_user_subscriptions_select.sql`  
-**Status:** Applied to linked preview project · **NOT merged/pushed automatically**  
+**Generated:** 2026-07-09
+**Scope:** Preview / Staging (`izzrlsgumyabdvlmwlwn`)
+**Migration:** `supabase/migrations/20260709203000_grant_service_role_user_subscriptions_select.sql`
+**Status:** Applied to linked preview project · **NOT merged/pushed automatically**
 **Production / TestFlight:** NOT approved
 
 ---
@@ -170,7 +170,7 @@ Verified policies (preview DB):
 
 **File:** `supabase/migrations/20260709203000_grant_service_role_user_subscriptions_select.sql`
 
-**Applied to preview project:** `izzrlsgumyabdvlmwlwn` (via Supabase migration API)  
+**Applied to preview project:** `izzrlsgumyabdvlmwlwn` (via Supabase migration API)
 **Git:** Local file only — **not pushed/merged** per release policy.
 
 ---
