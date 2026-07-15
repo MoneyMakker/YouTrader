@@ -1,21 +1,23 @@
-# Agent-007 Product Analytics
+# Agent-007 product analytics
 
-The iOS client records a limited set of meaningful product events without collecting trade content or personal data. It reuses the existing `trackEvent` boundary, so normal UI work remains non-blocking.
+The iOS client sends a small allowlisted product-event taxonomy through the authenticated `agent-analytics-proxy` Edge Function. The proxy validates the Supabase session, removes prohibited properties, signs the normalized batch with a server-only HMAC secret, and forwards it to Agent-007.
 
-## Privacy model
+No Agent-007 signing secret, service-role credential, customer email, phone, name, private note, screenshot, audio, brokerage credential, account number, payment data, or RevenueCat subscriber payload is sent from the mobile client.
 
-The client keeps a random installation identifier and session identifier locally. It strips prohibited property names before queueing, then sends a bounded batch only through the authenticated `agent-analytics-proxy` Supabase Edge Function. The app contains no Agent-007 service-role key or signing secret.
+Delivery is non-blocking. Events are bounded in local storage, sent only while the app is active, retried at most three times, and deduplicated by an idempotency key. Analytics transport failure never blocks a trade, journal, authentication, purchase, or restore flow.
 
-The proxy verifies the signed-in Supabase user, repeats property validation, and HMAC-signs its normalized payload for Agent-007. It does not forward the mobile user's identity, email, trade notes, screenshots, voice notes, broker data, payment data, or credentials.
-
-## Reliability model
-
-Events are buffered in AsyncStorage in batches of at most 25. Delivery is delayed until the app is active, retries are bounded to three attempts, and a stable idempotency key prevents replay from creating extra records. The queue, installation identifier, and session are cleared on sign-out to avoid cross-account delivery or cross-account correlation on a shared device.
+The mobile client records pseudonymous installation and session identifiers. Agent-007 hashes the subject identifier server-side before storage. The server-only Edge Function requires a valid authenticated user session and rejects invalid, oversized, or PII-bearing batches.
 
 ## Taxonomy
 
-The current first release maps existing meaningful events: account completion, authenticated app opening, journal entry creation, first trade/value moment, CSV import, paywall and purchase flow, AI analysis, news, and weekly reports. Not-yet-existing onboarding screens and controls are intentionally not fabricated as telemetry.
+The first release maps meaningful existing events only: authenticated app opening,
+journal entry creation, first trade/value moment, CSV import, paywall and
+purchase flow, AI analysis, news, and weekly reports. It does not fabricate
+events for screens or controls that do not exist.
 
 ## Required deployment configuration
 
-The `agent-analytics-proxy` Edge Function requires server-only Supabase secrets named `AGENT007_PRODUCT_ANALYTICS_INGEST_URL` and `AGENT007_PRODUCT_ANALYTICS_SIGNING_SECRET`. Do not add either to Expo or EAS public environment variables.
+The `agent-analytics-proxy` Edge Function requires server-only Supabase secrets
+named `AGENT007_PRODUCT_ANALYTICS_INGEST_URL` and
+`AGENT007_PRODUCT_ANALYTICS_SIGNING_SECRET`. Do not add either to Expo or EAS
+public environment variables.

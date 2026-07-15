@@ -1,8 +1,12 @@
 import React from "react";
 import * as Sentry from "@sentry/react-native";
+import Constants from "expo-constants";
 
 const SENTRY_DSN = (process.env.EXPO_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN || "").trim();
 const SENTRY_ENVIRONMENT = (process.env.EXPO_PUBLIC_APP_ENV || process.env.APP_ENV || (__DEV__ ? "development" : "production")).trim();
+const APP_VERSION = Constants.expoConfig?.version || "1.5.9";
+const APP_BUILD = Constants.expoConfig?.ios?.buildNumber || "97";
+const SENTRY_RELEASE = `YouTrader@${APP_VERSION}+${APP_BUILD}`;
 
 let monitoringInitialized = false;
 
@@ -25,6 +29,8 @@ export function initializeMonitoring() {
     dsn: SENTRY_DSN,
     enabled: true,
     environment: SENTRY_ENVIRONMENT,
+    release: SENTRY_RELEASE,
+    dist: APP_BUILD,
     attachStacktrace: true,
     tracesSampleRate: __DEV__ ? 0 : 0.05,
     beforeSend(event) {
@@ -33,6 +39,33 @@ export function initializeMonitoring() {
     },
   });
   monitoringInitialized = true;
+}
+
+export function setMonitoringUser(userId: string | null) {
+  if (!SENTRY_DSN) return;
+  try {
+    initializeMonitoring();
+    Sentry.setUser(userId ? { id: userId } : null);
+  } catch {
+    // Monitoring must never affect app behavior.
+  }
+}
+
+/** Defer Sentry init until after first paint — avoids startup UI hangs. */
+export function scheduleMonitoringInit() {
+  if (monitoringInitialized || !SENTRY_DSN) return;
+  const run = () => {
+    try {
+      initializeMonitoring();
+    } catch {
+      // Monitoring must never block app render.
+    }
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => setTimeout(run, 0));
+  } else {
+    setTimeout(run, 0);
+  }
 }
 
 export function captureAppError(error: unknown, context?: Record<string, unknown>) {
@@ -55,6 +88,6 @@ export function logCrashlyticsBreadcrumb(message: string, data?: Record<string, 
 
 export function wrapAppWithSentry<T extends React.ComponentType<any>>(Component: T): T {
   if (!SENTRY_DSN) return Component;
-  initializeMonitoring();
+  scheduleMonitoringInit();
   return Sentry.wrap(Component) as T;
 }

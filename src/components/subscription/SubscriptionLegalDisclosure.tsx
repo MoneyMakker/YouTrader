@@ -12,6 +12,7 @@ const C = {
   text: "#F4F4F5",
   sub: "#9CA3AF",
   green: "#A3FF12",
+  purple: "#B026FF",
   border: "rgba(255,255,255,0.08)",
 };
 
@@ -73,19 +74,21 @@ export function SubscriptionLegalDisclosure({
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
       <Text style={styles.heading}>{t("subAutoRenewHeading")}</Text>
-      <Text style={styles.line}>
-        • {monthly.title} — {monthly.duration} — {monthly.price}
-      </Text>
-      <Text style={styles.line}>
-        • {yearly.title} — {yearly.duration} — {yearly.price}
-      </Text>
+      <View style={styles.planDisclosureBox}>
+        <Text style={styles.line}>
+          • {monthly.title} — {monthly.duration} — {monthly.price}
+        </Text>
+        <Text style={styles.line}>
+          • {yearly.title} — {yearly.duration} — {yearly.price}
+        </Text>
+      </View>
       <Text style={styles.disclosure}>{t("subDisclosure")}</Text>
       <View style={styles.linkRow}>
-        <Pressable onPress={() => openLegalUrl(PRIVACY_POLICY_URL, t("authPrivacyLabel"))}>
+        <Pressable onPress={() => openLegalUrl(PRIVACY_POLICY_URL, t("authPrivacyLabel"))} style={styles.linkPressable}>
           <Text style={styles.link}>{t("authPrivacyLabel")}</Text>
         </Pressable>
         <Text style={styles.sep}>•</Text>
-        <Pressable onPress={() => openLegalUrl(TERMS_OF_USE_EULA_URL, t("subTermsEula"))}>
+        <Pressable onPress={() => openLegalUrl(TERMS_OF_USE_EULA_URL, t("subTermsEula"))} style={styles.linkPressable}>
           <Text style={styles.link}>{t("subTermsEula")}</Text>
         </Pressable>
       </View>
@@ -95,8 +98,8 @@ export function SubscriptionLegalDisclosure({
 
 const styles = StyleSheet.create({
   wrap: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 4,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: C.border,
   },
@@ -109,6 +112,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "800",
     marginBottom: 6,
+  },
+  planDisclosureBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    paddingHorizontal: 11,
+    paddingVertical: 9,
   },
   line: {
     color: C.sub,
@@ -126,17 +137,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    marginTop: 10,
+    marginTop: 12,
     gap: 8,
+  },
+  linkPressable: {
+    minHeight: 34,
+    justifyContent: "center",
   },
   link: {
     color: C.green,
     fontSize: 13,
-    fontWeight: "800",
-    textDecorationLine: "underline",
+    fontWeight: "900",
   },
   sep: {
-    color: C.sub,
+    color: C.purple,
     fontSize: 12,
   },
 });

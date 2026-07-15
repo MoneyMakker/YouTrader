@@ -37,8 +37,9 @@ export type SerializedSupabaseError = {
   name?: string;
 };
 
-/** Always logs — visible in Xcode / TestFlight device logs. */
+/** Dev-only — avoids leaking auth URLs, tokens, or user ids in production device logs. */
 export function logEmailAuth(event: string, payload?: Record<string, unknown>) {
+  if (!__DEV__) return;
   if (payload && Object.keys(payload).length > 0) {
     console.warn(EMAIL_AUTH_LOG_TAG, event, payload);
   } else {

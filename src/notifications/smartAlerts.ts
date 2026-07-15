@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { t } from "../i18n";
+import { logger } from "../lib/logger";
 import { trackEvent } from "../observability/analytics";
 import { captureAppError } from "../observability/monitoring";
 import {
@@ -11,9 +12,19 @@ import {
   getSmartPushPreferences,
   isProOnlyPreference,
   setSmartPushPreference,
+  setSmartPushPreferences,
   type SmartPushAlertId,
   type SmartPushPreferenceKey,
 } from "./notificationPreferences";
+import { setDailyTradingBriefEnabled } from "./dailyTradingBrief";
+import {
+  applyMasterGroupsToSmartPrefs,
+  getNotificationMasterGroups,
+  isMasterGroupProOnly,
+  saveNotificationMasterGroups,
+  type NotificationMasterGroupId,
+  type NotificationMasterGroupPrefs,
+} from "./notificationMasterGroups";
 import {
   analyzeSmartAlertData,
   type CalendarEventInput,
@@ -50,8 +61,8 @@ const COOLDOWN_MS: Partial<Record<SmartPushAlertId, number>> = {
 };
 
 function logSmartPush(event: string, payload?: Record<string, unknown>) {
-  if (payload) console.log(LOG, event, payload);
-  else console.log(LOG, event);
+  if (payload) logger.info(`${LOG} ${event}`, payload);
+  else logger.info(`${LOG} ${event}`);
 }
 
 function alertCopy(alertId: SmartPushAlertId) {
@@ -325,6 +336,56 @@ export async function evaluateSmartPushConditions(input: {
   if (!analysis.enoughDataForAiCoach && enabled.has("ai_coach_summary_reminder")) {
     logSmartPush("skipped_not_enough_data", { alertId: "ai_coach_summary_reminder" });
   }
+}
+
+export async function setMasterNotificationGroupEnabled(input: {
+  groupId: NotificationMasterGroupId;
+  enabled: boolean;
+  isPro: boolean;
+  calendarEvents?: CalendarEventInput[];
+  refreshDailyPropBuffer?: () => Promise<void>;
+}) {
+  if (input.enabled && isMasterGroupProOnly(input.groupId) && !input.isPro) {
+    logSmartPush("skipped_not_pro", { group: input.groupId });
+    return { ok: false as const, reason: "pro_required" as const };
+  }
+
+  if (input.enabled && input.groupId !== "dailyTradingBrief" && Platform.OS !== "web") {
+    const sampleKey =
+      input.groupId === "economicEvents"
+        ? "economicCalendarAlerts"
+        : input.groupId === "performanceInsights"
+          ? "winRateDropAlert"
+          : input.groupId === "riskProtection"
+            ? "dailyLossLimitWarning"
+            : "dailyJournalReminder";
+    const granted = await requestSmartPushPermission(sampleKey);
+    if (!granted) return { ok: false as const, reason: "permission_denied" as const };
+  }
+
+  const masters = await getNotificationMasterGroups();
+  const nextMasters: NotificationMasterGroupPrefs = { ...masters, [input.groupId]: input.enabled };
+
+  if (input.groupId === "dailyTradingBrief") {
+    const briefResult = await setDailyTradingBriefEnabled(input.enabled, {
+      refreshPropBuffer: input.refreshDailyPropBuffer,
+    });
+    if (!briefResult.ok) {
+      return { ok: false as const, reason: "permission_denied" as const };
+    }
+  }
+
+  await saveNotificationMasterGroups(nextMasters);
+  const prefs = applyMasterGroupsToSmartPrefs(nextMasters, input.isPro);
+  await setSmartPushPreferences(prefs);
+  await syncSmartPushSchedules({ isPro: input.isPro, calendarEvents: input.calendarEvents });
+
+  trackEvent(input.enabled ? "notification_enabled" : "notification_disabled", {
+    master_group: input.groupId,
+    pro_only: isMasterGroupProOnly(input.groupId),
+  });
+
+  return { ok: true as const, masters: nextMasters, prefs };
 }
 
 export async function setSmartPushPreferenceEnabled(input: {

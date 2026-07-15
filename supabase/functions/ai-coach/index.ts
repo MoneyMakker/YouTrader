@@ -3,6 +3,7 @@ import { corsHeadersFor, jsonResponse } from "../_shared/cors.ts";
 import { checkAIQuota, recordAIUsage, DAILY_AI_LIMIT_MESSAGE } from "../_shared/aiQuota.ts";
 import { generateAI } from "../_shared/aiProvider.ts";
 import { isAICoachAction, type AICoachRequest } from "../_shared/aiSchemas.ts";
+import { resolveServerProEntitlement } from "../_shared/revenueCatEntitlement.ts";
 
 function getEnv(name: string) {
   return Deno.env.get(name)?.trim() || "";
@@ -11,26 +12,6 @@ function getEnv(name: string) {
 function periodKey(action: string, period?: string) {
   const now = new Date();
   return `${period || action}:month:${now.toISOString().slice(0, 7)}`;
-}
-
-async function hasServerProEntitlement(supabaseAdmin: ReturnType<typeof createClient>, userId: string) {
-  const entitlementId = getEnv("REVENUECAT_ENTITLEMENT_ID") || "pro";
-  const { data, error } = await supabaseAdmin
-    .from("user_subscriptions")
-    .select("status, expires_at")
-    .eq("user_id", userId)
-    .eq("entitlement_id", entitlementId)
-    .maybeSingle();
-
-  if (error) {
-    console.warn("ai_pro_check_failed", { code: error.code, message: error.message });
-    return false;
-  }
-
-  if (!data) return false;
-  const status = String(data.status || "").toLowerCase();
-  const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
-  return ["active", "trialing"].includes(status) || expiresAt > Date.now();
 }
 
 Deno.serve(async (req) => {
@@ -71,8 +52,8 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Unsupported AI action." }, 400, req);
   }
 
-  const isPro = await hasServerProEntitlement(supabaseAdmin, userData.user.id);
-  if (!isPro) {
+  const entitlement = await resolveServerProEntitlement(supabaseAdmin, userData.user.id);
+  if (!entitlement.isPro) {
     const result = await generateAI(
       {
         action: body.action,
@@ -117,13 +98,19 @@ Deno.serve(async (req) => {
     true,
   );
 
-  await recordAIUsage(supabaseAdmin, {
-    userId: userData.user.id,
-    action: body.action,
-    periodKey: periodKey(body.action, body.period),
-    provider: result.provider,
-    usedFallback: result.usedFallback,
-  });
+  if (!(body.action === "trade_vision_review" && result.usedFallback)) {
+    await recordAIUsage(supabaseAdmin, {
+      userId: userData.user.id,
+      action: body.action,
+      periodKey: periodKey(body.action, body.period),
+      provider: result.provider,
+      usedFallback: result.usedFallback,
+      metadata: {
+        source: "ai-coach",
+        ...(result.platformMetadata || {}),
+      },
+    });
+  }
 
   return jsonResponse({
     data: result.data,

@@ -85,7 +85,7 @@ export function logAuthDev(provider: AuthProvider, error: unknown, extra?: Recor
     ...extra,
   };
   if (provider === "email") {
-    console.warn("[YouTrader:email-auth] sign-in failed", payload);
+    if (__DEV__) console.warn("[YouTrader:email-auth] sign-in failed", payload);
     return;
   }
   if (!__DEV__) return;

@@ -31,6 +31,7 @@ export async function recordAIUsage(
     periodKey: string;
     provider: string;
     usedFallback: boolean;
+    metadata?: Record<string, unknown>;
   },
 ) {
   await recordRateLimitUsage(supabaseAdmin, {
@@ -40,6 +41,7 @@ export async function recordAIUsage(
     provider: input.provider,
     usedFallback: input.usedFallback,
     source: "ai-coach",
+    metadata: input.metadata,
   });
 }
 

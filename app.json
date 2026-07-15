@@ -2,7 +2,7 @@
   "expo": {
     "name": "YouTrader",
     "slug": "youtrader-pro",
-    "version": "1.5.8",
+    "version": "1.6.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -25,13 +25,22 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.youtrader.pro",
       "usesAppleSignIn": true,
-      "buildNumber": "83",
+      "buildNumber": "107",
       "infoPlist": {
+        "CFBundleLocalizations": [
+          "en",
+          "ru",
+          "de",
+          "fr",
+          "es",
+          "it",
+          "uk"
+        ],
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "YouTrader lets you attach a screenshot of your trade to your journal.",
-        "NSPhotoLibraryUsageDescription": "YouTrader lets you upload a trade screenshot from your photo library.",
+        "NSCameraUsageDescription": "YouTrader lets you take a trade chart image for your journal or, when you choose Trade Vision, send a selected chart image to an external AI service for analysis.",
+        "NSPhotoLibraryUsageDescription": "YouTrader lets you select a trade chart image from your photo library for your journal or, when you choose Trade Vision, send it to an external AI service for analysis.",
         "NSPhotoLibraryAddUsageDescription": "YouTrader saves premium share cards directly to your photo library.",
-        "NSMicrophoneUsageDescription": "YouTrader lets you record voice notes about your trades.",
+        "NSMicrophoneUsageDescription": "Allow YouTrader to record audio notes for your trade journal.",
         "NSFaceIDUsageDescription": "Allow YouTrader to use Face ID for quick secure unlock.",
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true

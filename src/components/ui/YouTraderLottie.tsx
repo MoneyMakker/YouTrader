@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { ChartColumnIncreasing } from "lucide-react-native";
 import { t } from "../../i18n";
 import { C } from "../../theme/colors";
 
@@ -45,7 +46,7 @@ export function YouTraderLottie({ slot, style, label }: Props) {
     <Animated.View style={[styles.wrap, style, { transform: [{ scale }] }]}>
       <Animated.View style={[styles.glow, { opacity: glow }]} />
       <View style={styles.core}>
-        <Text style={styles.emoji}>📈</Text>
+        <ChartColumnIncreasing size={34} color={C.green} strokeWidth={2.4} />
       </View>
       {label || LABEL_KEYS[slot] ? (
         <Text style={styles.label} numberOfLines={2}>
@@ -75,7 +76,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  emoji: { fontSize: 34 },
   label: {
     color: C.text,
     fontSize: 13,

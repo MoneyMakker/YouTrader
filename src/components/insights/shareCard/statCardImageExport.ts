@@ -1,16 +1,16 @@
-import { Asset } from "expo-asset";
-import * as FileSystem from "expo-file-system/legacy";
+import { logger } from "../../../lib/logger";
 import type { AchievementShareStats } from "./achievementHelpers";
 import { buildAchievementStatSlots } from "./achievementStatSlots";
 import { buildStatTextLayers, STAT_CARD_EXPORT_HEIGHT, STAT_CARD_EXPORT_WIDTH } from "./statCardSvgBuilder";
+import { loadBundledAssetAsSvgHref } from "./shareTemplateAssetLoader";
 import { enqueueStatCardRaster } from "./statCardRasterizer";
 import { STAT_DARK_BULL_TEMPLATE } from "./statTemplateLayout";
 import type { TraderShareCardData } from "./TraderShareCard";
 
-let templateUriCache: string | null = null;
+let templateHrefCache: string | null = null;
 
 function logExport(event: string, detail?: string) {
-  console.log(`[YouTrader:export-card] ${event}${detail ? ` ${detail}` : ""}`);
+  logger.info(`[YouTrader:export-card] ${event}${detail ? ` ${detail}` : ""}`);
 }
 
 function traderDataToStats(data: TraderShareCardData): AchievementShareStats {
@@ -35,27 +35,18 @@ function traderDataToStats(data: TraderShareCardData): AchievementShareStats {
   };
 }
 
-async function loadTemplateUri() {
-  if (templateUriCache) return templateUriCache;
-  const asset = Asset.fromModule(STAT_DARK_BULL_TEMPLATE);
-  await asset.downloadAsync();
-  const uri = asset.localUri || asset.uri;
-  if (!uri) throw new Error("Share card template asset is missing");
-  if (uri.startsWith("http")) {
-    const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
-    if (!cacheDir) throw new Error("No writable cache directory for template");
-    const localPath = `${cacheDir}youtrader-stat-card-template.png`;
-    await FileSystem.downloadAsync(uri, localPath);
-    templateUriCache = localPath;
-  } else {
-    templateUriCache = uri;
-  }
+async function loadTemplateHref() {
+  if (templateHrefCache) return templateHrefCache;
+  templateHrefCache = await loadBundledAssetAsSvgHref(
+    STAT_DARK_BULL_TEMPLATE,
+    "youtrader-stat-card-template.jpg",
+  );
   logExport("template_loaded");
-  return templateUriCache;
+  return templateHrefCache;
 }
 
 export async function generateStatShareCardImage(data: TraderShareCardData, filename: string) {
-  const templateUri = await loadTemplateUri();
+  const templateUri = await loadTemplateHref();
   const slots = buildAchievementStatSlots(traderDataToStats(data));
   const layers = buildStatTextLayers(slots);
   const uri = await enqueueStatCardRaster({

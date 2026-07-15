@@ -9,6 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { signInWithAppleNative } from "./src/auth/appleSignIn";
 import { signInWithGoogle, signOutGoogleNative } from "./src/auth/googleSignIn";
@@ -26,7 +27,6 @@ import {
   signUpWithEmailPassword,
   updateUserEmail,
   updateUserPassword,
-  userHasPasswordSet,
 } from "./src/auth/emailPasswordAuth";
 import { EMAIL_PASSWORD_MESSAGES } from "./src/auth/emailPasswordMessages";
 import { buildLocalizedLocalCoachAnalysis } from "./src/i18n/localCoachAnalysis";
@@ -49,6 +49,7 @@ import {
   Easing,
   FlatList,
   Image,
+  InteractionManager,
   KeyboardAvoidingView,
   Linking,
   LogBox,
@@ -69,11 +70,25 @@ import {
   BrainCircuit,
   Calculator as CalculatorIcon,
   CalendarDays,
+  Camera,
   ChartColumnIncreasing,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  ImagePlus,
   Lock,
+  Mic,
   Newspaper,
+  Share2,
+  ShieldCheck,
+  Sparkles,
   Settings as SettingsIcon,
+  Target,
+  TrendingUp,
+  Trophy,
   Unlock,
+  Zap,
 } from "lucide-react-native";
 import Svg, {
   Circle,
@@ -86,10 +101,16 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
-import { StatCardExportHost } from "./src/components/insights/shareCard/StatCardExportHost";
 import { AuthScreen } from "./src/auth/AuthScreen";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./src/auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "./src/auth/userCache";
+import { hashLocalAiInput, localAiCacheKey, readLocalAiResponse, writeLocalAiResponse } from "./src/utils/localAiResponseCache";
+import {
+  acknowledgeTradeVisionPrivacy,
+  clearTradeVisionLocalCache,
+  getTradeVisionPrivacyAcknowledgement,
+  revokeTradeVisionPrivacyAcknowledgement,
+} from "./src/privacy/tradeVisionPrivacy";
 import { clearOfflineJobsForUser, enqueueOfflineJob } from "./src/sync/offlineQueue";
 import { useNetworkReconnect } from "./src/sync/networkReconnect";
 import { pullUserPreferences, pushUserPreferences } from "./src/sync/userPreferencesSync";
@@ -97,9 +118,10 @@ import { alertExportError } from "./src/utils/alertExportError";
 import { parseTradesCsvText } from "./src/utils/importTradesCsv";
 import { readCsvFileAsText } from "./src/utils/readCsvFile";
 import { scheduleDailyPropRiskNotification } from "./src/utils/propRiskNotification";
-import { clearLocalReminder, configureNotificationHandler, scheduleLocalReminder } from "./src/notifications/push";
+import { configureNotificationHandler } from "./src/notifications/push";
+import { LOCK_SCREEN_BUFFER_KEY } from "./src/notifications/dailyTradingBrief";
 import { SmartNotificationsSection } from "./src/notifications/SmartNotificationsSection";
-import { evaluateSmartPushConditions, syncSmartPushSchedules } from "./src/notifications/smartAlerts";
+import { SettingsAccountSection } from "./src/components/settings/SettingsAccountSection";
 import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "./src/api/finnhubCalendar";
 import {
   analyzeTrades,
@@ -114,6 +136,7 @@ import {
   fetchAIJournalSummary,
   fetchAINewsExplainer,
   fetchAIRiskPredictor,
+  fetchAITradeVisionReview,
   fetchAIWeeklyCoach,
   type AIDailyChallenge,
   type AIDailyPlan,
@@ -122,13 +145,15 @@ import {
   type AIProviderStatus,
   type AIResponse,
   type AIRiskPredictor,
+  type AITradeVisionReview,
   type AIWeeklyCoach,
 } from "./src/api/aiCoach";
 import { trackEvent, trackScreen } from "./src/observability/analytics";
 import { identifyAnalyticsUser, resetAnalyticsUser } from "./src/lib/analytics";
-import { captureAppError, initializeMonitoring, logCrashlyticsBreadcrumb, wrapAppWithSentry } from "./src/observability/monitoring";
+import { captureAppError, logCrashlyticsBreadcrumb, scheduleMonitoringInit, setMonitoringUser, wrapAppWithSentry } from "./src/observability/monitoring";
 import { recordMetric } from "./src/observability/metrics";
-import { posthogClient } from "./src/lib/posthog";
+import { getPosthogClient } from "./src/lib/posthog";
+import { logStartupError, logStartupPerf, markAppStart } from "./src/lib/startupPerf";
 import { logger } from "./src/lib/logger";
 import {
   enableCloudSignIn,
@@ -173,16 +198,30 @@ import { GlassCard } from "./src/components/ui/GlassCard";
 import { AnimatedEquityCurve } from "./src/components/charts/AnimatedEquityCurve";
 import { PremiumGlassCard } from "./src/components/ui/PremiumGlassCard";
 import { PremiumLockOverlay } from "./src/components/ui/PremiumLockOverlay";
+import {
+  AnimatedPressable,
+  EmptyStateCard,
+  GlowBorderCard,
+  NeonDivider,
+  CountUpText,
+  PremiumCard,
+  PremiumLoadingBar,
+  ShimmerPlaceholder,
+  TypingText,
+  type PremiumTone,
+} from "./src/components/ui/premium";
 import { AiAnalyticsProScreen } from "./src/components/traderStatus/AiAnalyticsProScreen";
 import { TraderStatusDashboard } from "./src/components/traderStatus/TraderStatusDashboard";
 import { AiNewsSentimentCard } from "./src/components/news/AiNewsSentimentCard";
-import { MarketIntelligenceTools } from "./src/components/ai/MarketIntelligenceTools";
+import { AiAnalysisLoading } from "./src/components/ai/AiAnalysisLoading";
+import { JournalTradeSwipeCard } from "./src/components/journal/JournalTradeSwipeCard";
+import { JournalCalendarDayPressable } from "./src/components/journal/JournalCalendarDayPressable";
 import {
   FREE_MONTHLY_PDF_PREVIEW_LIMIT,
   FREE_MONTHLY_TRADE_LIMIT,
   TRADE_LIMIT_PAYWALL,
 } from "./src/config/monetization";
-import { lightHaptic, warningHaptic } from "./src/components/ui/haptics";
+import { lightHaptic, successHaptic, warningHaptic } from "./src/components/ui/haptics";
 import { calculateAchievements, traderLevelFromScore, type Achievement, type TraderLevel } from "./src/analytics/achievements";
 import { detectTradingPatterns, type PatternDetectionResult } from "./src/analytics/patternDetector";
 import { calculatePropSurvival } from "./src/analytics/propSurvival";
@@ -190,22 +229,28 @@ import { buildSessionHeatmap, type HourHeatmapCell } from "./src/analytics/sessi
 import { calculateTradingScore, type TradingScoreResult } from "./src/analytics/tradingScore";
 import { buildAIAnalyticsContext } from "./src/analytics/aiContextBuilder";
 import { buildUnifiedTradeAnalytics, drawdownControlFromMetrics, infinitySafeMetric } from "./src/analytics/tradeMetrics";
+import {
+  resolveTimeRangeStart,
+  STATS_TIME_RANGES,
+  StatsTimeRangeProvider,
+  statsTimeRangeToLegacyPeriod,
+  useFilteredTrades,
+  useStatsTimeRange,
+  type StatsTimeRange,
+} from "./src/analytics/timeRange";
 import { calculatePassProbability, type PassProbabilityResult } from "./src/ai/passProbabilityEngine";
 import { detectRevengeTrading, type RevengeTradingResult } from "./src/ai/revengeTradingDetector";
 import { detectHiddenLeaks, type HiddenLeak } from "./src/ai/hiddenLeakDetector";
 import {
-  buildAiDailyMission,
   buildAiAchievements,
-  buildBenchmarkProfile,
   buildAiInsights,
-  buildImprovementTimeline,
-  buildTradingDNAProfile,
-  buildAiWeeklyReport,
+  buildAiOperatingSystem,
   type AiDailyMission,
   type AiDailyMissionStatus,
   type AiBenchmarkProfile,
   type AiImprovementTimeline,
   type AiInsight,
+  type AiOperatingSystem,
   type AiTradingAchievement,
   type AiTradingDNAProfile,
   type AiWeeklyReport,
@@ -242,8 +287,14 @@ if (isExpoGo && __DEV__) {
 }
 
 WebBrowser.maybeCompleteAuthSession();
-initializeMonitoring();
 configureNotificationHandler();
+markAppStart();
+
+const LazyStatCardExportHost = React.lazy(() =>
+  import("./src/components/insights/shareCard/StatCardExportHost").then((mod) => ({
+    default: mod.StatCardExportHost,
+  })),
+);
 
 type Tab = "journal" | "stats" | "ai" | "calendar" | "news" | "calc" | "settings";
 type Direction = "LONG" | "SHORT";
@@ -256,6 +307,8 @@ type ContractFamily = "micro" | "emini";
 type EvalStrategy = "steady" | "balanced" | "allIn";
 type RiskInstrument = "MES" | "MNQ" | "MGC" | "MCL" | "ES" | "NQ" | "GC" | "CL";
 type RiskStatus = "STOP" | "CAUTION" | "CLEAR";
+const UI_ICON_SIZE = 22;
+const UI_ICON_STROKE = 2.4;
 
 type Trade = {
   id: string;
@@ -403,11 +456,8 @@ const BILLING_DEBUG_LOGS = __DEV__ || process.env.EXPO_PUBLIC_BILLING_DEBUG_LOGS
 const ENTITLEMENT_RETRY_DELAYS_MS = [0, 900, 1800, 3200];
 const TRADES_STORAGE_KEY = GUEST_TRADES_STORAGE_KEY;
 const LANG_STORAGE_KEY = "lang-v1";
-const LOCK_SCREEN_BUFFER_KEY = "prop-lock-screen-v1";
 /** @deprecated Journal day limit removed — free users log unlimited days; Pro unlocks media/sync/analytics. */
 const FREE_JOURNAL_DAYS = 10;
-const PROP_RISK_ALERT_ID_KEY = "prop-risk-alert-notification-id-v1";
-const CALENDAR_ALERT_ID_KEY = "calendar-alert-notification-id-v1";
 const MAX_SYMBOL_LENGTH = 12;
 const MAX_NOTES_LENGTH = 2000;
 const MAX_MOOD_LENGTH = 32;
@@ -1147,6 +1197,16 @@ function normalizeTrades(trades: Trade[]) {
     }
   });
   return sortTrades([...map.values()]);
+}
+
+function parseStoredTrades(raw: string | null): Trade[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? normalizeTrades(parsed) : [];
+  } catch {
+    return [];
+  }
 }
 
 function tradeToCloudRow(trade: Trade, userId: string): TradeJournalRow {
@@ -2087,9 +2147,121 @@ async function loadCalendarEvents(): Promise<EconEvent[]> {
   return (cached?.items || makeOfflineCalendarEvents()).map(applyCalendarBias);
 }
 
-function Card({ children, style }: any) {
-  return <View style={[styles.card, styles.safeCard, style]}>{children}</View>;
+function AnimatedEntrance({
+  children,
+  style,
+  delay = 0,
+  distance = 10,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  delay?: number;
+  distance?: number;
+  disabled?: boolean;
+}) {
+  const opacity = useRef(new Animated.Value(disabled ? 1 : 0)).current;
+  const translateY = useRef(new Animated.Value(disabled ? 0 : distance)).current;
+
+  useEffect(() => {
+    if (disabled) return;
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 280,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 280,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [delay, disabled, opacity, translateY]);
+
+  return (
+    <Animated.View style={[style, { opacity, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  );
 }
+
+function Card({ children, style, animated = true, delay = 0 }: any) {
+  return (
+    <AnimatedEntrance style={[styles.card, styles.safeCard, style]} delay={delay} disabled={!animated}>
+      {children}
+    </AnimatedEntrance>
+  );
+}
+
+function PremiumSkeletonCard({
+  rows = 3,
+  tone = "purple",
+  style,
+}: {
+  rows?: number;
+  tone?: PremiumTone;
+  style?: any;
+}) {
+  return (
+    <PremiumCard tone={tone} compact style={[styles.skeletonCard, style]} contentStyle={styles.skeletonCardContent}>
+      <View style={styles.skeletonHeaderRow}>
+        <ShimmerPlaceholder width={44} height={44} radius={16} tone={tone} />
+        <View style={styles.skeletonHeaderCopy}>
+          <ShimmerPlaceholder width="58%" height={10} radius={999} tone={tone} />
+          <ShimmerPlaceholder width="36%" height={7} radius={999} tone="neutral" />
+        </View>
+      </View>
+      {Array.from({ length: rows }).map((_, index) => (
+        <ShimmerPlaceholder
+          key={`skeleton-row-${index}`}
+          width={index === rows - 1 ? "68%" : "100%"}
+          height={9}
+          radius={999}
+          tone={index % 2 === 0 ? tone : "neutral"}
+        />
+      ))}
+    </PremiumCard>
+  );
+}
+
+function PremiumSkeletonStack({
+  count = 3,
+  tone = "purple",
+  style,
+}: {
+  count?: number;
+  tone?: PremiumTone;
+  style?: any;
+}) {
+  return (
+    <View style={[styles.skeletonStack, style]}>
+      {Array.from({ length: count }).map((_, index) => (
+        <PremiumSkeletonCard
+          key={`premium-skeleton-${index}`}
+          rows={index === 0 ? 4 : 3}
+          tone={index % 2 === 0 ? tone : "lime"}
+        />
+      ))}
+    </View>
+  );
+}
+
+function AppStartupSkeleton() {
+  return (
+    <View style={styles.startupSkeletonWrap}>
+      <Text style={styles.h1}>YouTrader</Text>
+      <PremiumLoadingBar indeterminate height={4} tone="lime" style={styles.startupSkeletonBar} />
+      <PremiumSkeletonCard rows={4} tone="lime" style={styles.startupSkeletonCard} />
+      <PremiumSkeletonCard rows={3} tone="purple" style={styles.startupSkeletonCard} />
+    </View>
+  );
+}
+
 function SafeText({
   children,
   style,
@@ -2525,7 +2697,7 @@ function primarySetupLabel(trade: Trade) {
 function buildTradeAnalysisPayload(
   trades: Trade[],
   stats: ReturnType<typeof calcStats>,
-  period: "day" | "week" | "month" | "year",
+  period: StatsTimeRange,
   context?: {
     passProbability?: ReturnType<typeof calculatePassProbability>;
     propSnapshot?: ReturnType<typeof computePropRiskSnapshot>;
@@ -2538,7 +2710,7 @@ function buildTradeAnalysisPayload(
   const wins = trades.filter((trade) => trade.pnl > 0);
   const losses = trades.filter((trade) => trade.pnl < 0);
   return {
-    period,
+    period: statsTimeRangeToLegacyPeriod(period),
     totalTrades: stats.count,
     totalPnl: roundMetric(stats.pnl),
     winRate: Number(stats.wr.toFixed(2)),
@@ -2605,22 +2777,6 @@ function buildLocalTradeAnalysisResult(
 
 function toDateStart(value: Date) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-}
-
-function periodPnlFromTrades(
-  trades: Trade[],
-  selectedDateISO: string,
-  period: "week" | "month",
-) {
-  const selected = safeDateFromISO(selectedDateISO);
-  const start = toDateStart(
-    period === "week"
-      ? addDays(selected, -selected.getUTCDay())
-      : new Date(selected.getUTCFullYear(), selected.getUTCMonth(), 1),
-  );
-  return trades
-    .filter((trade) => toDateStart(safeDateFromISO(trade.date)) >= start)
-    .reduce((sum, trade) => sum + trade.pnl, 0);
 }
 
 function PerformanceBreakdown({
@@ -2895,13 +3051,24 @@ function PropFirmRiskCoach({
 
 function MetricGauge({ label, value, helper, tone = "green" }: { label: string; value: string; helper?: string; tone?: "green" | "purple" | "red" | "white" }) {
   const color = tone === "purple" ? C.purple : tone === "red" ? C.red : tone === "white" ? C.text : C.green;
+  const numericValue = Number(value.replace(/[$,%]/g, ""));
+  const canCount = Number.isFinite(numericValue) && /^[$+-]?\d/.test(value);
   return (
     <GlassCard compact style={styles.dashboardMetric}>
       <View style={styles.rowBetween}>
         <SafeMetricLabel style={styles.dashboardMetricLabel}>{label}</SafeMetricLabel>
         <View style={[styles.metricDot, { backgroundColor: color }]} />
       </View>
-      <SafeText style={[styles.dashboardMetricValue, { color }]}>{value}</SafeText>
+      {canCount ? (
+        <CountUpText
+          value={numericValue}
+          durationMs={500}
+          formatValue={(next) => value.startsWith("$") ? moneyCompact(next) : value.includes("%") ? `${next.toFixed(0)}%` : next.toFixed(value.includes(".") ? 2 : 0)}
+          textStyle={[styles.dashboardMetricValue, { color }]}
+        />
+      ) : (
+        <SafeText style={[styles.dashboardMetricValue, { color }]}>{value}</SafeText>
+      )}
       {!!helper && <SafeText style={styles.dashboardMetricHelper}>{helper}</SafeText>}
     </GlassCard>
   );
@@ -2942,7 +3109,7 @@ function EquityCurve({ data }: { data: { label: string; value: number }[] }) {
   const zeroY = chartHeight - ((0 - min) / range) * chartHeight;
 
   return (
-    <View style={[styles.equityCurveBox, { width: chartWidth, height: chartHeight }]}>
+    <AnimatedEntrance style={[styles.equityCurveBox, { width: chartWidth, height: chartHeight }]} distance={6}>
       {[0.25, 0.5, 0.75].map((p) => (
         <View key={p} style={[styles.equityGridLine, { top: chartHeight * p }]} />
       ))}
@@ -2983,7 +3150,7 @@ function EquityCurve({ data }: { data: { label: string; value: number }[] }) {
           ]}
         />
       ))}
-    </View>
+    </AnimatedEntrance>
   );
 }
 
@@ -3143,6 +3310,7 @@ function ProValueModal({
   onRestore: () => void;
   onClose: () => void;
 }) {
+  void showRestorePurchases;
   const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
   const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null;
   const monthlyProduct = storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null;
@@ -3166,7 +3334,10 @@ function ProValueModal({
           <Text style={styles.valueModalTitle}>{content.title}</Text>
           <Text style={styles.valueModalText}>{content.message}</Text>
           {(content.bullets || [t("unlimitedTradesMedia"), t("hiddenLeaksBenefit"), t("proToolsBenefit")]).slice(0, 4).map((item) => (
-            <Text key={item} style={styles.valueModalBullet}>✓ {item}</Text>
+            <View key={item} style={styles.valueModalBulletRow}>
+              <Check size={15} color={C.green} strokeWidth={UI_ICON_STROKE} />
+              <Text style={styles.valueModalBullet}>{item}</Text>
+            </View>
           ))}
           {content.reason === "trade_limit" ? (
             <>
@@ -3237,6 +3408,7 @@ function PaywallPreview({
       <Text style={styles.paywallSub}>
         {t("paywallPreviewSub")}
       </Text>
+      {purchaseBusy ? <PremiumSkeletonCard rows={2} tone="purple" style={styles.paywallSkeleton} /> : null}
       <Pressable
         disabled={purchaseBusy}
         onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
@@ -3380,15 +3552,11 @@ function PropTemplateSelector({
 function StatsMetricDashboard({
   stats,
   trades,
-  weekPnl,
-  monthPnl,
   consistency,
   isPremium,
 }: {
   stats: ReturnType<typeof calcStats>;
   trades: Trade[];
-  weekPnl: number;
-  monthPnl: number;
   consistency: number;
   isPremium: boolean;
 }) {
@@ -3396,21 +3564,27 @@ function StatsMetricDashboard({
   const losses = trades.filter((trade) => trade.pnl < 0).length;
   const biggestWin = Math.max(0, ...trades.map((trade) => trade.pnl));
   const biggestLoss = Math.min(0, ...trades.map((trade) => trade.pnl));
-  const rows: Array<{ label: string; value: string; tone: "green" | "red" | "purple" | "grey"; pro?: boolean }> = [
-    { label: t("winRate"), value: `${stats.wr.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
-    { label: t("trades"), value: String(stats.count), tone: "grey" },
+  const rows: Array<{
+    label: string;
+    value: string;
+    tone: "green" | "red" | "purple" | "grey";
+    pro?: boolean;
+    numericValue?: number;
+    decimals?: number;
+    formatValue?: (value: number) => string;
+  }> = [
+    { label: t("winRate"), value: `${stats.wr.toFixed(0)}%`, numericValue: stats.wr, formatValue: (value) => `${value.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
+    { label: t("trades"), value: String(stats.count), numericValue: stats.count, tone: "grey" },
     { label: t("winLoss"), value: `${wins} / ${losses}`, tone: wins >= losses ? "green" : "red" },
-    { label: t("monthPnl"), value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
-    { label: t("weekPnl"), value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
-    { label: t("biggestWin"), value: moneyCompact(biggestWin), tone: "green" },
-    { label: t("biggestLoss"), value: moneyCompact(biggestLoss), tone: biggestLoss < 0 ? "red" : "grey" },
-    { label: t("profitFactor"), value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple", pro: true },
-    { label: t("expectancy"), value: moneyCompact(stats.exp), tone: stats.exp >= 0 ? "green" : "red", pro: true },
-    { label: t("avgWinLoss"), value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", tone: stats.avgWinLoss >= 1.5 ? "green" : "purple", pro: true },
-    { label: t("consistency"), value: `${consistency.toFixed(0)}%`, tone: consistency >= 65 ? "green" : "purple", pro: true },
-    { label: t("stabilityScore"), value: stats.sharpeRatio ? stats.sharpeRatio.toFixed(2) : "0.00", tone: stats.sharpeRatio >= 0.8 ? "green" : "purple", pro: true },
-    { label: t("maxLosingDayStreak"), value: String(stats.maxLossDayStreak), tone: stats.maxLossDayStreak >= 2 ? "red" : "grey", pro: true },
-    { label: t("maxWinningDayStreak"), value: String(stats.maxWinDayStreak), tone: "green", pro: true },
+    { label: t("biggestWin"), value: moneyCompact(biggestWin), numericValue: biggestWin, formatValue: moneyCompact, tone: "green" },
+    { label: t("biggestLoss"), value: moneyCompact(biggestLoss), numericValue: biggestLoss, formatValue: moneyCompact, tone: biggestLoss < 0 ? "red" : "grey" },
+    { label: t("profitFactor"), value: stats.pf ? stats.pf.toFixed(2) : "—", numericValue: stats.pf || undefined, decimals: 2, tone: stats.pf >= 1.5 ? "green" : "purple", pro: true },
+    { label: t("expectancy"), value: moneyCompact(stats.exp), numericValue: stats.exp, formatValue: moneyCompact, tone: stats.exp >= 0 ? "green" : "red", pro: true },
+    { label: t("avgWinLoss"), value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", numericValue: stats.avgWinLoss || undefined, decimals: 2, tone: stats.avgWinLoss >= 1.5 ? "green" : "purple", pro: true },
+    { label: t("consistency"), value: `${consistency.toFixed(0)}%`, numericValue: consistency, formatValue: (value) => `${value.toFixed(0)}%`, tone: consistency >= 65 ? "green" : "purple", pro: true },
+    { label: t("stabilityScore"), value: stats.sharpeRatio ? stats.sharpeRatio.toFixed(2) : "0.00", numericValue: stats.sharpeRatio || 0, decimals: 2, tone: stats.sharpeRatio >= 0.8 ? "green" : "purple", pro: true },
+    { label: t("maxLosingDayStreak"), value: String(stats.maxLossDayStreak), numericValue: stats.maxLossDayStreak, tone: stats.maxLossDayStreak >= 2 ? "red" : "grey", pro: true },
+    { label: t("maxWinningDayStreak"), value: String(stats.maxWinDayStreak), numericValue: stats.maxWinDayStreak, tone: "green", pro: true },
   ];
   return (
     <View style={styles.statsMetricDashboard}>
@@ -3423,10 +3597,20 @@ function StatsMetricDashboard({
           const color =
             row.tone === "red" ? C.red : row.tone === "purple" ? C.purple : row.tone === "green" ? C.green : C.sub;
           return (
-            <View key={row.label} style={[styles.statsMetricTile, locked && styles.statsMetricTileLocked]}>
+            <AnimatedEntrance key={row.label} style={[styles.statsMetricTile, locked && styles.statsMetricTileLocked]} distance={8}>
               <Text style={styles.statsMetricLabel}>{row.label}</Text>
-              <Text style={[styles.statsMetricValue, { color: locked ? C.sub : color }]}>{locked ? "PRO" : row.value}</Text>
-            </View>
+              {locked || row.numericValue === undefined ? (
+                <Text style={[styles.statsMetricValue, { color: locked ? C.sub : color }]}>{locked ? "PRO" : row.value}</Text>
+              ) : (
+                <CountUpText
+                  value={row.numericValue}
+                  durationMs={520}
+                  decimals={row.decimals ?? 0}
+                  formatValue={row.formatValue}
+                  textStyle={[styles.statsMetricValue, { color }]}
+                />
+              )}
+            </AnimatedEntrance>
           );
         })}
       </View>
@@ -3506,21 +3690,6 @@ function BottomSheetPanel({
   );
 }
 
-type EquityRange = "7D" | "30D" | "90D" | "YTD" | "ALL";
-const EQUITY_RANGES: EquityRange[] = ["7D", "30D", "90D", "YTD", "ALL"];
-
-function filteredByEquityRange(trades: Trade[], range: EquityRange) {
-  if (range === "ALL") return trades;
-  const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
-  const lastDate = sorted[sorted.length - 1]?.date;
-  if (!lastDate) return trades;
-  const end = safeDateFromISO(lastDate);
-  const start = new Date(end);
-  if (range === "YTD") start.setUTCMonth(0, 1);
-  else start.setUTCDate(start.getUTCDate() - Number(range.replace("D", "")));
-  return trades.filter((trade) => safeDateFromISO(trade.date) >= start);
-}
-
 function buildEquityPoints(trades: Trade[], width: number, height: number) {
   const daily = buildDailySeries(trades);
   let cumulative = 0;
@@ -3551,14 +3720,14 @@ function smoothPath(points: { x: number; y: number }[]) {
   }, "");
 }
 
-function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: Trade[]; stats: ReturnType<typeof calcStats>; weekPnl: number; monthPnl: number }) {
+function TerminalEquitySection({ trades, stats }: { trades: Trade[]; stats: ReturnType<typeof calcStats> }) {
   const { width } = useWindowDimensions();
-  const [range, setRange] = useState<EquityRange>("30D");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const chartWidth = Math.max(300, Math.min(720, width - 56));
   const chartHeight = 250;
-  const rangedTrades = useMemo(() => filteredByEquityRange(trades, range), [range, trades]);
-  const points = useMemo(() => buildEquityPoints(rangedTrades, chartWidth, chartHeight), [chartHeight, chartWidth, rangedTrades]);
+  const points = useMemo(() => buildEquityPoints(trades, chartWidth, chartHeight), [chartHeight, chartWidth, trades]);
+  const dailySeries = useMemo(() => buildDailySeries(trades), [trades]);
+  const avgDay = dailySeries.length ? stats.pnl / dailySeries.length : 0;
   const selected = selectedIndex != null ? points[selectedIndex] : points[points.length - 1];
   const path = smoothPath(points);
   const fillPath = points.length ? `${path} L${points[points.length - 1].x},${chartHeight - 12} L${points[0].x},${chartHeight - 12} Z` : "";
@@ -3593,7 +3762,6 @@ function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: T
           <Text style={styles.terminalSub}>Net P&L</Text>
         </View>
       </View>
-      <SegmentedTimeFilter options={EQUITY_RANGES} value={range} onChange={(value) => setRange(value as EquityRange)} />
       <View style={styles.terminalChartWrap} {...panResponder.panHandlers}>
         <Svg width={chartWidth} height={chartHeight}>
           <Defs>
@@ -3626,12 +3794,12 @@ function TerminalEquitySection({ trades, stats, weekPnl, monthPnl }: { trades: T
       </View>
       <MetricPillRow
         items={[
-          { label: t("microToday"), value: moneyCompact(trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0)), tone: trades.filter((trade) => trade.date === todayISO()).reduce((sum, trade) => sum + trade.pnl, 0) >= 0 ? "green" : "red" },
-          { label: t("microWeekly"), value: moneyCompact(weekPnl), tone: weekPnl >= 0 ? "green" : "red" },
-          { label: t("microMonthly"), value: moneyCompact(monthPnl), tone: monthPnl >= 0 ? "green" : "red" },
+          { label: t("trades"), value: String(stats.count), tone: "grey" },
+          { label: t("winRate"), value: `${stats.wr.toFixed(0)}%`, tone: stats.wr >= 50 ? "green" : "red" },
           { label: t("microMaxDd"), value: moneyCompact(stats.maxDd), tone: stats.maxDd < 0 ? "red" : "grey" },
-          { label: t("microAvgDay"), value: moneyCompact(buildDailySeries(trades).length ? stats.pnl / buildDailySeries(trades).length : 0), tone: "grey" },
+          { label: t("microAvgDay"), value: moneyCompact(avgDay), tone: avgDay >= 0 ? "green" : "red" },
           { label: t("microPF"), value: stats.pf ? stats.pf.toFixed(2) : "—", tone: stats.pf >= 1.5 ? "green" : "purple" },
+          { label: t("avgWinLoss"), value: stats.avgWinLoss ? stats.avgWinLoss.toFixed(2) : "—", tone: stats.avgWinLoss >= 1.5 ? "green" : "purple" },
         ]}
       />
     </TerminalGlassCard>
@@ -3974,6 +4142,7 @@ function TerminalTraderStatus({
         trackEvent("achievement_card_saved", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
       }
       await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+      successHaptic();
       void recordAchievementShareAnalytics({ session, isPremium, achievement: item });
     } catch {
       Alert.alert(action === "share" ? t("achievementShareFailed") : t("achievementSaveFailed"), t("shareCardExportFailed"));
@@ -4224,7 +4393,7 @@ function TradeAnalysisCard({ result }: { result: TradeAnalysisResult }) {
         <View style={styles.rowBetween}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.aiAnalysisTitle}>{t("aiJournalReview")}</Text>
-            <Text style={styles.aiAnalysisSummary} numberOfLines={2}>{result.summary}</Text>
+            <TypingText text={result.summary} speedMs={9} enabled={result.summary.length <= 220} textStyle={styles.aiAnalysisSummary} numberOfLines={2} />
           </View>
           <Text style={styles.aiAnalysisSource}>SAVED</Text>
         </View>
@@ -4683,6 +4852,7 @@ function AchievementSection({
         trackEvent("achievement_card_saved", { achievement_id: item.id, achievement_title: item.title, is_pro: isPremium });
       }
       await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+      successHaptic();
       void recordAchievementShareAnalytics({ session, isPremium, achievement: item });
     } catch {
       Alert.alert(action === "share" ? t("achievementShareFailed") : t("achievementSaveFailed"), t("shareCardExportFailed"));
@@ -4831,6 +5001,8 @@ function Stats({
   achievements,
   traderLevel,
   shareStats,
+  revealSuppressToken,
+  journalTradesSignature,
 }: {
   trades: Trade[];
   lang: Lang;
@@ -4848,23 +5020,30 @@ function Stats({
   achievements: Achievement[];
   traderLevel: TraderLevel;
   shareStats: ReturnType<typeof buildAchievementShareStats>;
+  revealSuppressToken: number;
+  journalTradesSignature: string;
 }) {
   const visibleTrades = trades;
   const s = useMemo(() => calcStats(visibleTrades), [visibleTrades]);
   const consistency = s.consistency;
   const recoveryFactor = s.recoveryFactor;
   const drawdownControl = s.drawdownControl;
-  const monthPnl = periodPnlFromTrades(visibleTrades, selectedDate, "month");
-  const weekPnl = periodPnlFromTrades(visibleTrades, selectedDate, "week");
 
   return (
     <View style={styles.terminalScreenStack}>
-      <TerminalEquitySection trades={visibleTrades} stats={s} weekPnl={weekPnl} monthPnl={monthPnl} />
+      {!visibleTrades.length ? (
+        <EmptyStateCard
+          tone="lime"
+          title={t("statsEmptyTitle")}
+          message={t("statsEmptyMessage")}
+          icon={<ChartColumnIncreasing size={24} color={C.green} strokeWidth={2.4} />}
+          style={styles.emptyStateSpacing}
+        />
+      ) : null}
+      <TerminalEquitySection trades={visibleTrades} stats={s} />
       <StatsMetricDashboard
         stats={s}
         trades={visibleTrades}
-        weekPnl={weekPnl}
-        monthPnl={monthPnl}
         consistency={consistency}
         isPremium={isPremium}
       />
@@ -4886,6 +5065,8 @@ function Stats({
         isPremium={isPremium}
         session={session}
         shareStats={shareStats}
+        revealSuppressToken={revealSuppressToken}
+        journalTradesSignature={journalTradesSignature}
       />
 
       {!isPremium && (
@@ -4931,17 +5112,20 @@ function StatsScreen({
   onRestore: () => void;
   session: Session | null;
 }) {
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "year">("month");
-  const [selectedDate] = useState(todayISO());
+  const { range, setRange, anchorDate } = useStatsTimeRange();
+  const [revealSuppressToken, setRevealSuppressToken] = useState(0);
+  const handleStatsRangeSelect = useCallback((next: StatsTimeRange) => {
+    setRevealSuppressToken((token) => token + 1);
+    setRange(next);
+  }, [setRange]);
+  const [selectedDate] = useState(anchorDate);
   const [exportBusy, setExportBusy] = useState(false);
   const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "usage_limit", title: "YouTrader Pro", message: t("unlockPremiumExports") });
   const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
   const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
   const [tradeAnalysisError, setTradeAnalysisError] = useState("");
-  const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
+  const periodTrades = useFilteredTrades(trades);
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
-  const weekPnl = periodPnlFromTrades(trades, selectedDate, "week");
-  const monthPnl = periodPnlFromTrades(trades, selectedDate, "month");
   const safePropTemplates = propTemplates;
   const [propTemplateKey, setPropTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
@@ -4977,25 +5161,28 @@ function StatsScreen({
     [trades, selectedDate, activePropTemplate],
   );
   const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
+  const lifetimeStats = useMemo(() => calcStats(trades), [trades]);
+  const lifetimeTradingScore = useMemo(() => tradingScoreForTrades(trades), [trades]);
+  const journalTradesSignature = useMemo(() => trades.map((trade) => trade.id).join("|"), [trades]);
   const achievementList = useMemo(
     () =>
       calculateAchievements({
-        trades: periodTrades,
+        trades,
         selectedDate,
-        tradingScore: tradingScore.score,
-        winRate: periodStats.wr,
-        profitFactor: periodStats.pf,
-        riskControl: periodStats.drawdownControl,
+        tradingScore: lifetimeTradingScore.score,
+        winRate: lifetimeStats.wr,
+        profitFactor: lifetimeStats.pf,
+        riskControl: lifetimeStats.drawdownControl,
         propSurvivalScore: passProbability.probability,
         propTargetRemainingPct:
           propSnapshot && propSnapshot.template.evaluationTarget > 0
             ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
             : 100,
-        monthlyPnl: periodStats.pnl,
-        bestMonthPnl: Math.max(0, periodStats.pnl),
+        monthlyPnl: lifetimeStats.pnl,
+        bestMonthPnl: Math.max(0, lifetimeStats.pnl),
         dailyLossLimit: propSnapshot?.template.dailyLossLimit ?? 0,
       }),
-    [passProbability.probability, periodStats, periodTrades, propSnapshot, selectedDate, tradingScore.score],
+    [lifetimeStats, lifetimeTradingScore.score, passProbability.probability, propSnapshot, selectedDate, trades],
   );
   const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
   const achievementShareStats = useMemo(() => buildAchievementShareStats(periodTrades, selectedDate), [periodTrades, selectedDate]);
@@ -5008,7 +5195,7 @@ function StatsScreen({
       const bestTrade = periodTrades.length ? Math.max(0, ...periodTrades.map((trade) => trade.pnl)) : 0;
       const greenDays = buildDailySeries(periodTrades).filter((day) => day.value > 0).length;
       return {
-      periodLabel: `${period.toUpperCase()} • ${selectedDate}`,
+      periodLabel: `${range} • ${selectedDate}`,
       netPnl: periodStats.pnl,
       winRate: periodStats.wr,
       profitFactor: periodStats.pf,
@@ -5019,10 +5206,10 @@ function StatsScreen({
       consistency: periodStats.consistency,
       maxDrawdown: periodStats.maxDd,
       riskControl: periodStats.drawdownControl,
-      tradingScore: tradingScoreForTrades(periodTrades).score,
+      tradingScore: tradingScore.score,
       dateLabel: achievementShareDateLabel(selectedDate),
-      weekPnl,
-      monthPnl,
+      weekPnl: periodStats.pnl,
+      monthPnl: periodStats.pnl,
       trades: periodStats.count,
       bestSession: periodStats.session[0]?.label || "N/A",
       dailyBuffer: propMeta.dailyBuffer,
@@ -5032,7 +5219,7 @@ function StatsScreen({
       greenDays,
     };
     },
-    [period, selectedDate, periodStats, periodTrades, weekPnl, monthPnl, propSnapshot],
+    [range, selectedDate, periodStats, periodTrades, propSnapshot, tradingScore.score],
   );
 
   const openRadarUpgrade = () => {
@@ -5046,7 +5233,7 @@ function StatsScreen({
   };
 
   const runExport = async (action: "share" | "save" | "pdf") => {
-    console.log(`[YouTrader:export-action] ${action === "share" ? "Share Card pressed" : action === "save" ? "Save Card pressed" : "Monthly PDF pressed"}`);
+    logger.info("[YouTrader:export-action] pressed", { action });
     if (!isPremium) {
       setValueModal({
         visible: true,
@@ -5062,9 +5249,12 @@ function StatsScreen({
       const limit = await peekClientRateLimit("export:generate", "stats-local", "export_attempt");
       logExportRateLimitDebug(limit, `runExport:${action}:precheck`);
       if (!limit.allowed) {
-        console.warn(
-          `[YouTrader:export-rate-limit] BLOCKED export:${action} — ${limit.retryAfterSeconds}s remaining (${limit.count}/${limit.limit} in window)`,
-        );
+        logger.warn("[YouTrader:export-rate-limit] blocked", {
+          action,
+          retryAfterSeconds: limit.retryAfterSeconds,
+          count: limit.count,
+          limit: limit.limit,
+        });
         Alert.alert(t("exportTitle"), SECURITY_MESSAGES.rateLimited);
         return;
       }
@@ -5098,71 +5288,74 @@ function StatsScreen({
       const cardMeta = {
         userId: session?.user.id || null,
         action: action as "share" | "save",
-        period,
+        period: range,
       };
       const cardExport = { card: shareCardData, meta: cardMeta };
       if (action === "share") {
-        console.log("[YouTrader:export-action] running share flow");
+        logger.info("[YouTrader:export-action] running share flow");
         const result = await shareCapturedView(null, "Share YouTrader card", { data: cardExport });
         if (result.shared) {
           const consumed = await consumeClientRateLimit("export:generate", "stats-local");
           logExportRateLimitDebug(consumed, "runExport:share:success");
           await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+          successHaptic();
         } else {
           logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "share_sheet_unavailable"), "runExport:share:skipped");
         }
-        trackEvent("share_card_exported", { action: "share", period, trade_count: periodTrades.length, is_pro: isPremium, shared: result.shared });
+        trackEvent("share_card_exported", { action: "share", period: range, trade_count: periodTrades.length, is_pro: isPremium, shared: result.shared });
         return;
       }
       if (action === "save") {
-        console.log("[YouTrader:export-action] running save flow");
+        logger.info("[YouTrader:export-action] running save flow");
         await saveCapturedViewToPhotos(null, { data: cardExport });
         const consumed = await consumeClientRateLimit("export:generate", "stats-local");
         logExportRateLimitDebug(consumed, "runExport:save:success");
-        trackEvent("share_card_exported", { action: "save", period, trade_count: periodTrades.length, is_pro: isPremium });
+        trackEvent("share_card_exported", { action: "save", period: range, trade_count: periodTrades.length, is_pro: isPremium });
         Alert.alert(t("savedTitle"), t("pnlCardSaved"));
         await recordShareCardExportSuccess(session?.user.id || null, isPremium);
+        successHaptic();
         return;
       }
-      const exportKey = { action, period, selectedDate, count: periodTrades.length, pnl: periodStats.pnl, ts: Date.now() };
-      const monthTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "month"));
-      const monthStats = calcStats(monthTrades);
-      const monthWins = monthTrades.filter((trade) => trade.pnl > 0).length;
-      const monthLosses = monthTrades.filter((trade) => trade.pnl < 0).length;
-      const best = monthStats.weekday[0];
-      const worst = [...monthStats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
-      const bestSession = monthStats.session[0];
-      const worstSession = [...monthStats.session].sort((a, b) => a.pnl - b.pnl)[0];
+      const exportKey = { action, period: range, selectedDate, count: periodTrades.length, pnl: periodStats.pnl, ts: Date.now() };
+      const reportTrades = periodTrades;
+      const reportStats = periodStats;
+      const reportWins = reportTrades.filter((trade) => trade.pnl > 0).length;
+      const reportLosses = reportTrades.filter((trade) => trade.pnl < 0).length;
+      const best = reportStats.weekday[0];
+      const worst = [...reportStats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
+      const bestSession = reportStats.session[0];
+      const worstSession = [...reportStats.session].sort((a, b) => a.pnl - b.pnl)[0];
       const formatDayLabel = (row?: { label: string; pnl: number }) =>
         row && row.pnl !== 0 ? `${fullWeekdayName(row.label)} · ${moneyCompact(row.pnl)}` : row ? fullWeekdayName(row.label) : "N/A";
       const formatSessionLabel = (row?: { label: string; pnl: number }) =>
         row && row.pnl !== 0 ? `${row.label} · ${moneyCompact(row.pnl)}` : row?.label || "N/A";
-      const monthScore = tradingScoreForTrades(monthTrades);
-      const start = periodStart(safeDateFromISO(selectedDate), "month");
-      const end = addDays(addMonths(start, 1), -1);
+      const reportScore = tradingScoreForTrades(reportTrades);
+      const rangeStart = resolveTimeRangeStart(range, selectedDate);
+      const start = rangeStart ? safeDateFromISO(rangeStart) : reportTrades.length ? safeDateFromISO(reportTrades[0].date) : safeDateFromISO(selectedDate);
+      const end = safeDateFromISO(selectedDate);
       const result = await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
         lang,
         title: t("monthlyPerformanceReport"),
         rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
-        netPnl: monthStats.pnl,
-        winRate: monthStats.wr,
-        profitFactor: monthStats.pf,
-        trades: monthStats.count,
-        wins: monthWins,
-        losses: monthLosses,
-        expectancy: monthStats.exp,
-        avgWin: monthStats.avgWin,
-        avgLoss: monthStats.avgLoss,
-        avgWinLoss: monthStats.avgWinLoss,
-        equityCurve: monthStats.curve,
-        drawdown: monthStats.maxDd,
-        consistency: monthStats.consistency,
-        recoveryFactor: monthStats.recoveryFactor,
-        riskControl: monthStats.drawdownControl,
+        netPnl: reportStats.pnl,
+        winRate: reportStats.wr,
+        profitFactor: reportStats.pf,
+        trades: reportStats.count,
+        wins: reportWins,
+        losses: reportLosses,
+        expectancy: reportStats.exp,
+        avgWin: reportStats.avgWin,
+        avgLoss: reportStats.avgLoss,
+        avgWinLoss: reportStats.avgWinLoss,
+        equityCurve: reportStats.curve,
+        drawdown: reportStats.maxDd,
+        consistency: reportStats.consistency,
+        recoveryFactor: reportStats.recoveryFactor,
+        riskControl: reportStats.drawdownControl,
         bestDay: formatDayLabel(best),
         worstDay: formatDayLabel(worst),
-        tradingScore: monthScore.score,
-        grade: monthScore.grade,
+        tradingScore: reportScore.score,
+        grade: reportScore.grade,
         bestSession: formatSessionLabel(bestSession),
         worstSession: formatSessionLabel(worstSession),
         watermarked: !isPremium,
@@ -5173,13 +5366,14 @@ function StatsScreen({
       } else {
         logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "duplicate_pdf_skipped"), "runExport:pdf:duplicate");
       }
-      trackEvent("pdf_exported", { period: "month", trade_count: monthTrades.length, is_pro: isPremium, watermarked: !isPremium });
-      trackEvent("weekly_report_opened", { period: "month", trade_count: monthTrades.length, is_pro: isPremium });
+      trackEvent("pdf_exported", { period: range, trade_count: reportTrades.length, is_pro: isPremium, watermarked: !isPremium });
+      trackEvent("weekly_report_opened", { period: range, trade_count: reportTrades.length, is_pro: isPremium });
+      successHaptic();
       if (!isPremium) await incrementMonthlyUsageCount("pdf-previews", session?.user.id || null);
     } catch (error) {
       const failed = await peekClientRateLimit("export:generate", "stats-local", "export_failed");
       logExportRateLimitDebug(failed, "runExport:error");
-      console.warn("[YouTrader:export-rate-limit] Export failed without consuming quota", error);
+      logger.warn("[YouTrader:export-rate-limit] Export failed without consuming quota", { error });
       alertExportError(t("exportFailed"), error);
     } finally {
       setExportBusy(false);
@@ -5201,22 +5395,23 @@ function StatsScreen({
     try {
       setTradeAnalysisBusy(true);
       setTradeAnalysisError("");
-      trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
-      trackEvent("ai_analysis_opened", { period, trade_count: periodTrades.length });
-      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { propSnapshot });
+      trackEvent("ai_trade_analysis_opened", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_analysis_opened", { period: range, trade_count: periodTrades.length });
+      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, range, { propSnapshot });
       const result = await analyzeTrades(payload);
       setTradeAnalysis(result);
-      trackEvent("ai_trade_analysis_generated", { period, source: "edge_function", trade_count: periodTrades.length });
+      successHaptic();
+      trackEvent("ai_trade_analysis_generated", { period: range, source: "edge_function", trade_count: periodTrades.length });
       trackEvent("ai_pattern_detective_generated", {
-        period,
+        period: range,
         trade_count: periodTrades.length,
         detective_score: result.detectiveScore,
       });
       recordMetric("ai_trade_analysis_completed", 1, { source: "edge_function" });
     } catch (error) {
-      trackEvent("ai_trade_analysis_failed", { period, trade_count: periodTrades.length });
-      trackEvent("ai_pattern_detective_failed", { period, trade_count: periodTrades.length });
-      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
+      trackEvent("ai_trade_analysis_failed", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_failed", { period: range, trade_count: periodTrades.length });
+      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period: range });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
       setTradeAnalysis(fallback);
       setTradeAnalysisError(t("aiUnavailableLocal"));
@@ -5237,6 +5432,7 @@ function StatsScreen({
         >
           <Text style={styles.secondaryText}>{tradeAnalysisBusy ? t("analyzing") : t("analyzeMyTrades")}</Text>
         </Pressable>
+        {tradeAnalysisBusy ? <AiAnalysisLoading style={styles.aiInlineSkeleton} /> : null}
         {tradeAnalysisError ? (
           <Text style={[styles.sub, { color: C.yellow, marginTop: 10 }]}>{tradeAnalysisError}</Text>
         ) : null}
@@ -5250,56 +5446,55 @@ function StatsScreen({
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
-      <View style={[styles.segment, { marginTop: 0 }]}>
-        {(["day", "week", "month", "year"] as const).map((item) => (
+      <View style={styles.statsHeaderControls} pointerEvents="box-none">
+        <View style={[styles.segment, { marginTop: 0 }]}>
+          {STATS_TIME_RANGES.map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => handleStatsRangeSelect(item)}
+              style={[styles.segBtn, range === item && styles.segActive]}
+            >
+              <Text style={[styles.segText, range === item && styles.segTextActive]}>
+                {item}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <View style={styles.statsActionsRow}>
           <Pressable
-            key={item}
-            onPress={() => setPeriod(item)}
-            style={[styles.segBtn, period === item && styles.segActive]}
+            disabled={exportBusy}
+            onPress={() => {
+              void runExport("share");
+            }}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
           >
-            <Text style={[styles.segText, period === item && styles.segTextActive]}>
-              {item.toUpperCase()}
+            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+              {t("sharePnlCard")}
             </Text>
           </Pressable>
-        ))}
-      </View>
-      <View style={styles.statsActionsRow}>
-        <Pressable
-          disabled={exportBusy}
-          onPress={() => {
-            console.log("[YouTrader:export-action] Share Card pressed");
-            void runExport("share");
-          }}
-          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-        >
-          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {t("sharePnlCard")}
-          </Text>
-        </Pressable>
-        <Pressable
-          disabled={exportBusy}
-          onPress={() => {
-            console.log("[YouTrader:export-action] Save Card pressed");
-            void runExport("save");
-          }}
-          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-        >
-          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {t("saveImage")}
-          </Text>
-        </Pressable>
-        <Pressable
-          disabled={exportBusy}
-          onPress={() => {
-            console.log("[YouTrader:export-action] Monthly PDF pressed");
-            void runExport("pdf");
-          }}
-          style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-        >
-          <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-            {t("monthlyPdf")}
-          </Text>
-        </Pressable>
+          <Pressable
+            disabled={exportBusy}
+            onPress={() => {
+              void runExport("save");
+            }}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+              {t("saveImage")}
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={exportBusy}
+            onPress={() => {
+              void runExport("pdf");
+            }}
+            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+              {t("monthlyPdf")}
+            </Text>
+          </Pressable>
+        </View>
       </View>
       <ProValueModal
         lang={lang}
@@ -5313,7 +5508,7 @@ function StatsScreen({
         onRestore={onRestore}
         onClose={() => setValueModal((prev) => ({ ...prev, visible: false }))}
       />
-      {exportBusy ? <ActivityIndicator color={C.green} style={{ marginBottom: 10 }} /> : null}
+      {exportBusy ? <PremiumSkeletonCard rows={2} tone="lime" style={styles.statsLoadingSkeleton} /> : null}
       <Stats
         trades={periodTrades}
         lang={lang}
@@ -5331,6 +5526,8 @@ function StatsScreen({
         achievements={achievementList}
         traderLevel={traderLevel}
         shareStats={achievementShareStats}
+        revealSuppressToken={revealSuppressToken}
+        journalTradesSignature={journalTradesSignature}
       />
     </ScrollView>
   );
@@ -5593,14 +5790,16 @@ function AIResultCard({
         </View>
         {response ? <ProviderBadge status={response.providerStatus} /> : null}
       </View>
-      <View style={styles.aiCoachResultBody}>{children}</View>
+      <View style={styles.aiCoachResultBody}>
+        {loading && !response ? <AiAnalysisLoading style={styles.aiInlineSkeleton} /> : children}
+      </View>
       {response?.message ? <Text style={styles.aiFallbackMessage}>{response.message}</Text> : null}
       {response?.generatedAt ? (
         <Text style={styles.aiGeneratedAt}>Generated {new Date(response.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</Text>
       ) : null}
-      <Pressable disabled={loading} onPress={onRefresh} style={[styles.secondaryBig, styles.aiRefreshButton, loading && styles.disabledBtn]}>
+      <AnimatedPressable disabled={loading} onPress={onRefresh} style={styles.aiRefreshPressable} contentStyle={[styles.secondaryBig, styles.aiRefreshButton, loading && styles.disabledBtn]}>
         <Text style={styles.secondaryText}>{loading ? "Generating..." : response ? "Refresh" : "Generate"}</Text>
-      </Pressable>
+      </AnimatedPressable>
     </PremiumGlassCard>
   );
 }
@@ -5754,7 +5953,7 @@ function UnifiedAiInsightSection({
                 <Text style={[styles.terminalSmallLabel, { flex: 1, textAlign: "right" }]}>{insight.visualType.replace("_", " ").toUpperCase()}</Text>
               </View>
               <Text style={styles.propCoachHeadline}>{insight.title}</Text>
-              <Text style={styles.terminalSub}>{insight.summary}</Text>
+              <TypingText text={insight.summary} speedMs={8} enabled={insight.summary.length <= 180} textStyle={styles.terminalSub} />
               {insight.evidence.slice(0, 2).map((item) => (
                 <Text key={`${insight.id}-${item}`} style={styles.aiBulletText}>• {item}</Text>
               ))}
@@ -5886,7 +6085,7 @@ function DailyMissionCard({
           return (
             <Pressable key={item.id} onPress={() => onToggle(item.id)} style={{ flexDirection: "row", gap: 10, alignItems: "center", borderWidth: 1, borderColor: active ? "rgba(150,255,0,0.34)" : "rgba(255,255,255,0.10)", backgroundColor: active ? "rgba(150,255,0,0.07)" : "rgba(255,255,255,0.035)", borderRadius: 16, padding: 12 }}>
               <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: active ? C.green : C.sub, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: active ? C.green : "transparent", fontWeight: "900" }}>✓</Text>
+                {active ? <Check size={14} color={C.green} strokeWidth={UI_ICON_STROKE} /> : null}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.monthlyTimelineValue}>{item.text}</Text>
@@ -5941,9 +6140,7 @@ function RiskMeter({ label, value, danger = false }: { label: string; value: num
         <Text style={styles.terminalSmallLabel}>{label}</Text>
         <Text style={[styles.terminalSmallLabel, { color }]}>{clamped}%</Text>
       </View>
-      <View style={{ height: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-        <View style={{ width: `${clamped}%`, height: 8, borderRadius: 999, backgroundColor: color }} />
-      </View>
+      <PremiumLoadingBar progress={clamped / 100} height={8} tone={danger ? "red" : clamped >= 70 ? "lime" : "purple"} />
     </View>
   );
 }
@@ -5961,9 +6158,11 @@ function EvidenceChart({ label, values }: { label: string; values: { name: strin
               <Text style={styles.terminalSub}>{item.name}</Text>
               <Text style={[styles.terminalSub, { color }]}>{Number.isInteger(item.value) ? item.value : item.value.toFixed(1)}</Text>
             </View>
-            <View style={{ height: 7, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-              <View style={{ width: `${Math.max(6, Math.min(100, (Math.abs(item.value) / max) * 100))}%`, height: 7, borderRadius: 999, backgroundColor: color }} />
-            </View>
+            <PremiumLoadingBar
+              progress={Math.max(0.06, Math.min(1, Math.abs(item.value) / max))}
+              height={7}
+              tone={item.tone === "red" ? "red" : item.tone === "purple" ? "purple" : "lime"}
+            />
           </View>
         );
       })}
@@ -5998,6 +6197,1612 @@ function AIInsightCard({ insight }: { insight: AiInsight }) {
       <EvidenceChart label="Evidence" values={insight.evidence.slice(0, 3).map((item, index) => ({ name: item, value: 3 - index, tone: insight.priority === "high" ? "red" : "purple" }))} />
       <RuleImpactCard title={t("microRecommendation")} rule={insight.recommendation} evidence={insight.sourceMetrics.join(" · ")} />
     </View>
+  );
+}
+
+function aiOsConfidenceLabel(confidence: AiOperatingSystem["confidence"]) {
+  return confidence === "empty" ? "NO DATA" : confidence === "low" ? "LOW" : confidence === "medium" ? "MEDIUM" : "HIGH";
+}
+
+function aiOsStateIsLow(state: "empty" | "low_confidence" | "ready") {
+  return state === "empty" || state === "low_confidence";
+}
+
+function AiOperatingSystemTodaySection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const today = operatingSystem.today;
+  const lowConfidence = aiOsStateIsLow(today.state);
+  const score = today.tradingScore ?? 0;
+  const tone = lowConfidence ? C.purple : score >= 70 ? C.green : score >= 50 ? C.purple : C.red;
+  const ctaLabel = today.primaryCta === "mark_today_complete" ? "Mark Today Complete" : today.primaryCta === "start_trading_day" ? "Start Trading Day" : "Log More Trades";
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>TODAY</Text>
+          <Text style={styles.terminalSectionTitle}>What should I do today?</Text>
+          <Text style={styles.terminalSub}>
+            {lowConfidence
+              ? today.emptyState?.message || "AI Trading OS needs more journal evidence before it can give a strong plan."
+              : today.recommendation?.action || today.mission?.reason || "Follow the mission built from your current journal sample."}
+          </Text>
+        </View>
+        <AppleRing
+          label={lowConfidence ? "DATA" : "FOCUS"}
+          value={lowConfidence ? Math.max(8, operatingSystem.sample.tradeCount * 12) : score}
+          display={lowConfidence ? aiOsConfidenceLabel(today.confidence) : `${score}`}
+          size={112}
+          color={tone}
+        />
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Best Session", value: today.bestSession || "Need data", tone: today.bestSession ? "green" : "grey" },
+          { label: "Max Trades", value: today.maxTrades != null ? String(today.maxTrades) : "Need data", tone: today.maxTrades != null ? "purple" : "grey" },
+          { label: "Daily Loss", value: today.dailyLossLimit != null ? moneyCompact(-Math.abs(today.dailyLossLimit)) : "Not set", tone: today.dailyLossLimit != null ? "red" : "grey" },
+          { label: "Confidence", value: aiOsConfidenceLabel(today.confidence), tone: lowConfidence ? "purple" : "green" },
+          { label: "Sample", value: `${operatingSystem.sample.tradeCount}T / ${operatingSystem.sample.tradingDays}D`, tone: operatingSystem.sample.tradeCount >= 5 ? "green" : "grey" },
+        ]}
+      />
+      {lowConfidence ? (
+        <WarningCard
+          title={today.emptyState?.title || "Low-confidence AI Analytics sample"}
+          body={today.emptyState?.message || "Add more saved trades across multiple trading days to unlock a reliable daily plan."}
+        />
+      ) : today.mission ? (
+        <View style={styles.propCoachAdviceCard}>
+          <Text style={styles.terminalSmallLabel}>TODAY'S MISSION</Text>
+          <Text style={styles.propCoachHeadline}>{today.mission.title}</Text>
+          <BulletList items={today.mission.checklist.map((item) => item.text).slice(0, 3)} />
+        </View>
+      ) : null}
+      {today.evidence.length ? (
+        <View style={{ gap: 6, marginTop: 12 }}>
+          <Text style={styles.terminalSmallLabel}>Evidence</Text>
+          {today.evidence.slice(0, 3).map((item) => (
+            <Text key={`today-${item}`} style={styles.aiBulletText}>• {item}</Text>
+          ))}
+        </View>
+      ) : null}
+      <Pressable disabled style={[styles.primaryBig, { opacity: lowConfidence ? 0.65 : 1 }]}>
+        <Text style={styles.primaryText}>{ctaLabel}</Text>
+      </Pressable>
+    </TerminalGlassCard>
+  );
+}
+
+function AiCoachOperatingSystemPoint({
+  label,
+  item,
+}: {
+  label: string;
+  item: AiOperatingSystem["coach"]["biggestEdge"];
+}) {
+  if (!item) return null;
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(177,66,255,0.22)", backgroundColor: "rgba(177,66,255,0.055)", padding: 13, gap: 8 }}>
+      <Text style={styles.terminalSmallLabel}>{label} · {aiOsConfidenceLabel(item.confidence)}</Text>
+      <Text style={styles.propCoachHeadline}>{item.title}</Text>
+      <Text style={styles.terminalSub}>{item.action}</Text>
+      <View style={{ gap: 5 }}>
+        {item.evidence.slice(0, 3).map((evidence) => (
+          <Text key={`${label}-${evidence}`} style={styles.aiBulletText}>• {evidence}</Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function AiOperatingSystemCoachSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const coach = operatingSystem.coach;
+  const lowConfidence = aiOsStateIsLow(coach.state);
+  const seenActions = new Set<string>();
+  const points = [
+    { label: "Biggest Edge", item: coach.biggestEdge },
+    { label: "Biggest Mistake", item: coach.biggestMistake },
+    { label: "Next Improvement", item: coach.nextImprovement },
+  ].filter(({ item }) => {
+    if (!item) return false;
+    const key = item.action.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (seenActions.has(key)) return false;
+    seenActions.add(key);
+    return true;
+  });
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>AI COACH</Text>
+      <Text style={styles.terminalSectionTitle}>What should I improve on the next trade?</Text>
+      <Text style={styles.terminalSub}>
+        {lowConfidence
+          ? coach.emptyState?.message || "The next-trade coach is waiting for a larger saved trade sample."
+          : "One edge, one mistake, one improvement. Each point is tied to journal evidence."}
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={coach.emptyState?.title || "Low-confidence coach"}
+          body={coach.emptyState?.message || "Log at least 5 trades across 2 trading days before relying on next-trade coaching."}
+        />
+      ) : (
+        <View style={{ gap: 10, marginTop: 14 }}>
+          {points.length ? (
+            points.map(({ label, item }) => <AiCoachOperatingSystemPoint key={label} label={label} item={item} />)
+          ) : (
+            <Text style={styles.terminalSub}>No strong next-trade recommendation yet. Keep journaling with setup, mood, and notes.</Text>
+          )}
+        </View>
+      )}
+      {!lowConfidence && coach.evidence.length ? (
+        <View style={{ gap: 6, marginTop: 12 }}>
+          <Text style={styles.terminalSmallLabel}>Coach Evidence</Text>
+          {coach.evidence.slice(0, 4).map((item) => (
+            <Text key={`coach-${item}`} style={styles.aiBulletText}>• {item}</Text>
+          ))}
+        </View>
+      ) : null}
+    </TerminalGlassCard>
+  );
+}
+
+type CoachConversationState =
+  | "idle"
+  | "why"
+  | "fix"
+  | "rule_preview"
+  | "mistake_review"
+  | "plan"
+  | "prop_intro"
+  | "prop_simulator"
+  | "prop_emergency"
+  | "trade_vision_intro"
+  | "session_started"
+  | "session_complete";
+
+function coachStatusFromSignals({
+  operatingSystem,
+  revengeTrading,
+  snapshot,
+  passProbability,
+  stats,
+}: {
+  operatingSystem: AiOperatingSystem;
+  revengeTrading: RevengeTradingResult;
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
+  passProbability: PassProbabilityResult;
+  stats: ReturnType<typeof calcStats>;
+}): { label: "Ready" | "Caution" | "Emergency" | "Low confidence"; tone: "green" | "purple" | "red" | "grey"; reason: string } {
+  const lowConfidence = operatingSystem.confidence === "empty" || operatingSystem.confidence === "low";
+  const propEmergency = snapshot?.status === "STOP" || (snapshot ? snapshot.dailyRemaining <= 0 || snapshot.accountRemaining <= 0 : false);
+  const propCaution = snapshot?.status === "CAUTION" || passProbability.status === "DANGER" || passProbability.status === "AT_RISK";
+  const revengeEmergency = revengeTrading.detected && revengeTrading.severity === "HIGH";
+  const drawdownCaution = stats.maxDd < 0 && Math.abs(stats.maxDd) > Math.max(1, Math.abs(stats.avgWin || stats.avgLoss || 0));
+  if (propEmergency || revengeEmergency) {
+    return { label: "Emergency", tone: "red", reason: propEmergency ? "Prop drawdown protection is triggered." : revengeTrading.reason };
+  }
+  if (lowConfidence) {
+    return { label: "Low confidence", tone: "grey", reason: "More saved trades are needed before strong coaching." };
+  }
+  if (propCaution || revengeTrading.detected || drawdownCaution) {
+    return { label: "Caution", tone: "purple", reason: propCaution ? "Prop account risk needs protection." : revengeTrading.detected ? revengeTrading.reason : "Drawdown pressure is elevated." };
+  }
+  return { label: "Ready", tone: "green", reason: "Journal evidence supports controlled execution." };
+}
+
+function AiCoachConsole({
+  operatingSystem,
+  trades,
+  stats,
+  patterns,
+  revengeTrading,
+  snapshot,
+  passProbability,
+  userId,
+}: {
+  operatingSystem: AiOperatingSystem;
+  trades: Trade[];
+  stats: ReturnType<typeof calcStats>;
+  patterns: PatternDetectionResult;
+  revengeTrading: RevengeTradingResult;
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
+  passProbability: PassProbabilityResult;
+  userId: string | null;
+}) {
+  const [coachState, setCoachState] = useState<CoachConversationState>("idle");
+  const [riskMathOpen, setRiskMathOpen] = useState(false);
+  const [coachThinking, setCoachThinking] = useState(false);
+  const panelAnim = useRef(new Animated.Value(1)).current;
+  const panelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lowConfidence = operatingSystem.confidence === "empty" || operatingSystem.confidence === "low";
+  const nextImprovement = operatingSystem.coach.nextImprovement;
+  const biggestMistake = operatingSystem.coach.biggestMistake;
+  const today = operatingSystem.today;
+  const recentLosingTrades = trades.filter((trade) => trade.pnl < 0).slice(-3).reverse();
+  const highRiskPatterns = patterns.risks.slice(0, 3);
+  const priority =
+    today.recommendation?.action ||
+    today.mission?.title ||
+    nextImprovement?.action ||
+    "Log more trades to unlock a sharper daily priority.";
+  const biggestRisk =
+    revengeTrading.detected
+      ? revengeTrading.reason
+      : biggestMistake?.action || highRiskPatterns[0]?.detail || "No high-confidence risk pattern yet.";
+  const bestAction =
+    nextImprovement?.action ||
+    today.mission?.reason ||
+    (today.bestSession ? `Trade only your strongest session: ${today.bestSession}.` : "Build a cleaner sample before taking aggressive decisions.");
+  const coachSentence = lowConfidence
+    ? `I need a few more trades before strong coaching. Current sample: ${stats.count} trades.`
+    : "I found the one thing that matters today.";
+  const status = coachStatusFromSignals({ operatingSystem, revengeTrading, snapshot, passProbability, stats });
+  const actionButtons: { key: CoachConversationState; label: string }[] = [
+    { key: "why", label: "Why?" },
+    { key: "fix", label: "Fix this" },
+    { key: "prop_intro", label: "Prop risk" },
+    { key: "plan", label: "Local plan" },
+    { key: "mistake_review", label: "Review" },
+  ];
+  useEffect(() => {
+    return () => {
+      if (panelTimerRef.current) clearTimeout(panelTimerRef.current);
+    };
+  }, []);
+  const showPanel = (key: CoachConversationState) => {
+    lightHaptic();
+    if (panelTimerRef.current) clearTimeout(panelTimerRef.current);
+    const shouldClose = coachState === key && key !== "session_started" && key !== "session_complete";
+    if (shouldClose) {
+      setCoachThinking(false);
+      setCoachState("idle");
+      panelAnim.setValue(1);
+      return;
+    }
+    setCoachThinking(true);
+    setCoachState("idle");
+    panelAnim.setValue(0);
+    panelTimerRef.current = setTimeout(() => {
+      setCoachState(key);
+      setCoachThinking(false);
+      Animated.timing(panelAnim, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }, 240);
+    if (key !== "prop_simulator") setRiskMathOpen(false);
+  };
+  const panelAnimatedStyle = {
+    opacity: panelAnim,
+    transform: [{ translateY: panelAnim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+  };
+  const primaryCtaState: CoachConversationState = coachState === "session_started" ? "session_complete" : "session_started";
+  const primaryCtaLabel = coachState === "session_started" ? "Mark session complete" : coachState === "session_complete" ? "Session complete" : "Start trading session";
+  const statusLine =
+    status.label === "Ready"
+      ? "Coach is ready"
+      : status.label === "Low confidence"
+        ? "Coach is building confidence"
+        : "Coach is watching risk";
+  const evidenceItems = aiOsUniqueList([
+    ...today.evidence,
+    ...operatingSystem.coach.evidence,
+    ...operatingSystem.evidence.sessionImpact,
+    ...operatingSystem.evidence.behaviorPatterns,
+  ], 5);
+  const fixSteps = aiOsUniqueList([
+    nextImprovement?.action || "",
+    nextImprovement?.evidence[0] ? `Base the next trade on this evidence: ${nextImprovement.evidence[0]}` : "",
+    today.maxTrades != null ? `Cap the session at ${today.maxTrades} trades.` : "",
+    today.bestSession ? `Prefer ${today.bestSession}; skip weaker windows.` : "",
+  ], 3);
+  const ruleText =
+    today.maxTrades != null
+      ? `Today: maximum ${today.maxTrades} trades. Stop after one rule break.`
+      : nextImprovement?.action || "Today: no trade without a written setup and invalidation.";
+  const planItems = aiOsUniqueList([
+    today.mission?.title || "",
+    today.mission?.reason || "",
+    ...(today.mission?.checklist.map((item) => item.text) || []),
+    today.dailyLossLimit != null ? `Daily loss limit: ${moneyCompact(-Math.abs(today.dailyLossLimit))}` : "",
+  ], 5);
+  const propDailyBuffer = snapshot ? moneyCompact(snapshot.dailyRemaining) : "Needs setup";
+  const propAccountBuffer = snapshot ? moneyCompact(snapshot.accountRemaining) : "Needs setup";
+  const propMaxSafeLoss = snapshot ? moneyCompact(Math.floor(Math.max(0, Math.min(snapshot.dailyRemaining, snapshot.accountRemaining) * 0.35))) : "Needs setup";
+  const propStatus = snapshot?.status || "SETUP";
+  const propAction =
+    !snapshot
+      ? "Select a synced prop template before relying on account protection."
+      : status.label === "Emergency"
+        ? "Protect the account now. Stop trading until the risk is reviewed."
+        : status.label === "Caution"
+          ? "Reduce size and keep only checklist-perfect setups."
+          : "Trade within today's limits and protect green progress.";
+  const propEvidence = aiOsUniqueList([
+    snapshot ? `Daily buffer: ${moneyCompact(snapshot.dailyRemaining)}` : "",
+    snapshot ? `Account buffer: ${moneyCompact(snapshot.accountRemaining)}` : "",
+    `Pass probability: ${passProbability.probability}% (${passProbability.confidence} confidence)`,
+    revengeTrading.detected ? revengeTrading.reason : "",
+    `Filtered sample: ${trades.length} trades`,
+  ], 5);
+
+  return (
+    <TerminalGlassCard style={styles.coachConversationCard}>
+      <View style={styles.coachConsoleHero}>
+        <View style={[styles.tradeVisionIconOrbSmall, styles.coachConversationOrb, status.tone === "red" ? styles.coachConversationOrbRed : status.tone === "purple" ? styles.coachConversationOrbPurple : status.tone === "grey" ? styles.coachConversationOrbGrey : null]}>
+          <BrainCircuit size={17} color={status.tone === "red" ? C.red : status.tone === "purple" ? C.purple : status.tone === "grey" ? C.sub : C.green} strokeWidth={2.4} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={styles.coachConversationHeaderRow}>
+            <Text style={styles.terminalSmallLabel}>YOUTRADER COACH</Text>
+            <Text style={[styles.coachConversationStatus, status.tone === "red" ? styles.coachConversationStatusRed : status.tone === "purple" ? styles.coachConversationStatusPurple : status.tone === "grey" ? styles.coachConversationStatusGrey : null]}>
+              {status.label}
+            </Text>
+          </View>
+          <Text style={styles.coachCompactHeadline}>{truncateCoachLine(coachSentence, 64)}</Text>
+          <Text style={styles.coachCompactSub}>{truncateCoachLine(status.reason, 80)}</Text>
+        </View>
+      </View>
+      <View style={styles.coachFocusGrid}>
+        <CoachFocusRow label="Today's priority" value={priority} tone="action" />
+        <CoachFocusRow label="Biggest risk" value={biggestRisk} tone="risk" />
+        <CoachFocusRow label="Best action now" value={bestAction} tone="action" />
+      </View>
+      {lowConfidence ? (
+        <Text style={styles.coachCompactHint}>Low confidence · {operatingSystem.sample.tradeCount} trades · {operatingSystem.sample.tradingDays} days</Text>
+      ) : null}
+      <Pressable
+        disabled={coachThinking || coachState === "session_complete"}
+        onPress={() => showPanel(primaryCtaState)}
+        style={[styles.coachPrimaryCta, coachState === "session_started" && styles.coachPrimaryCtaActive, (coachThinking || coachState === "session_complete") && styles.disabledBtn]}
+      >
+        <Zap size={14} color={coachState === "session_complete" ? C.sub : C.green} strokeWidth={2.5} />
+        <Text style={[styles.coachPrimaryCtaText, coachState === "session_complete" && styles.coachPrimaryCtaTextDone]}>{primaryCtaLabel}</Text>
+      </Pressable>
+      <View style={styles.coachConsoleActionRow}>
+        {actionButtons.map((action) => {
+          const active = coachState === action.key;
+          return (
+            <Pressable key={`${action.key}-${action.label}`} onPress={() => showPanel(action.key)} style={[styles.coachConsoleActionChip, active && styles.coachConsoleActionChipActive]}>
+              <Text style={[styles.coachConsoleActionText, active && styles.coachConsoleActionTextActive]}>{action.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {coachThinking ? (
+        <View style={styles.coachThinkingRow}>
+          <ActivityIndicator size="small" color={C.green} />
+          <Text style={styles.coachThinkingText}>Coach is thinking...</Text>
+        </View>
+      ) : null}
+      {coachState === "session_started" || coachState === "session_complete" ? (
+        <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
+          <Text style={styles.terminalSmallLabel}>{coachState === "session_complete" ? "Session complete" : "Session started"}</Text>
+          <Text style={styles.propCoachHeadline}>{coachState === "session_complete" ? "Review the session before taking another trade." : "Trade the plan. One decision at a time."}</Text>
+          <View style={styles.coachConsoleActionRow}>
+            {coachState === "session_started" ? (
+              <Pressable onPress={() => showPanel("session_complete")} style={[styles.coachConsoleActionChip, styles.coachConsoleActionChipActive]}>
+                <Text style={[styles.coachConsoleActionText, styles.coachConsoleActionTextActive]}>Mark session complete</Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => showPanel("plan")} style={styles.coachConsoleActionChip}>
+              <Text style={styles.coachConsoleActionText}>Generate plan</Text>
+            </Pressable>
+            <Pressable onPress={() => showPanel("mistake_review")} style={styles.coachConsoleActionChip}>
+              <Text style={styles.coachConsoleActionText}>Review mistakes</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      ) : null}
+      {coachState === "why" ? (
+        <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
+          <Text style={styles.terminalSmallLabel}>Why this matters</Text>
+          {evidenceItems.length ? evidenceItems.map((item) => <Text key={`why-${item}`} style={styles.aiBulletText}>• {item}</Text>) : (
+            <Text style={styles.terminalSub}>Not enough evidence yet. Log more trades with notes, setups, and screenshots.</Text>
+          )}
+          <Pressable onPress={() => showPanel("mistake_review")} style={styles.coachInlineAction}>
+            <Text style={styles.coachConsoleActionText}>Review last mistakes</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+      {coachState === "fix" ? (
+        <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
+          <Text style={styles.terminalSmallLabel}>Fix this next</Text>
+          {fixSteps.length ? fixSteps.map((item) => <Text key={`fix-${item}`} style={styles.aiBulletText}>• {item}</Text>) : (
+            <Text style={styles.terminalSub}>Keep the next trade simple: predefined setup, predefined invalidation, fixed risk.</Text>
+          )}
+          <View style={styles.coachConsoleActionRow}>
+            <Pressable onPress={() => showPanel("rule_preview")} style={styles.coachConsoleActionChip}>
+              <Text style={styles.coachConsoleActionText}>Create rule</Text>
+            </Pressable>
+            <Pressable onPress={() => showPanel("plan")} style={styles.coachConsoleActionChip}>
+              <Text style={styles.coachConsoleActionText}>Generate plan</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      ) : null}
+      {coachState === "rule_preview" ? (
+        <Animated.View style={[styles.coachConsoleRulePreview, panelAnimatedStyle]}>
+          <Text style={styles.terminalSmallLabel}>Rule Preview</Text>
+          <Text style={styles.propCoachHeadline}>{ruleText}</Text>
+          <Text style={styles.terminalSub}>Visual preview only. This rule is not saved yet.</Text>
+        </Animated.View>
+      ) : null}
+      {coachState === "mistake_review" ? (
+        <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
+          <Text style={styles.terminalSmallLabel}>Review mistakes</Text>
+          {recentLosingTrades.length ? recentLosingTrades.map((trade) => (
+            <View key={trade.id} style={styles.coachConsoleTradeRow}>
+              <Text style={styles.terminalSub}>{trade.date} · {trade.symbol} · {trade.direction}</Text>
+              <Text style={[styles.metricPillValue, { color: C.red }]}>{moneyCompact(trade.pnl)}</Text>
+            </View>
+          )) : highRiskPatterns.length ? highRiskPatterns.map((item) => (
+            <Text key={`risk-${item.title}`} style={styles.aiBulletText}>• {item.title}: {item.detail}</Text>
+          )) : (
+            <Text style={styles.terminalSub}>No recent losing trades or high-risk patterns in this filtered sample.</Text>
+          )}
+        </Animated.View>
+      ) : null}
+      {coachState === "plan" ? (
+        <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
+          <Text style={styles.terminalSmallLabel}>Today's local plan</Text>
+          {planItems.length ? planItems.map((item) => <Text key={`plan-${item}`} style={styles.aiBulletText}>• {item}</Text>) : (
+            <Text style={styles.terminalSub}>Plan is low-confidence. Log more trades before relying on a detailed daily plan.</Text>
+          )}
+        </Animated.View>
+      ) : null}
+      {coachState === "prop_intro" || coachState === "prop_simulator" || coachState === "prop_emergency" ? (
+        <Animated.View style={[styles.coachConsoleReveal, panelAnimatedStyle]}>
+          <Text style={styles.terminalSmallLabel}>Prop risk mentor</Text>
+          <Text style={styles.coachCompactValue}>{truncateCoachLine(propAction, 96)}</Text>
+          <MetricPillRow
+            items={[
+              { label: "Status", value: propStatus, tone: propStatus === "STOP" ? "red" : propStatus === "CAUTION" ? "purple" : snapshot ? "green" : "grey" },
+              { label: "Daily Buffer", value: propDailyBuffer, tone: snapshot && snapshot.dailyRemaining > 0 ? "green" : "red" },
+              { label: "Max Safe Loss", value: propMaxSafeLoss, tone: snapshot ? "purple" : "grey" },
+            ]}
+          />
+          <View style={styles.coachConsoleActionRow}>
+            <Pressable onPress={() => showPanel("prop_emergency")} style={[styles.coachConsoleActionChip, coachState === "prop_emergency" && styles.coachConsoleActionChipActive]}>
+              <Text style={[styles.coachConsoleActionText, coachState === "prop_emergency" && styles.coachConsoleActionTextActive]}>Emergency mode</Text>
+            </Pressable>
+            <Pressable onPress={() => showPanel("prop_simulator")} style={[styles.coachConsoleActionChip, coachState === "prop_simulator" && styles.coachConsoleActionChipActive]}>
+              <Text style={[styles.coachConsoleActionText, coachState === "prop_simulator" && styles.coachConsoleActionTextActive]}>Run what-if</Text>
+            </Pressable>
+            <Pressable onPress={() => setRiskMathOpen((prev) => !prev)} style={styles.coachConsoleActionChip}>
+              <Text style={styles.coachConsoleActionText}>{riskMathOpen ? "Hide evidence" : "Show evidence"}</Text>
+            </Pressable>
+          </View>
+          {coachState === "prop_emergency" ? (
+            <View style={styles.coachConsoleRulePreview}>
+              <Text style={styles.coachCompactValue}>{snapshot ? "Stop after one rule break. Reduce size before the next trade." : "Connect a prop template in Prop Coach below."}</Text>
+            </View>
+          ) : null}
+          {riskMathOpen ? (
+            <View style={styles.coachConsoleReveal}>
+              {propEvidence.slice(0, 3).map((item) => <Text key={`prop-math-${item}`} style={styles.aiBulletText}>• {item}</Text>)}
+            </View>
+          ) : null}
+        </Animated.View>
+      ) : null}
+    </TerminalGlassCard>
+  );
+}
+
+const TRADE_VISION_MONTHLY_LIMIT = 25;
+const TRADE_VISION_USAGE_KEY = "trade-vision-reviews";
+const TRADE_VISION_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const AI_ASSISTANT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const TRADE_VISION_PROMPTS = [
+  { label: "Entry valid?", question: "Was my entry valid?" },
+  { label: "Stop logical?", question: "Was my stop logical?" },
+  { label: "A+ setup?", question: "Is this an A+ setup?" },
+  { label: "Did I chase?", question: "Did I chase?" },
+  { label: "Better entry?", question: "Where was the better entry?" },
+  { label: "Better stop?", question: "Where should my stop have been?" },
+  { label: "Risk too high?", question: "Was my risk too high?" },
+  { label: "Would you take it?", question: "Would you take this trade?" },
+  { label: "What to fix?", question: "What should I fix next time?" },
+] as const;
+const TRADE_VISION_THINKING_STEPS = [
+  "Analyzing market structure...",
+  "Reviewing entry...",
+  "Checking risk management...",
+  "Comparing with your journal...",
+  "Building coach response...",
+];
+type TradeVisionUiState = "empty" | "image_selected" | "loading" | "result" | "error" | "limit_reached";
+type TradeVisionDetail = "entry" | "stop" | "rr" | "mistake" | "alternative" | "evidence" | "journal";
+
+function tradeVisionMimeFromUri(uri: string, fallback?: string | null) {
+  if (fallback && /^image\/(jpeg|png|webp)$/i.test(fallback)) return fallback.toLowerCase();
+  const clean = uri.toLowerCase().split("?")[0];
+  if (clean.endsWith(".png")) return "image/png";
+  if (clean.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
+
+function AiIntelligencePulse({ tone = C.green }: { tone?: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+  return (
+    <Animated.View
+      style={[
+        styles.aiIntelligencePulse,
+        { borderColor: `${tone}66`, backgroundColor: `${tone}14`, shadowColor: tone },
+        {
+          transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.08] }) }],
+          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }),
+        },
+      ]}
+    >
+      <View style={[styles.aiIntelligencePulseCore, { backgroundColor: tone }]} />
+    </Animated.View>
+  );
+}
+
+function AiFlowRail({ nodes, tone = C.purple }: { nodes: string[]; tone?: string }) {
+  const travel = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(travel, { toValue: 1, duration: 2800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [travel]);
+  return (
+    <View style={styles.aiFlowRail}>
+      <View style={[styles.aiFlowTrack, { backgroundColor: `${tone}32` }]} />
+      <Animated.View
+        style={[
+          styles.aiFlowSignal,
+          { backgroundColor: tone, shadowColor: tone },
+          { transform: [{ translateX: travel.interpolate({ inputRange: [0, 1], outputRange: [0, 220] }) }] },
+        ]}
+      />
+      <View style={styles.aiFlowNodes}>
+        {nodes.map((node) => (
+          <View key={node} style={styles.aiFlowNode}>
+            <View style={[styles.aiFlowNodeDot, { borderColor: `${tone}80`, backgroundColor: `${tone}18`, shadowColor: tone }]}>
+              <View style={[styles.aiFlowNodeCore, { backgroundColor: tone }]} />
+            </View>
+            <Text style={styles.aiFlowNodeLabel}>{node}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function AiImageScan({ active }: { active: boolean }) {
+  const scan = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!active) {
+      scan.stopAnimation();
+      scan.setValue(0);
+      return;
+    }
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scan, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(scan, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [active, scan]);
+  if (!active) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.aiImageScanLine,
+        {
+          opacity: scan.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.2, 0.9, 0.2] }),
+          transform: [{ translateY: scan.interpolate({ inputRange: [0, 1], outputRange: [8, 190] }) }],
+        },
+      ]}
+    />
+  );
+}
+
+function AiGuardianRing({ ratio, tone, label }: { ratio: number; tone: string; label: string }) {
+  const normalized = Math.max(0, Math.min(1, ratio));
+  const circumference = 2 * Math.PI * 34;
+  return (
+    <View style={styles.aiGuardianRingWrap}>
+      <Svg width={86} height={86} viewBox="0 0 86 86">
+        <Circle cx="43" cy="43" r="34" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="7" />
+        <Circle
+          cx="43"
+          cy="43"
+          r="34"
+          fill="none"
+          stroke={tone}
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={circumference * (1 - normalized)}
+          rotation="-90"
+          origin="43, 43"
+        />
+      </Svg>
+      <View style={styles.aiGuardianRingCenter}>
+        <Text style={[styles.aiGuardianRingValue, { color: tone }]}>{Math.round(normalized * 100)}%</Text>
+        <Text style={styles.aiGuardianRingLabel}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
+function AiAnimatedBar({ ratio, tone }: { ratio: number; tone: string }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const normalized = Math.max(0, Math.min(1, ratio));
+  useEffect(() => {
+    Animated.spring(progress, { toValue: normalized, damping: 18, stiffness: 130, mass: 0.8, useNativeDriver: true }).start();
+  }, [normalized, progress]);
+  return (
+    <View style={styles.aiAnimatedBarTrack}>
+      <Animated.View style={[styles.aiAnimatedBarFill, { backgroundColor: tone, transform: [{ scaleX: progress }] }]} />
+    </View>
+  );
+}
+
+function tradeVisionAnalysisKey(imageUri: string, imageBase64: string, question: string) {
+  return hashLocalAiInput({ imageUri, imageBase64, question: question.trim().toLowerCase() });
+}
+
+function TradeVisionCoachSection({
+  userId,
+  journalContext,
+}: {
+  userId: string | null;
+  journalContext?: Record<string, unknown>;
+}) {
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState("");
+  const [imageMimeType, setImageMimeType] = useState("image/jpeg");
+  const [question, setQuestion] = useState("");
+  const [used, setUsed] = useState(0);
+  const [uiState, setUiState] = useState<TradeVisionUiState>("empty");
+  const [message, setMessage] = useState("");
+  const [analysis, setAnalysis] = useState<AITradeVisionReview | null>(null);
+  const [openDetail, setOpenDetail] = useState<TradeVisionDetail | null>(null);
+  const [thinkingStep, setThinkingStep] = useState(0);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
+  const [privacyDisclosureOpen, setPrivacyDisclosureOpen] = useState(false);
+  const [pendingImageSource, setPendingImageSource] = useState<"camera" | "library" | null>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const limitReached = used >= TRADE_VISION_MONTHLY_LIMIT;
+  const canAnalyze = !!imageUri && !!imageBase64 && !!question.trim() && !limitReached && uiState !== "loading";
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(monthlyUsageStorageKey(TRADE_VISION_USAGE_KEY, userId)).then((raw) => {
+      if (!mounted) return;
+      const count = Number(raw || "0");
+      const nextUsed = Number.isFinite(count) ? count : 0;
+      setUsed(nextUsed);
+      if (nextUsed >= TRADE_VISION_MONTHLY_LIMIT) {
+        setUiState("limit_reached");
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    let mounted = true;
+    void getTradeVisionPrivacyAcknowledgement().then((acknowledgement) => {
+      if (mounted) setPrivacyAcknowledged(Boolean(acknowledgement));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (uiState !== "loading") {
+      progressAnim.stopAnimation();
+      progressAnim.setValue(0);
+      return;
+    }
+    setThinkingStep(0);
+    const progress = Animated.loop(
+      Animated.sequence([
+        Animated.timing(progressAnim, { toValue: 1, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(progressAnim, { toValue: 0, duration: 500, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      ]),
+    );
+    progress.start();
+    const statusTimer = setInterval(() => {
+      setThinkingStep((prev) => (prev + 1) % TRADE_VISION_THINKING_STEPS.length);
+    }, 520);
+    return () => {
+      clearInterval(statusTimer);
+      progress.stop();
+    };
+  }, [progressAnim, uiState]);
+
+  const pickTradeVisionImage = async (source: "camera" | "library" = "library") => {
+    if (limitReached) {
+      setUiState("limit_reached");
+      return;
+    }
+    try {
+      const permission =
+        source === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setUiState("error");
+        setMessage(source === "camera" ? t("cameraPermissionNeeded") : t("photoPermissionNeeded"));
+        return;
+      }
+      const pickerOptions = { quality: 0.58, allowsEditing: false, base64: false, exif: false } as const;
+      const result =
+        source === "camera"
+          ? await ImagePicker.launchCameraAsync(pickerOptions)
+          : await ImagePicker.launchImageLibraryAsync(pickerOptions);
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) {
+        setUiState("error");
+        setMessage("Could not prepare that image for AI review. Try a JPG, PNG, or WebP screenshot.");
+        return;
+      }
+      // Re-encoding a bounded JPEG copy prevents the original filename and picker metadata from being uploaded.
+      // Only the processed image's pixels, JPEG mime type, user question, and reduced journal metrics are sent.
+      const processed = await manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1600 } }],
+        { base64: true, compress: 0.72, format: SaveFormat.JPEG },
+      );
+      if (!processed.base64 || processed.base64.length > 2_400_000) {
+        setUiState("error");
+        setMessage("That image is too large for a private AI review. Crop it to the chart area and try again.");
+        return;
+      }
+      setImageUri(processed.uri);
+      setImageBase64(processed.base64);
+      setImageMimeType("image/jpeg");
+      setAnalysis(null);
+      setOpenDetail(null);
+      setUiState("image_selected");
+      setMessage("");
+    } catch {
+      setUiState("error");
+      setMessage("Could not load that screenshot. Try a JPG, PNG, or WebP image.");
+    }
+  };
+
+  const requestTradeVisionImage = (source: "camera" | "library") => {
+    if (privacyAcknowledged) {
+      void pickTradeVisionImage(source);
+      return;
+    }
+    setPendingImageSource(source);
+    setPrivacyDisclosureOpen(true);
+  };
+
+  const continueWithPrivacyAcknowledgement = async () => {
+    const source = pendingImageSource;
+    if (!source) return;
+    await acknowledgeTradeVisionPrivacy("trade_vision");
+    setPrivacyAcknowledged(true);
+    setPrivacyDisclosureOpen(false);
+    setPendingImageSource(null);
+    void pickTradeVisionImage(source);
+  };
+
+  const cancelPrivacyDisclosure = () => {
+    setPrivacyDisclosureOpen(false);
+    setPendingImageSource(null);
+  };
+
+  const selectPrompt = (prompt: string) => {
+    setQuestion(prompt);
+    if (imageUri && !limitReached) setUiState("image_selected");
+    setMessage("");
+  };
+
+  const handleAnalyze = async () => {
+    if (limitReached) {
+      setUiState("limit_reached");
+      return;
+    }
+    if (!canAnalyze) return;
+    lightHaptic();
+    setUiState("loading");
+    setMessage("");
+    const analysisKey = tradeVisionAnalysisKey(imageUri, imageBase64, question);
+    try {
+      const cacheKey = localAiCacheKey("trade-vision", userId, analysisKey);
+      const cached = await readLocalAiResponse<AITradeVisionReview>(cacheKey);
+      if (cached) {
+        setAnalysis(cached);
+        setMessage("Showing cached review for this screenshot and question.");
+        setUiState("result");
+        successHaptic();
+        return;
+      }
+      const response = await fetchAITradeVisionReview({
+        question: question.trim(),
+        imageBase64,
+        imageMimeType,
+        journalContext: {
+          tradeCount: journalContext?.tradeCount ?? null,
+          winRate: journalContext?.winRate ?? null,
+          profitFactor: journalContext?.profitFactor ?? null,
+          expectancy: journalContext?.expectancy ?? null,
+          averageLoss: journalContext?.averageLoss ?? null,
+          maxDrawdown: journalContext?.maxDrawdown ?? null,
+          revengeRiskDetected: (journalContext?.revengeRisk as { detected?: unknown } | undefined)?.detected === true,
+          revengeRiskSeverity: (journalContext?.revengeRisk as { severity?: unknown } | undefined)?.severity ?? null,
+        },
+      });
+      if (response.usedFallback || response.providerStatus === "local_fallback" || response.providerStatus === "free_preview") {
+        setUiState("error");
+        setMessage(response.message || "AI Trade Analysis is unavailable right now. No review was used.");
+        warningHaptic();
+        return;
+      }
+      setAnalysis(response.data);
+      await writeLocalAiResponse(cacheKey, response.data, TRADE_VISION_CACHE_TTL_MS);
+      const nextUsed = await incrementMonthlyUsageCount(TRADE_VISION_USAGE_KEY, userId);
+      setUsed(nextUsed);
+      setUiState("result");
+      successHaptic();
+      trackEvent("ai_trade_vision_review_completed", {
+        provider_status: response.providerStatus,
+        cached: false,
+      });
+    } catch {
+      logger.error(new Error("Trade Vision review failed"), { feature: "ai_trade_analysis", action: "review_failed" });
+      setUiState("error");
+      setMessage("AI Trade Analysis could not review this image. No review was used.");
+      warningHaptic();
+    }
+  };
+
+  const resetQuestion = () => {
+    setQuestion("");
+    setMessage("");
+    setAnalysis(null);
+    setOpenDetail(null);
+    setUiState(imageUri && !limitReached ? "image_selected" : limitReached ? "limit_reached" : "empty");
+  };
+
+  const progressScale = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.18, 1],
+  });
+  const resultDetails: { key: TradeVisionDetail; label: string; items: string[] }[] = analysis
+    ? [
+        { key: "entry", label: "Entry", items: [analysis.entryQuality] },
+        { key: "stop", label: "Stop", items: [analysis.stopPlacementFeedback] },
+        { key: "rr", label: "Risk / Reward", items: [analysis.riskRewardFeedback] },
+        { key: "mistake", label: "Mistake", items: [analysis.mistakeDetected] },
+        { key: "alternative", label: "Alternative", items: [analysis.bestAlternativeAction] },
+        { key: "evidence", label: "Evidence", items: analysis.evidenceFromImage },
+        { key: "journal", label: "Journal", items: [analysis.journalBehaviorConnection] },
+      ]
+    : [];
+
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>AI TRADE ANALYSIS</Text>
+          <Text style={styles.terminalSectionTitle}>AI Trade Analysis</Text>
+          <Text style={styles.terminalSub}>Upload a trade and ask what happened.</Text>
+        </View>
+        <View style={{ alignItems: "flex-end", gap: 5 }}>
+          <AiIntelligencePulse tone={C.purple} />
+          <Text style={styles.tradeMetaChip}>{used}/{TRADE_VISION_MONTHLY_LIMIT} REVIEWS</Text>
+          <Text style={styles.terminalSmallLabel}>Uses 1 AI review</Text>
+        </View>
+      </View>
+
+      {limitReached ? (
+        <WarningCard
+          title={`You used ${TRADE_VISION_MONTHLY_LIMIT}/${TRADE_VISION_MONTHLY_LIMIT} Trade Vision reviews this month`}
+          body="Trade Vision reviews reset next month. No AI call will run while the monthly limit is reached."
+        />
+      ) : null}
+
+      {imageUri ? (
+        <View style={styles.tradeVisionSelectedArea}>
+          <Image source={{ uri: imageUri }} style={styles.tradeVisionPreview} resizeMode="cover" />
+          <AiImageScan active={uiState === "image_selected" || uiState === "loading"} />
+          <View style={styles.tradeVisionImageOverlay}>
+            <Check size={12} color={C.green} strokeWidth={3} />
+            <Text style={styles.tradeVisionImageBadge}>Ready</Text>
+          </View>
+          <View style={styles.tradeVisionQuestionBox}>
+            <Text style={styles.terminalSmallLabel}>Ask Coach</Text>
+            <TextInput
+              value={question}
+              onChangeText={(value) => {
+                setQuestion(value);
+                if (!limitReached) setUiState("image_selected");
+                setMessage("");
+              }}
+              placeholder="Ask what really happened on this trade..."
+              placeholderTextColor={C.sub}
+              multiline
+              style={styles.tradeVisionInput}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.tradeVisionUploadHero}>
+          <View style={styles.tradeVisionIconOrb}>
+            <ImagePlus size={25} color={C.purple} strokeWidth={2.3} />
+          </View>
+          <Text style={styles.propCoachHeadline}>Select one trade screenshot</Text>
+          <Text style={[styles.terminalSub, { textAlign: "center" }]}>Chart · DOM · Footprint · Execution</Text>
+          <AiFlowRail nodes={["Entry", "Stop", "Risk", "Reward", "Execution", "Psychology", "Discipline"]} />
+        </View>
+      )}
+
+      <View style={styles.tradeVisionResultActions}>
+        <Pressable onPress={() => requestTradeVisionImage("camera")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
+          <Text style={styles.secondaryText}>Take Photo</Text>
+        </Pressable>
+        <Pressable onPress={() => requestTradeVisionImage("library")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
+          <Text style={styles.secondaryText}>Upload Screenshot</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tradeVisionChipScroller} contentContainerStyle={styles.tradeVisionChipRow}>
+        {TRADE_VISION_PROMPTS.map((prompt) => {
+          const active = question === prompt.question;
+          return (
+            <Pressable key={prompt.question} onPress={() => selectPrompt(prompt.question)} style={[styles.tradeVisionChip, active && styles.tradeVisionChipActive]}>
+              <Text style={[styles.tradeVisionChipText, active && styles.tradeVisionChipTextActive]}>{prompt.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {uiState === "loading" ? (
+        <View style={styles.tradeVisionStatusBox}>
+          <View style={styles.tradeVisionThinkingHeader}>
+            <BrainCircuit size={18} color={C.green} strokeWidth={2.3} />
+            <Text style={styles.terminalSmallLabel}>Trade Vision is thinking</Text>
+          </View>
+          <View style={styles.tradeVisionProgressTrack}>
+            <Animated.View style={[styles.tradeVisionProgressFill, { transform: [{ scaleX: progressScale }] }]} />
+          </View>
+          <Text style={styles.tradeVisionThinkingText}>{TRADE_VISION_THINKING_STEPS[thinkingStep]}</Text>
+        </View>
+      ) : null}
+
+      {uiState === "result" && analysis ? (
+        <View style={styles.tradeVisionReadyCard}>
+          <View style={styles.tradeVisionReadyTop}>
+            <View style={styles.tradeVisionIconOrbSmall}>
+              <Sparkles size={18} color={C.green} strokeWidth={2.4} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.propCoachHeadline}>Trade review complete</Text>
+              <Text style={styles.terminalSub}>{message || `Confidence: ${analysis.confidence}`}</Text>
+            </View>
+          </View>
+          <MetricPillRow
+            items={[
+              { label: "Verdict", value: truncateCoachLine(analysis.verdict, 42), tone: "green" },
+              ...(analysis.confidence ? [{ label: "Confidence", value: analysis.confidence, tone: String(analysis.confidence).toLowerCase().includes("high") ? "green" as const : "purple" as const }] : []),
+            ]}
+          />
+          <View style={styles.tradeVisionNextAction}>
+            <Text style={styles.terminalSmallLabel}>NEXT ACTION</Text>
+            <Text style={styles.coachCompactValue}>{analysis.bestAlternativeAction}</Text>
+          </View>
+          <View style={styles.tradeVisionDetailRail}>
+            {resultDetails.map((detail) => {
+              const active = openDetail === detail.key;
+              return (
+                <Pressable key={detail.key} onPress={() => setOpenDetail(active ? null : detail.key)} style={[styles.tradeVisionChip, active && styles.tradeVisionChipActive]}>
+                  <Text style={[styles.tradeVisionChipText, active && styles.tradeVisionChipTextActive]}>{detail.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {openDetail ? (
+            <AiOsTextBlock
+              title={resultDetails.find((detail) => detail.key === openDetail)?.label || "Details"}
+              items={resultDetails.find((detail) => detail.key === openDetail)?.items || []}
+            />
+          ) : null}
+          <Text style={styles.coachCompactSub}>{analysis.coachNote}</Text>
+          <View style={styles.tradeVisionResultActions}>
+            <Pressable onPress={() => requestTradeVisionImage("library")} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton]}>
+              <Text style={styles.secondaryText}>Change Screenshot</Text>
+            </Pressable>
+            <Pressable onPress={resetQuestion} style={[styles.secondaryBig, styles.tradeVisionResultButton]}>
+              <Text style={styles.secondaryText}>Ask Another Question</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.terminalSub}>{analysis.educationalDisclaimer}</Text>
+        </View>
+      ) : null}
+
+      {uiState === "error" && message ? (
+        <WarningCard title="AI Trade Analysis unavailable" body={message} />
+      ) : null}
+
+      <Pressable
+        disabled={!canAnalyze}
+        onPress={handleAnalyze}
+        style={[styles.primaryBig, !canAnalyze && styles.disabledBtn]}
+      >
+        <AiIntelligencePulse tone={canAnalyze ? C.green : C.sub} />
+        <Text style={styles.primaryText}>{uiState === "loading" ? "Analyzing Trade" : "Analyze Trade"}</Text>
+      </Pressable>
+      <Text style={styles.terminalSub}>Your selected chart image is sent to an external AI service only after Analyze. It is not used for Agent-007 or product analytics.</Text>
+
+      <Modal visible={privacyDisclosureOpen} transparent animationType="fade" onRequestClose={cancelPrivacyDisclosure}>
+        <View style={styles.valueModalBackdrop}>
+          <GlassCard style={styles.valueModalCard} intensity={52}>
+            <Text style={styles.valueModalEyebrow}>TRADE VISION PRIVACY</Text>
+            <Text style={styles.valueModalTitle}>Before you choose an image</Text>
+            <Text style={styles.valueModalText}>Your selected chart image will leave your device and be sent to an external AI service for analysis. It may contain information visible in the screenshot.</Text>
+            <Text style={styles.valueModalText}>Crop or remove personal, account, brokerage, or other sensitive information first. The image is not sent to Agent-007 or general product analytics.</Text>
+            <Text style={styles.valueModalText}>External AI services process the image under their own terms. Read our Privacy Policy for the current processing details.</Text>
+            <Pressable onPress={() => void openLegalUrl(PRIVACY_POLICY_URL, "Privacy Policy")} style={styles.legalRow}>
+              <Text style={styles.legalText}>Read Privacy Policy</Text>
+              <Text style={styles.legalArrow}>›</Text>
+            </Pressable>
+            <View style={styles.tradeVisionResultActions}>
+              <Pressable onPress={cancelPrivacyDisclosure} style={[styles.secondaryBig, styles.tradeVisionResultButton]}>
+                <Text style={styles.secondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={() => void continueWithPrivacyAcknowledgement()} style={[styles.primaryBig, styles.tradeVisionResultButton]}>
+                <Text style={styles.primaryText}>Continue</Text>
+              </Pressable>
+            </View>
+          </GlassCard>
+        </View>
+      </Modal>
+    </TerminalGlassCard>
+  );
+}
+
+function aiOsUniqueList(items: string[], limit = 4) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of items) {
+    const clean = item.trim();
+    const key = clean.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(clean);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function AiOsTextBlock({ title, items }: { title: string; items: string[] }) {
+  const visible = aiOsUniqueList(items, 4);
+  if (!visible.length) return null;
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 6 }}>
+      <Text style={styles.terminalSmallLabel}>{title}</Text>
+      {visible.map((item) => (
+        <Text key={`${title}-${item}`} style={styles.aiBulletText}>• {item}</Text>
+      ))}
+    </View>
+  );
+}
+
+function AiOperatingSystemTradingDnaSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const dna = operatingSystem.tradingDna;
+  const profile = dna.profile;
+  const lowConfidence = aiOsStateIsLow(dna.state) || !profile || !profile.enoughData;
+  return (
+    <TerminalGlassCard>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>TRADING DNA</Text>
+          <Text style={styles.terminalSectionTitle}>What type of trader am I?</Text>
+          <Text style={styles.terminalSub}>
+            {lowConfidence
+              ? dna.emptyState?.message || "Not enough journal history yet. Trading DNA needs a larger sample before classifying your style."
+              : profile.summary}
+          </Text>
+        </View>
+        <AppleRing
+          label="DNA"
+          value={lowConfidence ? Math.max(8, operatingSystem.sample.tradeCount * 10) : profile?.metrics.consistency || 0}
+          display={aiOsConfidenceLabel(operatingSystem.confidence)}
+          size={104}
+          color={lowConfidence ? C.purple : C.green}
+        />
+      </View>
+      <MetricPillRow
+        items={[
+          { label: "Trader Type", value: profile?.traderType || "Building", tone: lowConfidence ? "grey" : "green" },
+          { label: "Sample", value: `${operatingSystem.sample.tradeCount}T / ${operatingSystem.sample.tradingDays}D`, tone: operatingSystem.sample.tradeCount >= 10 ? "green" : "grey" },
+          { label: "Best Symbol", value: profile?.metrics.bestSymbol || "Need data", tone: profile?.metrics.bestSymbol && profile.metrics.bestSymbol !== "Need data" ? "green" : "grey" },
+          { label: "Best Session", value: profile?.metrics.bestSession || "Need data", tone: profile?.metrics.bestSession && profile.metrics.bestSession !== "Need data" ? "purple" : "grey" },
+          { label: "Confidence", value: aiOsConfidenceLabel(operatingSystem.confidence), tone: lowConfidence ? "purple" : "green" },
+        ]}
+      />
+      {lowConfidence ? (
+        <WarningCard
+          title="Not enough journal history yet"
+          body={dna.emptyState?.message || "Log at least 10 trades with symbols, sessions, setup tags, and notes before using Trading DNA as a decision guide."}
+        />
+      ) : profile ? (
+        <View style={{ gap: 10, marginTop: 14 }}>
+          <RuleImpactCard title="Risk Profile" rule={profile.metrics.drawdownBehavior} evidence={`Recovery: ${profile.metrics.recoveryAfterLosses} · Emotional behavior: ${profile.metrics.emotionalBehavior}`} />
+          <AiOsTextBlock title="Ideal Conditions" items={profile.bestConditions} />
+          <AiOsTextBlock title="Worst Conditions" items={profile.dangerZones} />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AiOsTextBlock title="Strengths" items={profile.strengths} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <AiOsTextBlock title="Weaknesses" items={profile.weaknesses} />
+            </View>
+          </View>
+        </View>
+      ) : null}
+    </TerminalGlassCard>
+  );
+}
+
+function AiOperatingSystemEvidenceSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const evidence = operatingSystem.evidence;
+  const lowConfidence = aiOsStateIsLow(evidence.state);
+  const metrics = aiOsUniqueList(
+    evidence.metrics.filter((metric) => !["trade_count", "net_pnl", "win_rate"].includes(metric)),
+    8,
+  );
+  const sections = [
+    { title: "Session Impact", items: evidence.sessionImpact },
+    { title: "Weekday Impact", items: evidence.weekdayImpact },
+    { title: "Instrument Impact", items: evidence.instrumentImpact },
+    { title: "Setup Impact", items: evidence.setupImpact },
+    { title: "Behavior Patterns", items: evidence.behaviorPatterns },
+  ].filter((section) => aiOsUniqueList(section.items, 3).length > 0);
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>EVIDENCE</Text>
+      <Text style={styles.terminalSectionTitle}>Why does AI say this?</Text>
+      <Text style={styles.terminalSub}>
+        {lowConfidence
+          ? evidence.emptyState?.message || "Evidence is limited until more saved trades are available."
+          : "Compact proof from saved journal trades, grouped by what actually moved your results."}
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={evidence.emptyState?.title || "Evidence sample is weak"}
+          body={evidence.emptyState?.message || "Add more saved trades across multiple sessions before relying on detailed evidence breakdowns."}
+        />
+      ) : (
+        <View style={{ gap: 10, marginTop: 14 }}>
+          {sections.map((section) => (
+            <AiOsTextBlock key={section.title} title={section.title} items={section.items} />
+          ))}
+          {metrics.length ? (
+            <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(150,255,0,0.20)", backgroundColor: "rgba(150,255,0,0.045)", padding: 13, gap: 8 }}>
+              <Text style={styles.terminalSmallLabel}>Metrics Tied To Recommendations</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {metrics.map((metric) => (
+                  <Text key={metric} style={styles.tradeMetaChip}>{metric.replace(/_/g, " ").toUpperCase()}</Text>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {!sections.length && !metrics.length ? (
+            <Text style={styles.terminalSub}>No compact evidence groups yet. Add more trades with symbols, sessions, setup tags, and notes.</Text>
+          ) : null}
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+type AiOsPropMode = keyof AiOperatingSystem["propFirm"]["recommendations"];
+
+const aiOsPropModeLabels: Record<AiOsPropMode, string> = {
+  evaluation: "Evaluation",
+  funded: "Funded",
+  live: "Live",
+  consistency: "Consistency",
+  payout_protection: "Payout Protection",
+};
+
+const aiOsPropModeQuestions: Record<AiOsPropMode, string> = {
+  evaluation: "Pass phase objective, target progress, drawdown left, and today's max-loss plan.",
+  funded: "Protect the account, lower rule-violation risk, and preserve payout safety.",
+  live: "Compound safely with a defined risk budget and drawdown protection.",
+  consistency: "Control trade count, size consistency, rule adherence, and outlier days.",
+  payout_protection: "Reduce risk near payout, avoid trailing drawdown traps, and stop after rule breaks.",
+};
+
+const aiOsPropModeMetricLabels: Record<AiOsPropMode, string[]> = {
+  evaluation: ["Pass objective", "Current progress", "Remaining target", "Daily drawdown left", "Max drawdown left", "Suggested risk", "Today's goal", "Maximum loss"],
+  funded: ["Account protection", "Rule violation risk", "Daily risk cap", "Payout safety"],
+  live: ["Compounding safely", "Risk budget", "Suggested risk %", "Monthly target", "Drawdown protection"],
+  consistency: ["Trade count control", "Average size consistency", "Rule adherence", "Avoid outlier days"],
+  payout_protection: ["Payout eligibility", "Reduced size", "Trailing drawdown traps", "Stop after rule breaks"],
+};
+
+function aiOsEvidenceValue(evidence: string[], pattern: RegExp) {
+  return evidence.find((item) => pattern.test(item)) || null;
+}
+
+type AiOsPropTool = "limits" | "whatif" | "emergency" | "green" | "recovery";
+
+type PropAggression = "safe" | "balanced" | "aggressive";
+
+const PROP_COACH_FIRMS = ["Topstep", "Apex", "Take Profit Trader", "Lucid", "Other"] as const;
+const PROP_COACH_ACCOUNT_SIZES = [25000, 50000, 100000, 150000, 250000];
+const PROP_RULE_REVIEW_DAYS = 14;
+
+function propRuleNeedsReview(template: RiskTemplate | null) {
+  if (!template?.lastVerified) return true;
+  const verified = new Date(template.lastVerified).getTime();
+  if (!Number.isFinite(verified)) return true;
+  return Date.now() - verified > PROP_RULE_REVIEW_DAYS * 24 * 60 * 60 * 1000;
+}
+
+function propFirmMatches(template: RiskTemplate, firm: string) {
+  if (firm === "Other") return true;
+  const haystack = `${template.firm} ${template.company} ${template.label}`.toLowerCase();
+  return haystack.includes(firm.toLowerCase().replace(/\s+/g, "")) || haystack.includes(firm.toLowerCase());
+}
+
+function propAggressionLabel(aggression: PropAggression) {
+  if (aggression === "safe") return "Micros, lower daily stop, highest selectivity.";
+  if (aggression === "aggressive") return "Faster path, higher violation risk, strict stop required.";
+  return "Moderate size, controlled RR, avoid overtrading.";
+}
+
+function AiOperatingSystemPropFirmSection({
+  operatingSystem,
+  snapshot,
+  passProbability,
+  stats,
+  trades,
+  revengeTrading,
+}: {
+  operatingSystem: AiOperatingSystem;
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
+  passProbability: PassProbabilityResult;
+  stats: ReturnType<typeof calcStats>;
+  trades: Trade[];
+  revengeTrading: RevengeTradingResult;
+}) {
+  const propFirm = operatingSystem.propFirm;
+  const [mode, setMode] = useState<AiOsPropMode>(propFirm.mode);
+  const [activeTool, setActiveTool] = useState<AiOsPropTool>("limits");
+  const [plannedContracts, setPlannedContracts] = useState("1");
+  const [hypotheticalLoss, setHypotheticalLoss] = useState("");
+  const [dailyTarget, setDailyTarget] = useState("");
+  const [riskMathOpen, setRiskMathOpen] = useState(false);
+  const recommendation = propFirm.recommendations[mode];
+  const lowConfidence = propFirm.state === "empty" || propFirm.state === "low_confidence";
+  const notConfigured = propFirm.state === "not_configured" || !snapshot;
+  const evidence = aiOsUniqueList([...(recommendation?.evidence || []), ...propFirm.evidence], 6);
+  const status = aiOsEvidenceValue(evidence, /^Status/i) || (notConfigured ? "No prop firm template selected" : "Status needs synced prop data");
+  const dailyBuffer = aiOsEvidenceValue(evidence, /Daily buffer/i) || "Daily drawdown left needs prop data";
+  const accountBuffer = aiOsEvidenceValue(evidence, /Account buffer|Drawdown/i) || "Max drawdown left needs prop data";
+  const probability = aiOsEvidenceValue(evidence, /Pass probability/i) || "Probability needs more trade history";
+  const contracts = Math.max(0, Math.round(Number(plannedContracts) || 0));
+  const nextLoss = Math.max(0, Math.abs(Number(hypotheticalLoss) || Math.abs(stats.avgLoss || 0)));
+  const target = Math.max(0, Number(dailyTarget) || 0);
+  const projectedDaily = snapshot ? Math.max(0, snapshot.dailyRemaining - nextLoss) : 0;
+  const projectedAccount = snapshot ? Math.max(0, snapshot.accountRemaining - nextLoss) : 0;
+  const dailyRiskRatio = snapshot ? projectedDaily / Math.max(1, snapshot.template.dailyLossLimit) : 0;
+  const accountRiskRatio = snapshot ? projectedAccount / Math.max(1, snapshot.template.maxLossLimit) : 0;
+  const revengeRiskScore = revengeTrading.severity === "HIGH" ? 85 : revengeTrading.severity === "MEDIUM" ? 60 : 20;
+  const riskStatus: "safe" | "caution" | "danger" =
+    !snapshot || projectedDaily <= 0 || projectedAccount <= 0 || revengeRiskScore >= 85
+      ? "danger"
+      : dailyRiskRatio < 0.35 || accountRiskRatio < 0.35 || revengeRiskScore >= 60 || stats.exp <= 0
+        ? "caution"
+        : "safe";
+  const violationRisk = riskStatus === "danger" ? "High" : riskStatus === "caution" ? "Medium" : "Low";
+  const maxSafeLoss = snapshot ? Math.floor(Math.max(0, Math.min(snapshot.dailyRemaining, snapshot.accountRemaining) * 0.35)) : 0;
+  const suggestedContracts = snapshot?.engine?.contractRecommendation.recommended ?? (riskStatus === "safe" ? Math.max(1, contracts) : 0);
+  const safeDailyTarget = snapshot ? Math.max(0, Math.min(target || snapshot.remainingToPass, maxSafeLoss || snapshot.dailyRemaining)) : 0;
+  const suggestedAction =
+    riskStatus === "danger"
+      ? "Stop trading and protect the account."
+      : riskStatus === "caution"
+        ? "Reduce size and only take checklist-perfect setups."
+        : "Trade the plan, keep size stable, and protect green progress.";
+  const toolLabels: { key: AiOsPropTool; label: string }[] = [
+    { key: "limits", label: "Generate Today's Limits" },
+    { key: "whatif", label: "What-if Simulator" },
+    { key: "emergency", label: "Emergency Mode" },
+    { key: "green", label: "Green Day Lock" },
+    { key: "recovery", label: "Recovery Plan" },
+  ];
+  const modeMetrics = aiOsPropModeMetricLabels[mode].slice(0, 4).map((label, index) => {
+    const values = [status, probability, dailyBuffer, accountBuffer];
+    return { label, value: values[index] || "Needs prop data", tone: index === 0 ? "purple" as const : "grey" as const };
+  });
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>PROP FIRM COACH</Text>
+      <Text style={styles.terminalSectionTitle}>How do I pass/protect my account?</Text>
+      <Text style={styles.terminalSub}>
+        {notConfigured
+          ? "Select a synced prop firm template to unlock mode-based prop coaching."
+          : lowConfidence
+            ? propFirm.emptyState?.message || "Prop coaching needs more journal history before making strong recommendations."
+            : aiOsPropModeQuestions[mode]}
+      </Text>
+      <View style={styles.propModeRail}>
+        {(Object.keys(aiOsPropModeLabels) as AiOsPropMode[]).map((item) => {
+          const active = item === mode;
+          return (
+            <Pressable key={item} onPress={() => setMode(item)} style={[styles.propModeChip, active && styles.propModeChipActive]}>
+              <Text style={[styles.propModeChipText, active && styles.propModeChipTextActive]}>{aiOsPropModeLabels[item]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {notConfigured || lowConfidence || !recommendation ? (
+        <WarningCard
+          title={notConfigured ? "Prop account setup needed" : propFirm.emptyState?.title || "Low-confidence prop sample"}
+          body={notConfigured ? "Prop Firm Coach will stay in setup mode until a synced prop template and journal sample are available." : propFirm.emptyState?.message || "Add more saved trades before relying on mode-specific prop coaching."}
+        />
+      ) : (
+        <View style={{ gap: 12, marginTop: 14 }}>
+          <MetricPillRow items={modeMetrics} />
+          <View style={styles.propCoachInteractivePanel}>
+            <View style={styles.terminalHeaderRow}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.terminalSmallLabel}>ACCOUNT MENTOR</Text>
+                <Text style={styles.propCoachHeadline}>{riskStatus === "danger" ? "Protect the account now" : riskStatus === "caution" ? "Trade in protection mode" : "Account is clear for controlled execution"}</Text>
+              </View>
+              <Text style={[styles.tradeMetaChip, riskStatus === "danger" ? { color: C.red, borderColor: "rgba(255,91,91,0.38)", backgroundColor: C.redSoft } : riskStatus === "caution" ? { color: C.yellow, borderColor: "rgba(255,204,0,0.38)", backgroundColor: C.yellowSoft } : null]}>
+                {riskStatus.toUpperCase()}
+              </Text>
+            </View>
+            <MetricPillRow
+              items={[
+                { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+                { label: "Account Buffer", value: moneyCompact(snapshot.accountRemaining), tone: snapshot.accountRemaining > 0 ? "green" : "red" },
+                { label: "Max Safe Loss", value: moneyCompact(maxSafeLoss), tone: maxSafeLoss > 0 ? "purple" : "red" },
+                { label: "Suggested Contracts", value: `${suggestedContracts}`, tone: suggestedContracts > 0 ? "green" : "red" },
+              ]}
+            />
+            <View style={styles.coachConsoleActionRow}>
+              {toolLabels.map((tool) => {
+                const active = activeTool === tool.key;
+                return (
+                  <Pressable key={tool.key} onPress={() => setActiveTool(tool.key)} style={[styles.coachConsoleActionChip, active && styles.coachConsoleActionChipActive]}>
+                    <Text style={[styles.coachConsoleActionText, active && styles.coachConsoleActionTextActive]}>{tool.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {activeTool === "whatif" ? (
+              <View style={styles.propSimulatorBox}>
+                <View style={styles.propSimulatorInputRow}>
+                  <View style={styles.propSimulatorInputWrap}>
+                    <Text style={styles.terminalSmallLabel}>Contracts</Text>
+                    <TextInput value={plannedContracts} onChangeText={setPlannedContracts} keyboardType="number-pad" placeholder="1" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                  </View>
+                  <View style={styles.propSimulatorInputWrap}>
+                    <Text style={styles.terminalSmallLabel}>Next Loss</Text>
+                    <TextInput value={hypotheticalLoss} onChangeText={setHypotheticalLoss} keyboardType="decimal-pad" placeholder={moneyCompact(Math.abs(stats.avgLoss || 0))} placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                  </View>
+                </View>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Optional Daily Target</Text>
+                  <TextInput value={dailyTarget} onChangeText={setDailyTarget} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+              </View>
+            ) : null}
+            <View style={styles.propSimulatorResult}>
+              <Text style={styles.terminalSmallLabel}>
+                {activeTool === "limits" ? "Today's Limits" : activeTool === "whatif" ? "What-if Result" : activeTool === "emergency" ? "Emergency Mode" : activeTool === "green" ? "Green Day Lock" : "Recovery Plan"}
+              </Text>
+              <MetricPillRow
+                items={[
+                  { label: "Projected Daily", value: moneyCompact(activeTool === "whatif" ? projectedDaily : snapshot.dailyRemaining), tone: projectedDaily > 0 ? "green" : "red" },
+                  { label: "Projected Account", value: moneyCompact(activeTool === "whatif" ? projectedAccount : snapshot.accountRemaining), tone: projectedAccount > 0 ? "green" : "red" },
+                  { label: "Violation Risk", value: violationRisk, tone: riskStatus === "danger" ? "red" : riskStatus === "caution" ? "purple" : "green" },
+                  { label: "Safe Target", value: moneyCompact(safeDailyTarget), tone: safeDailyTarget > 0 ? "green" : "grey" },
+                ]}
+              />
+              <Text style={styles.terminalSub}>
+                {activeTool === "emergency"
+                  ? (riskStatus === "danger" ? "Stop trading. Review the last sequence before taking another trade." : "Emergency mode is not required, but keep a hard stop ready.")
+                  : activeTool === "green"
+                    ? "If you are green, lock progress by reducing size and stopping after one rule break."
+                    : activeTool === "recovery"
+                      ? `Recovery plan: cap size at ${Math.max(0, Math.min(suggestedContracts, contracts || suggestedContracts))} contracts and rebuild with clean journal entries.`
+                      : suggestedAction}
+              </Text>
+              <Pressable onPress={() => setRiskMathOpen((prev) => !prev)} style={styles.coachConsoleActionChip}>
+                <Text style={styles.coachConsoleActionText}>{riskMathOpen ? "Hide risk math" : "Show risk math"}</Text>
+              </Pressable>
+              {riskMathOpen ? (
+                <View style={styles.coachConsoleReveal}>
+                  <Text style={styles.aiBulletText}>• Daily buffer after hypothetical loss: {moneyCompact(projectedDaily)}</Text>
+                  <Text style={styles.aiBulletText}>• Account buffer after hypothetical loss: {moneyCompact(projectedAccount)}</Text>
+                  <Text style={styles.aiBulletText}>• Risk status uses daily/account buffer, expectancy, and revenge-risk severity.</Text>
+                  <Text style={styles.aiBulletText}>• Sample: {trades.length} trades · Win rate {stats.wr.toFixed(0)}% · Expectancy {moneyCompact(stats.exp)}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.propCoachAdviceCard}>
+            <Text style={styles.terminalSmallLabel}>{aiOsPropModeLabels[mode].toUpperCase()} MODE</Text>
+            <Text style={styles.propCoachHeadline}>{recommendation.title}</Text>
+            <Text style={styles.terminalSub}>{recommendation.action}</Text>
+          </View>
+          <AiOsTextBlock title="Mode Evidence" items={evidence} />
+          <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", backgroundColor: "rgba(255,255,255,0.035)", padding: 13, gap: 8 }}>
+            <Text style={styles.terminalSmallLabel}>Mode Focus</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {aiOsPropModeMetricLabels[mode].map((item) => (
+                <Text key={`${mode}-${item}`} style={styles.tradeMetaChip}>{item.toUpperCase()}</Text>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+function AiOperatingSystemGrowthSection({ operatingSystem }: { operatingSystem: AiOperatingSystem }) {
+  const growth = operatingSystem.growth;
+  const lowConfidence = aiOsStateIsLow(growth.state) || !growth.timeline;
+  const evidence = aiOsUniqueList(growth.evidence, 6);
+  const evidenceValue = (pattern: RegExp) => {
+    const match = aiOsEvidenceValue(evidence, pattern);
+    return match ? match.replace(pattern, "").replace(/^[:\s-]+/, "").trim() || match : "Needs more history";
+  };
+  const growthMetrics = [
+    { label: "Consistency", value: evidenceValue(/Consistency/i), tone: evidence.some((item) => /Consistency/i.test(item)) ? "green" as const : "grey" as const },
+    { label: "Rule Following", value: evidenceValue(/Rule|discipline|adherence/i), tone: evidence.some((item) => /Rule|discipline|adherence/i.test(item)) ? "purple" as const : "grey" as const },
+    { label: "Risk Control", value: evidenceValue(/Risk control/i), tone: evidence.some((item) => /Risk control/i.test(item)) ? "green" as const : "grey" as const },
+    { label: "Emotional Stability", value: evidenceValue(/Emotional|revenge|tilt/i), tone: evidence.some((item) => /Emotional|revenge|tilt/i.test(item)) ? "purple" as const : "grey" as const },
+    { label: "Execution Quality", value: growth.recommendation?.action || "Needs more history", tone: growth.recommendation ? "green" as const : "grey" as const },
+  ];
+  const timelineWindows = growth.timeline?.windows || [];
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>GROWTH</Text>
+      <Text style={styles.terminalSectionTitle}>Am I becoming a better trader?</Text>
+      <Text style={styles.terminalSub}>
+        {lowConfidence
+          ? growth.emptyState?.message || "Growth needs enough saved trades across time periods before comparing progress."
+          : "Progress is based on journal evidence and period-to-period behavior, not vanity badges."}
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={growth.emptyState?.title || "Not enough progress history"}
+          body={growth.emptyState?.message || "Keep saving trades with notes, mood, mistakes, and setups to unlock growth comparisons."}
+        />
+      ) : (
+        <View style={{ gap: 12, marginTop: 14 }}>
+          <MetricPillRow items={growthMetrics} />
+          {timelineWindows.length ? (
+            <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(150,255,0,0.20)", backgroundColor: "rgba(150,255,0,0.045)", padding: 13, gap: 8 }}>
+              <Text style={styles.terminalSmallLabel}>Comparison vs Previous Period</Text>
+              {timelineWindows.slice(0, 4).map((window) => (
+                <View key={window.label} style={styles.terminalHeaderRow}>
+                  <Text style={[styles.terminalSub, { flex: 1 }]}>{window.label}</Text>
+                  <Text style={[styles.metricPillValue, { color: window.improved ? C.green : C.red, fontSize: 16 }]}>
+                    {window.improved ? "+" : ""}{Math.round(window.delta)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {growth.recommendation ? (
+            <RuleImpactCard
+              title={growth.recommendation.title}
+              rule={growth.recommendation.action}
+              evidence={aiOsUniqueList(growth.recommendation.evidence, 3).join(" · ")}
+            />
+          ) : null}
+          <AiOsTextBlock title="Growth Evidence" items={evidence} />
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+type AiOsMarketActionId = AiOperatingSystem["marketAssistant"]["actions"][number]["id"];
+
+const aiOsMarketActionToCoachKey: Partial<Record<AiOsMarketActionId, keyof AIResultMap>> = {
+  summarize_today: "journalSummary",
+  risk_for_mes: "riskPredictor",
+  pre_market_plan: "dailyPlan",
+  prop_preparation: "dailyChallenge",
+};
+
+function AiOperatingSystemMarketAssistantSection({
+  operatingSystem,
+  aiBusy,
+  onAction,
+}: {
+  operatingSystem: AiOperatingSystem;
+  aiBusy: Record<keyof AIResultMap, boolean>;
+  onAction: (id: AiOsMarketActionId) => void;
+}) {
+  const assistant = operatingSystem.marketAssistant;
+  const lowConfidence = assistant.state === "empty" || assistant.state === "low_confidence";
+  const evidence = aiOsUniqueList(assistant.evidence, 4);
+
+  return (
+    <TerminalGlassCard>
+      <Text style={styles.terminalSmallLabel}>AI MARKET ASSISTANT</Text>
+      <Text style={styles.terminalSectionTitle}>What market help do I need right now?</Text>
+      <Text style={styles.terminalSub}>
+        One action hub for market and journal-assisted workflows. Existing AI actions keep their current payloads.
+      </Text>
+      {lowConfidence ? (
+        <WarningCard
+          title={assistant.state === "empty" ? "Journal evidence needed" : "Limited journal evidence"}
+          body="Journal-based actions stay cautious until more saved trades are available. Market-only actions can still be reviewed below."
+        />
+      ) : null}
+      <View style={{ gap: 10, marginTop: 14 }}>
+        {assistant.actions.map((action) => {
+          const coachKey = aiOsMarketActionToCoachKey[action.id];
+          const wired = Boolean(coachKey);
+          const disabled = !action.enabled || !wired || (coachKey ? aiBusy[coachKey] : false);
+          const status = !action.enabled ? "Needs evidence" : wired ? (coachKey && aiBusy[coachKey] ? "Working" : "Ready") : "View below";
+          return (
+            <Pressable
+              key={action.id}
+              disabled={disabled}
+              onPress={() => onAction(action.id)}
+              style={{
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: wired && action.enabled ? "rgba(150,255,0,0.24)" : "rgba(255,255,255,0.10)",
+                backgroundColor: wired && action.enabled ? "rgba(150,255,0,0.045)" : "rgba(255,255,255,0.035)",
+                padding: 13,
+                opacity: disabled && wired ? 0.62 : 1,
+              }}
+            >
+              <View style={styles.terminalHeaderRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.propCoachHeadline}>{action.label}</Text>
+                  <Text style={styles.terminalSub}>
+                    {action.source.replace(/_/g, " ").toUpperCase()} · {action.requiresJournalEvidence ? "Uses journal evidence" : "Market context"}
+                  </Text>
+                </View>
+                <Text style={[styles.tradeMetaChip, !wired || !action.enabled ? { color: C.sub, borderColor: "rgba(255,255,255,0.14)", backgroundColor: "rgba(255,255,255,0.04)" } : null]}>
+                  {status.toUpperCase()}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      {evidence.length ? (
+        <View style={{ marginTop: 14 }}>
+          <AiOsTextBlock title="Assistant Evidence" items={evidence} />
+        </View>
+      ) : null}
+    </TerminalGlassCard>
   );
 }
 
@@ -6056,7 +7861,7 @@ function TradingDNACard({ profile }: { profile: AiTradingDNAProfile }) {
   return (
     <TerminalGlassCard>
       <Text style={styles.terminalSectionTitle}>{t("personalTradingDna")}</Text>
-      <Text style={styles.terminalSub}>{profile.summary}</Text>
+      <TypingText text={profile.summary} speedMs={9} enabled={profile.summary.length <= 200} textStyle={styles.terminalSub} />
       <View style={{ gap: 10, marginTop: 14 }}>
         <RuleImpactCard title={t("profileTraderType")} rule={profile.traderType} evidence={profile.enoughData ? t("profileBuiltFromJournal") : t("profileRequiresTenTrades")} />
         <MetricPillRow items={[
@@ -6412,6 +8217,692 @@ function TerminalFundedPanel({
   );
 }
 
+function truncateCoachLine(value: string, max = 88) {
+  const clean = value.trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max - 1)}…`;
+}
+
+type AiAnalyticsToolId = "dna" | "evidence" | "growth" | "market" | "patterns" | "monthly";
+
+function CoachFocusRow({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "risk" | "action";
+}) {
+  const valueColor = tone === "risk" ? C.red : tone === "action" ? C.green : C.text;
+  return (
+    <View style={styles.coachFocusRow}>
+      <Text style={styles.coachFocusLabel}>{label}</Text>
+      <Text style={[styles.coachFocusValue, { color: valueColor }]} numberOfLines={2}>
+        {truncateCoachLine(value, 96)}
+      </Text>
+    </View>
+  );
+}
+
+function AiAnalyticsToolTile({
+  icon: Icon,
+  title,
+  summary,
+  active,
+  onPress,
+}: {
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  title: string;
+  summary: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[styles.analyticsToolTile, active && styles.analyticsToolTileActive]}>
+      <View style={styles.analyticsToolTileIcon}>
+        <Icon size={16} color={active ? C.green : C.purple} strokeWidth={2.3} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+        <Text style={styles.analyticsToolTileTitle}>{title}</Text>
+        <Text style={styles.analyticsToolTileSummary} numberOfLines={1}>
+          {truncateCoachLine(summary, 72)}
+        </Text>
+      </View>
+      <ChevronRight size={16} color={active ? C.green : C.sub} strokeWidth={2.4} />
+    </Pressable>
+  );
+}
+
+function AiAnalyticsToolMenu({
+  operatingSystem,
+  patterns,
+  stats,
+  tradeAnalysis,
+  activeTool,
+  onSelect,
+}: {
+  operatingSystem: AiOperatingSystem;
+  patterns: PatternDetectionResult;
+  stats: ReturnType<typeof calcStats>;
+  tradeAnalysis: TradeAnalysisResult | null;
+  activeTool: AiAnalyticsToolId | null;
+  onSelect: (tool: AiAnalyticsToolId) => void;
+}) {
+  const dnaSummary =
+    operatingSystem.tradingDna.profile?.traderType ||
+    operatingSystem.tradingDna.emptyState?.title ||
+    "Classify your trading style";
+  const evidenceSummary =
+    operatingSystem.evidence.sessionImpact[0] ||
+    operatingSystem.evidence.behaviorPatterns[0] ||
+    "Journal-backed proof";
+  const growthSummary =
+    operatingSystem.growth.recommendation?.title ||
+    operatingSystem.growth.emptyState?.title ||
+    "Track period-over-period progress";
+  const marketSummary =
+    operatingSystem.marketAssistant.actions.find((action) => action.enabled)?.label ||
+    "Market and journal actions";
+  const patternSummary =
+    patterns.risks[0]?.title ||
+    tradeAnalysis?.mistakes[0]?.title ||
+    "Scan hidden leaks and revenge risk";
+  const monthlySummary =
+    tradeAnalysis?.strengths[0]?.title ||
+    stats.bySetup[0]?.label ||
+    "Monthly performance review";
+
+  const tiles: { id: AiAnalyticsToolId; icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>; title: string; summary: string }[] = [
+    { id: "dna", icon: Sparkles, title: "Trading DNA", summary: dnaSummary },
+    { id: "evidence", icon: ShieldCheck, title: "Evidence", summary: evidenceSummary },
+    { id: "growth", icon: TrendingUp, title: "Growth", summary: growthSummary },
+    { id: "market", icon: Newspaper, title: "Market Brief", summary: marketSummary },
+    { id: "patterns", icon: Target, title: "Pattern Leaks", summary: patternSummary },
+    { id: "monthly", icon: CalendarDays, title: "Monthly Review", summary: monthlySummary },
+  ];
+
+  return (
+    <TerminalGlassCard style={styles.analyticsToolMenuCard}>
+      <Text style={styles.terminalSmallLabel}>ANALYTICS TOOLS</Text>
+      <Text style={styles.coachCompactHeadline}>Open one report at a time</Text>
+      <View style={styles.analyticsToolGrid}>
+        {tiles.map((tile) => (
+          <AiAnalyticsToolTile
+            key={tile.id}
+            icon={tile.icon}
+            title={tile.title}
+            summary={tile.summary}
+            active={activeTool === tile.id}
+            onPress={() => {
+              lightHaptic();
+              onSelect(tile.id);
+            }}
+          />
+        ))}
+      </View>
+    </TerminalGlassCard>
+  );
+}
+
+type AiTradingAssistantToolId =
+  | "daily_plan"
+  | "market_sentiment"
+  | "risk_predictor"
+  | "journal_summary"
+  | "pattern_leaks"
+  | "trading_dna"
+  | "growth_check"
+  | "monthly_review";
+
+function AiTradingAssistantBlock({
+  operatingSystem,
+  patterns,
+  stats,
+  trades,
+  tradeAnalysis,
+  tradeAnalysisBusy,
+  tradeAnalysisError,
+  aiResults,
+  aiBusy,
+  onRunCoachFeature,
+  onRunTradeAnalysis,
+}: {
+  operatingSystem: AiOperatingSystem;
+  patterns: PatternDetectionResult;
+  stats: ReturnType<typeof calcStats>;
+  trades: Trade[];
+  tradeAnalysis: TradeAnalysisResult | null;
+  tradeAnalysisBusy: boolean;
+  tradeAnalysisError: string;
+  aiResults: AIResultMap;
+  aiBusy: Record<keyof AIResultMap, boolean>;
+  onRunCoachFeature: (key: keyof AIResultMap) => void;
+  onRunTradeAnalysis: () => void;
+}) {
+  const [activeTool, setActiveTool] = useState<AiTradingAssistantToolId | null>(null);
+  const [lastTool, setLastTool] = useState<AiTradingAssistantToolId | null>(null);
+  const dna = operatingSystem.tradingDna.profile;
+  const growth = operatingSystem.growth.recommendation;
+  const tiles: {
+    id: AiTradingAssistantToolId;
+    icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+    title: string;
+    summary: string;
+    action: string;
+    accent: string;
+    status: "AI Review" | "Instant" | "Live";
+    busy?: boolean;
+    run?: () => void;
+  }[] = [
+    { id: "pattern_leaks", icon: Target, title: "Review Trade", summary: patterns.risks[0]?.title || "Inspect repeat mistakes", action: tradeAnalysis ? "Open" : "Analyze", accent: "#E95BFF", status: "AI Review", busy: tradeAnalysisBusy, run: onRunTradeAnalysis },
+    { id: "daily_plan", icon: CalendarDays, title: "Plan Today", summary: operatingSystem.today.mission?.title || "Build today's plan", action: aiResults.dailyPlan ? "Open" : "Generate", accent: "#69B7FF", status: "AI Review", busy: aiBusy.dailyPlan, run: () => onRunCoachFeature("dailyPlan") },
+    { id: "risk_predictor", icon: ShieldCheck, title: "Check Risk", summary: "Read behavior and risk pressure", action: aiResults.riskPredictor ? "Open" : "Generate", accent: C.red, status: "AI Review", busy: aiBusy.riskPredictor, run: () => onRunCoachFeature("riskPredictor") },
+    { id: "market_sentiment", icon: Newspaper, title: "Analyze News", summary: "Use currently visible headlines", action: "Open", accent: "#55D8E8", status: "Live" },
+    { id: "journal_summary", icon: FileText, title: "Review Journal", summary: "Summarize recent journal patterns", action: aiResults.journalSummary ? "Open" : "Generate", accent: "#FFAD5C", status: "AI Review", busy: aiBusy.journalSummary, run: () => onRunCoachFeature("journalSummary") },
+    { id: "monthly_review", icon: BrainCircuit, title: "Monthly Review", summary: "One premium review moment", action: aiResults.weeklyCoach ? "Open" : "Generate", accent: "#F0C75E", status: "AI Review", busy: aiBusy.weeklyCoach, run: () => onRunCoachFeature("weeklyCoach") },
+    { id: "trading_dna", icon: Sparkles, title: "Trading DNA", summary: dna?.traderType || "Who you are becoming", action: "Show", accent: C.purple, status: "Instant" },
+    { id: "growth_check", icon: TrendingUp, title: "Growth", summary: growth?.title || "Compare improvement signals", action: "Show", accent: C.green, status: "Instant" },
+  ];
+
+  const openTool = (tool: typeof tiles[number]) => {
+    lightHaptic();
+    setLastTool(tool.id);
+    setActiveTool((prev) => (prev === tool.id ? null : tool.id));
+    if (tool.run && !tool.busy && !(
+      (tool.id === "daily_plan" && aiResults.dailyPlan) ||
+      (tool.id === "risk_predictor" && aiResults.riskPredictor) ||
+      (tool.id === "journal_summary" && aiResults.journalSummary) ||
+      (tool.id === "monthly_review" && aiResults.weeklyCoach) ||
+      (tool.id === "pattern_leaks" && tradeAnalysis)
+    )) {
+      tool.run();
+    }
+  };
+  const lastOpenedTool = lastTool ? tiles.find((tile) => tile.id === lastTool) || null : null;
+
+  const renderActiveResult = () => {
+    if (!activeTool) return null;
+    if (activeTool === "daily_plan") {
+      const result = aiResults.dailyPlan;
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>DAILY PLAN</Text>
+          {result ? <ProviderBadge status={result.providerStatus} /> : null}
+          <Text style={styles.coachCompactValue}>{result?.data.dailyFocus || operatingSystem.today.mission?.title || "Trade only planned setups."}</Text>
+          <AiOsTextBlock
+            title="Rules"
+            items={result?.data.tradeRules || operatingSystem.today.mission?.checklist.map((item) => item.text) || [
+              operatingSystem.today.recommendation?.action || "Trade only planned setups.",
+            ]}
+          />
+        </View>
+      );
+    }
+    if (activeTool === "market_sentiment") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>MARKET SENTIMENT</Text>
+          <Text style={styles.coachCompactValue}>Use the News tab to analyze the currently visible headlines.</Text>
+          <Text style={styles.coachCompactSub}>This avoids stale generic sentiment and keeps the result tied to real loaded news.</Text>
+        </View>
+      );
+    }
+    if (activeTool === "risk_predictor") {
+      const result = aiResults.riskPredictor;
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>RISK PREDICTOR</Text>
+          {result ? <ProviderBadge status={result.providerStatus} /> : null}
+          <Text style={styles.coachCompactValue}>{result ? `${result.data.riskLevel.toUpperCase()} · ${result.data.riskScore}/100` : "Generating risk read..."}</Text>
+          <AiOsTextBlock title="Warning Signs" items={result?.data.warningSigns || patterns.risks.map((risk) => risk.title)} />
+        </View>
+      );
+    }
+    if (activeTool === "journal_summary") {
+      const result = aiResults.journalSummary;
+      const recentTrade = trades[0] || null;
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>JOURNAL SUMMARY</Text>
+          {result ? <ProviderBadge status={result.providerStatus} /> : null}
+          <Text style={styles.coachCompactValue}>{result?.data.summary || `${stats.count} trades · ${Math.round(stats.wr)}% win rate · ${stats.pf.toFixed(2)} PF`}</Text>
+          {recentTrade ? (
+            <View style={styles.aiJournalTimeline}>
+              <View style={styles.aiJournalTimelineItem}>
+                <View style={styles.aiJournalTimelineIcon}><Target size={15} color={C.purple} strokeWidth={2.4} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>TRADE</Text><Text style={styles.coachCompactValue}>{recentTrade.symbol} · {recentTrade.direction}</Text></View>
+              </View>
+              {recentTrade.voiceUri || recentTrade.voiceCloudUri ? <View style={styles.aiJournalTimelineItem}><View style={styles.aiJournalTimelineIcon}><Mic size={15} color="#69B7FF" strokeWidth={2.4} /></View><View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>VOICE NOTE</Text><Text style={styles.coachCompactSub}>Attached to this trade</Text></View></View> : null}
+              {recentTrade.photoUri || recentTrade.photoCloudUri ? <View style={styles.aiJournalTimelineItem}><View style={styles.aiJournalTimelineIcon}><ImagePlus size={15} color="#FFAD5C" strokeWidth={2.4} /></View><View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>SCREENSHOT</Text><Text style={styles.coachCompactSub}>Chart evidence attached</Text></View></View> : null}
+              <View style={styles.aiJournalTimelineItem}>
+                <View style={styles.aiJournalTimelineIcon}><BrainCircuit size={15} color={C.purple} strokeWidth={2.4} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>EMOTION</Text><Text style={styles.coachCompactSub}>{moodLabel(recentTrade.mood)}</Text></View>
+              </View>
+              <View style={[styles.aiJournalTimelineItem, styles.aiJournalTimelineLast]}>
+                <View style={styles.aiJournalTimelineIcon}><Trophy size={15} color={recentTrade.pnl >= 0 ? C.green : C.red} strokeWidth={2.4} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.terminalSmallLabel}>OUTCOME</Text><Text style={[styles.coachCompactValue, { color: recentTrade.pnl >= 0 ? C.green : C.red }]}>{moneyCompact(recentTrade.pnl)}</Text></View>
+              </View>
+            </View>
+          ) : null}
+          <AiOsTextBlock title="Improvement Plan" items={result?.data.improvementPlan || [operatingSystem.coach.nextImprovement?.action || "Fix one repeat leak before adding size."]} />
+        </View>
+      );
+    }
+    if (activeTool === "pattern_leaks") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>PATTERN LEAKS</Text>
+          <Text style={styles.coachCompactValue}>{typeof tradeAnalysis?.mainBlindSpot === "string" ? tradeAnalysis.mainBlindSpot : tradeAnalysis?.mainBlindSpot?.title || patterns.risks[0]?.title || "No strong leak found yet."}</Text>
+          {tradeAnalysisError ? <Text style={styles.coachCompactSub}>{tradeAnalysisError}</Text> : null}
+          <AiOsTextBlock title="Mistakes" items={tradeAnalysis?.mistakes.map((item) => item.title) || patterns.risks.map((risk) => risk.title)} />
+        </View>
+      );
+    }
+    if (activeTool === "trading_dna") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>TRADING DNA</Text>
+          <Text style={styles.coachCompactValue}>{dna?.traderType || "Not enough journal history yet."}</Text>
+          <AiOsTextBlock title="Edge / Weakness" items={[dna?.strengths[0] || "Build more sample size.", dna?.weaknesses[0] || "Keep journaling setup and emotion."]} />
+        </View>
+      );
+    }
+    if (activeTool === "growth_check") {
+      return (
+        <View style={styles.coachConsoleReveal}>
+          <Text style={styles.terminalSmallLabel}>GROWTH CHECK</Text>
+          <Text style={styles.coachCompactValue}>{growth?.title || operatingSystem.growth.emptyState?.title || "More history needed."}</Text>
+          <AiOsTextBlock title="Next Signal" items={[growth?.action || operatingSystem.growth.emptyState?.message || "Keep journaling clean trades."]} />
+        </View>
+      );
+    }
+    const result = aiResults.weeklyCoach;
+    return (
+      <View style={styles.coachConsoleReveal}>
+        <Text style={styles.terminalSmallLabel}>MONTHLY REVIEW</Text>
+        {result ? <ProviderBadge status={result.providerStatus} /> : null}
+        <Text style={styles.coachCompactValue}>{result?.data.summary || "Generate one high-value review instead of reading every metric."}</Text>
+        <AiOsTextBlock title="Focus" items={result?.data.nextWeekFocus || [operatingSystem.coach.nextImprovement?.title || "Protect execution quality."]} />
+      </View>
+    );
+  };
+
+  return (
+    <TerminalGlassCard style={styles.analyticsToolMenuCard}>
+      <View style={styles.assistantHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSectionTitle}>AI Trading Assistant</Text>
+        </View>
+        <AiIntelligencePulse tone={C.purple} />
+      </View>
+      <View style={styles.analyticsToolGrid}>
+        {tiles.map((tile) => {
+          const Icon = tile.icon;
+          const active = activeTool === tile.id;
+          return (
+            <Pressable key={tile.id} onPress={() => openTool(tile)} disabled={tile.busy} style={({ pressed }) => [styles.analyticsToolTile, active && styles.analyticsToolTileActive, pressed && styles.analyticsToolTilePressed, tile.busy && styles.disabledBtn]}>
+              <View style={[styles.analyticsToolTileIcon, { borderColor: `${tile.accent}55`, backgroundColor: `${tile.accent}14` }]}>
+                {tile.busy ? <ActivityIndicator color={tile.accent} size="small" /> : <Icon size={17} color={active ? C.green : tile.accent} strokeWidth={2.3} />}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.analyticsToolStatus, { color: tile.accent }]}>{tile.status}</Text>
+                <Text style={styles.analyticsToolTileTitle}>{tile.title}</Text>
+                <Text style={styles.analyticsToolTileSummary} numberOfLines={1}>{tile.summary}</Text>
+              </View>
+              <Text style={[styles.tradeMetaChip, active ? { color: C.green, borderColor: "rgba(150,255,0,0.34)", backgroundColor: "rgba(150,255,0,0.08)" } : null]}>
+                {tile.busy ? "..." : tile.action}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {!activeTool && lastOpenedTool ? (
+        <Pressable onPress={() => openTool(lastOpenedTool)} style={styles.aiMemoryStrip}>
+          <View style={[styles.analyticsToolTileIcon, { borderColor: `${lastOpenedTool.accent}55`, backgroundColor: `${lastOpenedTool.accent}14` }]}>
+            <BrainCircuit size={17} color={lastOpenedTool.accent} strokeWidth={2.3} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.terminalSmallLabel}>SESSION MEMORY</Text>
+            <Text style={styles.coachCompactValue}>Continue {lastOpenedTool.title}</Text>
+          </View>
+          <ChevronRight size={17} color={C.sub} strokeWidth={2.3} />
+        </Pressable>
+      ) : null}
+      {renderActiveResult()}
+    </TerminalGlassCard>
+  );
+}
+
+function PropCoachQuickCard({
+  snapshot,
+  templates,
+  templateKey,
+  propMode,
+  operatingSystem,
+  passProbability,
+  stats,
+  trades,
+  revengeTrading,
+  onTemplateChange,
+  onModeChange,
+}: {
+  snapshot: ReturnType<typeof computePropRiskSnapshot> | null;
+  templates: RiskTemplate[];
+  templateKey: string;
+  propMode: FirmMode;
+  operatingSystem: AiOperatingSystem;
+  passProbability: PassProbabilityResult;
+  stats: ReturnType<typeof calcStats>;
+  trades: Trade[];
+  revengeTrading: RevengeTradingResult;
+  onTemplateChange: (key: string) => void;
+  onModeChange: (mode: FirmMode) => void;
+}) {
+  const [activeTool, setActiveTool] = useState<AiOsPropTool>("limits");
+  const [plannedContracts, setPlannedContracts] = useState("1");
+  const [expectedStop, setExpectedStop] = useState("");
+  const [expectedTarget, setExpectedTarget] = useState("");
+  const [hypotheticalLoss, setHypotheticalLoss] = useState("");
+  const [dailyTarget, setDailyTarget] = useState("");
+  const [selectedFirm, setSelectedFirm] = useState<(typeof PROP_COACH_FIRMS)[number]>("Other");
+  const [selectedAccountSizeInput, setSelectedAccountSizeInput] = useState(PROP_COACH_ACCOUNT_SIZES[0]);
+  const [aggression, setAggression] = useState<PropAggression>("balanced");
+  const notConfigured = !snapshot;
+  const contracts = Math.max(0, Math.round(Number(plannedContracts) || 0));
+  const nextLoss = Math.max(0, Math.abs(Number(hypotheticalLoss) || Math.abs(stats.avgLoss || 0)));
+  const stopDollars = Math.max(0, Math.abs(Number(expectedStop) || nextLoss));
+  const targetDollars = Math.max(0, Math.abs(Number(expectedTarget) || Number(dailyTarget) || 0));
+  const plannedLoss = Math.max(nextLoss, contracts * stopDollars);
+  const projectedDaily = snapshot ? Math.max(0, snapshot.dailyRemaining - plannedLoss) : 0;
+  const projectedAccount = snapshot ? Math.max(0, snapshot.accountRemaining - plannedLoss) : 0;
+  const revengeRiskScore = revengeTrading.severity === "HIGH" ? 85 : revengeTrading.severity === "MEDIUM" ? 60 : 20;
+  const riskStatus: "safe" | "caution" | "danger" =
+    !snapshot || projectedDaily <= 0 || projectedAccount <= 0 || revengeRiskScore >= 85
+      ? "danger"
+      : projectedDaily / Math.max(1, snapshot.template.dailyLossLimit) < 0.35 || revengeRiskScore >= 60
+        ? "caution"
+        : "safe";
+  const baseSafeLoss = snapshot ? Math.floor(Math.max(0, Math.min(snapshot.dailyRemaining, snapshot.accountRemaining) * 0.35)) : 0;
+  const maxSafeLoss =
+    aggression === "safe"
+      ? Math.floor(baseSafeLoss * 0.65)
+      : aggression === "aggressive"
+        ? Math.floor(baseSafeLoss * 1.2)
+        : baseSafeLoss;
+  const baseContracts = snapshot?.engine?.contractRecommendation.recommended ?? (riskStatus === "safe" ? Math.max(1, contracts) : 0);
+  const maxContracts = propMode === "funded" ? snapshot?.template.liveContracts : snapshot?.template.evaluationContracts;
+  const suggestedContracts =
+    aggression === "safe"
+      ? Math.max(0, Math.min(maxContracts || baseContracts, Math.floor(baseContracts / 2) || 1))
+      : aggression === "aggressive"
+        ? Math.max(0, Math.min(maxContracts || baseContracts + 1, baseContracts + 1))
+        : Math.max(0, Math.min(maxContracts || baseContracts, baseContracts));
+  const activeRuleTemplate = snapshot?.template || templates.find((template) => template.key === templateKey) || null;
+  const rulesNeedReview = propRuleNeedsReview(activeRuleTemplate);
+  const dailyBufferRatio = snapshot ? snapshot.dailyRemaining / Math.max(1, snapshot.template.dailyLossLimit) : 0;
+  const accountBufferRatio = snapshot ? snapshot.accountRemaining / Math.max(1, snapshot.template.maxLossLimit) : 0;
+  const selectedAccountSize = activeRuleTemplate?.accountSize || selectedAccountSizeInput;
+  const chooseTemplate = (firm: string, accountSize: number) => {
+    setSelectedAccountSizeInput(accountSize);
+    const match = templates.find((template) => template.accountSize === accountSize && propFirmMatches(template, firm));
+    onTemplateChange(match?.key || "");
+  };
+  const toolButtons: { key: AiOsPropTool; label: string }[] = [
+    { key: "limits", label: "Generate limits" },
+    { key: "whatif", label: "Run what-if" },
+    { key: "emergency", label: "Emergency mode" },
+    { key: "green", label: "Green day lock" },
+    { key: "recovery", label: "Recovery plan" },
+  ];
+
+  return (
+    <TerminalGlassCard style={styles.propCoachQuickCard}>
+      <View style={styles.terminalHeaderRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.terminalSmallLabel}>AI PROP COACH</Text>
+          <Text style={styles.coachCompactHeadline}>{notConfigured ? "Connect prop rules" : "Next-trade prop plan"}</Text>
+          <Text style={styles.coachCompactSub}>
+            {notConfigured
+              ? "Choose a synced prop template."
+              : "Next trade limits based on journal + prop rules."}
+          </Text>
+        </View>
+        <View style={{ alignItems: "flex-end", gap: 6 }}>
+          <AiIntelligencePulse tone={notConfigured ? C.purple : C.green} />
+          <View style={[styles.tradeMetaChip, notConfigured ? styles.propPreviewBadge : null]}>
+            <Text style={styles.terminalSmallLabel}>{notConfigured ? "SETUP" : snapshot.status}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ gap: 10, marginTop: 12 }}>
+        <View style={styles.propModeRail}>
+          {(["evaluation", "funded"] as FirmMode[]).map((item) => (
+            <Pressable key={item} onPress={() => onModeChange(item)} style={[styles.propModeChip, propMode === item && styles.propModeChipActive]}>
+              <Text style={[styles.propModeChipText, propMode === item && styles.propModeChipTextActive]}>{item === "evaluation" ? "EVAL" : "LIVE"}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+          {PROP_COACH_FIRMS.map((firm) => {
+            const active = selectedFirm === firm;
+            return (
+              <Pressable
+                key={firm}
+                onPress={() => {
+                  setSelectedFirm(firm);
+                  chooseTemplate(firm, selectedAccountSize);
+                }}
+                style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}
+              >
+                <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>{firm}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+          {PROP_COACH_ACCOUNT_SIZES.map((size) => {
+            const active = selectedAccountSize === size;
+            return (
+              <Pressable
+                key={size}
+                onPress={() => chooseTemplate(selectedFirm, size)}
+                style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}
+              >
+                <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>${size / 1000}K</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View style={styles.propAggressionGrid}>
+          {(["safe", "balanced", "aggressive"] as PropAggression[]).map((item) => (
+            <Pressable
+              key={item}
+              onPress={() => setAggression(item)}
+              style={({ pressed }) => [styles.propAggressionCard, aggression === item && styles.propAggressionCardActive, pressed && styles.analyticsToolTilePressed]}
+            >
+              {item === "safe" ? <ShieldCheck size={17} color={C.green} strokeWidth={2.4} /> : item === "balanced" ? <Target size={17} color={C.purple} strokeWidth={2.4} /> : <Zap size={17} color={C.red} strokeWidth={2.4} />}
+              <Text style={[styles.propAggressionTitle, { color: item === "safe" ? C.green : item === "balanced" ? C.purple : C.red }]}>{item.toUpperCase()}</Text>
+              <Text style={styles.propAggressionHint} numberOfLines={2}>{propAggressionLabel(item)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {rulesNeedReview ? (
+        <WarningCard
+          title="Rules may need review"
+          body="Prop firm rules must stay current. This template is missing a recent verification date or is older than 14 days."
+        />
+      ) : null}
+
+      {notConfigured ? (
+        <View style={{ gap: 10, marginTop: 12 }}>
+          <Text style={styles.terminalSmallLabel}>SETUP STATE</Text>
+          <Text style={styles.coachCompactSub}>No matching prop template is selected. Prop Coach will not invent firm rules. Select an available synced template or review rules first.</Text>
+          {templates.length ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.propTemplateRailCompact}>
+              {templates.map((template) => {
+                const active = template.key === templateKey;
+                return (
+                  <Pressable key={template.key} onPress={() => onTemplateChange(template.key)} style={[styles.propTemplateChipCompact, active && styles.propTemplateChipActive]}>
+                    <Text style={[styles.propTemplateChipText, active && styles.propTemplateChipTextActive]}>{template.accountSize / 1000}K</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+          <Pressable onPress={() => templates[0] && onTemplateChange(templates[0].key)} style={styles.coachPrimaryCta}>
+            <Text style={styles.coachPrimaryCtaText}>Connect Prop Template</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={{ gap: 12, marginTop: 12 }}>
+          <View style={styles.propGuardianCard}>
+            <View style={styles.propGuardianHeader}>
+              <View>
+                <Text style={styles.terminalSmallLabel}>AI PROP GUARDIAN</Text>
+                <Text style={styles.propGuardianStatus}>{snapshot.status}</Text>
+              </View>
+              <View style={[styles.tradeMetaChip, rulesNeedReview ? styles.propPreviewBadge : null]}>
+                <Text style={styles.terminalSmallLabel}>{rulesNeedReview ? "REVIEW RULES" : "RULES CURRENT"}</Text>
+              </View>
+            </View>
+            <View style={styles.propGuardianBody}>
+              <AiGuardianRing ratio={dailyBufferRatio} tone={riskStatus === "danger" ? C.red : riskStatus === "caution" ? C.purple : C.green} label="BUFFER" />
+              <View style={styles.propGuardianMetrics}>
+                <View>
+                  <Text style={styles.terminalSmallLabel}>DAILY BUFFER</Text>
+                  <Text style={styles.propGuardianMetricValue}>{moneyCompact(snapshot.dailyRemaining)}</Text>
+                </View>
+                <View style={styles.propGuardianMetricRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.terminalSmallLabel}>SAFE LOSS</Text>
+                    <Text style={styles.coachCompactValue}>{moneyCompact(maxSafeLoss)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.terminalSmallLabel}>CONTRACTS</Text>
+                    <Text style={styles.coachCompactValue}>{suggestedContracts}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+            <View style={styles.propGuardianBarGroup}>
+              <View style={styles.propGuardianBarLabel}><Text style={styles.terminalSmallLabel}>DAILY</Text><Text style={styles.coachCompactSub}>{moneyCompact(snapshot.dailyRemaining)}</Text></View>
+              <AiAnimatedBar ratio={dailyBufferRatio} tone={dailyBufferRatio < 0.35 ? C.red : C.green} />
+              <View style={styles.propGuardianBarLabel}><Text style={styles.terminalSmallLabel}>ACCOUNT</Text><Text style={styles.coachCompactSub}>{moneyCompact(snapshot.accountRemaining)}</Text></View>
+              <AiAnimatedBar ratio={accountBufferRatio} tone={accountBufferRatio < 0.35 ? C.red : C.purple} />
+            </View>
+            {riskStatus !== "safe" ? <Text style={[styles.coachCompactHint, { color: riskStatus === "danger" ? C.red : C.purple }]}>{riskStatus === "danger" ? "Current calculated risk requires account protection." : "Current buffers call for reduced risk."}</Text> : null}
+          </View>
+          <MetricPillRow
+            items={[
+              { label: "Mode", value: propMode === "funded" ? "LIVE" : "EVAL", tone: "purple" },
+              { label: "Status", value: snapshot.status, tone: snapshot.status === "STOP" ? "red" : snapshot.status === "CAUTION" ? "purple" : "green" },
+              { label: "Daily Buffer", value: moneyCompact(snapshot.dailyRemaining), tone: snapshot.dailyRemaining > 0 ? "green" : "red" },
+              { label: "Max Safe Loss", value: moneyCompact(maxSafeLoss), tone: maxSafeLoss > 0 ? "purple" : "red" },
+              { label: "Contracts", value: `${suggestedContracts}`, tone: suggestedContracts > 0 ? "green" : "grey" },
+              { label: "Target RR", value: targetDollars > 0 && stopDollars > 0 ? `${(targetDollars / Math.max(1, stopDollars)).toFixed(1)}R` : "1.5R+", tone: "grey" },
+            ]}
+          />
+          <View style={styles.propCoachSignalRail}>
+            <AiFlowRail nodes={["Plan", "Risk", "Protect"]} tone={riskStatus === "danger" ? C.red : C.green} />
+          </View>
+          <View style={styles.coachConsoleActionRow}>
+            {toolButtons.map((tool) => {
+              const active = activeTool === tool.key;
+              return (
+                <Pressable key={tool.key} onPress={() => { lightHaptic(); setActiveTool(tool.key); }} style={[styles.coachConsoleActionChip, active && styles.coachConsoleActionChipActive]}>
+                  <Text style={[styles.coachConsoleActionText, active && styles.coachConsoleActionTextActive]}>{tool.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {activeTool === "whatif" ? (
+            <View style={styles.propSimulatorBox}>
+              <View style={styles.propSimulatorInputRow}>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Contracts</Text>
+                  <TextInput value={plannedContracts} onChangeText={setPlannedContracts} keyboardType="number-pad" placeholder="1" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Expected Stop $</Text>
+                  <TextInput value={expectedStop} onChangeText={setExpectedStop} keyboardType="decimal-pad" placeholder={moneyCompact(Math.abs(stats.avgLoss || 0))} placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+              </View>
+              <View style={styles.propSimulatorInputRow}>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Expected Target $</Text>
+                  <TextInput value={expectedTarget} onChangeText={setExpectedTarget} keyboardType="decimal-pad" placeholder="Target" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+                <View style={styles.propSimulatorInputWrap}>
+                  <Text style={styles.terminalSmallLabel}>Hypothetical Loss</Text>
+                  <TextInput value={hypotheticalLoss} onChangeText={setHypotheticalLoss} keyboardType="decimal-pad" placeholder={moneyCompact(Math.abs(stats.avgLoss || 0))} placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+                </View>
+              </View>
+              <View style={styles.propSimulatorInputWrap}>
+                <Text style={styles.terminalSmallLabel}>Daily Target</Text>
+                <TextInput value={dailyTarget} onChangeText={setDailyTarget} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={C.sub} style={styles.propSimulatorInput} />
+              </View>
+            </View>
+          ) : null}
+          <View style={styles.coachConsoleRulePreview}>
+            <Text style={styles.terminalSmallLabel}>
+              {activeTool === "limits" ? "Today's limits" : activeTool === "whatif" ? "What-if result" : activeTool === "emergency" ? "Emergency rules" : activeTool === "green" ? "Green day protection" : "Recovery steps"}
+            </Text>
+            <Text style={styles.coachCompactValue}>
+              {activeTool === "emergency"
+                ? riskStatus === "danger"
+                  ? "Stop trading. One rule break ends the session."
+                  : "Keep a hard stop ready before the next trade."
+                : activeTool === "green"
+                  ? "If green, lock progress: reduce size and stop after one break."
+                  : activeTool === "recovery"
+                    ? `Cap size at ${Math.max(0, suggestedContracts)} contracts and rebuild with clean entries.`
+                    : activeTool === "whatif"
+                      ? `Projected buffers: ${moneyCompact(projectedDaily)} daily · ${moneyCompact(projectedAccount)} account · ${riskStatus.toUpperCase()}`
+                      : `Safe loss ${moneyCompact(maxSafeLoss)} · ${suggestedContracts} contracts · ${moneyCompact(snapshot.dailyRemaining)} buffer`}
+            </Text>
+            {activeTool === "whatif" ? (
+              <Text style={styles.coachCompactSub}>
+                Suggested action: {riskStatus === "danger" ? "Do not take this plan." : riskStatus === "caution" ? "Reduce contracts or stop size before entry." : "Plan is inside current buffers."}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      )}
+    </TerminalGlassCard>
+  );
+}
+
+function TradeVisionEntryCard({
+  expanded,
+  onToggle,
+  userId,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+  userId: string | null;
+}) {
+  return (
+    <View style={{ gap: 10 }}>
+      <Pressable onPress={onToggle} style={styles.tradeVisionEntryCard}>
+        <View style={styles.tradeVisionIconOrbSmall}>
+          <ImagePlus size={17} color={C.purple} strokeWidth={2.3} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text style={styles.terminalSmallLabel}>TRADE VISION</Text>
+          <Text style={styles.coachCompactHeadline}>Review one chart with AI</Text>
+          <Text style={styles.coachCompactSub}>Your selected image is sent to an external AI service only for the review. It is not used as analytics data.</Text>
+        </View>
+        <ChevronRight size={16} color={expanded ? C.green : C.sub} strokeWidth={2.4} style={{ transform: [{ rotate: expanded ? "90deg" : "0deg" }] }} />
+      </Pressable>
+      {expanded ? <TradeVisionCoachSection userId={userId} /> : null}
+    </View>
+  );
+}
+
 function AiAnalysisScreen({
   lang,
   trades,
@@ -6439,8 +8930,8 @@ function AiAnalysisScreen({
   onRestore: () => void;
   session: Session | null;
 }) {
-  const period: "month" = "month";
-  const [selectedDate] = useState(todayISO());
+  const { range, anchorDate } = useStatsTimeRange();
+  const [selectedDate] = useState(anchorDate);
   const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
   const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
   const [tradeAnalysisError, setTradeAnalysisError] = useState("");
@@ -6458,21 +8949,32 @@ function AiAnalysisScreen({
     journalSummary: false,
     dailyChallenge: false,
   });
-  const [dailyMissionStatus, setDailyMissionStatus] = useState<AiDailyMissionStatus>("active");
-  const [dailyMissionChecked, setDailyMissionChecked] = useState<Record<string, boolean>>({});
   const safeAnalysisTemplates = propTemplates;
   const [analysisTemplateKey, setAnalysisTemplateKey] = useState("");
   const [propMode, setPropMode] = useState<FirmMode>("evaluation");
+  const screenActiveRef = useRef(true);
 
   useEffect(() => {
+    screenActiveRef.current = true;
+    return () => {
+      screenActiveRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
     Promise.all([
       AsyncStorage.getItem("prop-risk-template-v1"),
       AsyncStorage.getItem("prop-risk-mode-v1"),
     ]).then(([savedTemplate, savedMode]) => {
+      if (!mounted) return;
       const nextKey = resolvePropTemplateKey(savedTemplate || "", safeAnalysisTemplates);
       if (nextKey) setAnalysisTemplateKey(nextKey);
       if (savedMode === "evaluation" || savedMode === "funded") setPropMode(savedMode);
     });
+    return () => {
+      mounted = false;
+    };
   }, [safeAnalysisTemplates]);
   const changeAnalysisTemplate = useCallback((key: string) => {
     setAnalysisTemplateKey(key);
@@ -6483,13 +8985,10 @@ function AiAnalysisScreen({
     AsyncStorage.setItem("prop-risk-mode-v1", mode).catch(() => {});
   }, []);
 
-  const periodTrades = trades.filter((trade) => periodFilter(trade, selectedDate, period));
-  const weekTrades = trades.filter((trade) => periodFilter(trade, selectedDate, "week"));
+  const periodTrades = useFilteredTrades(trades);
   const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
-  const weekStats = useMemo(() => calcStats(weekTrades), [weekTrades]);
   const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
   const patterns = useMemo(() => detectTradingPatterns(periodTrades), [periodTrades]);
-  const weekPatterns = useMemo(() => detectTradingPatterns(weekTrades), [weekTrades]);
   const activeTemplate =
     analysisTemplateKey
       ? safeAnalysisTemplates.find((template) => template.key === analysisTemplateKey) || null
@@ -6557,11 +9056,11 @@ function AiAnalysisScreen({
   const hiddenLeaks = useMemo(() => detectHiddenLeaks(trades), [trades]);
   const aiCoachPayload = useMemo(
     () => ({
-      period,
+      period: range,
       selectedDate,
       stats: periodStats,
       analyticsContext: buildAIAnalyticsContext(periodTrades),
-      tradeAnalysisPayload: buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot }),
+      tradeAnalysisPayload: buildTradeAnalysisPayload(periodTrades, periodStats, range, { passProbability, propSnapshot }),
       propSnapshot,
       passProbability,
       revengeTrading,
@@ -6591,30 +9090,6 @@ function AiAnalysisScreen({
       }),
     [aiPropContext, patterns, periodStats, periodTrades, revengeTrading],
   );
-  const weeklyReport = useMemo(
-    () =>
-      buildAiWeeklyReport({
-        trades: weekTrades,
-        stats: weekStats,
-        prop: aiPropContext,
-        patterns: weekPatterns,
-        revengeRisk: revengeTrading,
-        createdAt: `${selectedDate}T00:00:00.000Z`,
-      }),
-    [aiPropContext, revengeTrading, selectedDate, weekPatterns, weekStats, weekTrades],
-  );
-  const dailyMission = useMemo(
-    () =>
-      buildAiDailyMission({
-        trades: periodTrades,
-        stats: periodStats,
-        prop: aiPropContext,
-        patterns,
-        revengeRisk: revengeTrading,
-        createdAt: `${selectedDate}T00:00:00.000Z`,
-      }),
-    [aiPropContext, patterns, periodStats, periodTrades, revengeTrading, selectedDate],
-  );
   const aiAchievements = useMemo(
     () =>
       buildAiAchievements({
@@ -6626,50 +9101,48 @@ function AiAnalysisScreen({
       }),
     [aiPropContext, patterns, periodStats, periodTrades, revengeTrading],
   );
-  const tradingDna = useMemo(
-    () => buildTradingDNAProfile({ trades: periodTrades, stats: periodStats, patterns, revengeRisk: revengeTrading }),
-    [patterns, periodStats, periodTrades, revengeTrading],
+  const operatingSystem = useMemo(
+    () =>
+      buildAiOperatingSystem({
+        trades: periodTrades,
+        stats: periodStats,
+        prop: aiPropContext,
+        patterns,
+        revengeRisk: revengeTrading,
+        createdAt: `${selectedDate}T00:00:00.000Z`,
+      }),
+    [aiPropContext, patterns, periodStats, periodTrades, revengeTrading, selectedDate],
   );
-  const benchmarkProfile = useMemo(() => buildBenchmarkProfile(), []);
-  const improvementTimeline = useMemo(
-    () => buildImprovementTimeline({ trades, stats: periodStats, patterns, revengeRisk: revengeTrading, createdAt: `${selectedDate}T00:00:00.000Z` }),
-    [patterns, periodStats, revengeTrading, selectedDate, trades],
+  const tradeVisionJournalContext = useMemo(
+    () => ({
+      tradeCount: periodStats.count,
+      winRate: periodStats.wr,
+      profitFactor: periodStats.pf,
+      expectancy: periodStats.exp,
+      averageLoss: periodStats.avgLoss,
+      maxDrawdown: periodStats.maxDd,
+      bestSession: periodStats.session[0]?.label || null,
+      revengeRisk: {
+        severity: revengeTrading.severity,
+        detected: revengeTrading.detected,
+        reason: revengeTrading.reason,
+        recommendation: revengeTrading.recommendation,
+      },
+      topRisks: patterns.risks.slice(0, 3).map((risk) => ({
+        title: risk.title,
+        detail: risk.detail,
+      })),
+      recentTrades: periodTrades.slice(0, 8).map((trade) => ({
+        date: trade.date,
+        symbol: trade.symbol,
+        direction: trade.direction,
+        pnl: trade.pnl,
+        mood: trade.mood,
+        tags: trade.tags?.slice(0, 4) || [],
+      })),
+    }),
+    [patterns.risks, periodStats, periodTrades, revengeTrading],
   );
-
-  useEffect(() => {
-    let mounted = true;
-    AsyncStorage.getItem(`ai-daily-mission-v1-${dailyMission.id}`).then((raw) => {
-      if (!mounted) return;
-      if (!raw) {
-        setDailyMissionStatus("active");
-        setDailyMissionChecked({});
-        return;
-      }
-      try {
-        const parsed = JSON.parse(raw) as { status?: AiDailyMissionStatus; checked?: Record<string, boolean> };
-        setDailyMissionStatus(parsed.status || "active");
-        setDailyMissionChecked(parsed.checked || {});
-      } catch {
-        setDailyMissionStatus("active");
-        setDailyMissionChecked({});
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [dailyMission.id]);
-
-  const persistDailyMission = useCallback((status: AiDailyMissionStatus, checked: Record<string, boolean>) => {
-    setDailyMissionStatus(status);
-    setDailyMissionChecked(checked);
-    AsyncStorage.setItem(`ai-daily-mission-v1-${dailyMission.id}`, JSON.stringify({ status, checked })).catch(() => {});
-  }, [dailyMission.id]);
-
-  const toggleDailyMissionItem = useCallback((id: string) => {
-    const next = { ...dailyMissionChecked, [id]: !dailyMissionChecked[id] };
-    const done = dailyMission.checklist.length > 0 && dailyMission.checklist.every((item) => next[item.id]);
-    persistDailyMission(done ? "completed" : dailyMissionStatus === "completed" ? "active" : dailyMissionStatus, next);
-  }, [dailyMission.checklist, dailyMissionChecked, dailyMissionStatus, persistDailyMission]);
 
   const runCoachFeature = async (key: keyof AIResultMap) => {
     if (!isPremium || !getLimitsForUser(isPremium).paidAiAnalysis) {
@@ -6683,6 +9156,19 @@ function AiAnalysisScreen({
     lightHaptic();
     setAiBusy((prev) => ({ ...prev, [key]: true }));
     try {
+      const cacheKey = localAiCacheKey(
+        `assistant-${key}`,
+        session?.user.id || null,
+        hashLocalAiInput({ key, payload: aiCoachPayload }),
+      );
+      const cached = await readLocalAiResponse<NonNullable<AIResultMap[typeof key]>>(cacheKey);
+      if (cached) {
+        if (screenActiveRef.current) {
+          setAiResults((prev) => ({ ...prev, [key]: cached }));
+        }
+        successHaptic();
+        return;
+      }
       const response =
         key === "dailyPlan"
           ? await fetchAIDailyPlan(aiCoachPayload)
@@ -6693,14 +9179,21 @@ function AiAnalysisScreen({
               : key === "journalSummary"
                 ? await fetchAIJournalSummary(aiCoachPayload)
                 : await fetchAIDailyChallenge(aiCoachPayload);
+      if (!screenActiveRef.current) return;
       setAiResults((prev) => ({ ...prev, [key]: response }));
+      if (!response.usedFallback) {
+        await writeLocalAiResponse(cacheKey, response, AI_ASSISTANT_CACHE_TTL_MS);
+      }
+      successHaptic();
       trackEvent("ai_coach_feature_generated", {
         feature: key,
         provider_status: response.providerStatus,
         used_fallback: response.usedFallback,
       });
     } finally {
-      setAiBusy((prev) => ({ ...prev, [key]: false }));
+      if (screenActiveRef.current) {
+        setAiBusy((prev) => ({ ...prev, [key]: false }));
+      }
     }
   };
 
@@ -6719,61 +9212,35 @@ function AiAnalysisScreen({
     try {
       setTradeAnalysisBusy(true);
       setTradeAnalysisError("");
-      trackEvent("ai_trade_analysis_opened", { period, trade_count: periodTrades.length });
-      trackEvent("ai_analysis_opened", { period, trade_count: periodTrades.length });
-      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, period, { passProbability, propSnapshot });
+      trackEvent("ai_trade_analysis_opened", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_analysis_opened", { period: range, trade_count: periodTrades.length });
+      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, range, { passProbability, propSnapshot });
       const result = await analyzeTrades(payload);
+      if (!screenActiveRef.current) return;
       setTradeAnalysis(result);
-      trackEvent("ai_trade_analysis_generated", { period, source: "edge_function", trade_count: periodTrades.length });
+      successHaptic();
+      trackEvent("ai_trade_analysis_generated", { period: range, source: "edge_function", trade_count: periodTrades.length });
       trackEvent("ai_pattern_detective_generated", {
-        period,
+        period: range,
         trade_count: periodTrades.length,
         detective_score: result.detectiveScore,
       });
       recordMetric("ai_trade_analysis_completed", 1, { source: "edge_function" });
     } catch (error) {
-      trackEvent("ai_trade_analysis_failed", { period, trade_count: periodTrades.length });
-      trackEvent("ai_pattern_detective_failed", { period, trade_count: periodTrades.length });
-      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period });
+      trackEvent("ai_trade_analysis_failed", { period: range, trade_count: periodTrades.length });
+      trackEvent("ai_pattern_detective_failed", { period: range, trade_count: periodTrades.length });
+      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period: range });
       const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
-      setTradeAnalysis(fallback);
-      setTradeAnalysisError(t("aiUnavailableLocal"));
+      if (screenActiveRef.current) {
+        setTradeAnalysis(fallback);
+        setTradeAnalysisError(t("aiUnavailableLocal"));
+      }
     } finally {
-      setTradeAnalysisBusy(false);
+      if (screenActiveRef.current) {
+        setTradeAnalysisBusy(false);
+      }
     }
   };
-
-  const localCoachStack = (
-    <View style={styles.terminalScreenStack}>
-      <Text style={styles.terminalSectionTitle}>{t("freeLocalCoach")}</Text>
-      <Text style={styles.terminalSub}>Rule-based insights from your journal — no paid AI API calls.</Text>
-      <AIWeeklyReportCard report={weeklyReport} />
-      <DailyMissionCard
-        mission={dailyMission}
-        status={dailyMissionStatus}
-        checked={dailyMissionChecked}
-        onToggle={toggleDailyMissionItem}
-        onStatusChange={(status) => persistDailyMission(status, dailyMissionChecked)}
-      />
-      <AchievementSystemCard achievements={aiAchievements} />
-      <TradingDNACard profile={tradingDna} />
-      <BenchmarkCard benchmark={benchmarkProfile} />
-      <ImprovementCard timeline={improvementTimeline} />
-      <View style={{ gap: 10 }}>
-        {unifiedInsights.primary.slice(0, 2).map((insight) => (
-          <AIInsightCard key={insight.id} insight={insight} />
-        ))}
-      </View>
-      <TerminalGlassCard>
-        <Text style={styles.terminalSectionTitle}>{t("evidenceMap")}</Text>
-        <Text style={styles.terminalSub}>{t("evidenceMapSub")}</Text>
-        <View style={{ gap: 12, marginTop: 14 }}>
-          <SessionHeatmap stats={periodStats} />
-          <CalendarImpact stats={periodStats} />
-        </View>
-      </TerminalGlassCard>
-    </View>
-  );
 
   if (!isPremium) {
     return (
@@ -6793,74 +9260,56 @@ function AiAnalysisScreen({
     );
   }
 
+  if (!periodTrades.length) {
+    return (
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
+        <EmptyStateCard
+          tone="purple"
+          title={t("aiEmptyTitle")}
+          message={t("aiEmptyMessage")}
+          icon={<BrainCircuit size={24} color={C.purple} strokeWidth={2.4} />}
+        />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
-      {localCoachStack}
       <View style={styles.terminalScreenStack}>
-        <View style={{ gap: 10 }}>
-          <Text style={styles.terminalSectionTitle}>{t("propFirmRiskAssistant")}</Text>
-          {safeAnalysisTemplates.length ? (
-            <PropFirmCoachSection
-              templates={safeAnalysisTemplates}
-              value={analysisTemplateKey || activeTemplate?.key || ""}
-              mode={propMode}
-              snapshot={selectedPropSnapshot}
-              stats={periodStats}
-              passProbability={passProbability}
-              revengeTrading={revengeTrading}
-              onTemplateChange={changeAnalysisTemplate}
-              onModeChange={changePropMode}
-            />
-          ) : (
-            <TerminalGlassCard>
-              <Text style={styles.terminalSub}>{t("syncFirmTemplates")}</Text>
-            </TerminalGlassCard>
-          )}
-        </View>
-        <TerminalPatternDetective stats={periodStats} />
-        <TerminalMonthlyIntelligence tradeAnalysis={tradeAnalysis} patterns={patterns} stats={periodStats} />
-        {tradeAnalysisError ? <Text style={styles.aiSingleStatusNote}>{tradeAnalysisError}</Text> : null}
-      </View>
-
-      <View style={styles.terminalScreenStack}>
-        <MarketIntelligenceTools />
-        <MarketIntelligencePanel lang={lang} />
-        <TerminalTradingCoach aiResults={aiResults} stats={periodStats} />
+        <TradeVisionCoachSection
+          userId={session?.user.id || null}
+          journalContext={tradeVisionJournalContext}
+        />
+        <PropCoachQuickCard
+          snapshot={selectedPropSnapshot}
+          templates={safeAnalysisTemplates}
+          templateKey={analysisTemplateKey}
+          propMode={propMode}
+          operatingSystem={operatingSystem}
+          passProbability={passProbability}
+          stats={periodStats}
+          trades={periodTrades}
+          revengeTrading={revengeTrading}
+          onTemplateChange={changeAnalysisTemplate}
+          onModeChange={changePropMode}
+        />
+        <AiTradingAssistantBlock
+          operatingSystem={operatingSystem}
+          patterns={patterns}
+          stats={periodStats}
+          trades={periodTrades}
+          tradeAnalysis={tradeAnalysis}
+          tradeAnalysisBusy={tradeAnalysisBusy}
+          tradeAnalysisError={tradeAnalysisError}
+          aiResults={aiResults}
+          aiBusy={aiBusy}
+          onRunCoachFeature={runCoachFeature}
+          onRunTradeAnalysis={runTradeAnalysis}
+        />
       </View>
     </ScrollView>
   );
 }
-function periodStart(date: Date, period: "day" | "week" | "month" | "year") {
-  const d = new Date(date);
-  if (period === "day")
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  if (period === "week") {
-    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    x.setDate(x.getDate() - x.getDay());
-    return x;
-  }
-  if (period === "month") return new Date(d.getFullYear(), d.getMonth(), 1);
-  return new Date(d.getFullYear(), 0, 1);
-}
-function periodFilter(
-  trade: Trade,
-  selectedDate: string,
-  period: "day" | "week" | "month" | "year",
-) {
-  const d = new Date(selectedDate + "T00:00:00");
-  const start = periodStart(d, period);
-  const end =
-    period === "day"
-      ? addDays(start, 1)
-      : period === "week"
-        ? addDays(start, 7)
-        : period === "month"
-          ? addMonths(start, 1)
-          : new Date(start.getFullYear() + 1, 0, 1);
-  const td = new Date(trade.date + "T00:00:00");
-  return td >= start && td < end;
-}
-
 function InstrumentButton({
   symbol,
   active,
@@ -6971,6 +9420,10 @@ function JournalScreen({
   const [lockedInsightDismissed, setLockedInsightDismissed] = useState(false);
   const [deleteDayDate, setDeleteDayDate] = useState<string | null>(null);
   const [deleteDayBusy, setDeleteDayBusy] = useState(false);
+  const [tradeActionTarget, setTradeActionTarget] = useState<Trade | null>(null);
+  const [deleteToastKey, setDeleteToastKey] = useState<string | null>(null);
+  const deleteToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const journalMountedRef = useRef(true);
   const lastSaveAtRef = useRef(0);
   const firstInsightSeenRef = useRef(false);
   const lockedInsightSeenRef = useRef(false);
@@ -6997,7 +9450,10 @@ function JournalScreen({
   const calendarWidth = Math.min(width - 8, isTabletLayout ? 760 : 520);
   const dayCellWidth = Math.floor((calendarWidth - calendarGap * 6) / 7);
   const dayCellHeight = Math.max(92, Math.min(isTabletLayout ? 132 : 124, Math.round(dayCellWidth * 1.82)));
-  const years = Array.from({ length: 9 }, (_, index) => viewMonth.getFullYear() - 4 + index);
+  const years = useMemo(
+    () => Array.from({ length: 9 }, (_, index) => viewMonth.getFullYear() - 4 + index),
+    [viewMonth],
+  );
   useEffect(() => {
     (async () => {
       try {
@@ -7009,16 +9465,43 @@ function JournalScreen({
       } catch {}
     })();
   }, []);
-  const filtered = trades.filter((x) => x.date === selectedDate);
+  useEffect(() => {
+    journalMountedRef.current = true;
+    return () => {
+      journalMountedRef.current = false;
+      if (deleteToastTimerRef.current) clearTimeout(deleteToastTimerRef.current);
+    };
+  }, []);
+  const showDeleteToast = useCallback((messageKey = "journalTradeDeletedToast") => {
+    if (deleteToastTimerRef.current) clearTimeout(deleteToastTimerRef.current);
+    if (!journalMountedRef.current) return;
+    setDeleteToastKey(messageKey);
+    deleteToastTimerRef.current = setTimeout(() => {
+      if (journalMountedRef.current) setDeleteToastKey(null);
+    }, 2200);
+  }, []);
+  const filtered = useMemo(
+    () => trades.filter((x) => x.date === selectedDate),
+    [trades, selectedDate],
+  );
+  const rangedTrades = useFilteredTrades(trades);
   const monthlyTradeCount = useMemo(() => monthlyLoggedTradeCount(trades), [trades]);
-  const journalStats = useMemo(() => calcStats(trades), [trades]);
-  const firstInsight = useMemo(() => buildFirstInsight(trades, journalStats), [trades, journalStats]);
+  const journalStats = useMemo(() => calcStats(rangedTrades), [rangedTrades]);
+  const firstInsight = useMemo(() => buildFirstInsight(rangedTrades, journalStats), [rangedTrades, journalStats]);
   const lockedInsightKey = `locked-insight-dismissed:${usageMonthKey()}`;
   const firstInsightVisible = !firstInsightDismissed && !!firstInsight;
   const lockedInsightVisible = !isPremium && !lockedInsightDismissed && trades.length >= 7 && trades.length <= 10;
   useEffect(() => {
-    AsyncStorage.getItem("first-insight-dismissed:5").then((value) => setFirstInsightDismissed(value === "true")).catch(() => {});
-    AsyncStorage.getItem(lockedInsightKey).then((value) => setLockedInsightDismissed(value === "true")).catch(() => {});
+    let mounted = true;
+    AsyncStorage.getItem("first-insight-dismissed:5").then((value) => {
+      if (mounted) setFirstInsightDismissed(value === "true");
+    }).catch(() => {});
+    AsyncStorage.getItem(lockedInsightKey).then((value) => {
+      if (mounted) setLockedInsightDismissed(value === "true");
+    }).catch(() => {});
+    return () => {
+      mounted = false;
+    };
   }, [lockedInsightKey]);
   useEffect(() => {
     if (!firstInsightVisible || firstInsightSeenRef.current) return;
@@ -7071,34 +9554,10 @@ function JournalScreen({
   const openDeleteDayConfirm = useCallback((date: string) => {
     const dayTrades = trades.filter((trade) => trade.date === date);
     if (!dayTrades.length) return;
-    warningHaptic();
+    lightHaptic();
     setSelectedDate(date);
     setDeleteDayDate(date);
   }, [trades]);
-
-  const confirmDeleteDay = useCallback(async () => {
-    if (!deleteDayDate || deleteDayBusy) return;
-    const dayTrades = trades.filter((trade) => trade.date === deleteDayDate);
-    if (!dayTrades.length) {
-      setDeleteDayDate(null);
-      return;
-    }
-    setDeleteDayBusy(true);
-    try {
-      const limit = await checkClientRateLimit("trade:delete", "journal-local");
-      if (!limit.allowed) {
-        Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
-        return;
-      }
-      await recordSecurityEvent("delete_trading_day_confirmed", "trade:delete", "journal-local");
-      dayTrades.forEach((trade) => onTradeDeleted(trade.id));
-      setTrades((prev) => prev.filter((trade) => trade.date !== deleteDayDate));
-      trackEvent("day_deleted", { trade_count: dayTrades.length });
-      setDeleteDayDate(null);
-    } finally {
-      setDeleteDayBusy(false);
-    }
-  }, [deleteDayBusy, deleteDayDate, onTradeDeleted, setTrades, trades]);
 
   const monthDays = useMemo(() => {
     const y = viewMonth.getFullYear();
@@ -7151,6 +9610,82 @@ function JournalScreen({
     });
     setModal(true);
   };
+  const executeTradeDelete = useCallback(
+    async (tradeId: string, opts?: { suppressFeedback?: boolean }): Promise<boolean> => {
+      const limit = await checkClientRateLimit("trade:delete", "journal-local");
+      if (!limit.allowed) {
+        Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
+        return false;
+      }
+      try {
+        onTradeDeleted(tradeId);
+        setTrades((prev) => prev.filter((x) => x.id !== tradeId));
+        trackEvent("trade_deleted", { source: "manual" });
+        if (editId === tradeId) setModal(false);
+        if (!opts?.suppressFeedback) {
+          successHaptic();
+          showDeleteToast();
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [editId, onTradeDeleted, setTrades, showDeleteToast],
+  );
+  const confirmDeleteTrade = useCallback(
+    (tradeId: string) => {
+      Alert.alert(t("deleteQuestion"), t("journalDeleteTradeBody"), [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("deleteTrade"),
+          style: "destructive",
+          onPress: () => {
+            warningHaptic();
+            void executeTradeDelete(tradeId);
+          },
+        },
+      ]);
+    },
+    [executeTradeDelete],
+  );
+  const confirmDeleteDay = useCallback(async () => {
+    if (!deleteDayDate || deleteDayBusy) return;
+    const dayTrades = trades.filter((trade) => trade.date === deleteDayDate);
+    if (!dayTrades.length) {
+      setDeleteDayDate(null);
+      return;
+    }
+    warningHaptic();
+    setDeleteDayBusy(true);
+    const tradeIds = dayTrades.map((trade) => trade.id);
+    try {
+      await recordSecurityEvent("delete_trading_day_confirmed", "trade:delete", "journal-local");
+      let deletedCount = 0;
+      for (const tradeId of tradeIds) {
+        const ok = await executeTradeDelete(tradeId, { suppressFeedback: true });
+        if (!ok) break;
+        deletedCount += 1;
+      }
+      if (deletedCount === tradeIds.length) {
+        trackEvent("day_deleted", { trade_count: tradeIds.length });
+        successHaptic();
+        showDeleteToast("journalDayDeletedToast");
+        setDeleteDayDate(null);
+      } else {
+        showDeleteToast("journalDayDeleteFailedToast");
+        if (deletedCount > 0) setDeleteDayDate(null);
+      }
+    } catch {
+      showDeleteToast("journalDayDeleteFailedToast");
+    } finally {
+      setDeleteDayBusy(false);
+    }
+  }, [deleteDayBusy, deleteDayDate, executeTradeDelete, showDeleteToast, trades]);
+  const openTradeActions = useCallback((tr: Trade) => {
+    lightHaptic();
+    setTradeActionTarget(tr);
+  }, []);
   const calcPnl = () => {
     if (form.pnl.trim()) {
       const amount = Math.min(MAX_ABS_PNL, Math.abs(toNum(form.pnl)));
@@ -7177,7 +9712,7 @@ function JournalScreen({
         openTradeLimitModal();
         return;
       }
-      const limit = await checkClientRateLimit(action, "journal-local");
+      const limit = await peekClientRateLimit(action, "journal-local", "trade_save");
       if (!limit.allowed) {
         Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
         return;
@@ -7238,12 +9773,16 @@ function JournalScreen({
       createdAt: editId ? (previousTrade?.createdAt || now) : now,
       updatedAt: now,
     };
-      await runIdempotentLocal(action, "journal-local", item, () => {
+      const saved = await runIdempotentLocal(action, "journal-local", item, () => {
         setTrades((prev) =>
           editId ? prev.map((x) => (x.id === editId ? item : x)) : [item, ...prev],
         );
         return { tradeId: item.id, updatedAt: item.updatedAt };
       });
+      if (!saved.duplicate) {
+        await consumeClientRateLimit(action, "journal-local");
+      }
+      successHaptic();
       if (!editId) {
         const analyticsProperties = {
           source: "manual",
@@ -7266,24 +9805,7 @@ function JournalScreen({
   };
   const remove = () => {
     if (!editId) return;
-    Alert.alert(t("deleteQuestion"), t("cannotUndo"), [
-      { text: t("close"), style: "cancel" },
-      {
-        text: t("deleteTrade"),
-        style: "destructive",
-        onPress: async () => {
-          const limit = await checkClientRateLimit("trade:delete", "journal-local");
-          if (!limit.allowed) {
-            Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
-            return;
-          }
-          onTradeDeleted(editId);
-          setTrades((prev) => prev.filter((x) => x.id !== editId));
-          trackEvent("trade_deleted", { source: "manual" });
-          setModal(false);
-        },
-      },
-    ]);
+    confirmDeleteTrade(editId);
   };
   const pnlPreview = calcPnl();
   const pickImage = async (camera: boolean) => {
@@ -7311,7 +9833,6 @@ function JournalScreen({
         });
         if (!r.canceled) {
           const asset = r.assets[0];
-          const limit = await checkClientRateLimit("upload:screenshot", "journal-local");
           const originalName = asset.fileName || "camera.jpg";
           const mimeType = asset.mimeType || "image/jpeg";
           const uploadCheck = await validateSecureUploadInput({
@@ -7320,9 +9841,14 @@ function JournalScreen({
             originalName,
             mimeType,
           });
-          if (!limit.allowed || !uploadCheck.ok) {
+          if (!uploadCheck.ok) {
             await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
-            return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
+            return Alert.alert("YouTrader", SECURITY_MESSAGES.invalidUpload);
+          }
+          const limit = await peekClientRateLimit("upload:screenshot", "journal-local", "pick_image_camera");
+          if (!limit.allowed) {
+            await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
+            return Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
           }
           const savedUri = await persistJournalMediaAsset({
             uri: asset.uri,
@@ -7330,6 +9856,7 @@ function JournalScreen({
             originalName,
             mimeType,
           });
+          await consumeClientRateLimit("upload:screenshot", "journal-local");
           setForm((prev) => ({ ...prev, photoUri: savedUri }));
         }
       } else {
@@ -7341,7 +9868,6 @@ function JournalScreen({
         });
         if (!r.canceled) {
           const asset = r.assets[0];
-          const limit = await checkClientRateLimit("upload:screenshot", "journal-local");
           const originalName = asset.fileName || "screenshot.jpg";
           const mimeType = asset.mimeType || "image/jpeg";
           const uploadCheck = await validateSecureUploadInput({
@@ -7350,9 +9876,14 @@ function JournalScreen({
             originalName,
             mimeType,
           });
-          if (!limit.allowed || !uploadCheck.ok) {
+          if (!uploadCheck.ok) {
             await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
-            return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
+            return Alert.alert("YouTrader", SECURITY_MESSAGES.invalidUpload);
+          }
+          const limit = await peekClientRateLimit("upload:screenshot", "journal-local", "pick_image_library");
+          if (!limit.allowed) {
+            await recordSecurityEvent("invalid_upload", "upload:screenshot", "journal-local");
+            return Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
           }
           const savedUri = await persistJournalMediaAsset({
             uri: asset.uri,
@@ -7360,6 +9891,7 @@ function JournalScreen({
             originalName,
             mimeType,
           });
+          await consumeClientRateLimit("upload:screenshot", "journal-local");
           setForm((prev) => ({ ...prev, photoUri: savedUri }));
         }
       }
@@ -7377,16 +9909,20 @@ function JournalScreen({
         await audioRecorder.stop();
         const uri = audioRecorder.uri;
         if (!uri) return Alert.alert(t("recordingFailed"));
-        const limit = await checkClientRateLimit("upload:voice", "journal-local");
         const uploadCheck = await validateSecureUploadInput({
           uri,
           category: "voice-note",
           originalName: "voice-note.m4a",
           mimeType: "audio/x-m4a",
         });
-        if (!limit.allowed || !uploadCheck.ok) {
+        if (!uploadCheck.ok) {
           await recordSecurityEvent("invalid_upload", "upload:voice", "journal-local");
-          return Alert.alert("YouTrader", !limit.allowed ? SECURITY_MESSAGES.rateLimited : SECURITY_MESSAGES.invalidUpload);
+          return Alert.alert("YouTrader", SECURITY_MESSAGES.invalidUpload);
+        }
+        const limit = await peekClientRateLimit("upload:voice", "journal-local", "voice_note_record");
+        if (!limit.allowed) {
+          await recordSecurityEvent("invalid_upload", "upload:voice", "journal-local");
+          return Alert.alert("YouTrader", SECURITY_MESSAGES.rateLimited);
         }
         const safeName = `${Date.now()}-voice-note.m4a`;
         const savedUri = await persistJournalMediaAsset({
@@ -7395,6 +9931,7 @@ function JournalScreen({
           originalName: safeName,
           mimeType: "audio/x-m4a",
         });
+        await consumeClientRateLimit("upload:voice", "journal-local");
         setForm((prev) => ({ ...prev, voiceUri: savedUri, voiceName: safeName }));
         return;
       }
@@ -7411,6 +9948,7 @@ function JournalScreen({
     }
   };
   return (
+    <View style={styles.journalScreenRoot}>
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[
@@ -7440,7 +9978,7 @@ function JournalScreen({
             <Text style={styles.monthTitleText} numberOfLines={1} adjustsFontSizeToFit>
               {monthTitle(viewMonth)}
             </Text>
-            <Text style={styles.monthChevron}>⌄</Text>
+            <ChevronDown size={18} color={C.sub} strokeWidth={UI_ICON_STROKE} />
           </Pressable>
           <Pressable
             accessibilityLabel={t("nextMonth")}
@@ -7466,9 +10004,10 @@ function JournalScreen({
                 const pnl = dayTrades.reduce((a, x) => a + x.pnl, 0);
                 const active = d === selectedDate;
                 return (
-                  <Pressable
+                  <JournalCalendarDayPressable
                     key={d}
-                    onPress={() => {
+                    hasTrades={dayTrades.length > 0}
+                    onDayPress={() => {
                       if (dayTrades.length === 0) {
                         openNew(d);
                       } else if (selectedDate === d) {
@@ -7477,8 +10016,7 @@ function JournalScreen({
                         setSelectedDate(d);
                       }
                     }}
-                    onLongPress={() => openDeleteDayConfirm(d)}
-                    delayLongPress={3000}
+                    onDayLongPress={() => openDeleteDayConfirm(d)}
                     style={[
                       styles.day,
                       { width: dayCellWidth, height: dayCellHeight },
@@ -7505,7 +10043,7 @@ function JournalScreen({
                         <SafeText style={styles.todayMiniBadgeText} minScale={0.7}>TODAY</SafeText>
                       </View>
                     ) : null}
-                  </Pressable>
+                  </JournalCalendarDayPressable>
                 );
               })}
             </View>
@@ -7516,7 +10054,7 @@ function JournalScreen({
         <View style={styles.journalScrollCue}>
           <Text style={styles.journalScrollCueLabel}>{t("scrollToViewTrades")}</Text>
           <View style={styles.journalScrollCueGlass}>
-            <Text style={styles.journalScrollCueChevron}>⌄</Text>
+            <ChevronDown size={18} color={C.purple} strokeWidth={UI_ICON_STROKE} />
           </View>
         </View>
       ) : null}
@@ -7557,9 +10095,27 @@ function JournalScreen({
       <Text style={styles.tradesTodayTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
         {t("tradesToday")} • {eventDateLabel(selectedDate)}
       </Text>
+      {firstInsightVisible && firstInsight ? (
+        <GlassCard style={styles.freeInsightCard} intensity={34}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
+            <Pressable onPress={dismissFirstInsight}>
+              <Text style={styles.valueModalLaterText}>{t("dismiss")}</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
+          <Text style={styles.freeInsightCta}>{t("firstInsightProCta")}</Text>
+        </GlassCard>
+      ) : null}
       {filtered.map((tr) => (
-        <Pressable key={tr.id} onPress={() => openEdit(tr)} onLongPress={() => openDeleteDayConfirm(tr.date)} delayLongPress={3000}>
-          <Card>
+        <JournalTradeSwipeCard
+          key={tr.id}
+          onPress={() => openEdit(tr)}
+          onLongPress={() => openTradeActions(tr)}
+          onDeletePress={() => confirmDeleteTrade(tr.id)}
+          onSwipeReveal={lightHaptic}
+        >
+          <Card animated={false} style={styles.journalSwipeCardInner}>
             <View style={styles.rowBetween}>
               <Text style={styles.tradeSymbolTitle}>{tr.symbol}</Text>
               <Pill
@@ -7595,31 +10151,23 @@ function JournalScreen({
                 <Image
                   source={{ uri: tr.photoUri }}
                   style={styles.tradeThumb}
+                  resizeMode="cover"
                 />
               </Pressable>
             ) : null}
             {tr.notes ? <Text style={styles.notes}>{tr.notes}</Text> : null}
             {tr.voiceUri ? (
               <Pressable onPress={() => Linking.openURL(tr.voiceUri || "")}>
-                <Text style={styles.tapHint}>🎙 {t("openAudio")}</Text>
+                <View style={styles.tapHintIconRow}>
+                  <Mic size={14} color={C.purple} strokeWidth={UI_ICON_STROKE} />
+                  <Text style={styles.tapHintInline}>{t("openAudio")}</Text>
+                </View>
               </Pressable>
             ) : null}
             <Text style={styles.tapHint}>{t("tapToViewEdit")}</Text>
           </Card>
-        </Pressable>
+        </JournalTradeSwipeCard>
       ))}
-      {firstInsightVisible && firstInsight ? (
-        <GlassCard style={styles.freeInsightCard} intensity={34}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.freeInsightTitle}>{firstInsight.title}</Text>
-            <Pressable onPress={dismissFirstInsight}>
-              <Text style={styles.valueModalLaterText}>{t("dismiss")}</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.freeInsightText}>{firstInsight.text}</Text>
-          <Text style={styles.freeInsightCta}>{t("firstInsightProCta")}</Text>
-        </GlassCard>
-      ) : null}
       {lockedInsightVisible ? (
         <GlassCard style={styles.lockedInsightCard} intensity={36}>
           <Text style={styles.freeInsightTitle}>{t("lockedInsightTitle")}</Text>
@@ -7634,6 +10182,37 @@ function JournalScreen({
           </View>
         </GlassCard>
       ) : null}
+      <BottomSheetPanel
+        visible={!!tradeActionTarget}
+        title={t("journalTradeActions")}
+        onClose={() => setTradeActionTarget(null)}
+      >
+        <Pressable
+          style={styles.tradeSheetAction}
+          onPress={() => {
+            const target = tradeActionTarget;
+            setTradeActionTarget(null);
+            if (target) openEdit(target);
+          }}
+        >
+          <Text style={styles.tradeSheetActionText}>{t("journalGestureEditTrade")}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.tradeSheetAction, styles.tradeSheetActionDestructive]}
+          onPress={() => {
+            const target = tradeActionTarget;
+            setTradeActionTarget(null);
+            if (target) confirmDeleteTrade(target.id);
+          }}
+        >
+          <Text style={[styles.tradeSheetActionText, styles.tradeSheetActionDestructiveText]}>
+            {t("deleteTrade")}
+          </Text>
+        </Pressable>
+        <Pressable style={styles.tradeSheetCancel} onPress={() => setTradeActionTarget(null)}>
+          <Text style={styles.tradeSheetCancelText}>{t("cancel")}</Text>
+        </Pressable>
+      </BottomSheetPanel>
       <Modal visible={!!deleteDayDate} transparent animationType="fade">
         <View style={styles.deleteDayBackdrop}>
           <View style={styles.deleteDayCard}>
@@ -7825,110 +10404,172 @@ function JournalScreen({
                 onChangeText={(v: string) => setForm({ ...form, notes: v.slice(0, MAX_NOTES_LENGTH) })}
                 multiline
               />
-              <Text style={styles.label}>{t("voiceNote")}</Text>
-              <View style={styles.row}>
-                <Pressable style={[styles.secondaryPhoto, styles.purpleAction, recorderState.isRecording && { borderColor: C.red, backgroundColor: C.redSoft }]} onPress={pickAudio}>
-                  <Text style={[styles.secondaryText, recorderState.isRecording && { color: C.red }]}>{recorderState.isRecording ? t("stopRecording") : t("recordVoice")}</Text>
-                </Pressable>
-                {form.voiceUri ? (
-                  <Pressable style={[styles.secondaryPhoto, styles.purpleAction]} onPress={() => Linking.openURL(form.voiceUri)}>
-                    <Text style={styles.secondaryText}>{t("openAudio")}</Text>
+              <View style={styles.journalMediaSection}>
+                <PremiumCard tone="purple" compact style={styles.journalMediaCard} contentStyle={styles.journalMediaCardContent}>
+                  <View style={styles.journalMediaCardHeader}>
+                    <Mic size={15} color={C.purple} strokeWidth={2.2} />
+                    <Text style={styles.journalMediaCardTitle}>{t("voiceNote")}</Text>
+                  </View>
+                  {!form.voiceUri && !recorderState.isRecording ? (
+                    <Text style={styles.journalMediaStatus}>{t("noAudio")}</Text>
+                  ) : null}
+                  <Pressable
+                    style={[
+                      styles.journalVoiceBtn,
+                      styles.purpleAction,
+                      recorderState.isRecording && styles.journalVoiceRecording,
+                      form.voiceUri && !recorderState.isRecording && styles.journalVoiceDone,
+                    ]}
+                    onPress={pickAudio}
+                  >
+                    <Mic
+                      size={16}
+                      color={
+                        recorderState.isRecording
+                          ? C.red
+                          : form.voiceUri
+                            ? C.purple
+                            : C.text
+                      }
+                      strokeWidth={2.2}
+                    />
+                    <Text
+                      style={[
+                        styles.journalVoiceBtnText,
+                        recorderState.isRecording && { color: C.red },
+                        form.voiceUri && !recorderState.isRecording && { color: C.purple },
+                      ]}
+                    >
+                      {recorderState.isRecording
+                        ? t("journalFormRecording")
+                        : form.voiceUri
+                          ? t("journalFormVoiceAdded")
+                          : t("journalFormRecordVoiceNote")}
+                    </Text>
                   </Pressable>
-                ) : (
-                  <Text style={styles.sub}>{t("noAudio")}</Text>
-                )}
-              </View>
-              <Text style={styles.label}>{t("photo")}</Text>
-              <View style={styles.row}>
-                {form.photoUri ? (
-                  <Image
-                    source={{ uri: form.photoUri }}
-                    style={styles.tradePhoto}
+                  <Text style={styles.journalMediaHint}>
+                    {recorderState.isRecording
+                      ? t("stopRecording")
+                      : form.voiceUri
+                        ? t("journalFormAudioAttached")
+                        : t("journalFormVoiceHint")}
+                  </Text>
+                  {form.voiceUri ? (
+                    <Pressable
+                      style={styles.journalOpenAudioLink}
+                      onPress={() => Linking.openURL(form.voiceUri)}
+                    >
+                      <Text style={styles.journalOpenAudioText}>{t("openAudio")}</Text>
+                    </Pressable>
+                  ) : null}
+                </PremiumCard>
+
+                <PremiumCard tone="neutral" compact style={styles.journalMediaCard} contentStyle={styles.journalMediaCardContent}>
+                  <Text style={styles.journalMediaCardTitle}>{t("photo")}</Text>
+                  {form.photoUri ? (
+                    <Image source={{ uri: form.photoUri }} style={styles.tradePhoto} />
+                  ) : null}
+                  <View style={styles.journalActionPair}>
+                    <Pressable
+                      style={[styles.journalActionCard, styles.purpleAction]}
+                      onPress={() => pickImage(true)}
+                    >
+                      <Camera size={18} color={C.purple} strokeWidth={2.2} />
+                      <Text style={styles.journalActionCardTitle}>{t("journalFormTakeScreenshot")}</Text>
+                      <Text style={styles.journalActionCardHint}>{t("journalFormCaptureSetup")}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.journalActionCard, styles.purpleAction]}
+                      onPress={() => pickImage(false)}
+                    >
+                      <ImagePlus size={18} color={C.purple} strokeWidth={2.2} />
+                      <Text style={styles.journalActionCardTitle}>{t("journalFormUploadChart")}</Text>
+                      <Text style={styles.journalActionCardHint}>{t("journalFormImportPhotos")}</Text>
+                    </Pressable>
+                  </View>
+                </PremiumCard>
+
+                <Text style={styles.journalSectionEyebrow}>{t("journalFormTradeResult")}</Text>
+                <View style={styles.pnlToggleRow}>
+                  <Pressable
+                    onPress={() => setPnlSide("plus")}
+                    style={[
+                      styles.pnlToggle,
+                      pnlSide !== "plus" && styles.pnlTogglePlusIdle,
+                      pnlSide === "plus" && styles.pnlPlusActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pnlToggleText,
+                        pnlSide === "plus" && { color: C.bg },
+                      ]}
+                    >
+                      + {t("plusPnl")}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setPnlSide("minus")}
+                    style={[
+                      styles.pnlToggle,
+                      pnlSide !== "minus" && styles.pnlToggleMinusIdle,
+                      pnlSide === "minus" && styles.pnlMinusActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pnlToggleText,
+                        pnlSide === "minus" && { color: C.white },
+                      ]}
+                    >
+                      − {t("minusPnl")}
+                    </Text>
+                  </Pressable>
+                </View>
+                <View
+                  style={[
+                    styles.resultBox,
+                    pnlPreview < 0 && styles.resultBoxRed,
+                  ]}
+                >
+                  <Text style={styles.label}>{t("pnl")}</Text>
+                  <TextInput
+                    keyboardType="decimal-pad"
+                    value={form.pnl}
+                    onChangeText={(v: string) => setForm({ ...form, pnl: v })}
+                    placeholder={money(Math.abs(pnlPreview))}
+                    placeholderTextColor={pnlPreview < 0 ? C.red : C.green}
+                    style={[
+                      styles.resultInput,
+                      pnlPreview < 0 && { color: C.red },
+                    ]}
+                    textAlign="center"
                   />
-                ) : null}
-                <Pressable
-                  style={[styles.secondaryPhoto, styles.purpleAction]}
-                  onPress={() => pickImage(true)}
-                >
-                  <Text style={styles.secondaryText}>{t("takePhoto")}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.secondaryPhoto, styles.purpleAction]}
-                  onPress={() => pickImage(false)}
-                >
-                  <Text style={styles.secondaryText}>{t("uploadPhoto")}</Text>
-                </Pressable>
-              </View>
-              <View style={styles.pnlToggleRow}>
-                <Pressable
-                  onPress={() => setPnlSide("plus")}
-                  style={[
-                    styles.pnlToggle,
-                    pnlSide === "plus" && styles.pnlPlusActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pnlToggleText,
-                      pnlSide === "plus" && { color: C.bg },
-                    ]}
-                  >
-                    + {t("plusPnl")}
+                  <Text style={styles.journalPnlHint}>
+                    {String(form.pnl || "").trim()
+                      ? t("journalFormPnlHintManual")
+                      : t("journalFormPnlHintAuto")}
                   </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setPnlSide("minus")}
-                  style={[
-                    styles.pnlToggle,
-                    pnlSide === "minus" && styles.pnlMinusActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pnlToggleText,
-                      pnlSide === "minus" && { color: C.white },
-                    ]}
-                  >
-                    − {t("minusPnl")}
+                </View>
+
+                <Pressable style={styles.primaryBig} onPress={save}>
+                  <Text style={styles.primaryText}>
+                    {editId ? t("updateTrade") : t("saveTrade")}
                   </Text>
+                  <Text style={styles.journalSaveHint}>{t("journalFormSaveHint")}</Text>
+                </Pressable>
+                {editId && (
+                  <Pressable style={styles.deleteBig} onPress={remove}>
+                    <Text style={styles.deleteText}>{t("deleteTrade")}</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  style={[styles.secondaryBig, styles.journalCloseSecondary]}
+                  onPress={() => setModal(false)}
+                >
+                  <Text style={styles.journalCloseText}>{t("close")}</Text>
                 </Pressable>
               </View>
-              <View
-                style={[
-                  styles.resultBox,
-                  pnlPreview < 0 && styles.resultBoxRed,
-                ]}
-              >
-                <Text style={styles.label}>{t("pnl")}</Text>
-                <TextInput
-                  keyboardType="decimal-pad"
-                  value={form.pnl}
-                  onChangeText={(v: string) => setForm({ ...form, pnl: v })}
-                  placeholder={money(Math.abs(pnlPreview))}
-                  placeholderTextColor={pnlPreview < 0 ? C.red : C.green}
-                  style={[
-                    styles.resultInput,
-                    pnlPreview < 0 && { color: C.red },
-                  ]}
-                  textAlign="center"
-                />
-              </View>
-              <Pressable style={styles.primaryBig} onPress={save}>
-                <Text style={styles.primaryText}>
-                  {editId ? t("updateTrade") : t("saveTrade")}
-                </Text>
-              </Pressable>
-              {editId && (
-                <Pressable style={styles.deleteBig} onPress={remove}>
-                  <Text style={styles.deleteText}>{t("deleteTrade")}</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={styles.secondaryBig}
-                onPress={() => setModal(false)}
-              >
-                <Text style={styles.secondaryText}>{t("close")}</Text>
-              </Pressable>
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -7955,6 +10596,14 @@ function JournalScreen({
         </SafeAreaView>
       </Modal>
     </ScrollView>
+    {deleteToastKey ? (
+      <View style={styles.journalDeleteToastWrap} pointerEvents="none">
+        <View style={styles.journalDeleteToast}>
+          <Text style={styles.journalDeleteToastText}>{t(deleteToastKey)}</Text>
+        </View>
+      </View>
+    ) : null}
+    </View>
   );
 }
 
@@ -7968,30 +10617,44 @@ function MarketSection({ title, children }: { title: string; children: React.Rea
 }
 
 function MarketEmpty({ text }: { text: string }) {
-  return <Text style={styles.marketEmptyText}>{text}</Text>;
+  return (
+    <EmptyStateCard
+      tone="purple"
+      title={t("marketIntelEmptyTitle")}
+      message={text}
+      icon={<Newspaper size={24} color={C.purple} strokeWidth={2.4} />}
+    />
+  );
 }
 
 function MarketIntelligencePanel({ lang }: { lang: Lang }) {
   const [intel, setIntel] = useState<MarketIntelData | null>(null);
   const [loading, setLoading] = useState(true);
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const data = await loadMarketIntelligence();
-    setIntel(data);
-    setLoading(false);
-  }, []);
   useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      if (alive) setLoading(true);
+      try {
+        const data = await loadMarketIntelligence();
+        if (alive) setIntel(data);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
     trackEvent("market_intel_viewed", { source: "cached" });
-    refresh();
-    const id = setInterval(refresh, 60000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    load();
+    const id = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
 
   const data = intel || { brief: null, watchlist: [], summary: null, events: [], propUpdates: [], headlines: [] };
   return (
     <View style={styles.terminalScreenStack}>
       <MarketSection title={t("dailyBrief")}>
-        {loading && !intel ? <ActivityIndicator color={C.purple} /> : data.brief ? (
+        {loading && !intel ? <AiAnalysisLoading /> : data.brief ? (
           <GlassCard style={styles.marketHeroCard} intensity={30}>
             <View style={styles.rowBetween}>
               <Pill text={data.brief.marketRegime} tone="med" />
@@ -8019,31 +10682,117 @@ function MarketIntelligencePanel({ lang }: { lang: Lang }) {
   );
 }
 
+function NewsListItem({ item }: { item: MarketNews }) {
+  return (
+    <AnimatedPressable onPress={() => {
+      trackEvent("news_opened", { source: item.source, impact: item.impact, has_url: !!item.url });
+      return item.url ? Linking.openURL(item.url) : undefined;
+    }}>
+      <GlassCard style={styles.purpleNewsCard} intensity={28} compact>
+        <View style={styles.rowBetween}>
+          <Pill text={item.impact} tone={item.impact === "HIGH" ? "high" : item.impact === "MED" ? "med" : "low"} />
+          <Text style={styles.sub}>{item.source} • {item.time}</Text>
+        </View>
+        <Text style={styles.newsTitle}>{item.title}</Text>
+        {!!item.summary && <Text style={styles.newsSummary}>{item.summary}</Text>}
+        <View style={styles.assetGrid}>
+          {ASSETS.map((asset) => {
+            const bias = item.bias[asset] || "NEUTRAL";
+            const tone = bias === "LONG" ? C.green : bias === "SHORT" ? C.red : C.sub;
+            return (
+              <View key={asset} style={styles.assetCell}>
+                <Text style={styles.asset}>{asset}</Text>
+                <Text style={[styles.calendarBiasValue, { color: tone }]}>{bias} {bias === "LONG" ? "↑" : bias === "SHORT" ? "↓" : "-"}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </GlassCard>
+    </AnimatedPressable>
+  );
+}
+
+const MemoNewsListItem = React.memo(NewsListItem);
+
 function NewsScreen({
   lang,
   isPremium,
+  userId,
   onUpgrade,
 }: {
   lang: Lang;
   isPremium: boolean;
+  userId: string | null;
   onUpgrade: () => void;
 }) {
   const [items, setItems] = useState<MarketNews[]>([]);
   const [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
     setLoading(true);
-    const news = await loadNews();
-    setItems(news);
-    setLoading(false);
+    try {
+      const news = await loadNews();
+      setItems(news);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let alive = true;
+    const load = async () => {
+      if (alive) setLoading(true);
+      try {
+        const news = await loadNews();
+        if (alive) setItems(news);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const renderNewsItem = useCallback(({ item }: { item: MarketNews }) => (
+    <MemoNewsListItem item={item} />
+  ), []);
+  const newsKeyExtractor = useCallback((item: MarketNews) => item.id, []);
+  const newsListHeader = useMemo(
+    () => (
+      <AiNewsSentimentCard
+        isPremium={isPremium}
+        onUpgrade={onUpgrade}
+        userId={userId}
+        headlines={items.slice(0, 8).map((item) => ({
+          title: item.title,
+          summary: item.summary,
+          source: item.source,
+          time: item.time,
+          impact: item.impact,
+          symbols: ASSETS.filter((asset) => item.bias[asset] && item.bias[asset] !== "NEUTRAL"),
+        }))}
+      />
+    ),
+    [isPremium, items, onUpgrade, userId],
+  );
+  const newsListEmpty = useMemo(
+    () => (
+      <EmptyStateCard
+        tone="purple"
+        title={t("newsEmptyTitle")}
+        message={t("newsEmptyMessage")}
+        icon={<Newspaper size={24} color={C.purple} strokeWidth={2.4} />}
+      />
+    ),
+    [],
+  );
 
   if (loading && !items.length) {
     return (
       <View style={styles.screen}>
-        <ActivityIndicator color={C.green} size="large" style={{ marginTop: 60 }} />
+        <View style={styles.newsList}>
+          <PremiumSkeletonStack count={4} tone="lime" />
+        </View>
       </View>
     );
   }
@@ -8053,53 +10802,30 @@ function NewsScreen({
       style={styles.screen}
       contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}
       data={items}
-      keyExtractor={(item) => item.id}
+      keyExtractor={newsKeyExtractor}
+      renderItem={renderNewsItem}
       refreshing={loading}
       onRefresh={refresh}
-      ListHeaderComponent={<AiNewsSentimentCard isPremium={isPremium} onUpgrade={onUpgrade} />}
-      ListEmptyComponent={
-        <GlassCard style={styles.marketCard} intensity={28}>
-          <Text style={styles.newsTitle}>{t("marketHeadlinesWarming")}</Text>
-          <Text style={styles.newsSummary}>{t("marketHeadlinesSub")}</Text>
-        </GlassCard>
-      }
-      renderItem={({ item }) => (
-        <Pressable onPress={() => {
-          trackEvent("news_opened", { source: item.source, impact: item.impact, has_url: !!item.url });
-          return item.url ? Linking.openURL(item.url) : undefined;
-        }}>
-          <GlassCard style={styles.purpleNewsCard} intensity={28}>
-            <View style={styles.rowBetween}>
-              <Pill text={item.impact} tone={item.impact === "HIGH" ? "high" : item.impact === "MED" ? "med" : "low"} />
-              <Text style={styles.sub}>{item.source} • {item.time}</Text>
-            </View>
-            <Text style={styles.newsTitle}>{item.title}</Text>
-            {!!item.summary && <Text style={styles.newsSummary}>{item.summary}</Text>}
-            <View style={styles.assetGrid}>
-              {ASSETS.map((asset) => {
-                const bias = item.bias[asset] || "NEUTRAL";
-                const tone = bias === "LONG" ? C.green : bias === "SHORT" ? C.red : C.sub;
-                return (
-                  <View key={asset} style={styles.assetCell}>
-                    <Text style={styles.asset}>{asset}</Text>
-                    <Text style={[styles.calendarBiasValue, { color: tone }]}>{bias} {bias === "LONG" ? "↑" : bias === "SHORT" ? "↓" : "-"}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </GlassCard>
-        </Pressable>
-      )}
+      removeClippedSubviews
+      initialNumToRender={8}
+      maxToRenderPerBatch={6}
+      windowSize={7}
+      ListHeaderComponent={newsListHeader}
+      ListEmptyComponent={newsListEmpty}
     />
   );
 }
 
-function SmallMetric({ l, v }: any) {
+function SmallMetric({ l, v, value, formatValue }: any) {
   return (
-    <View style={styles.smallMetric}>
+    <AnimatedEntrance style={styles.smallMetric} distance={6}>
       <Text style={styles.label}>{l}</Text>
-      <Text style={styles.metric}>{v}</Text>
-    </View>
+      {typeof value === "number" ? (
+        <CountUpText value={value} durationMs={420} formatValue={formatValue} textStyle={styles.metric} />
+      ) : (
+        <Text style={styles.metric}>{v}</Text>
+      )}
+    </AnimatedEntrance>
   );
 }
 function CalendarScreen({
@@ -8118,16 +10844,23 @@ function CalendarScreen({
   const [events, setEvents] = useState<EconEvent[]>([]);
   const [selected, setSelected] = useState(todayISO());
   const [loading, setLoading] = useState(true);
-  const refresh = async () => {
-    setLoading(true);
-    const d = await loadCalendarEvents();
-    setEvents(d);
-    setLoading(false);
-  };
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 60000);
-    return () => clearInterval(id);
+    let alive = true;
+    const load = async () => {
+      if (alive) setLoading(true);
+      try {
+        const d = await loadCalendarEvents();
+        if (alive) setEvents(d);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    load();
+    const id = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, []);
   const today = todayISO();
   const dayStrip = Array.from({ length: 31 }, (_, i) => isoFromDate(addDays(new Date(), i)));
@@ -8190,11 +10923,7 @@ function CalendarScreen({
         ))}
       </ScrollView>
       {loading && !events.length ? (
-        <ActivityIndicator
-          color={C.green}
-          size="large"
-          style={{ marginTop: 24 }}
-        />
+        <PremiumSkeletonStack count={4} tone="purple" style={styles.calendarSkeletonStack} />
       ) : (
         orderedAgenda.length ? orderedAgenda.map((e) => {
           const timeParts = splitTimeLabel(e.time);
@@ -8263,10 +10992,12 @@ function CalendarScreen({
           </Card>
           );
         }) : (
-          <Card style={styles.calendarEventCard}>
-            <Text style={styles.calendarEventTitle}>{t("noEventsThisDay")}</Text>
-            <Text style={[styles.sub, { marginTop: 6 }]}>{t("noEventsThisDaySub")}</Text>
-          </Card>
+          <EmptyStateCard
+            tone="purple"
+            title={t("calendarEmptyTitle")}
+            message={t("calendarEmptyMessage")}
+            icon={<CalendarDays size={24} color={C.purple} strokeWidth={2.4} />}
+          />
         )
       )}
     </ScrollView>
@@ -8316,9 +11047,14 @@ function CalcScreen({ lang }: { lang: Lang }) {
         <Input label={t("contracts")} keyboardType="number-pad" value={contracts} onChangeText={setContracts} />
         <View style={styles.resultBox}>
           <Text style={styles.label}>{t("resultInUsd")}</Text>
-          <Text style={styles.result} numberOfLines={1} adjustsFontSizeToFit>
-            ${result.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </Text>
+          <CountUpText
+            value={result}
+            durationMs={460}
+            formatValue={(value) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            textStyle={styles.result}
+          />
           <Text style={styles.sub}>{amount} {mode} × ${unitValue.toFixed(2)} × {contracts} contracts • {i.name}</Text>
         </View>
       </Card>
@@ -8329,9 +11065,9 @@ function CalcScreen({ lang }: { lang: Lang }) {
           <View style={{ flex: 1 }}><Input label={t("tpAmount")} keyboardType="decimal-pad" value={tp} onChangeText={setTp} /></View>
         </View>
         <View style={styles.row}>
-          <SmallMetric l="Risk $" v={`$${risk.toFixed(2)}`} />
-          <SmallMetric l="Reward $" v={`$${reward.toFixed(2)}`} />
-          <SmallMetric l="RR" v={rr ? `1:${rr.toFixed(2)}` : "—"} />
+          <SmallMetric l="Risk $" value={risk} formatValue={(value: number) => `$${value.toFixed(2)}`} />
+          <SmallMetric l="Reward $" value={reward} formatValue={(value: number) => `$${value.toFixed(2)}`} />
+          <SmallMetric l="RR" value={rr || undefined} v={rr ? `1:${rr.toFixed(2)}` : "—"} formatValue={(value: number) => `1:${value.toFixed(2)}`} />
         </View>
       </Card>
       <Card>
@@ -8342,15 +11078,65 @@ function CalcScreen({ lang }: { lang: Lang }) {
         </View>
         <View style={styles.resultBox}>
           <Text style={styles.label}>{t("maxRisk")}</Text>
-          <Text style={styles.result} numberOfLines={1} adjustsFontSizeToFit>
-            ${maxRiskDollars.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </Text>
+          <CountUpText
+            value={maxRiskDollars}
+            durationMs={460}
+            formatValue={(value) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            textStyle={styles.result}
+          />
           <Text style={styles.sub}>Balance ${Number(balance || 0).toLocaleString()} × {riskPct || 0}%</Text>
         </View>
       </Card>
     </ScrollView>
   );
 }
+type ProBenefitTone = "purple" | "lime";
+
+const PRO_BENEFIT_SECTIONS: Array<{
+  titleKey: string;
+  bodyKey: string;
+  tone: ProBenefitTone;
+  Icon: typeof BrainCircuit;
+}> = [
+  { titleKey: "paywallBenefitCoachTitle", bodyKey: "paywallBenefitCoachBody", tone: "purple", Icon: BrainCircuit },
+  { titleKey: "paywallBenefitLeaksTitle", bodyKey: "paywallBenefitLeaksBody", tone: "lime", Icon: Target },
+  { titleKey: "paywallBenefitPropTitle", bodyKey: "paywallBenefitPropBody", tone: "purple", Icon: ShieldCheck },
+  { titleKey: "paywallBenefitJournalTitle", bodyKey: "paywallBenefitJournalBody", tone: "lime", Icon: FileText },
+  { titleKey: "paywallBenefitAnalyticsTitle", bodyKey: "paywallBenefitAnalyticsBody", tone: "purple", Icon: ChartColumnIncreasing },
+  { titleKey: "paywallBenefitPatternsTitle", bodyKey: "paywallBenefitPatternsBody", tone: "lime", Icon: Sparkles },
+  { titleKey: "paywallBenefitMarketTitle", bodyKey: "paywallBenefitMarketBody", tone: "purple", Icon: Newspaper },
+  { titleKey: "paywallBenefitExportTitle", bodyKey: "paywallBenefitExportBody", tone: "lime", Icon: Share2 },
+  { titleKey: "paywallBenefitProgressTitle", bodyKey: "paywallBenefitProgressBody", tone: "purple", Icon: Trophy },
+];
+
+function ProBenefitSectionList({ compact = false }: { compact?: boolean }) {
+  return (
+    <View style={compact ? styles.proBenefitStack : styles.paywallFeatureGrid}>
+      {PRO_BENEFIT_SECTIONS.map((item) => (
+        <PremiumCard
+          key={item.titleKey}
+          tone={item.tone}
+          compact
+          style={[styles.paywallFeatureCard, compact && styles.proBenefitStackCard]}
+          contentStyle={[styles.paywallFeatureContent, compact && styles.proBenefitStackContent]}
+        >
+          <View style={[styles.paywallFeatureIcon, item.tone === "lime" ? styles.paywallFeatureIconLime : styles.paywallFeatureIconPurple]}>
+            <item.Icon size={18} color={item.tone === "lime" ? C.green : C.purple} strokeWidth={UI_ICON_STROKE} />
+          </View>
+          <Text style={styles.paywallFeatureTitle} numberOfLines={2}>
+            {t(item.titleKey)}
+          </Text>
+          <Text style={styles.paywallFeatureBody} numberOfLines={compact ? 2 : 3}>
+            {t(item.bodyKey)}
+          </Text>
+        </PremiumCard>
+      ))}
+    </View>
+  );
+}
+
 function PremiumScreen({
   lang,
   onClose,
@@ -8381,9 +11167,28 @@ function PremiumScreen({
   const yearlyPriceLabel = yearly
     ? packagePrice(yearly)
     : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
+  const entrance = useRef(new Animated.Value(0)).current;
+  const primaryPrice = packagePrice(monthly);
+
   useEffect(() => {
     trackEvent("paywall_viewed", { screen: "premium_screen" });
-  }, []);
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: 520,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [entrance]);
+
+  const entranceStyle = {
+    opacity: entrance,
+    transform: [
+      {
+        translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }),
+      },
+    ],
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.modalHeader}>
@@ -8392,82 +11197,167 @@ function PremiumScreen({
           <Text style={styles.closeX}>×</Text>
         </Pressable>
       </View>
-      <Card>
-        <Text style={styles.h2}>{t("premiumAccess")}</Text>
-        <Text style={styles.sub}>{t("premiumLockedText")}</Text>
-        {[
-          "premiumBenefit1",
-          "premiumBenefit2",
-          "premiumBenefit3",
-          "premiumBenefit4",
-          "premiumBenefit5",
-          "premiumBenefit6",
-          "premiumBenefit7",
-          "premiumBenefit8",
-        ].map((k) => (
-          <Text key={k} style={styles.benefit}>
-            ✓ {t(k)}
-          </Text>
-        ))}
-        <View style={styles.planRow}>
-          <Pressable
-            disabled={purchaseBusy}
-            onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
-            style={[styles.monthlyPlan, purchaseBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.planName}>MONTHLY</Text>
-            <Text style={styles.planPrice}>{packagePrice(monthly)}</Text>
-          </Pressable>
-          <Pressable
-            disabled={purchaseBusy}
-            onPress={() => onPurchase(yearly, YOU_TRADER_YEARLY_PRODUCT_ID)}
-            style={[styles.yearlyPlan, purchaseBusy && styles.disabledBtn]}
-          >
-            <View style={styles.bestValueBadge}>
-              <Text style={styles.bestValueText}>{t("bestValue")}</Text>
+      <Animated.View style={entranceStyle}>
+        <GlowBorderCard tone="purple" radius={28} contentStyle={styles.premiumPaywallCard}>
+          <View style={styles.premiumPaywallGlowLime} pointerEvents="none" />
+          <View style={styles.premiumPaywallGlowPurple} pointerEvents="none" />
+          <View style={styles.paywallHeroTop}>
+            <View style={styles.paywallHeroCopy}>
+              <Text style={styles.paywallKicker}>{t("premiumAccess")}</Text>
+              <Text style={styles.paywallHeroTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.78}>
+                {t("paywallHeroTitle")}
+              </Text>
+              <Text style={styles.paywallHeroSub}>{t("premiumLockedText")}</Text>
             </View>
-            <Text style={styles.planName}>YEARLY</Text>
-            <Text style={styles.planPrice}>{yearlyPriceLabel}</Text>
-          </Pressable>
-        </View>
-        <Pressable
-          disabled={purchaseBusy}
-          onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
-          style={[styles.primaryBig, purchaseBusy && styles.disabledBtn]}
-        >
-          <Text style={styles.primaryText}>
-            {purchaseBusy ? t("connecting") : `${t("unlockPro")} • ${packagePrice(monthly)}`}
-          </Text>
-        </Pressable>
-        <SubscriptionLegalDisclosure
-          monthlyPackage={monthly}
-          monthlyProduct={monthlyProduct}
-          yearlyPackage={yearly}
-          yearlyProduct={yearlyProduct}
-        />
-        {(showRestorePurchases || !!paywallError) ? (
-          <Pressable
+            <View style={styles.paywallTerminalBadge}>
+              <Text style={styles.paywallTerminalBadgeText}>PRO</Text>
+              <View style={styles.paywallTerminalDots}>
+                <View style={[styles.paywallTerminalDot, { backgroundColor: C.green }]} />
+                <View style={[styles.paywallTerminalDot, { backgroundColor: C.purple }]} />
+              </View>
+            </View>
+          </View>
+
+          {purchaseBusy ? (
+            <PremiumCard tone="purple" compact style={styles.paywallBusyCard} contentStyle={styles.paywallBusyContent}>
+              <View style={styles.paywallBusyHeader}>
+                <ActivityIndicator color={C.green} />
+                <Text style={styles.paywallBusyTitle}>{t("paywallProcessingTitle")}</Text>
+              </View>
+              <PremiumLoadingBar progress={0.68} tone="lime" height={4} />
+              <Text style={styles.paywallBusyText}>{t("paywallProcessingBody")}</Text>
+            </PremiumCard>
+          ) : null}
+
+          <ProBenefitSectionList compact />
+
+          <NeonDivider tone="purple" style={styles.paywallDivider} />
+
+          <View style={styles.planRow}>
+            <AnimatedPressable
+              disabled={purchaseBusy}
+              haptic
+              onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+              style={styles.planPressable}
+              contentStyle={styles.monthlyPlan}
+            >
+              <Text style={styles.planName}>{t("monthlyPlan")}</Text>
+              <Text style={styles.planPrice}>{primaryPrice}</Text>
+              <Text style={styles.planCaption}>{t("paywallPlanMonthlyCaption")}</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              disabled={purchaseBusy}
+              haptic
+              onPress={() => onPurchase(yearly, YOU_TRADER_YEARLY_PRODUCT_ID)}
+              style={styles.planPressable}
+              contentStyle={styles.yearlyPlan}
+            >
+              <View style={styles.bestValueBadge}>
+                <Text style={styles.bestValueText}>{t("bestValue")}</Text>
+              </View>
+              <Text style={styles.planName}>{t("yearlyPlan")}</Text>
+              <Text style={styles.planPrice}>{yearlyPriceLabel}</Text>
+              <Text style={styles.planCaption}>{t("paywallPlanYearlyCaption")}</Text>
+            </AnimatedPressable>
+          </View>
+
+          <AnimatedPressable
+            disabled={purchaseBusy}
+            haptic
+            onPress={() => onPurchase(monthly, YOU_TRADER_MONTHLY_PRODUCT_ID)}
+            style={styles.paywallCtaPressable}
+            contentStyle={[styles.primaryBig, styles.paywallPrimaryCta, purchaseBusy && styles.disabledBtn]}
+          >
+            <Text style={styles.primaryText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+              {purchaseBusy ? t("connecting") : `${t("unlockPro")} • ${primaryPrice}`}
+            </Text>
+            {!purchaseBusy ? <Text style={styles.paywallCtaSub}>{t("paywallCtaSub")}</Text> : null}
+          </AnimatedPressable>
+
+          <AnimatedPressable
             disabled={purchaseBusy}
             onPress={onRestore}
-            style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
+            style={styles.paywallRestorePressable}
+            contentStyle={[styles.secondaryBig, styles.restorePurchaseBtn, styles.paywallRestoreBtn, purchaseBusy && styles.disabledBtn]}
           >
             <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
-          </Pressable>
-        ) : null}
-        {paywallError ? (
-          <Text style={[styles.sub, { color: C.red, marginTop: 10 }]}>{paywallError}</Text>
-        ) : null}
-      </Card>
+            <Text style={styles.paywallRestoreHint}>{t("paywallRestoreHint")}</Text>
+          </AnimatedPressable>
+
+          {paywallError ? (
+            <View style={styles.paywallFeedbackError}>
+              <Text style={styles.paywallFeedbackTitle}>{t("purchaseIssue")}</Text>
+              <Text style={styles.paywallFeedbackText}>{paywallError}</Text>
+            </View>
+          ) : (
+            <View style={styles.paywallFeedbackNeutral}>
+              <Text style={styles.paywallFeedbackTitle}>{t("paywallSecureTitle")}</Text>
+              <Text style={styles.paywallFeedbackText}>{t("paywallSecureBody")}</Text>
+            </View>
+          )}
+
+          <SubscriptionLegalDisclosure
+            monthlyPackage={monthly}
+            monthlyProduct={monthlyProduct}
+            yearlyPackage={yearly}
+            yearlyProduct={yearlyProduct}
+          />
+        </GlowBorderCard>
+      </Animated.View>
     </ScrollView>
   );
 }
 
 function SettingsBenefitLine({ children }: { children: React.ReactNode }) {
   return (
-    <Text style={styles.settingsBenefit}>
-      <Text style={styles.settingsBenefitCheck}>✓ </Text>
+    <View style={styles.settingsBenefit}>
+      <Check size={16} color={C.green} strokeWidth={UI_ICON_STROKE} />
       <Text style={styles.settingsBenefitText}>{children}</Text>
-    </Text>
+    </View>
+  );
+}
+
+function TradeVisionPrivacyControls() {
+  const [acknowledgement, setAcknowledgement] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const refresh = useCallback(() => {
+    void getTradeVisionPrivacyAcknowledgement().then((value) => setAcknowledgement(Boolean(value)));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const clearCache = async () => {
+    const count = await clearTradeVisionLocalCache();
+    setStatus(count ? "Deleted local Trade Vision review cache." : "No local Trade Vision review cache to delete.");
+  };
+
+  const resetAcknowledgement = async () => {
+    await revokeTradeVisionPrivacyAcknowledgement();
+    setAcknowledgement(false);
+    setStatus("Trade Vision acknowledgement reset. You will see the disclosure before the next image selection.");
+  };
+
+  return (
+    <Card>
+      <Text style={styles.h2}>Trade Vision privacy</Text>
+      <Text style={styles.sub}>Selected chart images are sent to an external AI service only when you request a Trade Vision review. They are not used for Agent-007 or general product analytics.</Text>
+      <Text style={[styles.sub, { marginTop: 8 }]}>{acknowledgement ? "Privacy acknowledgement is active." : "You have not acknowledged the Trade Vision image-processing disclosure."}</Text>
+      <Pressable onPress={() => void openLegalUrl(PRIVACY_POLICY_URL, "Privacy Policy")} style={[styles.secondaryBig, { marginTop: 14 }]}>
+        <Text style={styles.secondaryText}>Read Privacy Policy</Text>
+      </Pressable>
+      <Pressable onPress={() => void clearCache()} style={[styles.secondaryBig, { marginTop: 10 }]}>
+        <Text style={styles.secondaryText}>Delete Local Trade Vision Cache</Text>
+      </Pressable>
+      {acknowledgement ? (
+        <Pressable onPress={() => void resetAcknowledgement()} style={[styles.secondaryBig, { marginTop: 10 }]}>
+          <Text style={styles.secondaryText}>Reset Trade Vision Acknowledgement</Text>
+        </Pressable>
+      ) : null}
+      {status ? <Text style={[styles.sub, { marginTop: 10 }]}>{status}</Text> : null}
+    </Card>
   );
 }
 
@@ -8488,11 +11378,9 @@ function SettingsScreen({
   cloudSyncStatus,
   cloudSyncMessage,
   lastCloudSyncAt,
-  lockScreenBufferEnabled,
   onPurchase,
   onRestore,
   onSyncNow,
-  onToggleLockScreenBuffer,
   onImportTradesCsv,
   onSignIn,
   onSignOut,
@@ -8500,6 +11388,7 @@ function SettingsScreen({
   onChangeEmail,
   calendarEvents,
   onUpgrade,
+  refreshDailyPropBuffer,
 }: {
   lang: Lang;
   setLang: (x: Lang) => void;
@@ -8517,11 +11406,9 @@ function SettingsScreen({
   cloudSyncStatus: "off" | "syncing" | "synced" | "error";
   cloudSyncMessage: string;
   lastCloudSyncAt: string | null;
-  lockScreenBufferEnabled: boolean;
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
   onSyncNow: () => void;
-  onToggleLockScreenBuffer: (enabled: boolean) => void;
   onImportTradesCsv: () => void;
   onSignIn: (provider: AuthProvider) => void;
   onSignOut: () => void;
@@ -8529,71 +11416,12 @@ function SettingsScreen({
   onChangeEmail: (email: string) => Promise<void>;
   calendarEvents: EconEvent[];
   onUpgrade: () => void;
+  refreshDailyPropBuffer: () => Promise<void>;
 }) {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const choose = (l: Lang) => {
     void changeAppLanguage(l).then(() => setLang(l));
-  };
-  const [calendarAlertsEnabled, setCalendarAlertsEnabled] = useState(false);
-  const [propRiskAlertsEnabled, setPropRiskAlertsEnabled] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem("calendar-alerts-v1").then((v) => setCalendarAlertsEnabled(v === "on"));
-    AsyncStorage.getItem("prop-risk-alerts-v1").then((v) => setPropRiskAlertsEnabled(v === "on"));
-  }, []);
-
-  const togglePropRiskAlerts = async () => {
-    if (propRiskAlertsEnabled) {
-      await clearLocalReminder(PROP_RISK_ALERT_ID_KEY, "propDailyBufferAtRisk");
-      await AsyncStorage.setItem("prop-risk-alerts-v1", "off");
-      setPropRiskAlertsEnabled(false);
-      return;
-    }
-    const id = await scheduleLocalReminder({
-      idKey: PROP_RISK_ALERT_ID_KEY,
-      title: t("youTraderRiskCoach"),
-      body: t("riskCoachReminderBody"),
-      hour: 8,
-      minute: 15,
-      preference: "propDailyBufferAtRisk",
-    });
-    if (!id) {
-      Alert.alert(t("notifications"), t("notificationsRiskPermission"));
-      return;
-    }
-    await AsyncStorage.setItem("prop-risk-alerts-v1", "on");
-    setPropRiskAlertsEnabled(true);
-  };
-
-  const toggleCalendarAlerts = async (enabled: boolean) => {
-    setCalendarAlertsEnabled(enabled);
-    try {
-      if (!enabled) {
-        await clearLocalReminder(CALENDAR_ALERT_ID_KEY, "dailyBriefReady");
-        await AsyncStorage.setItem("calendar-alerts-v1", "off");
-        return;
-      }
-
-      const id = await scheduleLocalReminder({
-        idKey: CALENDAR_ALERT_ID_KEY,
-        title: t("youTraderEconomicCalendar"),
-        body: t("economicCalendarReminderBody"),
-        hour: 7,
-        minute: 45,
-        preference: "dailyBriefReady",
-      });
-      if (!id) {
-        setCalendarAlertsEnabled(false);
-        Alert.alert(t("notifications"), t("notificationsCalendarPermission"));
-        return;
-      }
-      await AsyncStorage.setItem("calendar-alerts-v1", "on");
-    } catch (error) {
-      setCalendarAlertsEnabled(!enabled);
-      Alert.alert(t("calendarAlertsTitle"), t("calendarAlertsUpdateFailed"));
-      captureAppError(error, { feature: "settings", action: "toggle_calendar_alerts" });
-    }
   };
 
   const legalInfo = `YouTrader: Terms of Service, Risk Disclosure & Privacy Policy
@@ -8620,7 +11448,7 @@ To provide performance analytics, YouTrader collects the following information:
 
 Account Data: If account features are enabled in a future version, YouTrader may collect your name and email address for account access.
 
-User-Generated Data: We securely store the trading logs, dates, times, contract types, execution prices, screenshots, and custom tags that you manually input or import via file uploads (CSV/Excel).
+User-Generated Data: We securely store the trading logs, dates, times, contract types, execution prices, journal screenshots, and custom tags that you manually input or import via file uploads (CSV/Excel). Trade Vision is separate: when you choose to analyze a chart image, the selected image is sent to an external AI service to perform the requested review. Do not include personal, account, brokerage, or other sensitive information in an image you send for analysis.
 
 Usage & Device Data: We may automatically collect anonymized technical data, including device model, operating system, app version, and crash logs to monitor and optimize application performance.
 
@@ -8628,6 +11456,8 @@ Note: YouTrader does not collect, request, or store your live brokerage password
 
 2. Data Use, Security, and Protection
 Your trading data is used strictly to generate your personal statistics, charts, and subscription status. We do not sell, rent, trade, or share your personal identity or specific trading data with third-party advertisers.
+
+AI-Powered Chart Image Analysis: A Trade Vision image is sent only after you select it and request analysis. It is not used for Agent-007 or general product analytics. The application does not write the Trade Vision source image to its database or local AI-response cache; a locally cached review can be deleted in Settings. External AI services may process image content under their own terms, so see the current Privacy Policy for the applicable provider and processing details.
 
 3. Data Ownership and Deletion Rights (GDPR & CCPA Compliance)
 You retain full ownership of your data. In compliance with data privacy regulations, including GDPR and CCPA, you have the right to access, export, or permanently delete your account and all associated trading logs at any time. This action can be executed directly via the Application Settings. Once initiated, all account records are physically and permanently purged from our active databases.
@@ -8640,47 +11470,6 @@ YouTrader does not knowingly collect data from or market to individuals under th
       <View>
         <Card style={styles.notificationsCard}>
           <Text style={[styles.h2, styles.notificationsTitle]}>{t("notifications")}</Text>
-          <View style={styles.settingsSwitchRow}>
-            <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>{t("dailyPropReminder")}</Text>
-              <Text style={styles.sub}>{t("dailyPropReminderBody")}</Text>
-            </View>
-            <Switch
-              value={lockScreenBufferEnabled}
-              onValueChange={(enabled) => onToggleLockScreenBuffer(enabled)}
-              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
-              thumbColor={lockScreenBufferEnabled ? C.purple : "#7D8795"}
-              ios_backgroundColor="#222936"
-            />
-          </View>
-          <View style={styles.settingsSwitchDividerPurple} />
-          <View style={styles.settingsSwitchRow}>
-            <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>{t("riskAlerts")}</Text>
-              <Text style={styles.sub}>{t("riskAlertsBody")}</Text>
-            </View>
-            <Switch
-              value={propRiskAlertsEnabled}
-              onValueChange={togglePropRiskAlerts}
-              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
-              thumbColor={propRiskAlertsEnabled ? C.purple : "#7D8795"}
-              ios_backgroundColor="#222936"
-            />
-          </View>
-          <View style={styles.settingsSwitchDividerPurple} />
-          <View style={styles.settingsSwitchRow}>
-            <View style={styles.settingsSwitchCopy}>
-              <Text style={styles.settingsSwitchTitle}>{t("economicCalendarAlerts")}</Text>
-              <Text style={styles.sub}>{t("economicCalendarAlertsBody")}</Text>
-            </View>
-            <Switch
-              value={calendarAlertsEnabled}
-              onValueChange={toggleCalendarAlerts}
-              trackColor={{ false: "#222936", true: "rgba(176,38,255,0.55)" }}
-              thumbColor={calendarAlertsEnabled ? C.purple : "#7D8795"}
-              ios_backgroundColor="#222936"
-            />
-          </View>
           <SmartNotificationsSection
             isPro={isPremium}
             calendarEvents={calendarEvents.map((e) => ({
@@ -8690,6 +11479,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
               name: e.name,
             }))}
             onUpgrade={onUpgrade}
+            refreshDailyPropBuffer={refreshDailyPropBuffer}
           />
         </Card>
 
@@ -8729,25 +11519,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
           </View>
           {!isPremium && (
             <>
-              <SettingsBenefitLine>{t("settingsProBenefit1")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit2")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit3")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit4")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit5")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit6")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit7")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit8")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit9")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit10")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit11")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit12")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit13")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit14")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit15")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit16")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit17")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit18")}</SettingsBenefitLine>
-              <SettingsBenefitLine>{t("settingsProBenefit19")}</SettingsBenefitLine>
+              <ProBenefitSectionList compact />
               <SubscriptionLegalDisclosure
                 monthlyPackage={packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null}
                 monthlyProduct={storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null}
@@ -8797,62 +11569,22 @@ YouTrader does not knowingly collect data from or market to individuals under th
           {!!paywallError && <Text style={[styles.sub, { color: C.red, marginTop: 8 }]}>{paywallError}</Text>}
         </GlassCard>
 
-        <Card>
-          <Text style={styles.h2}>{t("account")}</Text>
-          {session?.user ? (
-            <>
-              <Text style={styles.sub}>{t("signedInAs")}</Text>
-              <Text style={styles.settingsAccountEmail}>{session.user.email || session.user.id}</Text>
-              <Pressable
-                onPress={() => setChangeEmailOpen(true)}
-                style={[styles.secondaryBig, { marginTop: 10 }]}
-              >
-                <Text style={styles.secondaryText}>{t("authChangeEmail")}</Text>
-              </Pressable>
-              <Text style={[styles.sub, { marginTop: 10 }]}>
-                Password: {userHasPasswordSet(session) ? t("authPasswordMasked") : t("authPasswordNotSet")}
-              </Text>
-              <Pressable
-                onPress={() => setChangePasswordOpen(true)}
-                style={[styles.secondaryBig, { marginTop: 10 }]}
-              >
-                <Text style={styles.secondaryText}>{t("authChangePassword")}</Text>
-              </Pressable>
-              <Text style={[styles.sub, { marginTop: 10 }]}>
-                {cloudSyncStatus === "syncing"
-                  ? cloudSyncMessage
-                  : cloudSyncStatus === "synced"
-                    ? t("cloudSynced")
-                    : cloudSyncStatus === "error"
-                      ? cloudSyncMessage
-                      : t("cloudSyncActive")}
-              </Text>
-              {lastCloudSyncAt ? (
-                <Text style={styles.sub}>{t("lastSync")} {new Date(lastCloudSyncAt).toLocaleString()}</Text>
-              ) : null}
-              {cloudSyncEnabled ? (
-                <Pressable onPress={onSyncNow} style={[styles.secondaryBig, { marginTop: 14 }]}>
-                  <Text style={styles.secondaryText}>{t("syncNow")}</Text>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={onSignOut} style={[styles.secondaryBig, { marginTop: 10 }]}>
-                <Text style={styles.secondaryText}>{t("signOut")}</Text>
-              </Pressable>
-            </>
-          ) : authConfigured ? (
-            <>
-              <Text style={styles.sub}>{t("authSecureNote")}</Text>
-              <Pressable disabled={authBusy} onPress={() => onSignIn("apple")} style={[styles.secondaryBig, { marginTop: 14 }, authBusy && styles.disabledBtn]}>
-                <Text style={styles.secondaryText}>{t("authApple")}</Text>
-              </Pressable>
-              <Pressable disabled={authBusy} onPress={() => onSignIn("google")} style={[styles.secondaryBig, { marginTop: 10 }, authBusy && styles.disabledBtn]}>
-                <Text style={styles.secondaryText}>{t("authGoogle")}</Text>
-              </Pressable>
-            </>
-          ) : (
-            <Text style={styles.sub}>{t("cloudSignInNotConfigured")}</Text>
-          )}
-        </Card>
+        <SettingsAccountSection
+          session={session}
+          authBusy={authBusy}
+          authConfigured={authConfigured}
+          cloudSyncEnabled={cloudSyncEnabled}
+          cloudSyncStatus={cloudSyncStatus}
+          cloudSyncMessage={cloudSyncMessage}
+          lastCloudSyncAt={lastCloudSyncAt}
+          onSignIn={onSignIn}
+          onSignOut={onSignOut}
+          onChangeEmail={() => setChangeEmailOpen(true)}
+          onChangePassword={() => setChangePasswordOpen(true)}
+          onSyncNow={onSyncNow}
+        />
+
+        <TradeVisionPrivacyControls />
 
         <ChangePasswordModal
           visible={changePasswordOpen}
@@ -8917,7 +11649,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
 
 function TabGlyph({ id, active }: { id: Tab; active: boolean }) {
   const color = active ? "#96FF00" : "#7D8795";
-  const iconProps = { size: 27.8, color, strokeWidth: 2.35 };
+  const iconProps = { size: UI_ICON_SIZE + 5, color, strokeWidth: UI_ICON_STROKE };
   if (id === "journal") return <BookOpen {...iconProps} />;
   if (id === "stats") return <ChartColumnIncreasing {...iconProps} />;
   if (id === "ai") return <BrainCircuit {...iconProps} />;
@@ -9003,6 +11735,7 @@ class AppErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    logStartupError("root_error_boundary", error);
     captureAppError(error, { componentStack: errorInfo.componentStack });
   }
 
@@ -9011,14 +11744,17 @@ class AppErrorBoundary extends React.Component<
       return (
         <SafeAreaProvider>
           <SafeAreaView style={styles.app}>
-            <View style={[styles.lockScreen, { padding: 24 }]}>
-              <Text style={styles.h1}>YouTrader</Text>
-              <Text style={[styles.sub, { marginTop: 10 }]}>
-                The app could not start after the update. Please reinstall from the App Store once a new build is available.
-              </Text>
-              <Text style={[styles.sub, { color: C.red, marginTop: 12 }]}>
-                Something went wrong. Please try again after restarting the app.
-              </Text>
+            <View style={styles.errorBoundaryScreen}>
+              <View style={styles.errorBoundaryCard}>
+                <Text style={styles.errorBoundaryKicker}>YouTrader</Text>
+                <Text style={styles.errorBoundaryTitle}>Restart the app</Text>
+                <Text style={styles.errorBoundaryText}>
+                  Something went wrong while loading YouTrader. Close the app completely, then open it again.
+                </Text>
+                <Text style={styles.errorBoundaryHint}>
+                  Your journal data is not shown here for privacy.
+                </Text>
+              </View>
             </View>
           </SafeAreaView>
         </SafeAreaProvider>
@@ -9029,9 +11765,10 @@ class AppErrorBoundary extends React.Component<
 }
 
 function App() {
+  const firstRenderLogged = useRef(false);
+  const authReadyLogged = useRef(false);
   const [tab, setTab] = useState<Tab>("journal");
   const [lang, setLang] = useState<Lang>("en");
-  const [i18nReady, setI18nReady] = useState(false);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradesHydrated, setTradesHydrated] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -9055,10 +11792,11 @@ function App() {
   const [propRulesMeta, setPropRulesMeta] = useState<{ source: "remote" | "cache" | "fallback"; updatedAt?: string }>({
     source: "fallback",
   });
-  const [lockScreenBufferEnabled, setLockScreenBufferEnabled] = useState(false);
   const [pushCalendarEvents, setPushCalendarEvents] = useState<EconEvent[]>([]);
+  const [shareExportHostReady, setShareExportHostReady] = useState(false);
   const purchasesConfigured = useRef(false);
   const cloudSyncInFlight = useRef(false);
+  const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
   const serverEntitlementActiveRef = useRef(false);
 
@@ -9070,60 +11808,16 @@ function App() {
   const currentTradeSignature = useMemo(() => tradesSignature(trades), [trades]);
 
   useEffect(() => {
-    trackEvent("app_opened");
+    if (firstRenderLogged.current) return;
+    firstRenderLogged.current = true;
+    logStartupPerf("first_render");
   }, []);
 
   useEffect(() => {
-    void loadCalendarEvents()
-      .then(setPushCalendarEvents)
-      .catch(() => setPushCalendarEvents([]));
-  }, []);
-
-  useEffect(() => {
-    if (!tradesHydrated) return;
-    let cancelled = false;
-    void (async () => {
-      const [templateKeyRaw, modeRaw] = await Promise.all([
-        AsyncStorage.getItem("prop-risk-template-v1"),
-        AsyncStorage.getItem("prop-risk-mode-v1"),
-      ]);
-      const templateKey = resolvePropTemplateKey(templateKeyRaw || "", propTemplates);
-      const mode: FirmMode = modeRaw === "funded" ? "funded" : "evaluation";
-      const snapshot = tryComputePropRiskSnapshot({
-        trades,
-        selectedDate: todayISO(),
-        templateKey,
-        mode,
-        templates: propTemplates,
-      });
-      const propSnapshot = snapshot
-        ? {
-            enabled: Boolean(templateKey),
-            dailyRemaining: snapshot.dailyRemaining,
-            dailyLossLimit: snapshot.template.dailyLossLimit,
-            dayPnl: snapshot.dayPnl,
-            status: snapshot.status,
-          }
-        : null;
-      const calendarMapped = pushCalendarEvents.map((e) => ({
-        id: e.id,
-        date: e.date,
-        time: e.time,
-        name: e.name,
-      }));
-      if (cancelled) return;
-      await syncSmartPushSchedules({ isPro: isPremium, calendarEvents: calendarMapped });
-      await evaluateSmartPushConditions({
-        trades,
-        isPro: isPremium,
-        calendarEvents: calendarMapped,
-        propSnapshot,
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [trades, tradesHydrated, isPremium, propTemplates, pushCalendarEvents]);
+    if (!authHydrated || authReadyLogged.current) return;
+    authReadyLogged.current = true;
+    logStartupPerf("auth_ready");
+  }, [authHydrated]);
 
   useEffect(() => {
     trackScreen(tab);
@@ -9134,64 +11828,148 @@ function App() {
     if (tradesHydrated) recordMetric("journal_trade_count", trades.length);
   }, [trades.length, tradesHydrated]);
 
+  const appReady = tradesHydrated && authHydrated;
+
   useEffect(() => {
-    (async () => {
-      try {
-        const cached = await AsyncStorage.getItem(PROP_RULES_CACHE_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached) as { templates?: unknown[]; updatedAt?: string };
-          const normalized = Array.isArray(parsed.templates)
-            ? parsed.templates
-                .map((row) => normalizeRemoteTemplate(row))
-                .filter((x): x is RiskTemplate => Boolean(x))
-            : [];
-          if (normalized.length) {
-            setPropTemplates(normalized);
-            setPropRulesMeta({ source: "cache", updatedAt: parsed.updatedAt });
+    if (!appReady) return;
+    let cancelled = false;
+    logStartupPerf("non_critical_init_started");
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          scheduleMonitoringInit();
+          getPosthogClient();
+          trackEvent("app_opened");
+
+          const events = await loadCalendarEvents().catch(() => [] as EconEvent[]);
+          if (!cancelled) setPushCalendarEvents(events);
+
+          try {
+            const cached = await AsyncStorage.getItem(PROP_RULES_CACHE_KEY);
+            if (cached) {
+              const parsed = JSON.parse(cached) as { templates?: unknown[]; updatedAt?: string };
+              const normalized = Array.isArray(parsed.templates)
+                ? parsed.templates
+                    .map((row) => normalizeRemoteTemplate(row))
+                    .filter((x): x is RiskTemplate => Boolean(x))
+                : [];
+              if (normalized.length && !cancelled) {
+                setPropTemplates(normalized);
+                setPropRulesMeta({ source: "cache", updatedAt: parsed.updatedAt });
+              }
+            }
+          } catch {
+            // ignore cache parsing issues
           }
+
+          if (supabase && !cancelled) {
+            try {
+              const { data, error } = await supabase
+                .from("prop_firms")
+                .select(PROP_FIRM_SELECT_COLUMNS)
+                .eq("is_active", true)
+                .order("account_size", { ascending: true });
+              if (error) throw error;
+              const normalized = (data || [])
+                .map((row) => normalizeRemoteTemplate(row))
+                .filter((x): x is RiskTemplate => Boolean(x));
+              if (normalized.length && !cancelled) {
+                const updatedAt = new Date().toISOString();
+                setPropTemplates(normalized);
+                setPropRulesMeta({ source: "remote", updatedAt });
+                await AsyncStorage.setItem(
+                  PROP_RULES_CACHE_KEY,
+                  JSON.stringify({ templates: data, updatedAt }),
+                );
+              }
+            } catch (error) {
+              logger.error(error, { feature: "supabase", action: "load_prop_firms", table: "prop_firms" });
+            }
+          }
+
+          if (!cancelled) setShareExportHostReady(true);
+        } catch (error) {
+          logStartupError("non_critical_init", error);
+          captureAppError(error, { feature: "startup", action: "non_critical_init" });
+        } finally {
+          if (!cancelled) logStartupPerf("non_critical_init_done");
         }
-      } catch {
-        // ignore cache parsing issues
-      }
-      if (!supabase) return;
-      try {
-        const { data, error } = await supabase
-          .from("prop_firms")
-          .select(PROP_FIRM_SELECT_COLUMNS)
-          .eq("is_active", true)
-          .order("account_size", { ascending: true });
-        if (error) throw error;
-        const normalized = (data || [])
-          .map((row) => normalizeRemoteTemplate(row))
-          .filter((x): x is RiskTemplate => Boolean(x));
-        if (normalized.length) {
-          const updatedAt = new Date().toISOString();
-          setPropTemplates(normalized);
-          setPropRulesMeta({ source: "remote", updatedAt });
-          await AsyncStorage.setItem(
-            PROP_RULES_CACHE_KEY,
-            JSON.stringify({ templates: data, updatedAt }),
-          );
+      })();
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+    };
+  }, [appReady]);
+
+  useEffect(() => {
+    if (!authHydrated || !tradesHydrated) return;
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          const { syncSmartPushSchedules, evaluateSmartPushConditions } = await import("./src/notifications/smartAlerts");
+          const [templateKeyRaw, modeRaw] = await Promise.all([
+            AsyncStorage.getItem("prop-risk-template-v1"),
+            AsyncStorage.getItem("prop-risk-mode-v1"),
+          ]);
+          const templateKey = resolvePropTemplateKey(templateKeyRaw || "", propTemplates);
+          const mode: FirmMode = modeRaw === "funded" ? "funded" : "evaluation";
+          const snapshot = tryComputePropRiskSnapshot({
+            trades,
+            selectedDate: todayISO(),
+            templateKey,
+            mode,
+            templates: propTemplates,
+          });
+          const propSnapshot = snapshot
+            ? {
+                enabled: Boolean(templateKey),
+                dailyRemaining: snapshot.dailyRemaining,
+                dailyLossLimit: snapshot.template.dailyLossLimit,
+                dayPnl: snapshot.dayPnl,
+                status: snapshot.status,
+              }
+            : null;
+          const calendarMapped = pushCalendarEvents.map((e) => ({
+            id: e.id,
+            date: e.date,
+            time: e.time,
+            name: e.name,
+          }));
+          if (cancelled) return;
+          await syncSmartPushSchedules({ isPro: isPremium, calendarEvents: calendarMapped });
+          await evaluateSmartPushConditions({
+            trades,
+            isPro: isPremium,
+            calendarEvents: calendarMapped,
+            propSnapshot,
+          });
+        } catch (error) {
+          logStartupError("smart_push_startup_sync", error);
+          captureAppError(error, { feature: "smart_push", action: "startup_sync" });
         }
-      } catch (error) {
-        logger.error(error, { feature: "supabase", action: "load_prop_firms", table: "prop_firms" });
-        // keep cache/fallback if remote request fails
-      }
-    })();
-  }, []);
+      })();
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+    };
+  }, [authHydrated, trades, tradesHydrated, isPremium, propTemplates, pushCalendarEvents]);
 
   useEffect(() => {
     let cancelled = false;
-    void initAppI18n()
+    void withTimeout(initAppI18n(), 3500)
       .then((initial) => {
         if (!cancelled) {
           setLang(initial);
-          setI18nReady(true);
+          logStartupPerf("i18n_ready");
         }
       })
       .catch((error) => {
+        logStartupError("i18n_init", error);
         captureAppError(error, { feature: "i18n", action: "init" });
-        if (!cancelled) setI18nReady(true);
+        if (!cancelled) logStartupPerf("i18n_ready");
       });
     const onLanguageChanged = (lng: string) => {
       if (["en", "ru", "es", "fr", "it", "uk", "de"].includes(lng)) setLang(lng as Lang);
@@ -9233,11 +12011,17 @@ function App() {
       try {
         const value = await AsyncStorage.getItem(key);
         if (value) {
-          setTrades(normalizeTrades(JSON.parse(value)));
+          const loaded = parseStoredTrades(value);
+          if (loaded.length) {
+            setTrades(loaded);
+          } else if (value.trim()) {
+            await AsyncStorage.removeItem(key);
+          }
         } else if (session?.user.id) {
           const guest = await AsyncStorage.getItem(TRADES_STORAGE_KEY);
           if (guest) {
-            setTrades(normalizeTrades(JSON.parse(guest)));
+            const loaded = parseStoredTrades(guest);
+            if (loaded.length) setTrades(loaded);
           }
         }
       } catch {
@@ -9346,26 +12130,30 @@ function App() {
 
   useEffect(() => {
     if (!revenueCatConfigured || purchasesConfigured.current) return;
-    try {
-      Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
-      Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-      purchasesConfigured.current = true;
-      setRevenueCatReady(true);
-      refreshRevenueCat();
-      const listener = (info: CustomerInfo) => {
-        applyCustomerInfo(info, "customerInfoUpdateListener");
-      };
-      Purchases.addCustomerInfoUpdateListener(listener);
-      return () => {
-        Purchases.removeCustomerInfoUpdateListener(listener);
-      };
-    } catch (error: any) {
-      if (!isExpoGo) {
-        logger.error(error, { feature: "revenuecat", action: "configure" });
+    let listener: ((info: CustomerInfo) => void) | null = null;
+    const task = InteractionManager.runAfterInteractions(() => {
+      try {
+        Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
+        Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+        purchasesConfigured.current = true;
+        setRevenueCatReady(true);
+        refreshRevenueCat();
+        listener = (info: CustomerInfo) => {
+          applyCustomerInfo(info, "customerInfoUpdateListener");
+        };
+        Purchases.addCustomerInfoUpdateListener(listener);
+      } catch (error: any) {
+        if (!isExpoGo) {
+          logger.error(error, { feature: "revenuecat", action: "configure" });
+        }
+        setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
       }
-      setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
-    }
-  }, [refreshRevenueCat, revenueCatConfigured]);
+    });
+    return () => {
+      task.cancel();
+      if (listener) Purchases.removeCustomerInfoUpdateListener(listener);
+    };
+  }, [applyCustomerInfo, refreshRevenueCat, revenueCatConfigured]);
 
   useEffect(() => {
     if (!purchasesConfigured.current || !session?.user.id) return;
@@ -9383,9 +12171,8 @@ function App() {
       AsyncStorage.getItem("prop-risk-template-v1"),
       AsyncStorage.getItem("prop-risk-mode-v1"),
     ]);
-    const enabled = enabledRaw === "on";
-    setLockScreenBufferEnabled(enabled);
-    if (!enabled) {
+  const enabled = enabledRaw === "on";
+  if (!enabled) {
       await scheduleDailyPropRiskNotification({ enabled: false, title: "", body: "" });
       return;
     }
@@ -9408,12 +12195,6 @@ function App() {
       body: `Daily buffer ${moneyCompact(snapshot.dailyRemaining)} • ${snapshot.status} • Day P&L ${moneyCompact(snapshot.dayPnl)}`,
     });
   }, [trades, propTemplates]);
-
-  useEffect(() => {
-    AsyncStorage.getItem(LOCK_SCREEN_BUFFER_KEY).then((value) => {
-      setLockScreenBufferEnabled(value === "on");
-    });
-  }, []);
 
   useEffect(() => {
     if (!tradesHydrated) return;
@@ -9516,15 +12297,6 @@ function App() {
     }
   }, [lang, session?.user.id]);
 
-  const toggleLockScreenBuffer = useCallback(
-    async (enabled: boolean) => {
-      setLockScreenBufferEnabled(enabled);
-      await AsyncStorage.setItem(LOCK_SCREEN_BUFFER_KEY, enabled ? "on" : "off");
-      await refreshLockScreenBufferReminder();
-    },
-    [refreshLockScreenBufferReminder],
-  );
-
   useEffect(() => {
     if (!supabase) {
       setAuthHydrated(true);
@@ -9532,7 +12304,10 @@ function App() {
     }
     let cancelled = false;
     const safety = setTimeout(() => {
-      if (!cancelled) setAuthHydrated(true);
+      if (!cancelled) {
+        logStartupError("auth_hydration_timeout");
+        setAuthHydrated(true);
+      }
     }, 6000);
     supabase.auth
       .getSession()
@@ -9544,6 +12319,8 @@ function App() {
       .catch((error) => {
         if (cancelled) return;
         logger.error(error, { feature: "supabase", action: "get_session" });
+        logStartupError("auth_get_session", error);
+        captureAppError(error, { feature: "auth", action: "get_session" });
         setAuthHydrated(true);
       });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -9558,37 +12335,41 @@ function App() {
   }, []);
 
   useEffect(() => {
+    activeSessionUserIdRef.current = session?.user.id ?? null;
+  }, [session?.user.id]);
+
+  useEffect(() => {
     if (session?.user?.id) {
       identifyAnalyticsUser(session.user.id, { provider: session.user.app_metadata?.provider || "unknown" });
+      setMonitoringUser(session.user.id);
+    } else {
+      setMonitoringUser(null);
     }
   }, [session?.user?.id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const refreshServerEntitlement = async () => {
-      if (!supabase || !session?.user.id) {
-        if (!cancelled) applyServerEntitlement(false, "no-session");
-        return;
-      }
-      try {
-        const { data, error } = await supabase
-          .from("user_subscriptions")
-          .select("status,expires_at")
-          .eq("user_id", session.user.id)
-          .eq("entitlement_id", REVENUECAT_ENTITLEMENT_ID)
-          .maybeSingle();
-        if (error) throw error;
-        if (!cancelled) applyServerEntitlement(serverSubscriptionHasPro(data as ServerSubscriptionRow | null), "supabase");
-      } catch (error) {
-        logger.error(error, { feature: "supabase", action: "refresh_server_entitlement", table: "user_subscriptions" });
-        if (!cancelled) applyServerEntitlement(false, "supabase-error");
-      }
-    };
-    refreshServerEntitlement();
-    return () => {
-      cancelled = true;
-    };
+  const refreshServerEntitlement = useCallback(async () => {
+    if (!supabase || !session?.user.id) {
+      applyServerEntitlement(false, "no-session");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("user_subscriptions")
+        .select("status,expires_at")
+        .eq("user_id", session.user.id)
+        .eq("entitlement_id", REVENUECAT_ENTITLEMENT_ID)
+        .maybeSingle();
+      if (error) throw error;
+      applyServerEntitlement(serverSubscriptionHasPro(data as ServerSubscriptionRow | null), "supabase");
+    } catch (error) {
+      logger.error(error, { feature: "supabase", action: "refresh_server_entitlement", table: "user_subscriptions" });
+      // Preserve last known server entitlement during offline/transient Supabase errors.
+    }
   }, [applyServerEntitlement, session?.user.id]);
+
+  useEffect(() => {
+    void refreshServerEntitlement();
+  }, [refreshServerEntitlement]);
 
   useEffect(() => {
     if (!supabase || Platform.OS === "web") return;
@@ -9647,6 +12428,8 @@ function App() {
       );
       return;
     }
+    const syncUserId = session.user.id;
+    const syncStillActive = () => activeSessionUserIdRef.current === syncUserId;
     if (cloudSyncInFlight.current) return;
     cloudSyncInFlight.current = true;
     setCloudSyncStatus("syncing");
@@ -9655,22 +12438,23 @@ function App() {
       const { data, error } = await withTimeout(supabase
         .from("trade_journal")
         .select("*")
-        .eq("user_id", session.user.id)
+        .eq("user_id", syncUserId)
         .order("updated_at", { ascending: false }));
       if (error) throw error;
+      if (!syncStillActive()) return;
 
       const cloudRows = (data || []) as TradeJournalRow[];
       const activeCloudTrades = cloudRows.filter((row) => !row.deleted_at).map(cloudRowToTrade);
       const activeCloudSignature = tradesSignature(activeCloudTrades);
       const merged = await mergeLocalAndCloudTrades(trades, cloudRows);
+      if (!syncStillActive()) return;
       if (!merged.length && activeCloudTrades.length) {
         const cloudOnly = sortTrades(activeCloudTrades);
         setTrades(cloudOnly);
         setCloudSyncStatus("synced");
         setCloudSyncMessage(t("cloudSynced"));
         setLastCloudSyncAt(new Date().toISOString());
-        await clearOfflineJobsForUser(session.user.id);
-        cloudSyncInFlight.current = false;
+        await clearOfflineJobsForUser(syncUserId);
         return;
       }
       const mergedSignature = tradesSignature(merged);
@@ -9696,21 +12480,23 @@ function App() {
           }).ok,
         );
         if (safeTrades.length !== merged.length) {
-          await recordSecurityEvent("invalid_trade_blocked_cloud_sync", "trade:update", session.user.id);
+          await recordSecurityEvent("invalid_trade_blocked_cloud_sync", "trade:update", syncUserId);
         }
+        if (!syncStillActive()) return;
         const uploadedTrades: Trade[] = [];
         for (const trade of safeTrades) {
           const result = await uploadTradeAttachmentsForCloud(trade);
           uploadedTrades.push(result.trade);
         }
+        if (!syncStillActive()) return;
         const uploadedSignature = tradesSignature(uploadedTrades);
         if (uploadedSignature !== mergedSignature) {
           setTrades(uploadedTrades);
         }
         finalSyncedTrades = uploadedTrades;
-        const rows = uploadedTrades.map((trade) => tradeToCloudRow(trade, session.user.id));
+        const rows = uploadedTrades.map((trade) => tradeToCloudRow(trade, syncUserId));
         if (rows.length) {
-          const claimed = await claimRemoteIdempotency("trade:cloud-upsert", session.user.id, rows);
+          const claimed = await claimRemoteIdempotency("trade:cloud-upsert", syncUserId, rows);
           if (claimed) {
             const { error: upsertError } = await withTimeout(supabase
               .from("trade_journal")
@@ -9720,9 +12506,9 @@ function App() {
         }
       }
 
+      if (!syncStillActive()) return;
       const syncedAt = new Date().toISOString();
       setLastCloudSyncAt(syncedAt);
-      const savedCount = finalSyncedTrades.length;
       const attachmentRetryNeeded = finalSyncedTrades.some((trade) =>
         (isLocalMediaUri(trade.photoUri) && !trade.photoCloudUri) ||
         (isLocalMediaUri(trade.voiceUri) && !trade.voiceCloudUri),
@@ -9733,37 +12519,43 @@ function App() {
           ? t("cloudSyncError")
           : t("cloudSynced"),
       );
-      await clearOfflineJobsForUser(session.user.id);
+      await clearOfflineJobsForUser(syncUserId);
       try {
-        await pullUserPreferences(supabase, session.user.id);
+        await pullUserPreferences(supabase, syncUserId);
       } catch (prefsError) {
-        logger.warn("Failed to pull user preferences", { feature: "supabase", action: "pull_preferences", userId: session.user.id, error: prefsError });
+        logger.warn("Failed to pull user preferences", { feature: "supabase", action: "pull_preferences", userId: syncUserId, error: prefsError });
       }
     } catch (error: any) {
-      logger.error(error, { feature: "supabase", action: "sync_trades", table: "trade_journal", userId: session?.user.id });
+      if (!syncStillActive()) return;
+      logger.error(error, { feature: "supabase", action: "sync_trades", table: "trade_journal", userId: syncUserId });
       setCloudSyncStatus("error");
       setCloudSyncMessage(t("cloudSyncError"));
       for (const trade of trades) {
-        await enqueueOfflineJob({ type: "trade_upsert", userId: session.user.id, tradeId: trade.id, queuedAt: Date.now() });
+        await enqueueOfflineJob({ type: "trade_upsert", userId: syncUserId, tradeId: trade.id, queuedAt: Date.now() });
       }
     } finally {
       cloudSyncInFlight.current = false;
+      if (!syncStillActive()) {
+        setCloudSyncStatus((status) => (status === "syncing" ? "off" : status));
+      }
     }
   }, [currentTradeSignature, lang, session?.user.id, trades, tradesHydrated]);
 
   const markCloudTradeDeleted = useCallback(async (tradeId: string) => {
     if (!supabase || !session?.user.id) return;
+    const userId = session.user.id;
     try {
       const now = new Date().toISOString();
-      const claimed = await claimRemoteIdempotency("trade:cloud-delete", session.user.id, { tradeId, now });
+      const claimed = await claimRemoteIdempotency("trade:cloud-delete", userId, { tradeId, now });
       if (!claimed) return;
       await withTimeout(supabase
         .from("trade_journal")
         .update({ deleted_at: now, updated_at: now })
-        .eq("user_id", session.user.id)
+        .eq("user_id", userId)
         .eq("client_id", tradeId));
     } catch (error) {
-      logger.error(error, { feature: "supabase", action: "mark_trade_deleted", table: "trade_journal", userId: session?.user.id });
+      logger.error(error, { feature: "supabase", action: "mark_trade_deleted", table: "trade_journal", userId });
+      await enqueueOfflineJob({ type: "trade_delete", userId, tradeId, queuedAt: Date.now() });
     }
   }, [session?.user.id]);
 
@@ -9810,10 +12602,6 @@ function App() {
     });
     return () => subscription.remove();
   }, [cloudSyncEnabled, syncTradesWithCloud]);
-
-  useNetworkReconnect(() => {
-    if (cloudSyncEnabled) syncTradesWithCloud();
-  });
 
   const signInWithProvider = useCallback(async (provider: AuthProvider) => {
     if (!supabase || !authConfigured) {
@@ -9957,11 +12745,32 @@ function App() {
     }
     await clearLocalUserCache(userId);
     resetAnalyticsUser();
+    setMonitoringUser(null);
+    serverEntitlementActiveRef.current = false;
+    if (purchasesConfigured.current) {
+      try {
+        const customerInfo = await Purchases.logOut();
+        applyCustomerInfo(customerInfo, "signOut");
+      } catch (logoutError) {
+        logger.warn("RevenueCat logOut failed during sign out", {
+          feature: "revenuecat",
+          action: "log_out",
+          error: logoutError instanceof Error ? logoutError.message : String(logoutError),
+        });
+        customerInfoRef.current = null;
+        setCustomerInfo(null);
+        setProAccess(emptyProAccessState());
+      }
+    } else {
+      customerInfoRef.current = null;
+      setCustomerInfo(null);
+      setProAccess(emptyProAccessState());
+    }
     setTrades([]);
     setTradesHydrated(true);
     setCloudSyncStatus("off");
     setLastCloudSyncAt(null);
-  }, [session?.user.id]);
+  }, [applyCustomerInfo, session?.user.id]);
 
   const refreshCurrentEntitlements = useCallback(async (reason: string, retryDelays = ENTITLEMENT_RETRY_DELAYS_MS) => {
     if (!purchasesConfigured.current) return null;
@@ -10020,6 +12829,7 @@ function App() {
       logger.info("RevenueCat purchase unlocked Pro", { feature: "revenuecat", action: "purchase_success", reason });
       trackEvent("purchase_success", { reason });
       trackEvent("pro_purchased", { reason });
+      successHaptic();
       Alert.alert(t("premiumAccess"), t("proUnlocked"));
       return;
     }
@@ -10029,6 +12839,7 @@ function App() {
       logger.info("RevenueCat entitlement refresh unlocked Pro", { feature: "revenuecat", action: "purchase_success_after_refresh", reason });
       trackEvent("purchase_success", { reason });
       trackEvent("pro_purchased", { reason });
+      successHaptic();
       Alert.alert(t("premiumAccess"), t("proUnlocked"));
       return;
     }
@@ -10096,10 +12907,10 @@ function App() {
         const trialEligible = !!(selectedPackage.product as any)?.introPrice;
         const result = await withTimeout(Purchases.purchasePackage(selectedPackage));
         if (trialEligible) {
-          console.log("[YouTrader:trial] started", { plan: isYearly ? "yearly" : "monthly" });
+          logger.info("[YouTrader:trial] started", { plan: isYearly ? "yearly" : "monthly" });
           trackEvent("trial_started", { plan: isYearly ? "yearly" : "monthly" });
         }
-        console.log("[YouTrader:subscription] purchase_package_success", { productId });
+        logger.info("[YouTrader:subscription] purchase_package_success", { productId });
         await finishPurchaseFlow(result, "purchasePackage");
         return;
       }
@@ -10192,7 +13003,24 @@ function App() {
     }
   }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id]);
 
-  const appReady = i18nReady && tradesHydrated && authHydrated;
+  useEffect(() => {
+    if (!revenueCatConfigured) return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active" || !purchasesConfigured.current) return;
+      void refreshCurrentEntitlements("app-foreground", [0]);
+      void refreshServerEntitlement();
+    });
+    return () => subscription.remove();
+  }, [refreshCurrentEntitlements, refreshServerEntitlement, revenueCatConfigured]);
+
+  useNetworkReconnect(() => {
+    if (cloudSyncEnabled) syncTradesWithCloud();
+    if (purchasesConfigured.current) {
+      void refreshCurrentEntitlements("network-reconnect", [0]);
+    }
+    void refreshServerEntitlement();
+  });
+
   const authScreenCopy: AuthScreenCopy = {
     headline: t("authHeadline"),
     subtitle: t("authSubtitle"),
@@ -10231,9 +13059,8 @@ function App() {
         <SafeAreaView style={styles.app}>
           <StatusBar style="light" backgroundColor="#000000" />
           <View style={styles.lockScreen}>
-            <Text style={styles.h1}>YouTrader</Text>
-            <ActivityIndicator color={C.green} style={{ marginTop: 18 }} />
-            <Text style={[styles.sub, { marginTop: 12 }]}>{t("loadingJournal")}</Text>
+            <AppStartupSkeleton />
+            <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
           </View>
         </SafeAreaView>
       </SafeAreaProvider>
@@ -10341,6 +13168,7 @@ function App() {
             <NewsScreen
               lang={lang}
               isPremium={isPremium}
+              userId={session?.user.id || null}
               onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)}
             />
           ) : tab === "calendar" ? (
@@ -10368,9 +13196,8 @@ function App() {
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
               onSyncNow={syncTradesWithCloud}
-              lockScreenBufferEnabled={lockScreenBufferEnabled}
-              onToggleLockScreenBuffer={toggleLockScreenBuffer}
               onImportTradesCsv={importTradesFromCsv}
+              refreshDailyPropBuffer={refreshLockScreenBufferReminder}
               onSignIn={signInWithProvider}
               onSignOut={signOut}
               onChangePassword={changeAccountPassword}
@@ -10426,16 +13253,32 @@ function App() {
             />
           ))}
         </View>
-        <StatCardExportHost />
+        {shareExportHostReady ? (
+          <React.Suspense fallback={null}>
+            <LazyStatCardExportHost />
+          </React.Suspense>
+        ) : null}
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
 function AppRoot() {
+  const [posthogReady, setPosthogReady] = useState(false);
+  const posthogClient = posthogReady ? getPosthogClient() : undefined;
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setPosthogReady(true);
+    });
+    return () => task.cancel();
+  }, []);
+
   const app = (
     <AppErrorBoundary>
-      <App />
+      <StatsTimeRangeProvider>
+        <App />
+      </StatsTimeRangeProvider>
     </AppErrorBoundary>
   );
   if (!posthogClient) return app;
@@ -10451,9 +13294,81 @@ export default wrapAppWithSentry(AppRoot);
 const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: C.bg },
   body: { flex: 1, backgroundColor: C.bg },
+  errorBoundaryScreen: {
+    flex: 1,
+    backgroundColor: C.bg,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  errorBoundaryCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.28)",
+    backgroundColor: "rgba(6,10,8,0.94)",
+    padding: 22,
+    shadowColor: C.green,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  errorBoundaryKicker: {
+    color: C.green,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  errorBoundaryTitle: {
+    color: C.text,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "900",
+    marginTop: 10,
+  },
+  errorBoundaryText: {
+    color: C.sub,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    marginTop: 10,
+  },
+  errorBoundaryHint: {
+    color: C.purple,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "800",
+    marginTop: 14,
+  },
   screen: { flex: 1, backgroundColor: C.bg, width: "100%" },
   content: { padding: 16, paddingBottom: 24, width: "100%", maxWidth: 980, alignSelf: "center" },
   journalContent: { flexGrow: 1, paddingTop: 8, paddingBottom: 46 },
+  journalScreenRoot: { flex: 1 },
+  journalSwipeCardInner: { marginBottom: 0 },
+  journalDeleteToastWrap: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 22,
+    alignItems: "center",
+    zIndex: 20,
+  },
+  journalDeleteToast: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: "rgba(13,14,20,0.96)",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  journalDeleteToastText: {
+    color: C.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   journalTabletContent: { paddingTop: 0, maxWidth: 1280 },
   calendarTabletContent: { maxWidth: 1280, paddingHorizontal: 24, paddingTop: 22 },
   calendarLiveHeader: {
@@ -10514,6 +13429,47 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     maxWidth: "100%",
     minWidth: 0,
+  },
+  skeletonStack: {
+    gap: 12,
+  },
+  emptyStateSpacing: {
+    marginBottom: 12,
+  },
+  skeletonCard: {
+    width: "100%",
+    marginBottom: 0,
+  },
+  skeletonCardContent: {
+    gap: 11,
+  },
+  skeletonHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 2,
+  },
+  skeletonHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 8,
+  },
+  startupSkeletonWrap: {
+    width: "100%",
+    maxWidth: 420,
+    alignItems: "stretch",
+  },
+  startupSkeletonBar: {
+    marginTop: 6,
+    marginBottom: 16,
+    opacity: 0.78,
+  },
+  startupSkeletonCard: {
+    marginBottom: 12,
+  },
+  startupSkeletonCaption: {
+    marginTop: 2,
+    textAlign: "center",
   },
   safeText: {
     minWidth: 0,
@@ -10576,6 +13532,8 @@ const styles = StyleSheet.create({
   sub: { color: C.sub, fontSize: 12, lineHeight: 18 },
   notes: { color: C.text, fontSize: 14, lineHeight: 21, marginTop: 8 },
   tapHint: { color: C.green, fontSize: 11, fontWeight: "800", marginTop: 10 },
+  tapHintInline: { color: C.green, fontSize: 11, fontWeight: "800" },
+  tapHintIconRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
   tradeMetaWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -10755,6 +13713,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   journalHeader: { display: "none" },
+  statsHeaderControls: {
+    position: "relative",
+    zIndex: 4,
+    elevation: 4,
+  },
   statsActionsRow: {
     flexDirection: "row",
     gap: 8,
@@ -11140,6 +14103,9 @@ const styles = StyleSheet.create({
   marketListText: { color: C.sub, fontSize: 12, lineHeight: 18, marginTop: 4 },
   marketCaution: { color: C.yellow, fontSize: 12, lineHeight: 18, fontWeight: "800", marginTop: 8 },
   marketEmptyText: { color: C.sub, fontSize: 12, lineHeight: 18, fontWeight: "800", paddingVertical: 8 },
+  calendarSkeletonStack: {
+    marginTop: 12,
+  },
   newsTitle: {
     color: C.text,
     fontSize: 16,
@@ -11259,11 +14225,1047 @@ const styles = StyleSheet.create({
     padding: 0,
     marginTop: 4,
   },
+  journalMediaSection: {
+    marginTop: 6,
+    gap: 12,
+  },
+  journalMediaCard: {
+    marginTop: 0,
+  },
+  journalMediaCardContent: {
+    padding: 14,
+    gap: 10,
+  },
+  journalMediaCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  journalMediaCardTitle: {
+    color: C.text,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  journalMediaStatus: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: -2,
+  },
+  journalVoiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+  },
+  journalVoiceRecording: {
+    borderColor: C.red,
+    backgroundColor: C.redSoft,
+  },
+  journalVoiceDone: {
+    borderColor: "rgba(176,38,255,0.55)",
+  },
+  journalVoiceBtnText: {
+    color: C.text,
+    fontWeight: "900",
+    fontSize: 14,
+  },
+  journalMediaHint: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 15,
+    textAlign: "center",
+  },
+  journalOpenAudioLink: {
+    alignSelf: "center",
+    paddingVertical: 4,
+  },
+  journalOpenAudioText: {
+    color: C.purple,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  tradeVisionPreview: {
+    width: "100%",
+    height: 250,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.28)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  tradeVisionSelectedArea: {
+    gap: 12,
+    marginTop: 14,
+    position: "relative",
+  },
+  tradeVisionImageOverlay: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.35)",
+    backgroundColor: "rgba(7,10,18,0.78)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  aiImageScanLine: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    top: 0,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: C.green,
+    shadowColor: C.green,
+    shadowOpacity: 0.9,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  tradeVisionImageBadge: {
+    color: C.green,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  tradeVisionUploadHero: {
+    minHeight: 178,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.26)",
+    backgroundColor: "rgba(176,38,255,0.07)",
+    padding: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 14,
+  },
+  aiIntelligencePulse: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  aiIntelligencePulseCore: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  aiFlowRail: {
+    width: "100%",
+    position: "relative",
+    marginTop: 5,
+    paddingTop: 1,
+  },
+  aiFlowTrack: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    top: 9,
+    height: 1,
+  },
+  aiFlowSignal: {
+    position: "absolute",
+    left: 16,
+    top: 6,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    shadowOpacity: 0.75,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  aiFlowNodes: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  aiFlowNode: {
+    flex: 1,
+    alignItems: "center",
+    gap: 5,
+  },
+  aiFlowNodeDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  aiFlowNodeCore: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  aiFlowNodeLabel: {
+    color: C.sub,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    textAlign: "center",
+  },
+  aiGuardianRingWrap: {
+    width: 86,
+    height: 86,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiGuardianRingCenter: {
+    position: "absolute",
+    alignItems: "center",
+  },
+  aiGuardianRingValue: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "900",
+  },
+  aiGuardianRingLabel: {
+    color: C.sub,
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+  aiAnimatedBarTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    overflow: "hidden",
+  },
+  aiAnimatedBarFill: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+  },
+  tradeVisionIconOrb: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.38)",
+    backgroundColor: "rgba(176,38,255,0.13)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tradeVisionIconOrbSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.34)",
+    backgroundColor: "rgba(150,255,0,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tradeVisionQuestionBox: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 13,
+    gap: 8,
+  },
+  tradeVisionInput: {
+    minHeight: 76,
+    color: C.text,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "700",
+    padding: 0,
+    textAlignVertical: "top",
+  },
+  tradeVisionEmptyBox: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 14,
+    gap: 6,
+    marginTop: 12,
+  },
+  tradeVisionChipRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingRight: 4,
+  },
+  tradeVisionChipScroller: {
+    marginTop: 12,
+  },
+  tradeVisionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  tradeVisionChipActive: {
+    borderColor: "rgba(176,38,255,0.54)",
+    backgroundColor: "rgba(176,38,255,0.14)",
+    transform: [{ scale: 1.02 }],
+  },
+  tradeVisionChipText: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  tradeVisionChipTextActive: {
+    color: C.purple,
+  },
+  coachConsoleHero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  coachConversationCard: {
+    borderColor: "rgba(150,255,0,0.18)",
+    backgroundColor: "rgba(10,14,18,0.94)",
+  },
+  coachConversationOrb: {
+    shadowColor: C.green,
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  coachConversationOrbPurple: {
+    borderColor: "rgba(176,38,255,0.38)",
+    backgroundColor: "rgba(176,38,255,0.12)",
+    shadowColor: C.purple,
+  },
+  coachConversationOrbRed: {
+    borderColor: "rgba(255,91,91,0.40)",
+    backgroundColor: C.redSoft,
+    shadowColor: C.red,
+  },
+  coachConversationOrbGrey: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    shadowColor: "#000",
+  },
+  coachConversationHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  coachConversationStatus: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.34)",
+    backgroundColor: "rgba(150,255,0,0.10)",
+    color: C.green,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    overflow: "hidden",
+  },
+  coachConversationStatusPurple: {
+    borderColor: "rgba(176,38,255,0.38)",
+    backgroundColor: "rgba(176,38,255,0.12)",
+    color: C.purple,
+  },
+  coachConversationStatusRed: {
+    borderColor: "rgba(255,91,91,0.38)",
+    backgroundColor: C.redSoft,
+    color: C.red,
+  },
+  coachConversationStatusGrey: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    color: C.sub,
+  },
+  coachStatusLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 8,
+  },
+  coachStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: C.green,
+    shadowColor: C.green,
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  coachStatusDotPurple: {
+    backgroundColor: C.purple,
+    shadowColor: C.purple,
+  },
+  coachStatusDotRed: {
+    backgroundColor: C.red,
+    shadowColor: C.red,
+  },
+  coachStatusDotGrey: {
+    backgroundColor: C.sub,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+  },
+  coachStatusLineText: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+  },
+  coachConsoleSentence: {
+    color: C.text,
+    fontSize: 23,
+    lineHeight: 30,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  coachConsoleFocusCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.22)",
+    backgroundColor: "rgba(150,255,0,0.055)",
+    padding: 14,
+    gap: 7,
+    marginTop: 14,
+  },
+  coachLowConfidenceBox: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.22)",
+    backgroundColor: "rgba(176,38,255,0.055)",
+    padding: 12,
+    gap: 5,
+    marginTop: 12,
+  },
+  coachPrimaryCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.48)",
+    backgroundColor: "rgba(150,255,0,0.16)",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 14,
+    shadowColor: C.green,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  coachPrimaryCtaText: {
+    color: C.green,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  coachPrimaryCtaActive: {
+    borderColor: "rgba(150,255,0,0.72)",
+    backgroundColor: "rgba(150,255,0,0.22)",
+  },
+  coachPrimaryCtaTextDone: {
+    color: C.sub,
+  },
+  coachCompactHeadline: {
+    color: C.text,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  coachCompactSub: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  coachCompactValue: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "800",
+  },
+  coachCompactHint: {
+    color: C.purple,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    marginTop: 10,
+  },
+  coachFocusGrid: {
+    marginTop: 12,
+    gap: 8,
+  },
+  coachFocusRow: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 3,
+  },
+  coachFocusLabel: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  coachFocusValue: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "800",
+  },
+  analyticsToolMenuCard: {
+    gap: 10,
+  },
+  assistantHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  analyticsToolGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  analyticsToolTile: {
+    flexGrow: 1,
+    flexBasis: "47%",
+    minWidth: 140,
+    minHeight: 142,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 13,
+  },
+  analyticsToolTileActive: {
+    borderColor: "rgba(150,255,0,0.34)",
+    backgroundColor: "rgba(150,255,0,0.08)",
+  },
+  analyticsToolTilePressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.88,
+  },
+  analyticsToolTileIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.24)",
+    backgroundColor: "rgba(176,38,255,0.10)",
+  },
+  analyticsToolTileTitle: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  analyticsToolStatus: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  analyticsToolTileSummary: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "600",
+  },
+  aiMemoryStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.20)",
+    backgroundColor: "rgba(176,38,255,0.045)",
+    padding: 12,
+    marginTop: 4,
+  },
+  aiJournalTimeline: {
+    marginTop: 4,
+    paddingLeft: 2,
+  },
+  aiJournalTimelineItem: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 11,
+    paddingBottom: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(176,38,255,0.22)",
+    marginLeft: 16,
+    paddingLeft: 22,
+  },
+  aiJournalTimelineLast: {
+    borderLeftColor: "transparent",
+    paddingBottom: 0,
+  },
+  aiJournalTimelineIcon: {
+    position: "absolute",
+    left: -17,
+    top: -1,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(12,15,24,0.98)",
+  },
+  propCoachQuickCard: {
+    gap: 4,
+  },
+  propCoachSignalRail: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.12)",
+    backgroundColor: "rgba(150,255,0,0.025)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  propAggressionGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  propAggressionCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 104,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.09)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    padding: 10,
+    gap: 5,
+  },
+  propAggressionCardActive: {
+    borderColor: "rgba(176,38,255,0.38)",
+    backgroundColor: "rgba(176,38,255,0.075)",
+    shadowColor: C.purple,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  propAggressionTitle: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+  },
+  propAggressionHint: {
+    color: C.sub,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "600",
+  },
+  propGuardianCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.16)",
+    backgroundColor: "rgba(150,255,0,0.035)",
+    padding: 14,
+    gap: 13,
+  },
+  propGuardianHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  propGuardianStatus: {
+    color: C.text,
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: "900",
+    marginTop: 3,
+  },
+  propGuardianBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  propGuardianMetrics: {
+    flex: 1,
+    gap: 11,
+  },
+  propGuardianMetricValue: {
+    color: C.text,
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "900",
+  },
+  propGuardianMetricRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  propGuardianBarGroup: {
+    gap: 7,
+  },
+  propGuardianBarLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  propPreviewBadge: {
+    borderColor: "rgba(176,38,255,0.34)",
+    backgroundColor: "rgba(176,38,255,0.12)",
+  },
+  propPreviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  propPreviewTile: {
+    flexGrow: 1,
+    flexBasis: "30%",
+    minWidth: 96,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    padding: 10,
+    gap: 4,
+  },
+  propPreviewTileLabel: {
+    color: C.text,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  propPreviewTileHint: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "600",
+  },
+  propPreviewTileBadge: {
+    color: C.purple,
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
+  tradeVisionEntryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.24)",
+    backgroundColor: "rgba(176,38,255,0.06)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  coachConsoleActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
+  coachConsoleActionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+  },
+  coachConsoleActionChipActive: {
+    borderColor: "rgba(150,255,0,0.56)",
+    backgroundColor: "rgba(150,255,0,0.15)",
+    shadowColor: C.green,
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  coachConsoleActionText: {
+    color: C.sub,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  coachConsoleActionTextActive: {
+    color: C.green,
+  },
+  coachThinkingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.18)",
+    backgroundColor: "rgba(150,255,0,0.055)",
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  coachThinkingText: {
+    color: C.green,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  coachInlineAction: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.32)",
+    backgroundColor: "rgba(150,255,0,0.08)",
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    marginTop: 4,
+  },
+  coachConsoleReveal: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 13,
+    gap: 7,
+    marginTop: 12,
+  },
+  coachConsoleRulePreview: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.28)",
+    backgroundColor: "rgba(176,38,255,0.075)",
+    padding: 13,
+    gap: 8,
+    marginTop: 12,
+  },
+  coachConsoleTradeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  fullAnalyticsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  fullAnalyticsCard: {
+    borderRadius: 22,
+    borderColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    opacity: 0.88,
+  },
+  propCoachInteractivePanel: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.18)",
+    backgroundColor: "rgba(150,255,0,0.04)",
+    padding: 14,
+    gap: 12,
+  },
+  propSimulatorBox: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    padding: 12,
+    gap: 10,
+  },
+  propSimulatorInputRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  propSimulatorInputWrap: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  propSimulatorInput: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(0,0,0,0.16)",
+    color: C.text,
+    fontSize: 15,
+    fontWeight: "900",
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+  },
+  propSimulatorResult: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.22)",
+    backgroundColor: "rgba(176,38,255,0.055)",
+    padding: 13,
+    gap: 10,
+  },
+  tradeVisionStatusBox: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.20)",
+    backgroundColor: "rgba(150,255,0,0.045)",
+    padding: 13,
+    gap: 8,
+    marginTop: 12,
+  },
+  tradeVisionThinkingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tradeVisionProgressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  tradeVisionProgressFill: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: C.green,
+  },
+  tradeVisionThinkingText: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+  tradeVisionReadyCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.22)",
+    backgroundColor: "rgba(150,255,0,0.055)",
+    padding: 14,
+    gap: 12,
+    marginTop: 12,
+  },
+  tradeVisionNextAction: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(150,255,0,0.22)",
+    backgroundColor: "rgba(150,255,0,0.055)",
+    padding: 13,
+    gap: 6,
+  },
+  tradeVisionDetailRail: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  tradeVisionReadyTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  tradeVisionResultActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  tradeVisionResultButton: {
+    flex: 1,
+  },
+  journalActionPair: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  journalActionCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    gap: 6,
+  },
+  journalActionCardTitle: {
+    color: C.text,
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  journalActionCardHint: {
+    color: C.sub,
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 13,
+  },
+  journalSectionEyebrow: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginTop: 2,
+    marginBottom: -4,
+  },
+  journalPnlHint: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 15,
+    textAlign: "center",
+    marginTop: 8,
+    paddingHorizontal: 8,
+  },
+  journalSaveHint: {
+    color: "rgba(5,7,10,0.62)",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  journalCloseSecondary: {
+    marginTop: 6,
+    paddingVertical: 14,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "transparent",
+  },
+  journalCloseText: {
+    color: C.sub,
+    fontWeight: "800",
+    fontSize: 15,
+  },
   pnlToggleRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 6,
-    marginBottom: 10,
+    marginTop: 0,
+    marginBottom: 0,
   },
   pnlToggle: {
     flex: 1,
@@ -11273,6 +15275,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: "center",
     backgroundColor: C.card2,
+  },
+  pnlTogglePlusIdle: {
+    borderColor: "rgba(163,255,18,0.28)",
+  },
+  pnlToggleMinusIdle: {
+    borderColor: "rgba(255,59,92,0.28)",
   },
   pnlPlusActive: { backgroundColor: C.green, borderColor: C.green },
   pnlMinusActive: { backgroundColor: C.red, borderColor: C.red },
@@ -13271,6 +17279,9 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 14,
   },
+  statsLoadingSkeleton: {
+    marginBottom: 12,
+  },
   statsMetricHeader: {
     gap: 2,
   },
@@ -13471,6 +17482,38 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     fontWeight: "800",
     marginTop: 10,
+  },
+  tradeSheetAction: {
+    marginTop: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card2,
+    paddingVertical: 15,
+    alignItems: "center",
+  },
+  tradeSheetActionDestructive: {
+    borderColor: "rgba(255,59,92,0.42)",
+    backgroundColor: C.redSoft,
+  },
+  tradeSheetActionText: {
+    color: C.text,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  tradeSheetActionDestructiveText: {
+    color: C.red,
+  },
+  tradeSheetCancel: {
+    marginTop: 10,
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  tradeSheetCancelText: {
+    color: C.sub,
+    fontSize: 15,
+    fontWeight: "800",
   },
   dnaHero: {
     marginTop: 16,
@@ -13926,6 +17969,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
     borderRadius: 22,
   },
+  aiInlineSkeleton: {
+    marginTop: 10,
+  },
   aiProviderBadge: {
     borderWidth: 1,
     borderRadius: 999,
@@ -13986,9 +18032,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: "800",
   },
-  aiRefreshButton: {
+  aiRefreshPressable: {
     marginTop: 12,
   },
+  aiRefreshButton: {},
   dailyCoachCard: {
     alignSelf: "center",
     marginTop: 12,
@@ -14212,7 +18259,8 @@ const styles = StyleSheet.create({
   valueModalClose: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.06)" },
   valueModalTitle: { color: C.text, fontSize: 25, lineHeight: 31, fontWeight: "900", marginTop: 12 },
   valueModalText: { color: C.sub, fontSize: 14, lineHeight: 21, fontWeight: "800", marginTop: 8 },
-  valueModalBullet: { color: C.text, fontSize: 13, lineHeight: 19, fontWeight: "800", marginTop: 8 },
+  valueModalBulletRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 8 },
+  valueModalBullet: { color: C.text, fontSize: 13, lineHeight: 19, fontWeight: "800", flex: 1, minWidth: 0 },
   valueModalPlanRow: { flexDirection: "row", gap: 10, marginTop: 12 },
   valueModalPlan: { flex: 1, borderRadius: 18, borderWidth: 1, borderColor: C.border, backgroundColor: C.card2, padding: 12 },
   valueModalYearlyPlan: { borderColor: C.purple, backgroundColor: C.purpleSoft },
@@ -14233,25 +18281,253 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(176,38,255,0.48)",
   },
+  paywallSkeleton: {
+    marginTop: 14,
+    marginBottom: 12,
+  },
   paywallTitle: { color: C.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
   paywallSub: { color: C.sub, fontSize: 13, lineHeight: 19, marginTop: 7 },
-  planRow: { flexDirection: "row", gap: 10, marginTop: 14 },
-  monthlyPlan: {
+  premiumPaywallCard: {
+    padding: 18,
+    gap: 16,
+    overflow: "hidden",
+  },
+  premiumPaywallGlowLime: {
+    position: "absolute",
+    top: -70,
+    right: -84,
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    backgroundColor: "rgba(163,255,18,0.13)",
+  },
+  premiumPaywallGlowPurple: {
+    position: "absolute",
+    bottom: 170,
+    left: -92,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    backgroundColor: "rgba(176,38,255,0.13)",
+  },
+  paywallHeroTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  paywallHeroCopy: {
     flex: 1,
-    borderRadius: 18,
-    padding: 13,
+    minWidth: 0,
+  },
+  paywallKicker: {
+    color: C.green,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  paywallHeroTitle: {
+    color: C.text,
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: "900",
+    letterSpacing: -0.6,
+    marginTop: 8,
+  },
+  paywallHeroSub: {
+    color: C.sub,
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "700",
+    marginTop: 10,
+  },
+  paywallTerminalBadge: {
+    width: 70,
+    minHeight: 70,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.card,
-    opacity: 0.68,
+    borderColor: "rgba(163,255,18,0.44)",
+    backgroundColor: "rgba(3,7,4,0.82)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    shadowColor: C.green,
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  paywallTerminalBadgeText: {
+    color: C.green,
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+  },
+  paywallTerminalDots: { flexDirection: "row", gap: 5 },
+  paywallTerminalDot: { width: 6, height: 6, borderRadius: 3 },
+  paywallBusyCard: {
+    marginTop: 2,
+  },
+  paywallBusyContent: {
+    gap: 10,
+  },
+  paywallBusyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  paywallBusyTitle: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  paywallBusyText: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  paywallFeatureGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  proBenefitStack: {
+    gap: 8,
+    marginBottom: 4,
+  },
+  proBenefitStackCard: {
+    width: "100%",
+    minWidth: 0,
+  },
+  proBenefitStackContent: {
+    minHeight: 78,
+    gap: 6,
+  },
+  paywallFeatureCard: {
+    width: "48%",
+    flexGrow: 1,
+    minWidth: 136,
+  },
+  paywallFeatureContent: {
+    minHeight: 142,
+    gap: 8,
+  },
+  paywallFeatureIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  paywallFeatureIconLime: {
+    borderColor: "rgba(163,255,18,0.44)",
+    backgroundColor: "rgba(163,255,18,0.12)",
+  },
+  paywallFeatureIconPurple: {
+    borderColor: "rgba(176,38,255,0.48)",
+    backgroundColor: "rgba(176,38,255,0.14)",
+  },
+  paywallFeatureIconText: { color: C.green, fontSize: 13, fontWeight: "900" },
+  paywallFeatureTitle: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  paywallFeatureBody: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  paywallCompareBox: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.025)",
+    padding: 12,
+    gap: 10,
+  },
+  paywallCompareHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  paywallCompareTitle: {
+    color: C.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  paywallComparePro: {
+    color: C.green,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  paywallCompareRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 36,
+  },
+  paywallCompareLabel: {
+    flex: 1.12,
+    minWidth: 0,
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+  },
+  paywallCompareFree: {
+    flex: 0.68,
+    minWidth: 0,
+    color: C.muted,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  paywallCompareIncluded: {
+    flex: 0.72,
+    minWidth: 0,
+    color: C.green,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  paywallDivider: {
+    marginVertical: 1,
+  },
+  planRow: { flexDirection: "row", gap: 10, marginTop: 2 },
+  planPressable: {
+    flex: 1,
+    minWidth: 0,
+  },
+  monthlyPlan: {
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.045)",
   },
   yearlyPlan: {
-    flex: 1.18,
     borderRadius: 18,
-    padding: 13,
+    padding: 14,
     borderWidth: 1.5,
-    borderColor: C.purple,
-    backgroundColor: C.purpleSoft,
+    borderColor: "rgba(176,38,255,0.66)",
+    backgroundColor: "rgba(176,38,255,0.13)",
+    shadowColor: C.purple,
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
   },
   bestValueBadge: {
     alignSelf: "flex-start",
@@ -14263,7 +18539,73 @@ const styles = StyleSheet.create({
   },
   bestValueText: { color: C.white, fontSize: 9, fontWeight: "900" },
   planName: { color: C.sub, fontSize: 11, fontWeight: "900" },
-  planPrice: { color: C.text, fontSize: 17, fontWeight: "900", marginTop: 4 },
+  planPrice: { color: C.text, fontSize: 17, lineHeight: 22, fontWeight: "900", marginTop: 4 },
+  planCaption: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "700",
+    marginTop: 5,
+  },
+  paywallCtaPressable: {
+    marginTop: 2,
+  },
+  paywallPrimaryCta: {
+    borderColor: "rgba(163,255,18,0.70)",
+    shadowColor: C.green,
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  paywallCtaSub: {
+    color: "rgba(0,0,0,0.72)",
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "900",
+    marginTop: 2,
+  },
+  paywallRestorePressable: {
+    marginTop: -4,
+  },
+  paywallRestoreBtn: {
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.045)",
+    paddingVertical: 12,
+  },
+  paywallRestoreHint: {
+    color: C.sub,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  paywallFeedbackNeutral: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.18)",
+    backgroundColor: "rgba(163,255,18,0.045)",
+    padding: 12,
+  },
+  paywallFeedbackError: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,91,91,0.34)",
+    backgroundColor: "rgba(255,91,91,0.08)",
+    padding: 12,
+  },
+  paywallFeedbackTitle: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  paywallFeedbackText: {
+    color: C.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    marginTop: 4,
+  },
   lockedNewsIntel: {
     marginTop: 12,
     borderRadius: 16,
@@ -14726,12 +19068,11 @@ const styles = StyleSheet.create({
   greenActionText: { color: C.green },
   redActionText: { color: C.red },
   settingsBenefit: {
-    fontSize: 14,
-    lineHeight: 22,
-    fontWeight: "800",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
     marginTop: 6,
   },
-  settingsBenefitCheck: { color: C.purple, fontWeight: "900" },
-  settingsBenefitText: { color: C.green, fontWeight: "800" },
+  settingsBenefitText: { color: C.green, fontSize: 14, lineHeight: 22, fontWeight: "800", flex: 1, minWidth: 0 },
   settingsAccountEmail: { color: C.text, fontSize: 16, fontWeight: "700", marginTop: 4 },
 });

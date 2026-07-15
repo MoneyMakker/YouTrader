@@ -4,9 +4,11 @@ import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 import Constants from "expo-constants";
 import type { Achievement } from "../../analytics/achievements";
+import { logger } from "../../lib/logger";
 import { t } from "../../i18n";
 import { buildWeeklyReportHtml } from "../../reports/weeklyReportHtml";
-import { ACHIEVEMENT_GALAXY_TEMPLATE } from "./shareCard/achievementTemplateLayout";
+import { MAPPED_ACHIEVEMENT_IDS } from "../../achievements/achievementCardAssets";
+import { preloadAchievementCardAssets, resolveAchievementCardUri } from "../../achievements/resolveAchievementCardUri";
 import type { AchievementShareStats } from "./shareCard/achievementHelpers";
 import { generateStatShareCardImage, logStatCardExport } from "./shareCard/statCardImageExport";
 import type { TraderShareCardData } from "./shareCard/TraderShareCard";
@@ -48,13 +50,8 @@ function buildStatCardFilename(meta: StatCardExportMeta) {
   return `youtrader-share-card-${meta.action}-${meta.period}-${userPart}-${stampForFilename()}.png`;
 }
 
-function buildAchievementFilename(item: Achievement) {
-  const id = item.id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "achievement";
-  return `youtrader-achievement-${id}-${stampForFilename()}.png`;
-}
-
 function logShareCard(event: string, detail?: string) {
-  console.log(`[YouTrader:share-card] ${event}${detail ? ` ${detail}` : ""}`);
+  logger.info(`[YouTrader:share-card] ${event}${detail ? ` ${detail}` : ""}`);
 }
 
 async function loadShareModules() {
@@ -69,10 +66,7 @@ async function loadShareModules() {
 
 export async function preloadAchievementTemplate() {
   if (!achievementTemplateReady) {
-    achievementTemplateReady = (async () => {
-      const asset = Asset.fromModule(ACHIEVEMENT_GALAXY_TEMPLATE);
-      await asset.downloadAsync();
-    })();
+    achievementTemplateReady = preloadAchievementCardAssets(MAPPED_ACHIEVEMENT_IDS);
   }
   await achievementTemplateReady;
 }
@@ -188,9 +182,9 @@ export async function shareAchievementCardFromData(
   stats?: AchievementShareStats | null,
   dialogTitle = "Share YouTrader achievement card",
 ) {
+  void stats;
   try {
-    const { generateAchievementShareCardImage } = await import("./shareCard/achievementShareImageExport");
-    const uri = await generateAchievementShareCardImage(item, stats, buildAchievementFilename(item));
+    const uri = await resolveAchievementCardUri(item.id);
     const result = await openNativeShareSheet(uri, dialogTitle);
     if (result.shared) logShareCard("share_success", item.id);
     return { uri, ...result };
@@ -201,6 +195,7 @@ export async function shareAchievementCardFromData(
 }
 
 export async function saveAchievementCardFromDataToPhotos(item: Achievement, stats?: AchievementShareStats | null) {
+  void stats;
   const { MediaLibrary } = await loadShareModules();
   const perm = await MediaLibrary.requestPermissionsAsync(false, ["photo"]);
   if (!perm.granted) {
@@ -210,8 +205,7 @@ export async function saveAchievementCardFromDataToPhotos(item: Achievement, sta
     throw new Error("Photos permission was denied. Allow Photos access in iPhone Settings to save YouTrader cards.");
   }
   try {
-    const { generateAchievementShareCardImage } = await import("./shareCard/achievementShareImageExport");
-    const uri = await generateAchievementShareCardImage(item, stats, buildAchievementFilename(item));
+    const uri = await resolveAchievementCardUri(item.id);
     await MediaLibrary.saveToLibraryAsync(uri);
     logShareCard("save_success", item.id);
     return uri;

@@ -15,6 +15,7 @@ import type { PurchasesStoreProduct } from "react-native-purchases";
 import { t } from "../../i18n";
 import { PRO_MONTHLY_PRICE_LABEL, PRO_TRIAL_DAYS } from "../../config/monetization";
 import { lightHaptic } from "../ui/haptics";
+import { PremiumCard, ShimmerPlaceholder } from "../ui/premium";
 import { C } from "../../theme/colors";
 
 type Props = {
@@ -83,6 +84,12 @@ export function AiAnalyticsProScreen({
               {purchaseBusy ? t("aiProConnecting") : t("aiProStartTrial", { days: PRO_TRIAL_DAYS })}
             </Text>
           </Pressable>
+          {purchaseBusy ? (
+            <PremiumCard tone="purple" compact style={styles.purchaseSkeleton} contentStyle={styles.purchaseSkeletonContent}>
+              <ShimmerPlaceholder width="74%" height={10} radius={999} tone="purple" />
+              <ShimmerPlaceholder width="46%" height={8} radius={999} tone="neutral" />
+            </PremiumCard>
+          ) : null}
           <Text style={styles.priceHint}>{t("aiProPriceHint", { price: PRO_MONTHLY_PRICE_LABEL })}</Text>
 
           {showRestorePurchases || paywallError ? (
@@ -149,6 +156,14 @@ const styles = StyleSheet.create({
   },
   ctaDisabled: { opacity: 0.6 },
   ctaText: { color: C.bg, fontSize: 16, fontWeight: "900" },
+  purchaseSkeleton: {
+    width: "100%",
+    maxWidth: 340,
+    marginTop: 12,
+  },
+  purchaseSkeletonContent: {
+    gap: 9,
+  },
   priceHint: { color: C.sub, fontSize: 12, textAlign: "center", marginTop: 12, lineHeight: 18 },
   restoreBtn: { alignItems: "center", paddingVertical: 16 },
   restoreText: { color: C.purple, fontWeight: "800", fontSize: 13 },

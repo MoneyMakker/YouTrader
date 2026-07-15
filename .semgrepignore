@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.expo/
+ios/Pods/
+ios/build/
+android/build/
+android/app/build/
+recovery-backups/
+review-fix-backups/
+bundle-check/
+builds/
+*.hbc

@@ -4,7 +4,6 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,12 @@ import { EmailAuthModal } from "./EmailAuthModal";
 import { AuthScreenBackground } from "./components/AuthScreenBackground";
 import { LiveTerminalStatus } from "./components/LiveTerminalStatus";
 import { PixelNeonBull } from "./components/PixelNeonBull";
+import {
+  AnimatedPressable,
+  GlowBorderCard,
+  PremiumLoadingBar,
+  ShimmerPlaceholder,
+} from "../components/ui/premium";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./types";
 
 const C = {
@@ -33,6 +38,7 @@ const C = {
 };
 
 const FADE_MS = 560;
+const HERO_FALLBACK_SIZE = 88;
 
 type Props = {
   busy: boolean;
@@ -44,6 +50,45 @@ type Props = {
   onSignUpWithEmailPassword: (email: string, password: string) => Promise<"confirmation_sent" | "signed_in">;
   onRequestPasswordReset: (email: string) => Promise<void>;
 };
+
+type SafeHeroBoundaryProps = {
+  children: React.ReactNode;
+  fallback: React.ReactNode;
+};
+
+type SafeHeroBoundaryState = {
+  failed: boolean;
+};
+
+class SafeHeroBoundary extends React.PureComponent<SafeHeroBoundaryProps, SafeHeroBoundaryState> {
+  state: SafeHeroBoundaryState = { failed: false };
+
+  static getDerivedStateFromError(): SafeHeroBoundaryState {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    this.setState({ failed: true });
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+function StaticSafeHero() {
+  return (
+    <View style={styles.staticHero} accessible accessibilityRole="image">
+      <View style={styles.staticHeroHornLeft} />
+      <View style={styles.staticHeroHornRight} />
+      <View style={styles.staticHeroFace}>
+        <View style={styles.staticHeroEye} />
+        <View style={styles.staticHeroEye} />
+      </View>
+      <View style={styles.staticHeroGlow} />
+    </View>
+  );
+}
 
 function AuthProviderButton({
   label,
@@ -62,7 +107,6 @@ function AuthProviderButton({
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(14)).current;
-  const scale = useRef(new Animated.Value(1)).current;
   const glow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -75,33 +119,26 @@ function AuthProviderButton({
     ]).start();
   }, [delay, opacity, translateY]);
 
-  const pressIn = () => {
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 0.985, useNativeDriver: true, speed: 40, bounciness: 0 }),
-      Animated.timing(glow, { toValue: 1, duration: 120, useNativeDriver: true }),
-    ]).start();
-  };
-  const pressOut = () => {
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 5 }),
-      Animated.timing(glow, { toValue: 0, duration: 220, useNativeDriver: true }),
-    ]).start();
-  };
+  const pressIn = () => Animated.timing(glow, { toValue: 1, duration: 120, useNativeDriver: true }).start();
+  const pressOut = () => Animated.timing(glow, { toValue: 0, duration: 220, useNativeDriver: true }).start();
 
   const shadowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] });
 
   return (
-    <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       <Animated.View style={[styles.btnGlow, { shadowColor: glowColor, shadowOpacity }]}>
-        <Pressable
+        <AnimatedPressable
+          accessibilityRole="button"
           disabled={busy}
           onPress={onPress}
           onPressIn={pressIn}
           onPressOut={pressOut}
-          style={[styles.providerBtn, { borderColor }, busy && styles.disabled]}
+          haptic
+          scaleTo={0.975}
+          contentStyle={[styles.providerBtn, { borderColor }, busy && styles.disabled]}
         >
           {busy ? <ActivityIndicator color={C.green} /> : <Text style={styles.providerText}>{label}</Text>}
-        </Pressable>
+        </AnimatedPressable>
       </Animated.View>
     </Animated.View>
   );
@@ -125,6 +162,8 @@ export function AuthScreen({
   const subtitleOpacity = useRef(new Animated.Value(0)).current;
   const appleOpacity = useRef(new Animated.Value(0)).current;
   const appleY = useRef(new Animated.Value(12)).current;
+  const actionsOpacity = useRef(new Animated.Value(0)).current;
+  const actionsY = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
     Animated.sequence([
@@ -151,7 +190,24 @@ export function AuthScreen({
         ]),
       ]).start();
     }
-  }, [showApple, headlineOpacity, headlineY, mascotOpacity, subtitleOpacity, appleOpacity, appleY]);
+    Animated.sequence([
+      Animated.delay(showApple ? 610 : 520),
+      Animated.parallel([
+        Animated.timing(actionsOpacity, { toValue: 1, duration: FADE_MS, useNativeDriver: true }),
+        Animated.spring(actionsY, { toValue: 0, useNativeDriver: true, speed: 13, bounciness: 2 }),
+      ]),
+    ]).start();
+  }, [
+    showApple,
+    headlineOpacity,
+    headlineY,
+    mascotOpacity,
+    subtitleOpacity,
+    appleOpacity,
+    appleY,
+    actionsOpacity,
+    actionsY,
+  ]);
 
   const buttonBaseDelay = showApple ? 640 : 560;
 
@@ -170,7 +226,9 @@ export function AuthScreen({
           >
             <View style={styles.hero}>
               <Animated.View style={[styles.mascotSlot, { opacity: mascotOpacity }]}>
-                <PixelNeonBull />
+                <SafeHeroBoundary fallback={<StaticSafeHero />}>
+                  <PixelNeonBull />
+                </SafeHeroBoundary>
               </Animated.View>
               <Animated.Text
                 style={[styles.headline, { opacity: headlineOpacity, transform: [{ translateY: headlineY }] }]}
@@ -178,9 +236,18 @@ export function AuthScreen({
                 {copy.headline}
               </Animated.Text>
               <Animated.Text style={[styles.subtitle, { opacity: subtitleOpacity }]}>{copy.subtitle}</Animated.Text>
+              {busy ? (
+                <Animated.View pointerEvents="none" style={[styles.initSkeleton, { opacity: subtitleOpacity }]}>
+                  <PremiumLoadingBar indeterminate height={3} tone="lime" style={styles.initBar} />
+                  <View style={styles.skeletonRow}>
+                    <ShimmerPlaceholder width="38%" height={5} radius={999} tone="lime" />
+                    <ShimmerPlaceholder width="24%" height={5} radius={999} tone="purple" />
+                  </View>
+                </Animated.View>
+              ) : null}
             </View>
 
-            <View style={styles.actions}>
+            <Animated.View style={[styles.actions, { opacity: actionsOpacity, transform: [{ translateY: actionsY }] }]}>
               {showApple ? (
                 <Animated.View style={{ opacity: appleOpacity, transform: [{ translateY: appleY }] }}>
                   <AppleAuthentication.AppleAuthenticationButton
@@ -209,10 +276,12 @@ export function AuthScreen({
                 delay={buttonBaseDelay + 70}
                 onPress={() => setEmailOpen(true)}
               />
-            </View>
+            </Animated.View>
 
             <View style={styles.footer}>
-              <Text style={styles.secureNote}>{copy.secureNote}</Text>
+              <GlowBorderCard tone="neutral" animated={false} radius={18} contentStyle={styles.secureCard}>
+                <Text style={styles.secureNote}>{copy.secureNote}</Text>
+              </GlowBorderCard>
               <Text style={styles.terms}>
                 {copy.termsPrefix}
                 <Text style={styles.termsLink} onPress={() => void openLegalUrl(TERMS_OF_USE_EULA_URL, copy.termsLabel)}>
@@ -294,6 +363,24 @@ const styles = StyleSheet.create({
   providerText: { color: C.text, fontSize: 16, fontWeight: "600", letterSpacing: -0.2 },
   disabled: { opacity: 0.6 },
   footer: { marginTop: 44, gap: 16, paddingHorizontal: 8 },
+  initSkeleton: {
+    width: "100%",
+    maxWidth: 260,
+    marginTop: 16,
+    gap: 10,
+  },
+  initBar: {
+    opacity: 0.72,
+  },
+  skeletonRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 10,
+  },
+  secureCard: {
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+  },
   secureNote: {
     color: C.sub,
     fontSize: 11,
@@ -312,5 +399,67 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.85)",
     textDecorationLine: "underline",
     fontWeight: "500",
+  },
+  staticHero: {
+    width: HERO_FALLBACK_SIZE,
+    height: HERO_FALLBACK_SIZE,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(10,12,16,0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.34)",
+    shadowColor: C.green,
+    shadowOpacity: 0.24,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  staticHeroFace: {
+    width: 52,
+    height: 36,
+    borderRadius: 16,
+    backgroundColor: "rgba(163,255,18,0.92)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  staticHeroEye: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.bg,
+  },
+  staticHeroHornLeft: {
+    position: "absolute",
+    top: 20,
+    left: 24,
+    width: 18,
+    height: 10,
+    borderTopLeftRadius: 10,
+    borderColor: "rgba(163,255,18,0.78)",
+    borderLeftWidth: 3,
+    borderTopWidth: 3,
+    transform: [{ rotate: "-18deg" }],
+  },
+  staticHeroHornRight: {
+    position: "absolute",
+    top: 20,
+    right: 24,
+    width: 18,
+    height: 10,
+    borderTopRightRadius: 10,
+    borderColor: "rgba(163,255,18,0.78)",
+    borderRightWidth: 3,
+    borderTopWidth: 3,
+    transform: [{ rotate: "18deg" }],
+  },
+  staticHeroGlow: {
+    position: "absolute",
+    bottom: 14,
+    width: 46,
+    height: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(163,255,18,0.34)",
   },
 });

@@ -31,31 +31,13 @@ type PendingBatch = {
 };
 
 const ALLOWED_EVENT_NAMES = new Set([
-  "app_opened",
-  "signup_started",
-  "signup_completed",
-  "login_completed",
-  "journal_entry_created",
-  "first_trade_created",
-  "first_journal_entry_created",
-  "first_value_moment",
-  "csv_import_started",
-  "csv_import_completed",
-  "csv_import_failed",
-  "paywall_viewed",
-  "product_selected",
-  "purchase_started",
-  "purchase_completed",
-  "purchase_failed",
-  "restore_started",
-  "restore_completed",
-  "ai_analysis_started",
-  "ai_analysis_completed",
-  "ai_analysis_failed",
-  "first_insight_viewed",
-  "news_viewed",
-  "weekly_report_viewed",
-  "sync_failed",
+  "app_opened", "signup_started", "signup_completed", "login_completed",
+  "journal_entry_created", "first_trade_created", "first_journal_entry_created",
+  "first_value_moment", "csv_import_started", "csv_import_completed", "csv_import_failed",
+  "paywall_viewed", "product_selected", "purchase_started", "purchase_completed",
+  "purchase_failed", "restore_started", "restore_completed", "ai_analysis_started",
+  "ai_analysis_completed", "ai_analysis_failed", "first_insight_viewed", "news_viewed",
+  "weekly_report_viewed", "sync_failed",
 ]);
 
 const EVENT_ALIASES: Record<string, string> = {
@@ -95,13 +77,9 @@ function sanitizeProperties(properties?: Record<string, unknown>): Agent007Analy
   const result: Agent007AnalyticsProperties = {};
   for (const [key, value] of Object.entries(properties ?? {})) {
     if (PROHIBITED_PROPERTY.test(key)) continue;
-    if (value === null) {
-      result[key] = null;
-    } else if (typeof value === "boolean" || typeof value === "number") {
-      result[key] = value;
-    } else if (typeof value === "string") {
-      result[key] = value.slice(0, 120);
-    }
+    if (value === null) result[key] = null;
+    else if (typeof value === "boolean" || typeof value === "number") result[key] = value;
+    else if (typeof value === "string") result[key] = value.slice(0, 120);
   }
   return result;
 }
@@ -146,7 +124,7 @@ class Agent007AnalyticsClient {
     const eventName = EVENT_ALIASES[name] ?? name;
     if (!ALLOWED_EVENT_NAMES.has(eventName)) return;
     void this.enqueue(eventName, properties).catch(() => {
-      // Analytics must never surface storage or transport failures to the UI.
+      // Analytics never interrupts the product experience.
     });
   }
 
@@ -188,11 +166,8 @@ class Agent007AnalyticsClient {
       },
     };
     const last = this.queue.at(-1);
-    if (last && last.events.length < MAX_BATCH_SIZE && last.retries === 0) {
-      last.events.push(event);
-    } else {
-      this.queue.push({ idempotencyKey: `ios-${randomId()}`, retries: 0, events: [event] });
-    }
+    if (last && last.events.length < MAX_BATCH_SIZE && last.retries === 0) last.events.push(event);
+    else this.queue.push({ idempotencyKey: `ios-${randomId()}`, retries: 0, events: [event] });
     this.queue = this.queue.slice(-MAX_QUEUE_SIZE);
     await this.persist();
     this.scheduleFlush();

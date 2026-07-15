@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../config/appConfig";
+import { logger } from "../lib/logger";
 import { getEmailConfirmRedirectUri, getPasswordResetRedirectUri } from "./authConfig";
 import { EMAIL_PASSWORD_MESSAGES, mapEmailPasswordError } from "./emailPasswordMessages";
 import { isValidEmail, normalizeEmail } from "./emailOtpValidation";
@@ -22,7 +23,7 @@ export function userHasPasswordSet(session: Session | null): boolean {
 }
 
 export async function signInWithEmailPassword(email: string, password: string): Promise<Session> {
-  console.log(`${LOG_TAG} sign_in_started`);
+  logger.info(`${LOG_TAG} sign_in_started`);
   const client = requireSupabase();
   try {
     const { data, error } = await client.auth.signInWithPassword({
@@ -33,10 +34,10 @@ export async function signInWithEmailPassword(email: string, password: string): 
     if (!data.session) throw new Error(EMAIL_PASSWORD_MESSAGES.signInFailed);
     const { data: refreshed } = await client.auth.getSession();
     const session = refreshed.session || data.session;
-    console.log(`${LOG_TAG} sign_in_success`, { userId: session.user.id });
+    logger.info(`${LOG_TAG} sign_in_success`);
     return session;
   } catch (error) {
-    console.warn(`${LOG_TAG} sign_in_failed`, {
+    logger.warn(`${LOG_TAG} sign_in_failed`, {
       message: error instanceof Error ? error.message : String(error),
     });
     throw error;
@@ -46,7 +47,7 @@ export async function signInWithEmailPassword(email: string, password: string): 
 export type SignUpResult = "confirmation_sent" | Session;
 
 export async function signUpWithEmailPassword(email: string, password: string): Promise<SignUpResult> {
-  console.log(`${LOG_TAG} sign_up_started`);
+  logger.info(`${LOG_TAG} sign_up_started`);
   const client = requireSupabase();
   try {
     const { data, error } = await client.auth.signUp({
@@ -59,13 +60,13 @@ export async function signUpWithEmailPassword(email: string, password: string): 
     });
     if (error) throw Object.assign(new Error(mapEmailPasswordError(error)), { cause: error });
     if (data.session) {
-      console.log(`${LOG_TAG} sign_up_success`, { userId: data.session.user.id, confirmed: true });
+      logger.info(`${LOG_TAG} sign_up_success`, { confirmed: true });
       return data.session;
     }
-    console.log(`${LOG_TAG} sign_up_success`, { confirmed: false, confirmationRequired: true });
+    logger.info(`${LOG_TAG} sign_up_success`, { confirmed: false, confirmationRequired: true });
     return "confirmation_sent";
   } catch (error) {
-    console.warn(`${LOG_TAG} sign_up_failed`, {
+    logger.warn(`${LOG_TAG} sign_up_failed`, {
       message: error instanceof Error ? error.message : String(error),
     });
     throw error;

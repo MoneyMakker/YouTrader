@@ -1,0 +1,174 @@
+{
+  "version": "2.0.0",
+  "providers": {
+    "openrouter": {
+      "enabled": true,
+      "kind": "openai_compatible",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "secretEnv": "OPENROUTER_API_KEY",
+      "headers": {
+        "HTTP-Referer": "https://youtrader.app",
+        "X-Title": "YouTrader"
+      }
+    },
+    "gemini": {
+      "enabled": true,
+      "kind": "gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "secretEnv": "GEMINI_API_KEY"
+    },
+    "anthropic": {
+      "enabled": true,
+      "kind": "anthropic",
+      "baseUrl": "https://api.anthropic.com/v1",
+      "secretEnv": "ANTHROPIC_API_KEY"
+    },
+    "nvidia": {
+      "enabled": true,
+      "kind": "openai_compatible",
+      "baseUrl": "https://integrate.api.nvidia.com/v1",
+      "secretEnv": "NVIDIA_API_KEY"
+    },
+    "openai": {
+      "enabled": true,
+      "kind": "openai_compatible",
+      "baseUrl": "https://api.openai.com/v1",
+      "secretEnv": "OPENAI_API_KEY"
+    }
+  },
+  "models": {
+    "gemini-flash": {
+      "provider": "openrouter",
+      "modelIdEnv": "AI_MODEL_FAST",
+      "modelIdDefault": "google/gemini-2.5-flash",
+      "directProvider": "gemini",
+      "directModelIdDefault": "gemini-2.5-flash",
+      "tier": "fast",
+      "contextWindow": 1000000,
+      "costPer1MInputUsd": 0.15,
+      "costPer1MOutputUsd": 0.6
+    },
+    "claude-sonnet": {
+      "provider": "openrouter",
+      "modelIdEnv": "AI_MODEL_DEEP",
+      "modelIdDefault": "anthropic/claude-sonnet-4",
+      "directProvider": "anthropic",
+      "directModelIdDefault": "claude-sonnet-4-20250514",
+      "tier": "deep",
+      "contextWindow": 200000,
+      "costPer1MInputUsd": 3,
+      "costPer1MOutputUsd": 15
+    },
+    "gpt-4o": {
+      "provider": "openrouter",
+      "modelIdDefault": "openai/gpt-4o",
+      "directProvider": "openai",
+      "directModelIdDefault": "gpt-4o",
+      "tier": "deep",
+      "contextWindow": 128000,
+      "costPer1MInputUsd": 2.5,
+      "costPer1MOutputUsd": 10
+    },
+    "deepseek-chat": {
+      "provider": "openrouter",
+      "modelIdDefault": "deepseek/deepseek-chat",
+      "tier": "cheap",
+      "contextWindow": 64000,
+      "costPer1MInputUsd": 0.14,
+      "costPer1MOutputUsd": 0.28
+    },
+    "kimi-long": {
+      "provider": "openrouter",
+      "modelIdDefault": "moonshotai/kimi-k2",
+      "tier": "long_context",
+      "contextWindow": 200000,
+      "costPer1MInputUsd": 1,
+      "costPer1MOutputUsd": 3
+    },
+    "nvidia-llama": {
+      "provider": "nvidia",
+      "modelIdEnv": "NVIDIA_MODEL",
+      "modelIdDefault": "meta/llama-3.1-70b-instruct",
+      "tier": "legacy",
+      "contextWindow": 128000,
+      "costPer1MInputUsd": 0,
+      "costPer1MOutputUsd": 0
+    }
+  },
+  "profiles": {
+    "fast": {
+      "modelRef": "gemini-flash",
+      "temperature": 0.2,
+      "maxTokens": 900,
+      "timeoutMs": 18000,
+      "maxRetries": 1
+    },
+    "deep": {
+      "modelRef": "claude-sonnet",
+      "temperature": 0.2,
+      "maxTokens": 900,
+      "timeoutMs": 18000,
+      "maxRetries": 1
+    },
+    "long_context": {
+      "modelRef": "kimi-long",
+      "temperature": 0.2,
+      "maxTokens": 1200,
+      "timeoutMs": 25000,
+      "maxRetries": 1
+    },
+    "cheap_batch": {
+      "modelRef": "deepseek-chat",
+      "temperature": 0.2,
+      "maxTokens": 900,
+      "timeoutMs": 18000,
+      "maxRetries": 1
+    },
+    "market_fast": {
+      "modelRef": "gemini-flash",
+      "temperature": 0.2,
+      "maxTokens": 900,
+      "timeoutMs": 20000,
+      "maxRetries": 1
+    }
+  },
+  "endpointProfiles": {
+    "daily_plan": "fast",
+    "news_explainer": "fast",
+    "daily_challenge": "fast",
+    "weekly_coach": "deep",
+    "journal_summary": "deep",
+    "risk_predictor": "deep",
+    "market_sentiment": "market_fast",
+    "market_narrative": "market_fast",
+    "watchlist_risk": "deep",
+    "volatility_radar": "fast",
+    "pre_market_brief": "fast",
+    "noise_filter": "cheap_batch",
+    "opportunity_scanner": "deep",
+    "why_market_moving": "fast"
+  },
+  "longContextTokenThreshold": 12000,
+  "fallbackChains": {
+    "fast": ["gemini-flash", "deepseek-chat", "gpt-4o", "nvidia-llama"],
+    "deep": ["claude-sonnet", "gpt-4o", "gemini-flash", "deepseek-chat", "nvidia-llama"],
+    "long_context": ["kimi-long", "claude-sonnet", "gpt-4o"],
+    "cheap_batch": ["deepseek-chat", "gemini-flash", "gpt-4o"],
+    "market_fast": ["gemini-flash", "deepseek-chat", "nvidia-llama"],
+    "legacy": ["nvidia-llama", "gemini-flash"]
+  },
+  "cache": {
+    "enabled": true,
+    "ttlSeconds": 3600,
+    "maxEntries": 256
+  },
+  "embedding": {
+    "provider": "openai",
+    "modelEnv": "OPENAI_EMBEDDING_MODEL",
+    "modelDefault": "text-embedding-3-small"
+  },
+  "observability": {
+    "langfuseEnabled": true,
+    "structuredLogs": true
+  }
+}

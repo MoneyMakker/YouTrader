@@ -1,0 +1,61 @@
+---
+description: YouTrader development guardrails for Cursor and Codex
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# YouTrader Rules
+
+YouTrader is an existing Expo React Native TypeScript app. Continue the current codebase only. Do not start a new app, rewrite the architecture, or replace established flows.
+
+## Current Release Baseline
+
+- Current target app version/build: `1.5.8 (90)`.
+- Latest checkpoint commit: `d67d333 Checkpoint latest YouTrader 1.5.8 build 90 state`.
+- Do not change `expo.version`, iOS build number, bundle identifier, EAS project, app scheme, or package identity unless the user explicitly asks.
+- Treat the current local state as authoritative.
+
+## Architecture
+
+- Preserve the existing React Native + Expo + TypeScript architecture.
+- Main orchestration currently lives in `App.tsx`; extract only when a task explicitly asks and the diff stays focused.
+- Reuse existing components, utilities, hooks, i18n keys, styles, and analytics helpers.
+- Do not duplicate UI logic. Prefer a shared helper/component when the same UI behavior appears in more than one place.
+- Keep deterministic analytics derived from journal data. AI may explain or coach, but must not become the source of calculations.
+- Do not add heavy native dependencies or non-Expo-compatible packages without explicit approval.
+
+## Product And UI
+
+- YouTrader should feel like a premium dark iOS fintech terminal: calm, readable, precise, and information-dense.
+- Preserve the existing design system and visual language.
+- Use reusable components for new UI. Avoid one-off screens, duplicate cards, and parallel styling systems.
+- Keep animations smooth and 60 FPS. Prefer lightweight transforms and opacity over layout-heavy animation.
+- Do not make the product feel like a trade-signal, market-prediction, crypto-dashboard, or game.
+
+## Backend, Auth, And Monetization Safety
+
+- Do not change backend logic unless explicitly requested.
+- Do not change Supabase schema, migrations, RLS, Edge Functions, quotas, or cloud sync behavior unless explicitly requested.
+- Do not change auth flows, Apple sign-in, session handling, or account logic unless explicitly requested.
+- Do not change RevenueCat product IDs, entitlement IDs, purchase, restore, paywall, or subscription logic unless explicitly requested.
+- Never expose private API keys, service role keys, AI provider keys, payment payloads, tokens, screenshots, voice notes, or full private journal payloads.
+
+## i18n And Content
+
+- Maintain i18n for user-facing strings.
+- Add or update locale keys consistently across supported languages.
+- Avoid hard-coded user-facing English in components unless an existing pattern clearly does that.
+- AI and coaching copy must not provide financial advice, buy/sell/hold signals, market direction predictions, or profit/pass guarantees.
+
+## Required QA
+
+After changes, run:
+
+```bash
+npm run typecheck
+npm run translations:check
+expo export --platform ios
+```
+
+If a command cannot run, report the exact reason and do not claim the project passed QA.

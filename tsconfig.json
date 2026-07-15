@@ -5,6 +5,7 @@
     "node_modules",
     "review-fix-backups",
     "recovery-backups",
+    "scripts/ai-platform-v2/backups",
     "supabase/functions",
     "ios",
     "android"

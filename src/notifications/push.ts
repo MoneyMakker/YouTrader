@@ -67,6 +67,7 @@ export async function scheduleLocalReminder(options: {
   hour: number;
   minute: number;
   preference: NotificationPreferenceKey;
+  skipPreferenceSync?: boolean;
 }) {
   const granted = await requestNotificationPermission(options.preference);
   if (!granted) return null;
@@ -81,17 +82,25 @@ export async function scheduleLocalReminder(options: {
     },
   });
   await AsyncStorage.setItem(options.idKey, id);
-  await setNotificationPreference(options.preference, true);
+  if (!options.skipPreferenceSync) {
+    await setNotificationPreference(options.preference, true);
+  }
   return id;
 }
 
-export async function clearLocalReminder(idKey: string, preference: NotificationPreferenceKey) {
+export async function clearLocalReminder(
+  idKey: string,
+  preference: NotificationPreferenceKey,
+  options?: { skipPreferenceSync?: boolean },
+) {
   const existingId = await AsyncStorage.getItem(idKey);
   if (existingId) {
     await Notifications.cancelScheduledNotificationAsync(existingId);
     await AsyncStorage.removeItem(idKey);
   }
-  await setNotificationPreference(preference, false);
+  if (!options?.skipPreferenceSync) {
+    await setNotificationPreference(preference, false);
+  }
 }
 
 export async function getExpoPushTokenIfServerStorageIsReady() {

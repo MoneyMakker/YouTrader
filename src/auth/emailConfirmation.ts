@@ -1,4 +1,5 @@
 import { supabase } from "../config/appConfig";
+import { logger } from "../lib/logger";
 import { isEmailConfirmCallbackUrl } from "./authConfig";
 import { exchangePkceCodeForSession } from "./exchangePkceCode";
 import { parseAuthCallbackParams } from "./authUrlParse";
@@ -18,7 +19,7 @@ async function clearSessionAfterConfirmation() {
 export async function completeEmailConfirmationFromUrl(url: string): Promise<boolean> {
   if (!supabase || !isEmailConfirmCallbackUrl(url)) return false;
 
-  console.log(`${LOG_TAG} email_confirmation_received`);
+  logger.info(`${LOG_TAG} email_confirmation_received`);
 
   const errorDescription = mergedParam(url, "error_description") || mergedParam(url, "error");
   if (errorDescription) {

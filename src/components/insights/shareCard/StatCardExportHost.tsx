@@ -24,32 +24,41 @@ export function StatCardExportHost() {
 
   useEffect(() => {
     if (!job) return;
+    let cancelled = false;
+    const activeJob = job;
     const timer = setTimeout(() => {
+      if (cancelled) return;
       const node = svgRef.current as unknown as {
         toDataURL?: (cb: (uri: string) => void, opts?: { width?: number; height?: number }) => void;
       } | null;
       if (!node?.toDataURL) {
-        job.reject(new Error("SVG rasterizer is unavailable on this device"));
-        setJob(null);
+        activeJob.reject(new Error("SVG rasterizer is unavailable on this device"));
+        if (!cancelled) setJob(null);
         return;
       }
       node.toDataURL(
         (dataUrl) => {
           void (async () => {
             try {
-              const uri = await writePngFromDataUrl(dataUrl, job.filename);
-              job.resolve(uri);
+              const uri = await writePngFromDataUrl(dataUrl, activeJob.filename);
+              if (!cancelled) activeJob.resolve(uri);
             } catch (error) {
-              job.reject(error instanceof Error ? error : new Error(String(error)));
+              if (!cancelled) {
+                activeJob.reject(error instanceof Error ? error : new Error(String(error)));
+              }
             } finally {
-              setJob(null);
+              if (!cancelled) setJob(null);
             }
           })();
         },
-        { width: job.width, height: job.height },
+        { width: activeJob.width, height: activeJob.height },
       );
     }, 64);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      activeJob.reject(new Error("Export cancelled"));
+    };
   }, [job]);
 
   if (!job) return null;
@@ -63,7 +72,7 @@ export function StatCardExportHost() {
           y={0}
           width={job.width}
           height={job.height}
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid meet"
         />
         {job.layers?.map((layer, index) => {
           const cx = layer.rect.x + layer.rect.w / 2;
@@ -96,18 +105,49 @@ export function StatCardExportHost() {
           );
         })}
         {job.achievementLayers?.map((layer, index) => (
-          <SvgText
-            key={`export-achievement-${index}`}
-            x={layer.x}
-            y={layer.y}
-            fill={layer.fill}
-            fontSize={layer.fontSize}
-            fontWeight={layer.fontWeight}
-            textAnchor="middle"
-            letterSpacing={layer.letterSpacing}
-          >
-            {layer.text}
-          </SvgText>
+          <React.Fragment key={`export-achievement-${index}`}>
+            {layer.shadowFill ? (
+              <SvgText
+                x={layer.x}
+                y={layer.y + (layer.shadowDy ?? 2)}
+                fill={layer.shadowFill}
+                fontSize={layer.fontSize}
+                fontWeight={layer.fontWeight}
+                textAnchor="middle"
+                letterSpacing={layer.letterSpacing}
+                opacity={0.85}
+              >
+                {layer.lines?.length
+                  ? layer.lines.map((line, lineIndex) => (
+                      <TSpan
+                        key={`ach-shadow-${lineIndex}`}
+                        x={layer.x}
+                        dy={lineIndex === 0 ? 0 : layer.lineHeight ?? layer.fontSize * 1.14}
+                      >
+                        {line}
+                      </TSpan>
+                    ))
+                  : layer.text}
+              </SvgText>
+            ) : null}
+            <SvgText
+              x={layer.x}
+              y={layer.y}
+              fill={layer.fill}
+              fontSize={layer.fontSize}
+              fontWeight={layer.fontWeight}
+              textAnchor="middle"
+              letterSpacing={layer.letterSpacing}
+            >
+              {layer.lines?.length
+                ? layer.lines.map((line, lineIndex) => (
+                    <TSpan key={`ach-line-${lineIndex}`} x={layer.x} dy={lineIndex === 0 ? 0 : layer.lineHeight ?? layer.fontSize * 1.14}>
+                      {line}
+                    </TSpan>
+                  ))
+                : layer.text}
+            </SvgText>
+          </React.Fragment>
         ))}
       </Svg>
     </View>

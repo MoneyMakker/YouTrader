@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { memo, useMemo } from "react";
 import { BlurView } from "expo-blur";
 import {
   Platform,
@@ -30,7 +30,7 @@ function flattenStyle(style: StyleProp<ViewStyle>) {
  * Glassmorphism surface: native blur on iOS, semi-transparent fallback elsewhere.
  * Keep `compact` for lists/grids to limit simultaneous blur layers.
  */
-export function GlassCard({
+export const GlassCard = memo(function GlassCard({
   children,
   style,
   compact = false,
@@ -108,7 +108,7 @@ export function GlassCard({
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   iosTint: {

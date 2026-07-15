@@ -4,7 +4,8 @@ export type AICoachAction =
   | "journal_summary"
   | "daily_plan"
   | "news_explainer"
-  | "daily_challenge";
+  | "daily_challenge"
+  | "trade_vision_review";
 
 export type AICoachPeriod = "day" | "week" | "month" | "custom";
 
@@ -23,6 +24,7 @@ export const AI_ACTIONS: AICoachAction[] = [
   "daily_plan",
   "news_explainer",
   "daily_challenge",
+  "trade_vision_review",
 ];
 
 export function isAICoachAction(value: unknown): value is AICoachAction {
@@ -129,6 +131,20 @@ export function normalizeAIOutput(action: AICoachAction, value: Record<string, u
         difficulty: difficulty(value.difficulty),
         whyThisHelps: stringValue(value.whyThisHelps, "Small discipline wins compound into cleaner execution."),
       };
+    case "trade_vision_review":
+      return {
+        verdict: stringValue(value.verdict, "The image is unclear or missing enough trade context for a strong verdict."),
+        entryQuality: stringValue(value.entryQuality, "Entry quality is unclear from the screenshot."),
+        mistakeDetected: stringValue(value.mistakeDetected, "No specific mistake can be confirmed from the image alone."),
+        stopPlacementFeedback: stringValue(value.stopPlacementFeedback, "Stop placement cannot be judged precisely unless the stop area is visible."),
+        riskRewardFeedback: stringValue(value.riskRewardFeedback, "Risk/reward is unclear without readable entry, stop, and target context."),
+        bestAlternativeAction: stringValue(value.bestAlternativeAction, "Wait for a clearer setup and define invalidation before entry."),
+        coachNote: stringValue(value.coachNote, "Use this as educational trade review, not financial advice."),
+        confidence: stringValue(value.confidence, "Low"),
+        evidenceFromImage: stringArray(value.evidenceFromImage, ["Screenshot evidence is limited or unclear."]),
+        journalBehaviorConnection: stringValue(value.journalBehaviorConnection, "No journal behavior connection was provided."),
+        educationalDisclaimer: "Educational trade review only. Not financial advice.",
+      };
   }
 }
 
@@ -146,6 +162,8 @@ export function schemaInstruction(action: AICoachAction) {
       '{"headline":"","plainEnglish":"","whyItMatters":"","marketsPotentiallyAffected":[],"riskReminder":"","notFinancialAdvice":true}',
     daily_challenge:
       '{"challengeTitle":"","challengeDescription":"","rules":[],"successCriteria":[],"difficulty":"easy|medium|hard","whyThisHelps":""}',
+    trade_vision_review:
+      '{"verdict":"","entryQuality":"","mistakeDetected":"","stopPlacementFeedback":"","riskRewardFeedback":"","bestAlternativeAction":"","coachNote":"","confidence":"Low|Medium|High","evidenceFromImage":[],"journalBehaviorConnection":"","educationalDisclaimer":"Educational trade review only. Not financial advice."}',
   };
   return schemas[action];
 }

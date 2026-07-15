@@ -1,12 +1,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 const MAX_EVENTS = 25;
 const MAX_BODY_BYTES = 32_000;
 const PROHIBITED_PROPERTY = /(email|phone|full.?name|name$|password|passcode|token|secret|authorization|cookie|api.?key|brokerage|account.?number|private.?note|note.?body|screenshot|image|voice|audio|order.?id|payment|card|user.?id|customer.?id|subscriber.?id|device.?id)/i;
 
-function response(status: number, body: Record<string, unknown>) { return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
-function isSafeValue(value: unknown): value is string | number | boolean | null { return value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || (typeof value === "string" && value.length <= 200); }
+function response(status: number, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+function isSafeValue(value: unknown): value is string | number | boolean | null {
+  return value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || (typeof value === "string" && value.length <= 200);
+}
 
 function normalizePayload(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid analytics payload.");
@@ -40,7 +48,10 @@ async function sign(body: string, secret: string) {
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return response(405, { error: "Method not allowed." });
-  const supabaseUrl = Deno.env.get("SUPABASE_URL"), publishableKey = Deno.env.get("SUPABASE_ANON_KEY"), agentUrl = Deno.env.get("AGENT007_PRODUCT_ANALYTICS_INGEST_URL"), signingSecret = Deno.env.get("AGENT007_PRODUCT_ANALYTICS_SIGNING_SECRET");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const publishableKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const agentUrl = Deno.env.get("AGENT007_PRODUCT_ANALYTICS_INGEST_URL");
+  const signingSecret = Deno.env.get("AGENT007_PRODUCT_ANALYTICS_SIGNING_SECRET");
   if (!supabaseUrl || !publishableKey || !agentUrl || !signingSecret) return response(503, { error: "Analytics ingestion is not configured." });
   const authorization = request.headers.get("Authorization");
   if (!authorization?.startsWith("Bearer ")) return response(401, { error: "Unauthorized." });
@@ -50,12 +61,23 @@ Deno.serve(async (request) => {
   const raw = await request.text();
   if (raw.length > MAX_BODY_BYTES) return response(413, { error: "Analytics batch is too large." });
   let payload: ReturnType<typeof normalizePayload>;
-  try { payload = normalizePayload(JSON.parse(raw)); } catch { return response(400, { error: "Analytics payload was rejected." }); }
+  try {
+    payload = normalizePayload(JSON.parse(raw));
+  } catch {
+    return response(400, { error: "Analytics payload was rejected." });
+  }
   const signedBody = JSON.stringify(payload);
   try {
-    const upstream = await fetch(agentUrl, { method: "POST", headers: { "Content-Type": "application/json", "X-Agent007-Analytics-Signature": await sign(signedBody, signingSecret) }, body: signedBody, signal: AbortSignal.timeout(12_000) });
+    const upstream = await fetch(agentUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Agent007-Analytics-Signature": await sign(signedBody, signingSecret) },
+      body: signedBody,
+      signal: AbortSignal.timeout(12_000),
+    });
     if (!upstream.ok) return response(upstream.status >= 500 ? 503 : 400, { error: "Analytics ingestion was rejected." });
     const result = await upstream.json().catch(() => ({}));
     return response(200, { accepted: Number(result.accepted ?? 0), duplicates: Number(result.duplicates ?? 0) });
-  } catch { return response(503, { error: "Analytics ingestion is temporarily unavailable." }); }
+  } catch {
+    return response(503, { error: "Analytics ingestion is temporarily unavailable." });
+  }
 });

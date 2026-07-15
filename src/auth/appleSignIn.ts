@@ -8,24 +8,16 @@ import { IOS_BUNDLE_IDENTIFIER } from "../config/appConfig";
 const NONCE_CHARSET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-export function generateRawNonce(length = 32): string {
-  const values = new Uint8Array(length);
-  if (typeof globalThis.crypto?.getRandomValues === "function") {
-    globalThis.crypto.getRandomValues(values);
-    let result = "";
-    for (let i = 0; i < length; i++) {
-      result += NONCE_CHARSET[values[i] % NONCE_CHARSET.length];
-    }
-    return result;
-  }
+async function generateRawNonce(length = 32): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(length);
   let result = "";
   for (let i = 0; i < length; i++) {
-    result += NONCE_CHARSET[Math.floor(Math.random() * NONCE_CHARSET.length)];
+    result += NONCE_CHARSET[bytes[i] % NONCE_CHARSET.length];
   }
   return result;
 }
 export async function buildAppleNonce(): Promise<{ rawNonce: string; hashedNonce: string }> {
-  const rawNonce = generateRawNonce();
+  const rawNonce = await generateRawNonce();
   const hashedNonce = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     rawNonce,

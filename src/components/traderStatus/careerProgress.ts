@@ -65,17 +65,20 @@ export function nextTierLabel(score: number) {
   return careerTierLabel(CAREER_TIERS[idx + 1]);
 }
 
+const TIER_THRESHOLDS = [0, 35, 58, 66, 76, 88, 95, 100];
+
+/** Progress within the current career tier band (0–100) for roadmap UI. */
+export function tierBandProgressPercent(score: number) {
+  const idx = careerTierIndex(score);
+  const start = TIER_THRESHOLDS[idx] ?? 0;
+  const end = TIER_THRESHOLDS[idx + 1] ?? 100;
+  if (end <= start) return 100;
+  return Math.max(0, Math.min(100, Math.round(((score - start) / (end - start)) * 100)));
+}
+
 export function missionRewardLabel(achievementId: string) {
   if (achievementId.includes("top") || achievementId.includes("score")) return t("rewardTradingScore");
   if (achievementId.includes("risk") || achievementId.includes("revenge")) return t("rewardDiscipline");
   if (achievementId.includes("prop") || achievementId.includes("eval")) return t("rewardPropProgress");
   return t("rewardAchievementBadge");
-}
-
-export function achievementIcon(category: string, unlocked: boolean) {
-  if (category === "journal") return unlocked ? "✓" : "📝";
-  if (category === "performance") return unlocked ? "✓" : "📈";
-  if (category === "risk") return unlocked ? "✓" : "🛡️";
-  if (category === "prop_firm") return unlocked ? "✓" : "🏦";
-  return unlocked ? "✓" : "🏆";
 }

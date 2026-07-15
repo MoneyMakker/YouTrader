@@ -5,6 +5,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+scripts/market-intel-worker/.env
 
 # Expo and build output
 .expo/
@@ -34,6 +35,13 @@ recovery-backups/
 review-fix-backups/
 supabase/.temp/
 knowledge/sources/.last-import.json
+scripts/ai-platform-v2/backups/
+scripts/ai-platform-v2/reports/
+scripts/release-command-center/reports/
+
+# Local agent worktrees (not part of app releases)
+.worktrees/
+.parallel-code/
 
 # Logs
 *.log

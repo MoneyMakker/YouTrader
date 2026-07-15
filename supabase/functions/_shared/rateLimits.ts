@@ -17,7 +17,7 @@ const BUCKET_ACTIONS: Record<RateLimitBucket, string[]> = {
   ai_news: ["news_explainer", "market_sentiment"],
   ai_analytics: ["market_narrative", "volatility_radar", "opportunity_scanner", "noise_filter"],
   weekly_review: ["weekly_coach", "pre_market_brief"],
-  heavy_analysis: ["watchlist_risk", "why_market_moving", "trade_analysis"],
+  heavy_analysis: ["watchlist_risk", "why_market_moving", "trade_analysis", "trade_vision_review"],
 };
 
 function startOfWindow(window: "day" | "week") {
@@ -73,7 +73,7 @@ export async function checkRateLimitBucket(
 
 export async function recordRateLimitUsage(
   supabaseAdmin: SupabaseClient,
-  input: { userId: string; action: string; periodKey: string; provider: string; usedFallback: boolean; source: string },
+  input: { userId: string; action: string; periodKey: string; provider: string; usedFallback: boolean; source: string; metadata?: Record<string, unknown> },
 ) {
   const { error } = await supabaseAdmin.from("ai_usage_events").insert({
     user_id: input.userId,
@@ -81,7 +81,7 @@ export async function recordRateLimitUsage(
     period_key: input.periodKey,
     provider: input.provider,
     used_fallback: input.usedFallback,
-    metadata: { source: input.source, bucket: bucketForAction(input.action) },
+    metadata: { source: input.source, bucket: bucketForAction(input.action), ...(input.metadata || {}) },
   });
   if (error) {
     console.error("[YouTrader:subscription] usage_record_failed", { action: input.action, code: error.code });
