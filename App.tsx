@@ -9,6 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { signInWithAppleNative } from "./src/auth/appleSignIn";
 import { signInWithGoogle, signOutGoogleNative } from "./src/auth/googleSignIn";
@@ -104,6 +105,12 @@ import { AuthScreen } from "./src/auth/AuthScreen";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./src/auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "./src/auth/userCache";
 import { hashLocalAiInput, localAiCacheKey, readLocalAiResponse, writeLocalAiResponse } from "./src/utils/localAiResponseCache";
+import {
+  acknowledgeTradeVisionPrivacy,
+  clearTradeVisionLocalCache,
+  getTradeVisionPrivacyAcknowledgement,
+  revokeTradeVisionPrivacyAcknowledgement,
+} from "./src/privacy/tradeVisionPrivacy";
 import { clearOfflineJobsForUser, enqueueOfflineJob } from "./src/sync/offlineQueue";
 import { useNetworkReconnect } from "./src/sync/networkReconnect";
 import { pullUserPreferences, pushUserPreferences } from "./src/sync/userPreferencesSync";
@@ -6869,6 +6876,9 @@ function TradeVisionCoachSection({
   const [analysis, setAnalysis] = useState<AITradeVisionReview | null>(null);
   const [openDetail, setOpenDetail] = useState<TradeVisionDetail | null>(null);
   const [thinkingStep, setThinkingStep] = useState(0);
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
+  const [privacyDisclosureOpen, setPrivacyDisclosureOpen] = useState(false);
+  const [pendingImageSource, setPendingImageSource] = useState<"camera" | "library" | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const limitReached = used >= TRADE_VISION_MONTHLY_LIMIT;
   const canAnalyze = !!imageUri && !!imageBase64 && !!question.trim() && !limitReached && uiState !== "loading";
@@ -6888,6 +6898,16 @@ function TradeVisionCoachSection({
       mounted = false;
     };
   }, [userId]);
+
+  useEffect(() => {
+    let mounted = true;
+    void getTradeVisionPrivacyAcknowledgement().then((acknowledgement) => {
+      if (mounted) setPrivacyAcknowledged(Boolean(acknowledgement));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (uiState !== "loading") {
@@ -6927,21 +6947,33 @@ function TradeVisionCoachSection({
         setMessage(source === "camera" ? t("cameraPermissionNeeded") : t("photoPermissionNeeded"));
         return;
       }
-      const pickerOptions = { quality: 0.58, allowsEditing: false, base64: true } as const;
+      const pickerOptions = { quality: 0.58, allowsEditing: false, base64: false, exif: false } as const;
       const result =
         source === "camera"
           ? await ImagePicker.launchCameraAsync(pickerOptions)
           : await ImagePicker.launchImageLibraryAsync(pickerOptions);
       if (result.canceled) return;
       const asset = result.assets[0];
-      if (!asset?.uri || !asset.base64) {
+      if (!asset?.uri) {
         setUiState("error");
         setMessage("Could not prepare that image for AI review. Try a JPG, PNG, or WebP screenshot.");
         return;
       }
-      setImageUri(asset.uri);
-      setImageBase64(asset.base64);
-      setImageMimeType(tradeVisionMimeFromUri(asset.uri, asset.mimeType));
+      // Re-encoding a bounded JPEG copy prevents the original filename and picker metadata from being uploaded.
+      // Only the processed image's pixels, JPEG mime type, user question, and reduced journal metrics are sent.
+      const processed = await manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 1600 } }],
+        { base64: true, compress: 0.72, format: SaveFormat.JPEG },
+      );
+      if (!processed.base64 || processed.base64.length > 2_400_000) {
+        setUiState("error");
+        setMessage("That image is too large for a private AI review. Crop it to the chart area and try again.");
+        return;
+      }
+      setImageUri(processed.uri);
+      setImageBase64(processed.base64);
+      setImageMimeType("image/jpeg");
       setAnalysis(null);
       setOpenDetail(null);
       setUiState("image_selected");
@@ -6950,6 +6982,30 @@ function TradeVisionCoachSection({
       setUiState("error");
       setMessage("Could not load that screenshot. Try a JPG, PNG, or WebP image.");
     }
+  };
+
+  const requestTradeVisionImage = (source: "camera" | "library") => {
+    if (privacyAcknowledged) {
+      void pickTradeVisionImage(source);
+      return;
+    }
+    setPendingImageSource(source);
+    setPrivacyDisclosureOpen(true);
+  };
+
+  const continueWithPrivacyAcknowledgement = async () => {
+    const source = pendingImageSource;
+    if (!source) return;
+    await acknowledgeTradeVisionPrivacy("trade_vision");
+    setPrivacyAcknowledged(true);
+    setPrivacyDisclosureOpen(false);
+    setPendingImageSource(null);
+    void pickTradeVisionImage(source);
+  };
+
+  const cancelPrivacyDisclosure = () => {
+    setPrivacyDisclosureOpen(false);
+    setPendingImageSource(null);
   };
 
   const selectPrompt = (prompt: string) => {
@@ -6982,7 +7038,16 @@ function TradeVisionCoachSection({
         question: question.trim(),
         imageBase64,
         imageMimeType,
-        journalContext: journalContext || {},
+        journalContext: {
+          tradeCount: journalContext?.tradeCount ?? null,
+          winRate: journalContext?.winRate ?? null,
+          profitFactor: journalContext?.profitFactor ?? null,
+          expectancy: journalContext?.expectancy ?? null,
+          averageLoss: journalContext?.averageLoss ?? null,
+          maxDrawdown: journalContext?.maxDrawdown ?? null,
+          revengeRiskDetected: (journalContext?.revengeRisk as { detected?: unknown } | undefined)?.detected === true,
+          revengeRiskSeverity: (journalContext?.revengeRisk as { severity?: unknown } | undefined)?.severity ?? null,
+        },
       });
       if (response.usedFallback || response.providerStatus === "local_fallback" || response.providerStatus === "free_preview") {
         setUiState("error");
@@ -7000,8 +7065,8 @@ function TradeVisionCoachSection({
         provider_status: response.providerStatus,
         cached: false,
       });
-    } catch (error) {
-      logger.error(error, { feature: "ai_trade_analysis", action: "review_failed" });
+    } catch {
+      logger.error(new Error("Trade Vision review failed"), { feature: "ai_trade_analysis", action: "review_failed" });
       setUiState("error");
       setMessage("AI Trade Analysis could not review this image. No review was used.");
       warningHaptic();
@@ -7090,10 +7155,10 @@ function TradeVisionCoachSection({
       )}
 
       <View style={styles.tradeVisionResultActions}>
-        <Pressable onPress={() => pickTradeVisionImage("camera")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
+        <Pressable onPress={() => requestTradeVisionImage("camera")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
           <Text style={styles.secondaryText}>Take Photo</Text>
         </Pressable>
-        <Pressable onPress={() => pickTradeVisionImage("library")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
+        <Pressable onPress={() => requestTradeVisionImage("library")} disabled={limitReached || uiState === "loading"} style={[styles.secondaryBig, styles.tradeVisionResultButton, (limitReached || uiState === "loading") && styles.disabledBtn]}>
           <Text style={styles.secondaryText}>Upload Screenshot</Text>
         </Pressable>
       </View>
@@ -7161,7 +7226,7 @@ function TradeVisionCoachSection({
           ) : null}
           <Text style={styles.coachCompactSub}>{analysis.coachNote}</Text>
           <View style={styles.tradeVisionResultActions}>
-            <Pressable onPress={() => pickTradeVisionImage("library")} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton]}>
+            <Pressable onPress={() => requestTradeVisionImage("library")} style={[styles.secondaryBig, styles.purpleAction, styles.tradeVisionResultButton]}>
               <Text style={styles.secondaryText}>Change Screenshot</Text>
             </Pressable>
             <Pressable onPress={resetQuestion} style={[styles.secondaryBig, styles.tradeVisionResultButton]}>
@@ -7184,7 +7249,31 @@ function TradeVisionCoachSection({
         <AiIntelligencePulse tone={canAnalyze ? C.green : C.sub} />
         <Text style={styles.primaryText}>{uiState === "loading" ? "Analyzing Trade" : "Analyze Trade"}</Text>
       </Pressable>
-      <Text style={styles.terminalSub}>Sent only after Analyze.</Text>
+      <Text style={styles.terminalSub}>Your selected chart image is sent to an external AI service only after Analyze. It is not used for Agent-007 or product analytics.</Text>
+
+      <Modal visible={privacyDisclosureOpen} transparent animationType="fade" onRequestClose={cancelPrivacyDisclosure}>
+        <View style={styles.valueModalBackdrop}>
+          <GlassCard style={styles.valueModalCard} intensity={52}>
+            <Text style={styles.valueModalEyebrow}>TRADE VISION PRIVACY</Text>
+            <Text style={styles.valueModalTitle}>Before you choose an image</Text>
+            <Text style={styles.valueModalText}>Your selected chart image will leave your device and be sent to an external AI service for analysis. It may contain information visible in the screenshot.</Text>
+            <Text style={styles.valueModalText}>Crop or remove personal, account, brokerage, or other sensitive information first. The image is not sent to Agent-007 or general product analytics.</Text>
+            <Text style={styles.valueModalText}>External AI services process the image under their own terms. Read our Privacy Policy for the current processing details.</Text>
+            <Pressable onPress={() => void openLegalUrl(PRIVACY_POLICY_URL, "Privacy Policy")} style={styles.legalRow}>
+              <Text style={styles.legalText}>Read Privacy Policy</Text>
+              <Text style={styles.legalArrow}>›</Text>
+            </Pressable>
+            <View style={styles.tradeVisionResultActions}>
+              <Pressable onPress={cancelPrivacyDisclosure} style={[styles.secondaryBig, styles.tradeVisionResultButton]}>
+                <Text style={styles.secondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={() => void continueWithPrivacyAcknowledgement()} style={[styles.primaryBig, styles.tradeVisionResultButton]}>
+                <Text style={styles.primaryText}>Continue</Text>
+              </Pressable>
+            </View>
+          </GlassCard>
+        </View>
+      </Modal>
     </TerminalGlassCard>
   );
 }
@@ -8804,8 +8893,8 @@ function TradeVisionEntryCard({
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text style={styles.terminalSmallLabel}>TRADE VISION</Text>
-          <Text style={styles.coachCompactHeadline}>Review a screenshot locally</Text>
-          <Text style={styles.coachCompactSub}>Upload one chart for an AI review. It is not used as analytics data.</Text>
+          <Text style={styles.coachCompactHeadline}>Review one chart with AI</Text>
+          <Text style={styles.coachCompactSub}>Your selected image is sent to an external AI service only for the review. It is not used as analytics data.</Text>
         </View>
         <ChevronRight size={16} color={expanded ? C.green : C.sub} strokeWidth={2.4} style={{ transform: [{ rotate: expanded ? "90deg" : "0deg" }] }} />
       </Pressable>
@@ -11228,6 +11317,50 @@ function SettingsBenefitLine({ children }: { children: React.ReactNode }) {
   );
 }
 
+function TradeVisionPrivacyControls() {
+  const [acknowledgement, setAcknowledgement] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const refresh = useCallback(() => {
+    void getTradeVisionPrivacyAcknowledgement().then((value) => setAcknowledgement(Boolean(value)));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const clearCache = async () => {
+    const count = await clearTradeVisionLocalCache();
+    setStatus(count ? "Deleted local Trade Vision review cache." : "No local Trade Vision review cache to delete.");
+  };
+
+  const resetAcknowledgement = async () => {
+    await revokeTradeVisionPrivacyAcknowledgement();
+    setAcknowledgement(false);
+    setStatus("Trade Vision acknowledgement reset. You will see the disclosure before the next image selection.");
+  };
+
+  return (
+    <Card>
+      <Text style={styles.h2}>Trade Vision privacy</Text>
+      <Text style={styles.sub}>Selected chart images are sent to an external AI service only when you request a Trade Vision review. They are not used for Agent-007 or general product analytics.</Text>
+      <Text style={[styles.sub, { marginTop: 8 }]}>{acknowledgement ? "Privacy acknowledgement is active." : "You have not acknowledged the Trade Vision image-processing disclosure."}</Text>
+      <Pressable onPress={() => void openLegalUrl(PRIVACY_POLICY_URL, "Privacy Policy")} style={[styles.secondaryBig, { marginTop: 14 }]}>
+        <Text style={styles.secondaryText}>Read Privacy Policy</Text>
+      </Pressable>
+      <Pressable onPress={() => void clearCache()} style={[styles.secondaryBig, { marginTop: 10 }]}>
+        <Text style={styles.secondaryText}>Delete Local Trade Vision Cache</Text>
+      </Pressable>
+      {acknowledgement ? (
+        <Pressable onPress={() => void resetAcknowledgement()} style={[styles.secondaryBig, { marginTop: 10 }]}>
+          <Text style={styles.secondaryText}>Reset Trade Vision Acknowledgement</Text>
+        </Pressable>
+      ) : null}
+      {status ? <Text style={[styles.sub, { marginTop: 10 }]}>{status}</Text> : null}
+    </Card>
+  );
+}
+
 function SettingsScreen({
   lang,
   setLang,
@@ -11315,7 +11448,7 @@ To provide performance analytics, YouTrader collects the following information:
 
 Account Data: If account features are enabled in a future version, YouTrader may collect your name and email address for account access.
 
-User-Generated Data: We securely store the trading logs, dates, times, contract types, execution prices, screenshots, and custom tags that you manually input or import via file uploads (CSV/Excel).
+User-Generated Data: We securely store the trading logs, dates, times, contract types, execution prices, journal screenshots, and custom tags that you manually input or import via file uploads (CSV/Excel). Trade Vision is separate: when you choose to analyze a chart image, the selected image is sent to an external AI service to perform the requested review. Do not include personal, account, brokerage, or other sensitive information in an image you send for analysis.
 
 Usage & Device Data: We may automatically collect anonymized technical data, including device model, operating system, app version, and crash logs to monitor and optimize application performance.
 
@@ -11323,6 +11456,8 @@ Note: YouTrader does not collect, request, or store your live brokerage password
 
 2. Data Use, Security, and Protection
 Your trading data is used strictly to generate your personal statistics, charts, and subscription status. We do not sell, rent, trade, or share your personal identity or specific trading data with third-party advertisers.
+
+AI-Powered Chart Image Analysis: A Trade Vision image is sent only after you select it and request analysis. It is not used for Agent-007 or general product analytics. The application does not write the Trade Vision source image to its database or local AI-response cache; a locally cached review can be deleted in Settings. External AI services may process image content under their own terms, so see the current Privacy Policy for the applicable provider and processing details.
 
 3. Data Ownership and Deletion Rights (GDPR & CCPA Compliance)
 You retain full ownership of your data. In compliance with data privacy regulations, including GDPR and CCPA, you have the right to access, export, or permanently delete your account and all associated trading logs at any time. This action can be executed directly via the Application Settings. Once initiated, all account records are physically and permanently purged from our active databases.
@@ -11448,6 +11583,8 @@ YouTrader does not knowingly collect data from or market to individuals under th
           onChangePassword={() => setChangePasswordOpen(true)}
           onSyncNow={onSyncNow}
         />
+
+        <TradeVisionPrivacyControls />
 
         <ChangePasswordModal
           visible={changePasswordOpen}

@@ -17,7 +17,7 @@ function resolveUrl(envName: string, fallback: string) {
 
 export const PRIVACY_POLICY_URL = resolveUrl(
   "EXPO_PUBLIC_PRIVACY_POLICY_URL",
-  "https://youtrader.pro/privacy",
+  "https://borovikgroup-static-pages.vercel.app/privacy",
 );
 
 export const TERMS_OF_USE_EULA_URL = resolveUrl(
