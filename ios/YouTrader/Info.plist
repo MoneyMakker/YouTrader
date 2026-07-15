@@ -60,13 +60,13 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>YouTrader lets you attach a screenshot of your trade to your journal.</string>
+    <string>YouTrader lets you take a trade chart image for your journal or, when you choose Trade Vision, send a selected chart image to an external AI service for analysis.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow YouTrader to use Face ID for quick secure unlock.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow YouTrader to record audio notes for your trade journal.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>YouTrader lets you upload a trade screenshot from your photo library.</string>
+    <string>YouTrader lets you select a trade chart image from your photo library for your journal or, when you choose Trade Vision, send it to an external AI service for analysis.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>YouTrader saves premium share cards directly to your photo library.</string>
     <key>RCTNewArchEnabled</key>
