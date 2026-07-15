@@ -7,8 +7,9 @@ This is the source checklist for the public subprocessors notice. It is intentio
 | Provider/service category | When involved | Data categories | Verified policy source | Publication status |
 | --- | --- | --- | --- | --- |
 | Supabase Edge Functions | Always; authenticated request proxy, entitlement and quota checks | Processed chart image, MIME type, user question, reduced aggregate journal metrics, authenticated request | YouTrader implementation review | Confirm production project retention/log configuration before publication |
-| Google Gemini API | Only when `AI_PROVIDER=gemini`, or automatic Trade Vision routing selects Gemini | Processed chart image, question, reduced aggregate metrics | [Gemini ZDR documentation](https://ai.google.dev/gemini-api/docs/zdr) | Verify paid-service/log/dataset configuration before publication |
-| OpenRouter | Only when `AI_PROVIDER=openrouter`, or automatic Trade Vision routing falls back to OpenRouter | Processed chart image, question, reduced aggregate metrics, model request metadata | [OpenRouter data collection](https://openrouter.ai/docs/guides/privacy/data-collection), [ZDR controls](https://openrouter.ai/docs/guides/features/zdr) | Verify production key privacy settings, guardrail, model, and final endpoint before publication |
+| OpenRouter | Current configured Trade Vision route: production has `OPENROUTER_API_KEY`; the exact `AI_PROVIDER` setting and final model endpoint remain unreadable | Processed chart image, question, reduced aggregate metrics, model request metadata | [OpenRouter data collection](https://openrouter.ai/docs/guides/privacy/data-collection), [ZDR controls](https://openrouter.ai/docs/guides/features/zdr) | Do not publish retention/training claims until the deployed key, model, and downstream endpoint are verified |
+
+Google Gemini API is supported by the code but is not an active production Trade Vision processor in the 2026-07-15 secret inventory because `GEMINI_API_KEY` is absent. It must not appear in the public subprocessor notice unless that configuration changes and is verified first. Its official [ZDR documentation](https://ai.google.dev/gemini-api/docs/zdr) remains the required source if it becomes active.
 
 ## Publication rule
 

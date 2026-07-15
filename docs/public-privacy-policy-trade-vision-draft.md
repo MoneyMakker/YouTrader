@@ -18,7 +18,7 @@ To request information or ask a privacy question, contact `support@borovikgroup.
 
 ## Publication prerequisites
 
-1. Replace this repository draft with the source that deploys the App Store Connect privacy-policy URL.
-2. Record the active production provider chain in `docs/trade-vision-subprocessors.md` and publish the matching public subprocessors notice.
-3. Confirm applicable provider retention/training settings from the exact production account before adding stronger statements.
+1. Replace this repository draft with the source that deploys the App Store Connect privacy-policy URL. As of 2026-07-15, that URL is served by an inaccessible Vercel project (`borovikgroup-static-pages`); it is not in the accessible MoneyMakker repositories or current Vercel scope.
+2. Record the active production provider chain in `docs/trade-vision-subprocessors.md` and publish the matching public subprocessor notice.
+3. Confirm applicable provider retention/training settings from the exact production account before adding stronger statements. The current production secret inventory has an OpenRouter key and no Gemini key, but does not reveal the deployed model, endpoint, ZDR state, or prompt-log settings.
 4. Set an effective date and verify the public URL returns the new content.
