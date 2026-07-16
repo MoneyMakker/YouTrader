@@ -1,0 +1,1 @@
+{"contract_version":"1.0.0","canonical_repository":"MoneyMakker/youtrader-pr-agent","canonical_path":"specs/contract/spec.schema.json","sync_rule":"Copy only through an explicit sync and verify with spec:drift.","no_secret_fields":["api_key","private_key","password","token","authorization","environment_value","source_code_body"]}
