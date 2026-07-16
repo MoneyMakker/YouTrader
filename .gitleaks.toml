@@ -3,9 +3,16 @@ title = "YouTrader Gitleaks"
 [extend]
 useDefault = true
 
+[[rules]]
+id = "app-review-credential"
+description = "Detect literal App Review credential assignments while allowing explicit safe placeholders"
+regex = '''(?i)(?:APP_REVIEW_TEST_(?:EMAIL|PASSWORD)|(?:username|password))\s*[:=]\s*[A-Za-z0-9][A-Za-z0-9!@#$%^&*._-]{7,}'''
+keywords = ["APP_REVIEW_TEST_PASSWORD", "APP_REVIEW_TEST_EMAIL"]
+
 [allowlist]
 description = "Ignore known false positives and local-only paths"
 paths = [
+  '''scripts/verify-app-review-credential-scan\.mjs$''',
   '''\.env\.example$''',
   '''scripts/market-intel-worker/\.env\.example$''',
   '''ios/Podfile\.lock$''',
