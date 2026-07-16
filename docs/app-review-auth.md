@@ -1,13 +1,18 @@
 # App Store Review — Email/Password Sign-In
 
-Last updated: 2026-07-04
+Last updated: 2026-07-16
 
 Apple Review requires a working username (email) + password login. Magic link alone is **not** acceptable for review.
 
 ## Test account (copy into App Store Connect → App Review Information)
 
-**Username:** `apple.review.youtrader@gmail.com`  
-**Password:** `AppleReview2026!`
+**Username:** `APP_REVIEW_TEST_EMAIL=<stored securely>`
+
+**Password:** `APP_REVIEW_TEST_PASSWORD=<stored securely>`
+
+### Current-build limitation
+
+Apple does not allow App Review credentials for an already-created build to be replaced in App Store Connect. For the current `1.6.0 (107)` build, keep the new verified review account in the approved owner-only credential record. Replace the App Review Information credentials immediately before the next App Store submission that includes a new build. This is a release-workflow follow-up, not a reason to store credentials in Git.
 
 ### App Review notes (copy-paste)
 
@@ -28,11 +33,11 @@ No external brokerage account is required. The app does not execute trades or pr
 
 1. Open [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Authentication** → **Users**
 2. Click **Add user** → **Create new user**
-3. Email: `apple.review.youtrader@gmail.com`
-4. Password: `AppleReview2026!`
+3. Email: `APP_REVIEW_TEST_EMAIL=<stored securely>`
+4. Password: `APP_REVIEW_TEST_PASSWORD=<stored securely>`
 5. Enable **Auto Confirm User** (or mark email confirmed — see below)
 
-If the user already exists but cannot sign in, reset the password to `AppleReview2026!` and confirm the email.
+If the user already exists but cannot sign in, rotate the password through the approved owner-only credential record and confirm the email.
 
 ### Manually confirm email (if confirmation is required)
 
@@ -46,7 +51,7 @@ If the user already exists but cannot sign in, reset the password to `AppleRevie
 ```sql
 update auth.users
 set email_confirmed_at = now()
-where email = 'apple.review.youtrader@gmail.com';
+where email = '<stored securely>';
 ```
 
 ---
@@ -139,7 +144,8 @@ Filter console for:
 
 ## 6. Security notes
 
-- Do not commit real passwords to git
-- Rotate `AppleReview2026!` after review if desired
-- Review account should have no real trading/broker credentials
+- Never commit App Review usernames, passwords, codes, or tokens to Git.
+- The owner rotates the review credential through the approved release secret manager whenever exposure is suspected or App Review access changes.
+- Maintain the current credential only in the approved owner-only release secret record; update App Store Connect review notes before the next eligible submission after rotation.
+- Review account should have no real trading/broker credentials.
 - Rate limits apply to auth attempts (client-side guard)

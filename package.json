@@ -29,6 +29,7 @@
     "security:audit": "npm audit --audit-level=high",
     "security:gitleaks": "gitleaks detect --no-git --source . --config .gitleaks.toml --redact",
     "security:gitleaks:history": "gitleaks detect --source . --config .gitleaks.toml --redact",
+    "security:verify-app-review-credential-scan": "node scripts/verify-app-review-credential-scan.mjs",
     "security:semgrep": "semgrep scan --config auto --severity ERROR --exclude node_modules --exclude dist --exclude ios/Pods --exclude ios/build --exclude android/build --exclude recovery-backups",
     "security:all": "npm run security:check && npm run security:audit && npm run security:gitleaks && npm run security:semgrep",
     "release:stability": "node scripts/release-stability-check.mjs",
