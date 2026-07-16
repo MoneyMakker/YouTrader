@@ -47,7 +47,14 @@
     "ai-platform:verify-db-permissions": "node scripts/ai-platform-v2/verify-db-permissions.mjs",
     "prepare:testflight": "node scripts/release-command-center/run.mjs testflight",
     "prepare:production": "node scripts/release-command-center/run.mjs production",
-    "prepare:release": "node scripts/release-command-center/run.mjs release"
+    "prepare:release": "node scripts/release-command-center/run.mjs release",
+    "spec:create": "node scripts/spec.mjs create",
+    "spec:validate": "node scripts/spec.mjs validate",
+    "spec:render": "node scripts/spec.mjs render",
+    "spec:status": "node scripts/spec.mjs status",
+    "spec:drift": "node scripts/spec.mjs drift",
+    "spec:link-pr": "node scripts/spec.mjs link-pr",
+    "spec:release-check": "node scripts/spec.mjs release-check"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
