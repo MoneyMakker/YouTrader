@@ -156,6 +156,10 @@ import { getPosthogClient } from "./src/lib/posthog";
 import { logStartupError, logStartupPerf, markAppStart } from "./src/lib/startupPerf";
 import { logger } from "./src/lib/logger";
 import {
+  RevenueCatIdentitySynchronizer,
+  type RevenueCatIdentityClient,
+} from "./src/billing/revenueCatIdentity";
+import {
   enableCloudSignIn,
   isExpoGo,
   isRevenueCatConfigured,
@@ -11373,7 +11377,6 @@ function SettingsScreen({
   purchaseBusy,
   revenueCatConfigured,
   paywallError,
-  showRestorePurchases,
   cloudSyncEnabled,
   cloudSyncStatus,
   cloudSyncMessage,
@@ -11401,7 +11404,6 @@ function SettingsScreen({
   purchaseBusy: boolean;
   revenueCatConfigured: boolean;
   paywallError: string;
-  showRestorePurchases: boolean;
   cloudSyncEnabled: boolean;
   cloudSyncStatus: "off" | "syncing" | "synced" | "error";
   cloudSyncMessage: string;
@@ -11557,7 +11559,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
               </Pressable>
             </View>
           ) : null}
-          {!isPremium && (showRestorePurchases || !!paywallError) ? (
+          {!isPremium ? (
             <Pressable
               disabled={purchaseBusy}
               onPress={onRestore}
@@ -11795,6 +11797,7 @@ function App() {
   const [pushCalendarEvents, setPushCalendarEvents] = useState<EconEvent[]>([]);
   const [shareExportHostReady, setShareExportHostReady] = useState(false);
   const purchasesConfigured = useRef(false);
+  const revenueCatIdentityRef = useRef<RevenueCatIdentitySynchronizer<CustomerInfo> | null>(null);
   const cloudSyncInFlight = useRef(false);
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -12128,6 +12131,34 @@ function App() {
     }
   }, [applyCustomerInfo]);
 
+  const syncRevenueCatIdentity = useCallback(async (reason: string) => {
+    const userId = session?.user.id || null;
+    if (!userId) return { status: "skipped_no_user" as const };
+    if (!purchasesConfigured.current) return { status: "skipped_not_configured" as const };
+
+    if (!revenueCatIdentityRef.current) {
+      revenueCatIdentityRef.current = new RevenueCatIdentitySynchronizer<CustomerInfo>(
+        Purchases as unknown as RevenueCatIdentityClient<CustomerInfo>,
+        { isConfigured: () => purchasesConfigured.current },
+      );
+    }
+
+    const result = await revenueCatIdentityRef.current.synchronize(userId);
+    if (result.status === "failed") {
+      // Do not turn a provider failure into a confirmed free state.
+      setPaywallError(t("restoreFailedTryAgain"));
+      logger.warn("RevenueCat identity synchronization failed", {
+        feature: "revenuecat",
+        action: "identity_sync",
+        reason,
+      });
+      return result;
+    }
+
+    if (result.customerInfo) applyCustomerInfo(result.customerInfo, `identity_sync:${reason}`);
+    return result;
+  }, [applyCustomerInfo, session?.user.id]);
+
   useEffect(() => {
     if (!revenueCatConfigured || purchasesConfigured.current) return;
     let listener: ((info: CustomerInfo) => void) | null = null;
@@ -12136,8 +12167,11 @@ function App() {
         Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
         Purchases.configure({ apiKey: REVENUECAT_API_KEY });
         purchasesConfigured.current = true;
+        revenueCatIdentityRef.current = new RevenueCatIdentitySynchronizer<CustomerInfo>(
+          Purchases as unknown as RevenueCatIdentityClient<CustomerInfo>,
+          { isConfigured: () => purchasesConfigured.current },
+        );
         setRevenueCatReady(true);
-        refreshRevenueCat();
         listener = (info: CustomerInfo) => {
           applyCustomerInfo(info, "customerInfoUpdateListener");
         };
@@ -12153,17 +12187,22 @@ function App() {
       task.cancel();
       if (listener) Purchases.removeCustomerInfoUpdateListener(listener);
     };
-  }, [applyCustomerInfo, refreshRevenueCat, revenueCatConfigured]);
+  }, [applyCustomerInfo, revenueCatConfigured]);
 
   useEffect(() => {
-    if (!purchasesConfigured.current || !session?.user.id) return;
-    Purchases.logIn(session.user.id)
-      .then(({ customerInfo: nextCustomerInfo }) => applyCustomerInfo(nextCustomerInfo, "logIn"))
-      .then(refreshRevenueCat)
-      .catch((error) => {
-        logger.error(error, { feature: "revenuecat", action: "log_in" });
-      });
-  }, [applyCustomerInfo, refreshRevenueCat, session?.user.id]);
+    if (!revenueCatReady) return;
+    let cancelled = false;
+    void (async () => {
+      if (session?.user.id) {
+        const identity = await syncRevenueCatIdentity("session_available");
+        if (cancelled || identity.status === "failed") return;
+      }
+      if (!cancelled) await refreshRevenueCat();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshRevenueCat, revenueCatReady, session?.access_token, session?.user.id, syncRevenueCatIdentity]);
 
   const refreshLockScreenBufferReminder = useCallback(async () => {
     const [enabledRaw, templateKeyRaw, modeRaw] = await Promise.all([
@@ -12750,6 +12789,7 @@ function App() {
     if (purchasesConfigured.current) {
       try {
         const customerInfo = await Purchases.logOut();
+        revenueCatIdentityRef.current?.reset();
         applyCustomerInfo(customerInfo, "signOut");
       } catch (logoutError) {
         logger.warn("RevenueCat logOut failed during sign out", {
@@ -12760,11 +12800,13 @@ function App() {
         customerInfoRef.current = null;
         setCustomerInfo(null);
         setProAccess(emptyProAccessState());
+        revenueCatIdentityRef.current?.reset();
       }
     } else {
       customerInfoRef.current = null;
       setCustomerInfo(null);
       setProAccess(emptyProAccessState());
+      revenueCatIdentityRef.current?.reset();
     }
     setTrades([]);
     setTradesHydrated(true);
@@ -12966,6 +13008,11 @@ function App() {
 
     setPurchaseBusy(true);
     try {
+      const identity = await syncRevenueCatIdentity("restore_purchases");
+      if (identity.status !== "synced" && identity.status !== "already_synced") {
+        Alert.alert(t("restorePurchases"), t("restoreFailedTryAgain"));
+        return;
+      }
       const limit = await checkClientRateLimit("restore", session?.user.id || "local");
       if (!limit.allowed) {
         Alert.alert(t("restorePurchases"), SECURITY_MESSAGES.rateLimited);
@@ -13001,22 +13048,28 @@ function App() {
     } finally {
       setPurchaseBusy(false);
     }
-  }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id]);
+  }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id, syncRevenueCatIdentity]);
 
   useEffect(() => {
     if (!revenueCatConfigured) return;
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active" || !purchasesConfigured.current) return;
-      void refreshCurrentEntitlements("app-foreground", [0]);
+      void (async () => {
+        const identity = await syncRevenueCatIdentity("app_foreground");
+        if (identity.status !== "failed") await refreshCurrentEntitlements("app-foreground", [0]);
+      })();
       void refreshServerEntitlement();
     });
     return () => subscription.remove();
-  }, [refreshCurrentEntitlements, refreshServerEntitlement, revenueCatConfigured]);
+  }, [refreshCurrentEntitlements, refreshServerEntitlement, revenueCatConfigured, syncRevenueCatIdentity]);
 
   useNetworkReconnect(() => {
     if (cloudSyncEnabled) syncTradesWithCloud();
     if (purchasesConfigured.current) {
-      void refreshCurrentEntitlements("network-reconnect", [0]);
+      void (async () => {
+        const identity = await syncRevenueCatIdentity("network_reconnect");
+        if (identity.status !== "failed") await refreshCurrentEntitlements("network-reconnect", [0]);
+      })();
     }
     void refreshServerEntitlement();
   });
@@ -13188,7 +13241,6 @@ function App() {
               purchaseBusy={purchaseBusy}
               revenueCatConfigured={revenueCatConfigured}
               paywallError={paywallError}
-              showRestorePurchases={showRestorePurchases}
               cloudSyncEnabled={cloudSyncEnabled}
               cloudSyncStatus={cloudSyncStatus}
               cloudSyncMessage={cloudSyncMessage}
