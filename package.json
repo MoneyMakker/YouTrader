@@ -17,6 +17,7 @@
     "test:trade-vision-privacy": "node scripts/trade-vision-privacy-qa.mjs",
     "test:ai-quota-lifecycle": "node --experimental-strip-types scripts/security/ai-quota-lifecycle-qa.ts",
     "test:revenuecat-entitlement": "node --experimental-strip-types scripts/security/revenuecat-entitlement-qa.mjs",
+    "test:revenuecat-mobile-identity": "npx tsx scripts/revenuecat-mobile-identity-qa.ts",
     "test:release-readiness": "npx tsx scripts/release-readiness-qa.ts",
     "market-intel": "node scripts/market-intel-worker/index.mjs all",
     "market-intel:news": "node scripts/market-intel-worker/index.mjs news",
