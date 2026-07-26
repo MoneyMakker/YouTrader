@@ -3,8 +3,10 @@ import { corsHeadersFor, jsonResponse } from "../_shared/cors.ts";
 import { fetchBraveMarketNews, formatBraveArticlesForPrompt } from "../_shared/braveSearch.ts";
 import { generateMarketIntelligence } from "../_shared/marketAiProvider.ts";
 import { isMarketIntelligenceAction, type MarketIntelligenceAction } from "../_shared/marketAiSchemas.ts";
-import { checkRateLimitBucket, recordRateLimitUsage } from "../_shared/rateLimits.ts";
+import { DAILY_AI_LIMIT_MESSAGE, recordRateLimitUsage } from "../_shared/rateLimits.ts";
 import { resolveServerProEntitlement } from "../_shared/revenueCatEntitlement.ts";
+import { requestId, reserveAiQuota, transitionAiQuota } from "../_shared/aiQuotaLifecycle.ts";
+import { runQuotaLifecycle } from "../_shared/aiQuotaOrchestrator.ts";
 
 type SuppliedHeadline = {
   title: string;
@@ -90,51 +92,66 @@ Deno.serve(async (req) => {
   if (!isMarketIntelligenceAction(body.action)) {
     return jsonResponse({ error: "Unsupported market action." }, 400, req);
   }
-
   const entitlement = await resolveServerProEntitlement(supabaseAdmin, userData.user.id);
   if (!entitlement.isPro) {
     console.log("[YouTrader:subscription] market_intel_blocked_free", { action: body.action });
     return jsonResponse({ error: "YouTrader Pro is required for this feature." }, 403, req);
   }
 
-  const quota = await checkRateLimitBucket(supabaseAdmin, userData.user.id, body.action);
-  if (!quota.allowed) {
-    return jsonResponse({
-      error: quota.message || "Daily AI limit reached. More requests become available tomorrow.",
-      quota: { remaining: 0, limit: quota.limit, bucket: quota.bucket },
-    }, 429, req);
-  }
+  const logicalRequestId = requestId(req.headers.get("Idempotency-Key"));
+  if (!logicalRequestId) return jsonResponse({ error: "Invalid request identifier." }, 400, req);
 
   const payload = body.payload || {};
-  const symbols = Array.isArray(payload.symbols)
-    ? payload.symbols.map((item) => String(item))
-    : typeof payload.symbols === "string"
-      ? payload.symbols.split(/[,\s]+/).filter(Boolean)
-      : undefined;
-  const symbol = typeof payload.symbol === "string" ? payload.symbol : undefined;
-  const query =
-    body.action === "why_market_moving" && symbol
-      ? `${symbol} market news today why moving`
-      : undefined;
-
-  const visibleHeadlines = suppliedHeadlines(payload);
-  const articles = visibleHeadlines.length ? [] : await fetchBraveMarketNews({ query, symbols, count: 5 });
-  const articlesText = visibleHeadlines.length ? formatSuppliedHeadlines(visibleHeadlines) : formatBraveArticlesForPrompt(articles);
-  const enrichedPayload = {
-    ...payload,
-    headlines: visibleHeadlines.length ? visibleHeadlines : payload.headlines,
-    inputHeadlineCount: visibleHeadlines.length || articles.length,
-  };
-  const result = await generateMarketIntelligence(body.action, enrichedPayload, articlesText);
-
-  await recordRateLimitUsage(supabaseAdmin, {
-    userId: userData.user.id,
-    action: body.action,
-    periodKey: periodKey(body.action),
-    provider: result.provider,
-    usedFallback: result.usedFallback,
-    source: "market-intelligence",
+  const lifecycle = await runQuotaLifecycle({
+    reserve: () => reserveAiQuota(supabaseAdmin, userData.user.id, body.action, logicalRequestId),
+    transition: (target, reason) => transitionAiQuota(supabaseAdmin, userData.user.id, body.action, logicalRequestId, target, reason),
+    invokeProvider: async () => {
+      const visibleHeadlines = suppliedHeadlines(payload);
+      const symbols = Array.isArray(payload.symbols)
+        ? payload.symbols.map((item) => String(item))
+        : typeof payload.symbols === "string"
+          ? payload.symbols.split(/[,\s]+/).filter(Boolean)
+          : undefined;
+      const symbol = typeof payload.symbol === "string" ? payload.symbol : undefined;
+      const query = body.action === "why_market_moving" && symbol ? `${symbol} market news today why moving` : undefined;
+      const articles = visibleHeadlines.length ? [] : await fetchBraveMarketNews({ query, symbols, count: 5 });
+      const articlesText = visibleHeadlines.length ? formatSuppliedHeadlines(visibleHeadlines) : formatBraveArticlesForPrompt(articles);
+      const enrichedPayload = {
+        ...payload,
+        headlines: visibleHeadlines.length ? visibleHeadlines : payload.headlines,
+        inputHeadlineCount: visibleHeadlines.length || articles.length,
+      };
+      const result = await generateMarketIntelligence(body.action, enrichedPayload, articlesText);
+      return { articles, result, visibleHeadlines };
+    },
+    isUsable: ({ result }) => !result.usedFallback && result.provider !== "local",
+    timeoutMs: 25_000,
   });
+
+  if (lifecycle.kind === "denied") {
+    return jsonResponse({
+      error: "quota_exceeded",
+      message: DAILY_AI_LIMIT_MESSAGE,
+      providerStatus: "quota_exceeded",
+    }, 429, req);
+  }
+  if (lifecycle.kind === "unavailable") {
+    if (lifecycle.reason === "duplicate") return jsonResponse({ error: "AI request was already processed." }, 409, req);
+    return jsonResponse({ error: "AI service is temporarily unavailable." }, 503, req);
+  }
+
+  const { articles, result, visibleHeadlines } = lifecycle.value;
+
+  if (lifecycle.consumed) {
+    await recordRateLimitUsage(supabaseAdmin, {
+      userId: userData.user.id,
+      action: body.action,
+      periodKey: periodKey(body.action),
+      provider: result.provider,
+      usedFallback: result.usedFallback,
+      source: "market-intelligence",
+    });
+  }
 
   return jsonResponse({
     data: result.data,
@@ -142,6 +159,5 @@ Deno.serve(async (req) => {
     providerStatus: result.provider,
     usedFallback: result.usedFallback,
     message: result.message,
-    quota: { remaining: Math.max(0, quota.remaining - 1), limit: quota.limit },
   }, 200, req);
 });

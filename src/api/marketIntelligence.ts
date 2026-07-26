@@ -2,6 +2,7 @@ import { isSupabaseConfigured, supabase } from "../config/appConfig";
 import { AI_DAILY_LIMIT_MESSAGE } from "../config/monetization";
 import { t } from "../i18n";
 import { logger } from "../lib/logger";
+import { createIdempotencyKey } from "../utils/idempotency";
 
 export type MarketIntelligenceAction =
   | "market_sentiment"
@@ -181,8 +182,10 @@ export async function invokeMarketIntelligence<T>(
     }
 
     logger.info(`[YouTrader:brave-news] invoke ${action}`);
+    const idempotencyKey = await createIdempotencyKey();
     const { data, error } = await supabase.functions.invoke("market-intelligence", {
       body: { action, payload },
+      headers: { "Idempotency-Key": idempotencyKey },
     });
 
     if (error) {

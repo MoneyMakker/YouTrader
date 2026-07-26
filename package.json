@@ -15,6 +15,7 @@
     "test:email-password": "npx tsx scripts/email-password-qa.ts",
     "test:usage-limits": "npx tsx scripts/usage-limits-qa.ts",
     "test:trade-vision-privacy": "node scripts/trade-vision-privacy-qa.mjs",
+    "test:ai-quota-lifecycle": "node --experimental-strip-types scripts/security/ai-quota-lifecycle-qa.ts",
     "test:release-readiness": "npx tsx scripts/release-readiness-qa.ts",
     "market-intel": "node scripts/market-intel-worker/index.mjs all",
     "market-intel:news": "node scripts/market-intel-worker/index.mjs news",

@@ -1,9 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { corsHeadersFor, jsonResponse } from "../_shared/cors.ts";
-import { checkAIQuota, recordAIUsage, DAILY_AI_LIMIT_MESSAGE } from "../_shared/aiQuota.ts";
+import { DAILY_AI_LIMIT_MESSAGE, recordAIUsage } from "../_shared/aiQuota.ts";
 import { generateAI } from "../_shared/aiProvider.ts";
 import { isAICoachAction, type AICoachRequest } from "../_shared/aiSchemas.ts";
 import { resolveServerProEntitlement } from "../_shared/revenueCatEntitlement.ts";
+import { requestId, reserveAiQuota, transitionAiQuota } from "../_shared/aiQuotaLifecycle.ts";
+import { runQuotaLifecycle } from "../_shared/aiQuotaOrchestrator.ts";
 
 function getEnv(name: string) {
   return Deno.env.get(name)?.trim() || "";
@@ -75,30 +77,43 @@ Deno.serve(async (req) => {
     }, 200, req);
   }
 
-  const quota = await checkAIQuota(supabaseAdmin, userData.user.id, body.action);
-  if (!quota.allowed) {
+  const logicalRequestId = requestId(req.headers.get("Idempotency-Key"));
+  if (!logicalRequestId) return jsonResponse({ error: "Invalid request identifier." }, 400, req);
+
+  const lifecycle = await runQuotaLifecycle({
+    reserve: () => reserveAiQuota(supabaseAdmin, userData.user.id, body.action, logicalRequestId),
+    transition: (target, reason) => transitionAiQuota(supabaseAdmin, userData.user.id, body.action, logicalRequestId, target, reason),
+    invokeProvider: () => generateAI(
+      {
+        action: body.action,
+        period: body.period || "day",
+        payload: body.payload || {},
+      },
+      true,
+    ),
+    isUsable: (result) => !result.usedFallback && result.provider !== "local",
+    timeoutMs: 22_000,
+  });
+
+  if (lifecycle.kind === "denied") {
     return jsonResponse(
       {
         error: "quota_exceeded",
-        message: quota.message || DAILY_AI_LIMIT_MESSAGE,
+        message: DAILY_AI_LIMIT_MESSAGE,
         providerStatus: "quota_exceeded",
-        quota: { remaining: 0, limit: quota.limit },
       },
       429,
       req,
     );
   }
+  if (lifecycle.kind === "unavailable") {
+    if (lifecycle.reason === "duplicate") return jsonResponse({ error: "AI request was already processed." }, 409, req);
+    return jsonResponse({ error: "AI service is temporarily unavailable." }, 503, req);
+  }
 
-  const result = await generateAI(
-    {
-      action: body.action,
-      period: body.period || "day",
-      payload: body.payload || {},
-    },
-    true,
-  );
+  const result = lifecycle.value;
 
-  if (!(body.action === "trade_vision_review" && result.usedFallback)) {
+  if (lifecycle.consumed) {
     await recordAIUsage(supabaseAdmin, {
       userId: userData.user.id,
       action: body.action,
@@ -122,10 +137,5 @@ Deno.serve(async (req) => {
       confidence: result.retrieval.confidence,
       lowConfidence: result.retrieval.lowConfidence,
     } : undefined,
-    quota: {
-      remaining: Math.max(0, quota.remaining - 1),
-      limit: quota.limit,
-      warning: quota.warning,
-    },
   }, 200, req);
 });
