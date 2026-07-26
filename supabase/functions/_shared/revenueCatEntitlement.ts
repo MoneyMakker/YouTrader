@@ -3,6 +3,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.75.0
 type SubscriptionRow = {
   status: string | null;
   expires_at: string | null;
+  updated_at: string | null;
 };
 
 type RevenueCatEntitlement = {
@@ -25,66 +26,105 @@ export type ServerEntitlementResult = {
   synced: boolean;
 };
 
+type EntitlementDependencies = {
+  env?: (name: string) => string;
+  fetch?: typeof fetch;
+  now?: () => number;
+  timeoutMs?: number;
+};
+
+const CACHE_TTL_MS = 15 * 60 * 1000;
+const REVENUECAT_TIMEOUT_MS = 5_000;
+
 function env(name: string) {
   return Deno.env.get(name)?.trim() || "";
 }
 
-function isActiveSubscription(row: SubscriptionRow | null) {
+export function isActiveSubscription(row: SubscriptionRow | null, now = Date.now()) {
   if (!row) return false;
   const status = String(row.status || "").toLowerCase();
   if (!["active", "trialing"].includes(status)) return false;
   if (!row.expires_at) return true;
   const expiresAt = new Date(row.expires_at).getTime();
-  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+  return Number.isFinite(expiresAt) && expiresAt > now;
 }
 
-function isActiveRevenueCatEntitlement(entitlement: RevenueCatEntitlement | undefined) {
+export function isActiveRevenueCatEntitlement(entitlement: RevenueCatEntitlement | undefined, now = Date.now()) {
   if (!entitlement) return false;
   if (!entitlement.expires_date) return true;
   const expiresAt = new Date(entitlement.expires_date).getTime();
-  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+  return Number.isFinite(expiresAt) && expiresAt > now;
 }
 
-async function fetchRevenueCatEntitlement(userId: string, entitlementId: string) {
-  const secret = env("REVENUECAT_SECRET_KEY");
+function isFreshCache(row: SubscriptionRow, now: number) {
+  const updatedAt = new Date(row.updated_at || "").getTime();
+  return Number.isFinite(updatedAt) && updatedAt <= now && now - updatedAt < CACHE_TTL_MS;
+}
+
+type RevenueCatLookup =
+  | { kind: "active"; entitlement: RevenueCatEntitlement }
+  | { kind: "inactive"; entitlement?: RevenueCatEntitlement }
+  | { kind: "unavailable" };
+
+async function fetchRevenueCatEntitlement(
+  userId: string,
+  entitlementId: string,
+  dependencies: Required<Pick<EntitlementDependencies, "env" | "fetch" | "timeoutMs" | "now">>,
+): Promise<RevenueCatLookup> {
+  const secret = dependencies.env("REVENUECAT_SECRET_KEY");
   if (!secret) {
     console.warn("[YouTrader:subscription] revenuecat_secret_missing", { entitlement_id: entitlementId });
-    return null;
+    return { kind: "unavailable" };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), dependencies.timeoutMs);
   try {
-    const response = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+    const response = await dependencies.fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
       headers: {
         Authorization: `Bearer ${secret}`,
         Accept: "application/json",
       },
+      signal: controller.signal,
     });
     if (!response.ok) {
       console.warn("[YouTrader:subscription] revenuecat_lookup_failed", {
         entitlement_id: entitlementId,
         status: response.status,
       });
-      return null;
+      return { kind: "unavailable" };
     }
     const body = await response.json() as RevenueCatSubscriberResponse;
-    return body.subscriber?.entitlements?.[entitlementId] || null;
-  } catch (error) {
+    const entitlement = body.subscriber?.entitlements?.[entitlementId];
+    return isActiveRevenueCatEntitlement(entitlement, dependencies.now()) && entitlement
+      ? { kind: "active", entitlement }
+      : { kind: "inactive", entitlement };
+  } catch {
     console.warn("[YouTrader:subscription] revenuecat_lookup_error", {
       entitlement_id: entitlementId,
-      error_type: error instanceof Error ? error.name : "unknown",
     });
-    return null;
+    return { kind: "unavailable" };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 export async function resolveServerProEntitlement(
   supabaseAdmin: SupabaseClient,
   userId: string,
+  dependencies: EntitlementDependencies = {},
 ): Promise<ServerEntitlementResult> {
-  const entitlementId = env("REVENUECAT_ENTITLEMENT_ID") || "pro";
+  const resolved = {
+    env: dependencies.env || env,
+    fetch: dependencies.fetch || fetch,
+    now: dependencies.now || (() => Date.now()),
+    timeoutMs: dependencies.timeoutMs || REVENUECAT_TIMEOUT_MS,
+  };
+  const now = resolved.now();
+  const entitlementId = resolved.env("REVENUECAT_ENTITLEMENT_ID") || "pro";
   const { data, error } = await supabaseAdmin
     .from("user_subscriptions")
-    .select("status, expires_at")
+    .select("status, expires_at, updated_at")
     .eq("user_id", userId)
     .eq("entitlement_id", entitlementId)
     .maybeSingle();
@@ -98,31 +138,29 @@ export async function resolveServerProEntitlement(
   }
 
   const subscriptionFound = !error && !!row;
-  if (!error && isActiveSubscription(row)) {
+  if (!error && row && isFreshCache(row, now) && isActiveSubscription(row, now)) {
     return { isPro: true, source: "subscription", subscriptionFound, synced: false };
   }
+  if (!error && row && isFreshCache(row, now) && !isActiveSubscription(row, now) && row.status !== "active" && row.status !== "trialing") {
+    return { isPro: false, source: "subscription", subscriptionFound, synced: false };
+  }
 
-  const revenueCatEntitlement = await fetchRevenueCatEntitlement(userId, entitlementId);
-  const valid = isActiveRevenueCatEntitlement(revenueCatEntitlement || undefined);
-  if (!valid || !revenueCatEntitlement) {
+  const revenueCat = await fetchRevenueCatEntitlement(userId, entitlementId, resolved);
+  if (revenueCat.kind === "unavailable") {
     return { isPro: false, source: "none", subscriptionFound, synced: false };
   }
 
+  const isPro = revenueCat.kind === "active";
+  const entitlement = revenueCat.entitlement;
   const { error: syncError } = await supabaseAdmin
     .from("user_subscriptions")
     .upsert({
       user_id: userId,
       entitlement_id: entitlementId,
-      status: "active",
-      product_id: revenueCatEntitlement.product_identifier || null,
-      store: revenueCatEntitlement.store || null,
-      environment: revenueCatEntitlement.is_sandbox ? "sandbox" : "production",
-      expires_at: revenueCatEntitlement.expires_date || null,
-      metadata: {
-        source: "revenuecat_v1",
-        validated_at: new Date().toISOString(),
-      },
-      updated_at: new Date().toISOString(),
+      status: isPro ? "active" : "inactive",
+      product_id: entitlement?.product_identifier || null,
+      expires_at: entitlement?.expires_date || null,
+      updated_at: new Date(now).toISOString(),
     }, { onConflict: "user_id,entitlement_id" });
 
   if (syncError) {
@@ -130,9 +168,9 @@ export async function resolveServerProEntitlement(
       entitlement_id: entitlementId,
       code: syncError.code,
     });
-    // RevenueCat has still authenticated this request. The write is only a cache/sync optimization.
-    return { isPro: true, source: "revenuecat", subscriptionFound, synced: false };
+    // RevenueCat is still authoritative. The write is only a cache/sync optimization.
+    return { isPro, source: "revenuecat", subscriptionFound, synced: false };
   }
 
-  return { isPro: true, source: "revenuecat", subscriptionFound, synced: true };
+  return { isPro, source: "revenuecat", subscriptionFound, synced: true };
 }

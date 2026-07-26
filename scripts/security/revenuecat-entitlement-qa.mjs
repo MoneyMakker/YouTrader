@@ -1,0 +1,136 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const helperModule = await import(new URL("../../supabase/functions/_shared/revenueCatEntitlement.ts", import.meta.url).href);
+const { resolveServerProEntitlement } = helperModule;
+
+const NOW = Date.parse("2026-07-26T12:00:00.000Z");
+
+function activeResponse(expires = "2026-08-26T12:00:00.000Z") {
+  return new Response(JSON.stringify({
+    subscriber: { entitlements: { pro: { expires_date: expires, product_identifier: "youtrader_pro_monthly" } } },
+  }), { status: 200 });
+}
+
+function inactiveResponse() {
+  return new Response(JSON.stringify({ subscriber: { entitlements: {} } }), { status: 200 });
+}
+
+function mockAdmin(initial, options = {}) {
+  let row = initial;
+  const queries = [];
+  const upserts = [];
+  const query = {
+    eq(field, value) {
+      queries.push({ field, value });
+      return query;
+    },
+    async maybeSingle() {
+      return { data: row, error: null };
+    },
+  };
+  return {
+    client: {
+      from() {
+        return {
+          select() { return query; },
+          async upsert(value) {
+            upserts.push(value);
+            options.onUpsert?.(value);
+            if (!options.upsertError) {
+              row = {
+                status: String(value.status || ""),
+                expires_at: typeof value.expires_at === "string" ? value.expires_at : null,
+                updated_at: typeof value.updated_at === "string" ? value.updated_at : null,
+              };
+            }
+            return { error: options.upsertError || null };
+          },
+        };
+      },
+    },
+    queries,
+    upserts,
+  };
+}
+
+function dependencies(fetchImpl, timeoutMs = 20) {
+  return {
+    env: (name) => name === "REVENUECAT_SECRET_KEY" ? "test-secret" : name === "REVENUECAT_ENTITLEMENT_ID" ? "pro" : "",
+    fetch: fetchImpl,
+    now: () => NOW,
+    timeoutMs,
+  };
+}
+
+async function resolve(row, fetchImpl, options, timeoutMs) {
+  const admin = mockAdmin(row, options);
+  const result = await resolveServerProEntitlement(admin.client, "user-a", dependencies(fetchImpl, timeoutMs));
+  return { ...admin, result };
+}
+
+const freshActive = {
+  status: "active",
+  expires_at: "2026-08-26T12:00:00.000Z",
+  updated_at: "2026-07-26T11:59:00.000Z",
+};
+
+let fetchCalls = 0;
+const cacheHit = await resolve(freshActive, async () => {
+  fetchCalls += 1;
+  return activeResponse();
+});
+assert.deepEqual(cacheHit.result, { isPro: true, source: "subscription", subscriptionFound: true, synced: false });
+assert.equal(fetchCalls, 0, "fresh active cache avoids RevenueCat");
+
+const expired = await resolve({ ...freshActive, expires_at: "2026-07-25T12:00:00.000Z", updated_at: "2026-07-25T11:00:00.000Z" }, async () => activeResponse());
+assert.equal(expired.result.isPro, true);
+assert.equal(expired.result.source, "revenuecat");
+assert.equal(expired.upserts.length, 1, "stale cache is reconciled");
+assert.deepEqual(Object.keys(expired.upserts[0]).sort(), ["entitlement_id", "expires_at", "product_id", "status", "updated_at", "user_id"]);
+
+const missing = await resolve(null, async () => inactiveResponse());
+assert.deepEqual(missing.result, { isPro: false, source: "revenuecat", subscriptionFound: false, synced: true });
+assert.equal(missing.upserts[0].status, "inactive");
+
+const expiredEntitlement = await resolve(null, async () => activeResponse("2026-07-25T12:00:00.000Z"));
+assert.equal(expiredEntitlement.result.isPro, false, "expired RevenueCat entitlements are denied");
+assert.equal(expiredEntitlement.upserts[0].status, "inactive");
+
+const freshInactive = await resolve({ status: "inactive", expires_at: null, updated_at: "2026-07-26T11:59:00.000Z" }, async () => {
+  throw new Error("fresh negative cache must not call RevenueCat");
+});
+assert.deepEqual(freshInactive.result, { isPro: false, source: "subscription", subscriptionFound: true, synced: false });
+
+const timeout = await resolve(null, async () => { throw new Error("network unavailable"); });
+assert.deepEqual(timeout.result, { isPro: false, source: "none", subscriptionFound: false, synced: false });
+assert.equal(timeout.upserts.length, 0, "provider failures do not create cache rows");
+
+const timedOut = await resolve(null, (_url, init) => new Promise((_resolve, reject) => {
+  init.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+}), undefined, 1);
+assert.deepEqual(timedOut.result, { isPro: false, source: "none", subscriptionFound: false, synced: false });
+assert.equal(timedOut.upserts.length, 0, "RevenueCat timeouts fail closed without a cache write");
+
+const shared = mockAdmin(null);
+const reconcile = async () => resolveServerProEntitlement(
+  shared.client,
+  "user-a",
+  dependencies(async () => activeResponse()),
+);
+const duplicate = await Promise.all([reconcile(), reconcile()]);
+assert.ok(duplicate.every((result) => result.isPro));
+assert.equal(shared.upserts.length, 2, "duplicate reconciliation uses idempotent upserts");
+assert.ok(shared.upserts.every((row) => row.user_id === "user-a" && row.entitlement_id === "pro"));
+assert.ok(cacheHit.queries.some((query) => query.field === "user_id" && query.value === "user-a"), "cache lookup stays scoped to the authenticated user");
+
+const coach = readFileSync("supabase/functions/ai-coach/index.ts", "utf8");
+const market = readFileSync("supabase/functions/market-intelligence/index.ts", "utf8");
+for (const source of [coach, market]) {
+  assert.match(source, /resolveServerProEntitlement/);
+  assert.ok(source.indexOf("resolveServerProEntitlement") < source.indexOf("runQuotaLifecycle"));
+  assert.match(source, /userData\.user\.id/);
+}
+const helper = readFileSync("supabase/functions/_shared/revenueCatEntitlement.ts", "utf8");
+assert.doesNotMatch(helper, /console\.(?:log|warn|error)\([^\n]*\{\s*(?:userId|secret|authorization|subscriber)/i);
+console.log("RevenueCat entitlement QA passed");
