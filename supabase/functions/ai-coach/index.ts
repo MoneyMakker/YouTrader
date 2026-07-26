@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
 
   const result = lifecycle.value;
 
-  if (!(body.action === "trade_vision_review" && result.usedFallback)) {
+  if (lifecycle.consumed) {
     await recordAIUsage(supabaseAdmin, {
       userId: userData.user.id,
       action: body.action,

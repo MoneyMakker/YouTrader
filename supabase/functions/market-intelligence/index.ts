@@ -142,14 +142,16 @@ Deno.serve(async (req) => {
 
   const { articles, result, visibleHeadlines } = lifecycle.value;
 
-  await recordRateLimitUsage(supabaseAdmin, {
-    userId: userData.user.id,
-    action: body.action,
-    periodKey: periodKey(body.action),
-    provider: result.provider,
-    usedFallback: result.usedFallback,
-    source: "market-intelligence",
-  });
+  if (lifecycle.consumed) {
+    await recordRateLimitUsage(supabaseAdmin, {
+      userId: userData.user.id,
+      action: body.action,
+      periodKey: periodKey(body.action),
+      provider: result.provider,
+      usedFallback: result.usedFallback,
+      source: "market-intelligence",
+    });
+  }
 
   return jsonResponse({
     data: result.data,

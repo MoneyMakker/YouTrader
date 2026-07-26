@@ -29,7 +29,7 @@ function lifecycle(reservation: QuotaReservation, provider: () => Promise<{ usab
 
 async function testLifecycle() {
   const success = lifecycle({ kind: "reserved", status: "reserved", replay: false });
-  assert.equal((await success.result).kind, "success");
+  assert.deepEqual(await success.result, { kind: "success", value: { usable: true }, consumed: true });
   assert.equal(success.calls(), 1);
   assert.deepEqual(success.transitions, [{ target: "completed", reason: undefined }]);
 
@@ -66,7 +66,7 @@ async function testLifecycle() {
   assert.deepEqual(timeout.transitions, [{ target: "provider_failed", reason: "provider_failure" }]);
 
   const unusable = lifecycle({ kind: "reserved", status: "reserved", replay: false }, async () => ({ usable: false }));
-  assert.equal((await unusable.result).kind, "success");
+  assert.deepEqual(await unusable.result, { kind: "success", value: { usable: false }, consumed: false });
   assert.deepEqual(unusable.transitions, [{ target: "released", reason: "unusable_result" }]);
 }
 
@@ -123,6 +123,7 @@ function testStaticSecurityContracts() {
     assert.match(source, /Idempotency-Key/);
     assert.match(source, /AI service is temporarily unavailable/);
     assert.doesNotMatch(source, /console\.(?:log|warn|error)\([^\n]*(?:payload|prompt|token|key)/i);
+    assert.match(source, /if \(lifecycle\.consumed\)/);
   }
   assert.match(migration, /pg_advisory_xact_lock/);
   assert.match(migration, /security definer/);

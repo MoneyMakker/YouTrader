@@ -4,7 +4,7 @@ export type QuotaReservation =
   | { kind: "reserved"; status: "reserved" | "completed" | "provider_failed" | "released"; replay: boolean };
 
 export type QuotaLifecycleOutcome<T> =
-  | { kind: "success"; value: T }
+  | { kind: "success"; value: T; consumed: boolean }
   | { kind: "denied" }
   | { kind: "unavailable"; reason: "quota" | "provider" | "duplicate" };
 
@@ -62,12 +62,12 @@ export async function runQuotaLifecycle<T>(
     const value = await withTimeout(dependencies.invokeProvider, dependencies.timeoutMs);
     if (!dependencies.isUsable(value)) {
       return (await transition("released", "unusable_result"))
-        ? { kind: "success", value }
+        ? { kind: "success", value, consumed: false }
         : { kind: "unavailable", reason: "quota" };
     }
 
     return (await transition("completed"))
-      ? { kind: "success", value }
+      ? { kind: "success", value, consumed: true }
       : { kind: "unavailable", reason: "quota" };
   } catch {
     return (await transition("provider_failed", "provider_failure"))
