@@ -1,0 +1,9 @@
+# Replace @youtrader-maintainers with the GitHub team or account that owns reviews.
+* @youtrader-maintainers
+
+/AGENTS.md @youtrader-maintainers
+/docs/ @youtrader-maintainers
+/.github/ @youtrader-maintainers
+/supabase/ @youtrader-maintainers
+/src/auth/ @youtrader-maintainers
+/src/security/ @youtrader-maintainers
