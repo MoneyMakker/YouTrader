@@ -1,5 +1,6 @@
 import { isSupabaseConfigured, supabase } from "../config/appConfig";
 import { t } from "../i18n";
+import { createIdempotencyKey } from "../utils/idempotency";
 
 export type AIProviderStatus = "openrouter" | "gemini" | "anthropic" | "nvidia" | "local_fallback" | "quota_exceeded" | "free_preview";
 
@@ -222,8 +223,10 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
       };
     }
 
+    const idempotencyKey = await createIdempotencyKey();
     const { data, error } = await supabase.functions.invoke("ai-coach", {
       body: { action, period, payload },
+      headers: { "Idempotency-Key": idempotencyKey },
     });
 
     if (error || !data?.data) {
