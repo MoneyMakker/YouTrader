@@ -3,19 +3,24 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.75.0
 type SubscriptionRow = {
   status: string | null;
   expires_at: string | null;
-  updated_at: string | null;
+  last_verified_at: string | null;
 };
 
 type RevenueCatEntitlement = {
   expires_date?: string | null;
+  grace_period_expires_date?: string | null;
   product_identifier?: string | null;
-  store?: string | null;
-  is_sandbox?: boolean | null;
+};
+
+type RevenueCatSubscription = {
+  refunded_at?: string | null;
+  grace_period_expires_date?: string | null;
 };
 
 type RevenueCatSubscriberResponse = {
   subscriber?: {
     entitlements?: Record<string, RevenueCatEntitlement>;
+    subscriptions?: Record<string, RevenueCatSubscription>;
   };
 };
 
@@ -33,7 +38,8 @@ type EntitlementDependencies = {
   timeoutMs?: number;
 };
 
-const CACHE_TTL_MS = 15 * 60 * 1000;
+const ACTIVE_CACHE_TTL_MS = 15 * 60 * 1000;
+const NEGATIVE_CACHE_TTL_MS = 60 * 1000;
 const REVENUECAT_TIMEOUT_MS = 5_000;
 
 function env(name: string) {
@@ -43,27 +49,48 @@ function env(name: string) {
 export function isActiveSubscription(row: SubscriptionRow | null, now = Date.now()) {
   if (!row) return false;
   const status = String(row.status || "").toLowerCase();
-  if (!["active", "trialing"].includes(status)) return false;
-  if (!row.expires_at) return true;
+  if (!["active", "trialing", "grace_period", "billing_retry", "canceled"].includes(status)) return false;
+  if (!row.expires_at) return ["active", "trialing"].includes(status);
   const expiresAt = new Date(row.expires_at).getTime();
   return Number.isFinite(expiresAt) && expiresAt > now;
 }
 
-export function isActiveRevenueCatEntitlement(entitlement: RevenueCatEntitlement | undefined, now = Date.now()) {
+function isFutureDate(value: string | null | undefined, now: number) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) && timestamp > now;
+}
+
+function effectiveExpiration(entitlement: RevenueCatEntitlement, subscription?: RevenueCatSubscription) {
+  const candidates = [
+    entitlement.expires_date,
+    entitlement.grace_period_expires_date,
+    subscription?.grace_period_expires_date,
+  ].filter((value): value is string => !!value && Number.isFinite(new Date(value).getTime()));
+  return candidates.sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null;
+}
+
+export function isActiveRevenueCatEntitlement(
+  entitlement: RevenueCatEntitlement | undefined,
+  subscription: RevenueCatSubscription | undefined,
+  now = Date.now(),
+) {
   if (!entitlement) return false;
+  if (subscription?.refunded_at) return false;
   if (!entitlement.expires_date) return true;
-  const expiresAt = new Date(entitlement.expires_date).getTime();
-  return Number.isFinite(expiresAt) && expiresAt > now;
+  return isFutureDate(effectiveExpiration(entitlement, subscription), now);
 }
 
 function isFreshCache(row: SubscriptionRow, now: number) {
-  const updatedAt = new Date(row.updated_at || "").getTime();
-  return Number.isFinite(updatedAt) && updatedAt <= now && now - updatedAt < CACHE_TTL_MS;
+  const verifiedAt = new Date(row.last_verified_at || "").getTime();
+  if (!Number.isFinite(verifiedAt) || verifiedAt > now) return false;
+  const ttl = isActiveSubscription(row, now) ? ACTIVE_CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS;
+  return now - verifiedAt < ttl;
 }
 
 type RevenueCatLookup =
-  | { kind: "active"; entitlement: RevenueCatEntitlement }
-  | { kind: "inactive"; entitlement?: RevenueCatEntitlement }
+  | { kind: "active"; entitlement: RevenueCatEntitlement; expiresAt: string | null }
+  | { kind: "inactive"; entitlement?: RevenueCatEntitlement; expiresAt: string | null }
   | { kind: "unavailable" };
 
 async function fetchRevenueCatEntitlement(
@@ -96,9 +123,13 @@ async function fetchRevenueCatEntitlement(
     }
     const body = await response.json() as RevenueCatSubscriberResponse;
     const entitlement = body.subscriber?.entitlements?.[entitlementId];
-    return isActiveRevenueCatEntitlement(entitlement, dependencies.now()) && entitlement
-      ? { kind: "active", entitlement }
-      : { kind: "inactive", entitlement };
+    const subscription = entitlement?.product_identifier
+      ? body.subscriber?.subscriptions?.[entitlement.product_identifier]
+      : undefined;
+    const expiresAt = entitlement ? effectiveExpiration(entitlement, subscription) : null;
+    return isActiveRevenueCatEntitlement(entitlement, subscription, dependencies.now()) && entitlement
+      ? { kind: "active", entitlement, expiresAt }
+      : { kind: "inactive", entitlement, expiresAt };
   } catch {
     console.warn("[YouTrader:subscription] revenuecat_lookup_error", {
       entitlement_id: entitlementId,
@@ -124,7 +155,7 @@ export async function resolveServerProEntitlement(
   const entitlementId = resolved.env("REVENUECAT_ENTITLEMENT_ID") || "pro";
   const { data, error } = await supabaseAdmin
     .from("user_subscriptions")
-    .select("status, expires_at, updated_at")
+    .select("status, expires_at, last_verified_at")
     .eq("user_id", userId)
     .eq("entitlement_id", entitlementId)
     .maybeSingle();
@@ -141,7 +172,7 @@ export async function resolveServerProEntitlement(
   if (!error && row && isFreshCache(row, now) && isActiveSubscription(row, now)) {
     return { isPro: true, source: "subscription", subscriptionFound, synced: false };
   }
-  if (!error && row && isFreshCache(row, now) && !isActiveSubscription(row, now) && row.status !== "active" && row.status !== "trialing") {
+  if (!error && row && isFreshCache(row, now) && !isActiveSubscription(row, now)) {
     return { isPro: false, source: "subscription", subscriptionFound, synced: false };
   }
 
@@ -152,14 +183,21 @@ export async function resolveServerProEntitlement(
 
   const isPro = revenueCat.kind === "active";
   const entitlement = revenueCat.entitlement;
+  // Production requires provider and product_id. Do not persist an unknown inactive
+  // customer as an authoritative negative cache entry.
+  if (!entitlement?.product_identifier) {
+    return { isPro, source: "revenuecat", subscriptionFound, synced: false };
+  }
   const { error: syncError } = await supabaseAdmin
     .from("user_subscriptions")
     .upsert({
       user_id: userId,
+      provider: "revenuecat",
       entitlement_id: entitlementId,
-      status: isPro ? "active" : "inactive",
-      product_id: entitlement?.product_identifier || null,
-      expires_at: entitlement?.expires_date || null,
+      status: isPro ? "active" : "expired",
+      product_id: entitlement.product_identifier,
+      expires_at: revenueCat.expiresAt,
+      last_verified_at: new Date(now).toISOString(),
       updated_at: new Date(now).toISOString(),
     }, { onConflict: "user_id,entitlement_id" });
 
