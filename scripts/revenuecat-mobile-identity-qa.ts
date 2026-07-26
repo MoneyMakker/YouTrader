@@ -9,6 +9,8 @@ async function main() {
   const restoreSyncIndex = appSource.indexOf('syncRevenueCatIdentity("restore_purchases")');
   const restoreCallIndex = appSource.indexOf("Purchases.restorePurchases()", restoreSyncIndex);
   const restoreCallCount = appSource.split("Purchases.restorePurchases()").length - 1;
+  const restoreBodyEnd = appSource.indexOf("\n  useEffect(() => {", restoreSyncIndex);
+  const restoreBody = appSource.slice(restoreSyncIndex, restoreBodyEnd);
   const settingsRestoreIndex = appSource.indexOf("!isPremium ? (\n            <Pressable\n              disabled={purchaseBusy}\n              onPress={onRestore}");
 
   if (restoreSyncIndex < 0 || restoreCallIndex < restoreSyncIndex) {
@@ -20,8 +22,14 @@ async function main() {
   if (restoreCallCount !== 1) {
     throw new Error("Restore Purchases must issue exactly one RevenueCat restorePurchases call per tap.");
   }
+  if (!restoreBody.includes('t("noActiveSubscription")') || !restoreBody.includes('t("restoreFailedTryAgain")')) {
+    throw new Error("Restore Purchases must preserve neutral no-purchase and generic retry states.");
+  }
+  if (!restoreBody.includes("refreshCurrentEntitlements") || restoreBody.includes("Purchases.purchase")) {
+    throw new Error("Restore Purchases must refresh entitlement state without starting a purchase.");
+  }
 
-  console.log(`[YouTrader:revenuecat-mobile-identity-qa] ${results.length + 3} scenarios passed`);
+  console.log(`[YouTrader:revenuecat-mobile-identity-qa] ${results.length + 5} scenarios passed`);
 }
 
 void main().catch((error) => {
