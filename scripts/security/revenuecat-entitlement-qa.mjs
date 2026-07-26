@@ -127,8 +127,12 @@ assert.ok(cacheHit.queries.some((query) => query.field === "user_id" && query.va
 const coach = readFileSync("supabase/functions/ai-coach/index.ts", "utf8");
 const market = readFileSync("supabase/functions/market-intelligence/index.ts", "utf8");
 for (const source of [coach, market]) {
-  assert.match(source, /resolveServerProEntitlement/);
-  assert.ok(source.indexOf("resolveServerProEntitlement") < source.indexOf("runQuotaLifecycle"));
+  const entitlementCall = source.indexOf("const entitlement = await resolveServerProEntitlement");
+  const freeGate = source.indexOf("if (!entitlement.isPro)", entitlementCall);
+  const lifecycleCall = source.indexOf("const lifecycle = await runQuotaLifecycle", freeGate);
+  assert.ok(entitlementCall >= 0, "the shared entitlement resolver is invoked");
+  assert.ok(freeGate > entitlementCall, "free access is rejected after entitlement resolution");
+  assert.ok(lifecycleCall > freeGate, "free access cannot enter the quota lifecycle");
   assert.match(source, /userData\.user\.id/);
 }
 const helper = readFileSync("supabase/functions/_shared/revenueCatEntitlement.ts", "utf8");
