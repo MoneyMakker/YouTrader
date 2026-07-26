@@ -14,6 +14,7 @@
     "test:export-rate-limit": "npx tsx scripts/export-rate-limit-qa.ts",
     "test:email-password": "npx tsx scripts/email-password-qa.ts",
     "test:usage-limits": "npx tsx scripts/usage-limits-qa.ts",
+    "test:session-storage": "node --experimental-strip-types scripts/security/session-storage-qa.ts",
     "test:release-readiness": "npx tsx scripts/release-readiness-qa.ts",
     "market-intel": "node scripts/market-intel-worker/index.mjs all",
     "market-intel:news": "node scripts/market-intel-worker/index.mjs news",

@@ -1,8 +1,8 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { t } from "../i18n";
+import { secureSessionStorage } from "../auth/secureSessionStorage";
 
 const PLACEHOLDER_SNIPPETS = [
   "your_project",
@@ -57,7 +57,7 @@ export const isSupabaseConfigured = !!(supabaseUrl && supabaseKey);
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey, {
       auth: {
-        ...(Platform.OS !== "web" ? { storage: AsyncStorage } : {}),
+        ...(Platform.OS !== "web" ? { storage: secureSessionStorage } : {}),
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
