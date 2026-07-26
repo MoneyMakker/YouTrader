@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const defaultAllowedOrigins = ["https://youtrader.app", "https://www.youtrader.app"];
@@ -68,6 +67,10 @@ const config: Record<Category, { bucket: string; folder: string; maxBytes: numbe
   },
 };
 
+const MAX_UPLOAD_BYTES = Math.max(...Object.values(config).map((rule) => rule.maxBytes));
+const MAX_BASE64_CHARS = Math.ceil(MAX_UPLOAD_BYTES / 3) * 4;
+const MAX_JSON_BYTES = MAX_BASE64_CHARS + 16 * 1024;
+
 function json(status: number, body: Record<string, unknown>, req?: Request) {
   return new Response(JSON.stringify(body), {
     status,
@@ -108,6 +111,7 @@ async function sha256(bytes: Uint8Array) {
 }
 
 function decodeBase64(value: string) {
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) throw new Error("Invalid base64");
   const binary = atob(value);
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
@@ -159,13 +163,18 @@ async function consumeUploadLimit(admin: ReturnType<typeof createClient>, userId
     p_max_requests: 20,
     p_window_seconds: 60 * 60,
   });
-  if (error) return true;
+  if (error || !data || typeof data.allowed !== "boolean") return false;
   return data?.allowed !== false;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeadersFor(req) });
   if (req.method !== "POST") return invalid(405, req);
+
+  const contentLength = Number(req.headers.get("content-length") || "0");
+  if (!Number.isFinite(contentLength) || contentLength < 0 || contentLength > MAX_JSON_BYTES) {
+    return invalid(413, req);
+  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -225,6 +234,10 @@ Deno.serve(async (req) => {
   if (!payload.base64 || typeof payload.base64 !== "string") {
     await logEvent("malformed_upload_metadata", category);
     return invalid(400, req);
+  }
+  if (payload.base64.length > Math.ceil(rule.maxBytes / 3) * 4) {
+    await logEvent("oversized_upload", category);
+    return invalid(413, req);
   }
 
   let bytes: Uint8Array;
