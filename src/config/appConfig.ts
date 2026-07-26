@@ -93,6 +93,32 @@ export const isExpoGo =
 export const isRevenueCatConfigured =
   !!REVENUECAT_API_KEY && Platform.OS !== "web" && !isExpoGo;
 
+export type RevenueCatAvailabilityDiagnostic =
+  | "sdk_not_configured"
+  | "offerings_unavailable"
+  | "provider_network_failure";
+
+export function classifyRevenueCatAvailabilityFailure(error?: unknown): RevenueCatAvailabilityDiagnostic {
+  if (!isRevenueCatConfigured) return "sdk_not_configured";
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (
+    message.includes("api key") ||
+    message.includes("configuration") ||
+    message.includes("credentials")
+  ) {
+    return "sdk_not_configured";
+  }
+  if (
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("connection") ||
+    message.includes("offline")
+  ) {
+    return "provider_network_failure";
+  }
+  return "offerings_unavailable";
+}
+
 export const enableCloudSignIn =
   process.env.EXPO_PUBLIC_ENABLE_CLOUD_SIGN_IN === "true";
 

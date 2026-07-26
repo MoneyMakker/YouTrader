@@ -168,6 +168,7 @@ import {
   REVENUECAT_ENTITLEMENT_ID,
   REVENUECAT_IOS_PRODUCT_ID,
   REVENUECAT_IOS_YEARLY_PRODUCT_ID,
+  classifyRevenueCatAvailabilityFailure,
   supabase,
   userFacingBillingError,
   appVersionDisplayLabel,
@@ -12115,6 +12116,11 @@ function App() {
         loadedProductIds: products.map((product) => product.identifier),
       });
       setStoreProducts(products);
+      if (!products.length) {
+        billingDebugLog("RevenueCat offerings unavailable", {
+          category: "offerings_unavailable",
+        });
+      }
       setPaywallError(
         products.length
           ? ""
@@ -12126,6 +12132,9 @@ function App() {
         logger.error(error, { feature: "revenuecat", action: "refresh_catalog" });
       }
       const message = userFacingBillingError(error?.message || "RevenueCat connection failed.");
+      billingDebugLog("RevenueCat catalog unavailable", {
+        category: classifyRevenueCatAvailabilityFailure(error),
+      });
       setPaywallError(message);
       return { packages: [] as PurchasesPackage[], storeProducts: [] as PurchasesStoreProduct[] };
     }
@@ -12160,7 +12169,11 @@ function App() {
   }, [applyCustomerInfo, session?.user.id]);
 
   useEffect(() => {
-    if (!revenueCatConfigured || purchasesConfigured.current) return;
+    if (!revenueCatConfigured) {
+      billingDebugLog("RevenueCat SDK not configured", { category: "sdk_not_configured" });
+      return;
+    }
+    if (purchasesConfigured.current) return;
     let listener: ((info: CustomerInfo) => void) | null = null;
     const task = InteractionManager.runAfterInteractions(() => {
       try {
@@ -12180,6 +12193,9 @@ function App() {
         if (!isExpoGo) {
           logger.error(error, { feature: "revenuecat", action: "configure" });
         }
+        billingDebugLog("RevenueCat SDK configuration failed", {
+          category: classifyRevenueCatAvailabilityFailure(error),
+        });
         setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
       }
     });
