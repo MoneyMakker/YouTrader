@@ -12117,8 +12117,9 @@ function App() {
       });
       setStoreProducts(products);
       if (!products.length) {
-        billingDebugLog("RevenueCat offerings unavailable", {
-          category: "offerings_unavailable",
+        logger.warn("RevenueCat offerings unavailable", {
+          feature: "revenuecat",
+          action: "offerings_unavailable",
         });
       }
       setPaywallError(
@@ -12132,8 +12133,9 @@ function App() {
         logger.error(error, { feature: "revenuecat", action: "refresh_catalog" });
       }
       const message = userFacingBillingError(error?.message || "RevenueCat connection failed.");
-      billingDebugLog("RevenueCat catalog unavailable", {
-        category: classifyRevenueCatAvailabilityFailure(error),
+      logger.warn("RevenueCat catalog unavailable", {
+        feature: "revenuecat",
+        action: classifyRevenueCatAvailabilityFailure(error),
       });
       setPaywallError(message);
       return { packages: [] as PurchasesPackage[], storeProducts: [] as PurchasesStoreProduct[] };
@@ -12170,7 +12172,10 @@ function App() {
 
   useEffect(() => {
     if (!revenueCatConfigured) {
-      billingDebugLog("RevenueCat SDK not configured", { category: "sdk_not_configured" });
+      logger.warn("RevenueCat SDK not configured", {
+        feature: "revenuecat",
+        action: "sdk_not_configured",
+      });
       return;
     }
     if (purchasesConfigured.current) return;
@@ -12193,8 +12198,9 @@ function App() {
         if (!isExpoGo) {
           logger.error(error, { feature: "revenuecat", action: "configure" });
         }
-        billingDebugLog("RevenueCat SDK configuration failed", {
-          category: classifyRevenueCatAvailabilityFailure(error),
+        logger.warn("RevenueCat SDK configuration failed", {
+          feature: "revenuecat",
+          action: classifyRevenueCatAvailabilityFailure(error),
         });
         setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
       }
