@@ -4,6 +4,12 @@ This pass adds free security controls for React Native + Expo + Supabase + Reven
 
 ## Implemented In App
 
+- Supabase sessions persist in Expo SecureStore. The historical AsyncStorage
+  session is migrated only after a successful secure write and is never used
+  as a fallback after logout or an unreadable/corrupted secure value.
+- Logout writes a SecureStore migration block before clearing either store. If
+  AsyncStorage cleanup fails, logout reports the failure and the block remains
+  so an app relaunch cannot restore the old legacy session.
 - Central limits in `src/security/securityConfig.ts`
 - Local rate limiting for:
   - auth attempts
