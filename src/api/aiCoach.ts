@@ -1,5 +1,11 @@
 import { isSupabaseConfigured, supabase } from "../config/appConfig";
 import { t } from "../i18n";
+import {
+  hashLocalAiInput,
+  localAiCacheKey,
+  readLocalAiResponse,
+  writeLocalAiResponse,
+} from "../utils/localAiResponseCache";
 
 export type AIProviderStatus = "openrouter" | "gemini" | "anthropic" | "nvidia" | "local_fallback" | "quota_exceeded" | "free_preview";
 
@@ -86,6 +92,18 @@ type Action =
   | "daily_challenge";
 
 type Period = "day" | "week" | "month" | "custom";
+
+/** Text coach actions only — never cache vision/image payloads. */
+const LOCAL_AI_CACHEABLE_ACTIONS = new Set<Action>([
+  "weekly_coach",
+  "risk_predictor",
+  "journal_summary",
+  "daily_plan",
+  "news_explainer",
+  "daily_challenge",
+]);
+
+const AI_COACH_LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function now() {
   return new Date().toISOString();
@@ -193,6 +211,18 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
       };
     }
 
+    const userId = sessionData.session.user.id;
+    const cacheKey = LOCAL_AI_CACHEABLE_ACTIONS.has(action)
+      ? localAiCacheKey(`ai-coach-${action}`, userId, hashLocalAiInput({ action, period, payload }))
+      : null;
+
+    if (cacheKey) {
+      const cached = await readLocalAiResponse<AIResponse<T>>(cacheKey);
+      if (cached && !cached.usedFallback) {
+        return cached;
+      }
+    }
+
     const { data, error } = await supabase.functions.invoke("ai-coach", {
       body: { action, period, payload },
     });
@@ -208,7 +238,7 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
       };
     }
 
-    return {
+    const response: AIResponse<T> = {
       data: data.data as T,
       providerStatus: data.providerStatus || "nvidia",
       usedFallback: !!data.usedFallback,
@@ -217,6 +247,12 @@ async function invokeAI<T>(action: Action, period: Period, payload: Record<strin
       rag: data.rag,
       generatedAt: now(),
     };
+
+    if (cacheKey && !response.usedFallback) {
+      await writeLocalAiResponse(cacheKey, response, AI_COACH_LOCAL_CACHE_TTL_MS);
+    }
+
+    return response;
   } catch {
     return {
       data: fallbackData,

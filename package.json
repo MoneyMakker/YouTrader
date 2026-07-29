@@ -47,7 +47,8 @@
     "ai-platform:verify-db-permissions": "node scripts/ai-platform-v2/verify-db-permissions.mjs",
     "prepare:testflight": "node scripts/release-command-center/run.mjs testflight",
     "prepare:production": "node scripts/release-command-center/run.mjs production",
-    "prepare:release": "node scripts/release-command-center/run.mjs release"
+    "prepare:release": "node scripts/release-command-center/run.mjs release",
+    "test:local-ai-cache": "npx tsx scripts/local-ai-cache-qa.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
