@@ -48,7 +48,8 @@
     "prepare:testflight": "node scripts/release-command-center/run.mjs testflight",
     "prepare:production": "node scripts/release-command-center/run.mjs production",
     "prepare:release": "node scripts/release-command-center/run.mjs release",
-    "test:local-ai-cache": "npx tsx scripts/local-ai-cache-qa.ts"
+    "test:local-ai-cache": "npx tsx scripts/local-ai-cache-qa.ts",
+    "test:revenge-trading": "npx tsx scripts/revenge-trading-qa.ts"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
