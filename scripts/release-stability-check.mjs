@@ -5,8 +5,8 @@ import path from "node:path";
 
 const root = process.cwd();
 const requiredLocales = ["en", "ru", "es", "fr", "de", "it", "uk"];
-const expectedVersion = "1.5.9";
-const expectedBuild = "97";
+const expectedVersion = "1.6.1";
+const expectedBuild = "111";
 
 function run(name, command, args) {
   console.log(`\n[release:stability] ${name}`);
