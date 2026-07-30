@@ -9,6 +9,8 @@
     "scripts/prop-os-fixtures-qa.ts",
     "scripts/prop-os-schema-static-qa.ts",
     "scripts/generate-prop-os-db-types.ts",
+    "scripts/generate-prop-os-db-types-live.ts",
+    "scripts/prop-os-schema-drift-qa.ts",
     "src/propOs",
     "supabase/functions",
     "ios",

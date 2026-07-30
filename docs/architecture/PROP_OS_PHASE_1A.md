@@ -1,7 +1,8 @@
 # Phase 1A — Additive Database Foundation
 
-**Status:** READY FOR PRODUCT OWNER REVIEW  
-**Baseline commit:** `e6c903e`  
+**Status:** CONDITIONALLY APPROVED → live validation complete; awaiting FINAL APPROVAL  
+**Baseline commit:** `cc9ed42`  
+**Live validation:** [`PROP_OS_PHASE_1A_LIVE_VALIDATION.md`](./PROP_OS_PHASE_1A_LIVE_VALIDATION.md)  
 **Contract:** [`PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md`](./PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md)  
 **Rollback:** [`PROP_OS_PHASE_1A_ROLLBACK.md`](./PROP_OS_PHASE_1A_ROLLBACK.md)
 
@@ -10,9 +11,13 @@
 | Artifact | Path |
 |---|---|
 | Additive migration | `supabase/migrations/20260730190000_prop_os_database_foundation.sql` |
-| Live SQL tests (local/CI) | `supabase/tests/prop_os_phase1a_schema_rls.sql` |
+| Live SQL tests (local/CI) | `supabase/tests/prop_os_phase1a_schema_rls.sql`, `supabase/tests/prop_os_phase1a_live_assertions.sql` |
+| Live validation runner | `scripts/prop-os-phase1a-live-validate.sh` |
+| Live validation report | [`PROP_OS_PHASE_1A_LIVE_VALIDATION.md`](./PROP_OS_PHASE_1A_LIVE_VALIDATION.md) |
 | Static contract QA | `scripts/prop-os-schema-static-qa.ts` |
-| DB types generator | `scripts/generate-prop-os-db-types.ts` |
+| DB types generator (SQL parse, secondary) | `scripts/generate-prop-os-db-types.ts` |
+| DB types generator (live DB, primary) | `scripts/generate-prop-os-db-types-live.ts` |
+| Schema drift check | `scripts/prop-os-schema-drift-qa.ts` |
 | Generated types | `src/types/propOsDatabase.ts` |
 
 ## Tables (12)
