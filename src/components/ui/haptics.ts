@@ -1,22 +1,27 @@
-import { Platform, Vibration } from "react-native";
-
-function vibrate(pattern: number | number[]) {
-  try {
-    if (Platform.OS === "web") return;
-    Vibration.vibrate(pattern);
-  } catch {
-    // Haptics are optional in this safe UI pass.
-  }
-}
+/**
+ * UI haptics — thin bridge to YDL presets (expo-haptics + Vibration fallback).
+ */
+import { runYdlHaptic, ydlHapticPresets } from "../../ydl/haptics";
 
 export function lightHaptic() {
-  vibrate(8);
+  ydlHapticPresets.ImpactLight();
 }
 
 export function successHaptic() {
-  vibrate([0, 14, 40, 12]);
+  ydlHapticPresets.Success();
 }
 
 export function warningHaptic() {
-  vibrate([0, 20, 35, 20]);
+  ydlHapticPresets.Warning();
 }
+
+/** Selection / chip / secondary control feedback. */
+export function selectionHaptic() {
+  runYdlHaptic("Selection");
+}
+
+export {
+  ydlHapticPresets,
+  runYdlHaptic,
+  type YdlHapticPreset,
+} from "../../ydl/haptics";

@@ -8,6 +8,7 @@
     "scripts/ai-platform-v2/backups",
     "supabase/functions",
     "ios",
-    "android"
+    "android",
+    ".rnstorybook"
   ]
 }
