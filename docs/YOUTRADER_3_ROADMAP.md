@@ -25,13 +25,16 @@ Every candidate feature must pass:
 
 ```text
 1. Close UI Phase 6 PNG baselines          ✅
-2. Document this YouTrader 3.0 roadmap     ← this file
+2. Document this YouTrader 3.0 roadmap     ✅
 3. Phase 0 — Prop Domain & Data Architecture (approve before code)
-4. Repository / domain audit (audit-only; no product redesign)
-5. Only after Phase 0 approval → production implementation
+4. Repository / domain audit (audit-only)  ✅ → docs/architecture/PROP_OS_PHASE0_DATA_AUDIT.md
+5. Only after Phase 0 implementation approve → production domain work
+6. Only after that → Prop OS / Prop Pass UI
 ```
 
 **Do not** start by redesigning `AI Analytics` → `Prop Pass`, inventing `84% Pass Probability` UI, or deleting legacy screens before Phase 0.
+
+Audit status: **READY FOR PRODUCT OWNER REVIEW** (no implementation until separate approve).
 
 Naming note: React Native + Expo remains. UI language is **premium native iOS / SwiftUI-inspired**, not a SwiftUI rewrite.
 
