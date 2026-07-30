@@ -1,34 +1,32 @@
-# Prop OS (Phase 0C) — isolated domain fixtures
+# Prop OS domain package (Phase 1B)
 
-**Not production.** This module is the executable source of truth for `calc-spec-v0` fixtures.
+Production-grade **pure** calculation engine for `calc-spec-v0`. No App UI, Supabase, AI, or RevenueCat wiring.
 
 ## Rules
 
-- Do **not** import from `App.tsx`, `YouTraderApp.tsx`, or wire into navigation / AI / Supabase.
-- Do **not** import this package from production UI until a later approved phase.
-- App `tsconfig.json` excludes `src/propOs` so production typecheck stays disconnected.
-- Isolated static check: `npm run test:prop-os-types` (`tsconfig.prop-os.json`).
-- Full fixture QA (types + executable): `npm run test:prop-os-fixtures`
+- Import only domain contracts from this package.
+- Do **not** import from `App.tsx` / navigation / screens until Phase 1E activation gate.
+- Engine must not import Supabase, React, AsyncStorage, RevenueCat, AI, analytics, or UI tokens.
+- App `tsconfig.json` includes `src/propOs` for type safety; product imports remain forbidden by process.
 
 ## Layout
 
 | Path | Role |
 |---|---|
+| `engine.ts` | Production `calculateChallenge` |
+| `replay.ts` | Deprecated thin alias → `calculateChallenge` |
 | `types.ts` | Domain + engine envelopes |
-| `eventOrder.ts` | Canonical event sort |
+| `eventOrder.ts` | Canonical event sort + input revision |
 | `tradingDay.ts` | IANA firm TZ + DST-aware day id |
-| `scoreDrivers.ts` | Causal score-delta drivers + reconciliation tolerance |
-| `replay.ts` | Reference challenge replay (`calc-spec-v0`) |
-| `fixtures/` | Deterministic scenarios + expected assertions |
+| `scoreDrivers.ts` | Causal score-delta drivers (±1) |
+| `confidence.ts` | Confidence blocks |
+| `fixtures/` | F01–F29 scenarios |
 
-## Score-delta drivers (F27)
+## Commands
 
-- Causal `drivers` only when a previous factor snapshot is supplied.
-- `sum(driver.contribution)` must equal `currentScore − previousScore` within `SCORE_DELTA_RECONCILIATION_TOLERANCE` (= **1** score point).
-- If reconciliation fails or previous factors are missing, factors are `supportingEvidence` only — not drivers.
+```bash
+npm run test:prop-os-engine   # types + fixtures + invariants
+npm run typecheck             # includes src/propOs
+```
 
-See `docs/architecture/PROP_OS_PHASE_0C_FIXTURES.md`.
-
-## Security scan note
-
-Aikido = **NOT RUN** (authentication failed). Non-blocking; do not report as PASS.
+See `docs/architecture/PROP_OS_PHASE_1B.md`.

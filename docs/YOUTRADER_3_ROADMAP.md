@@ -39,8 +39,8 @@ Phase 0B Calculation Engine                  ✅ FINAL APPROVED
 Phase 0C Fixtures & Test Accounts            ✅ FINAL APPROVED
 Phase 0D Migration Plan                      ✅ FINAL APPROVED (`b740a9a`)
 ── Phase 0 architecture gate PASSED ──
-Phase 1A Additive Database Foundation        ← READY FOR REVIEW
-Phase 1B Production Domain Engine
+Phase 1A Additive Database Foundation        ✅ FINAL APPROVED
+Phase 1B Production Domain Engine            ← READY FOR REVIEW
 Phase 1C Shadow Calculation Pipeline
 Phase 1D Internal Account Management
 Phase 1E Controlled Product Activation
@@ -78,9 +78,9 @@ Accepted commits: `6aa3339`, `1c93ee7`, `206f3e7`, `dc965c2`, `cece87a`, `e4976e
 
 | ID | Name | Focus | Status |
 |---|---|---|---|
-| **1A** | Additive Database Foundation | SQL tables, RLS, immutability, types, schema tests — [`PROP_OS_PHASE_1A.md`](./architecture/PROP_OS_PHASE_1A.md) | READY FOR REVIEW |
-| **1B** | Production Domain Engine | Wire calc-spec behind repos (not UI) | Not started |
-| **1C** | Shadow Calculation Pipeline | Old/new compare | Not started |
+| **1A** | Additive Database Foundation | SQL tables, RLS, immutability, types, schema tests — [`PROP_OS_PHASE_1A.md`](./architecture/PROP_OS_PHASE_1A.md) | FINAL APPROVED |
+| **1B** | Production Domain Engine | Pure `calculateChallenge` engine — [`PROP_OS_PHASE_1B.md`](./architecture/PROP_OS_PHASE_1B.md) | READY FOR REVIEW |
+| **1C** | Shadow Calculation Pipeline | Old/new compare | Not started (blocked on 1B APPROVE) |
 | **1D** | Internal Account Management | Opt-in accounts; no silent trade bind | Not started |
 | **1E** | Controlled Product Activation | Feature-flagged read path | Not started |
 

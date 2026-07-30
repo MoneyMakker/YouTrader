@@ -1,4 +1,4 @@
-import type { AccountingEvent } from "./types.ts";
+import type { AccountingEvent } from "./types";
 
 /**
  * Canonical event order (Phase 0B condition #1):

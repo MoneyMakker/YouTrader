@@ -1,16 +1,19 @@
 /**
- * Prop OS Phase 0C — fixture QA (executable source of truth).
- * Not wired to production app flows.
+ * Prop OS Phase 1B — fixture QA against production domain engine.
+ * Not wired to production app UI / Supabase.
  */
 import assert from "node:assert/strict";
-import { PROP_OS_FIXTURES } from "../src/propOs/fixtures/scenarios.ts";
-import { publicReadinessScore, replayChallenge } from "../src/propOs/replay.ts";
-import { sortAccountingEvents } from "../src/propOs/eventOrder.ts";
+import { PROP_OS_FIXTURES } from "../src/propOs/fixtures/scenarios";
+import {
+  calculateChallenge,
+  publicReadinessScore,
+} from "../src/propOs/engine";
+import { sortAccountingEvents } from "../src/propOs/eventOrder";
 import {
   SCORE_DELTA_RECONCILIATION_TOLERANCE,
   assertDriversReconcileDelta,
-} from "../src/propOs/scoreDrivers.ts";
-import { tradingDayId } from "../src/propOs/tradingDay.ts";
+} from "../src/propOs/scoreDrivers";
+import { tradingDayId } from "../src/propOs/tradingDay";
 
 let passed = 0;
 
@@ -34,13 +37,13 @@ check("F05 firm TZ trading day is 2026-01-06", () => {
 check("canonical sort is stable for shuffle", () => {
   const fx = PROP_OS_FIXTURES.find((f) => f.id === "F15_out_of_order_import");
   assert.ok(fx);
-  const a = replayChallenge({
+  const a = calculateChallenge({
     challenge: fx.challenge,
     events: fx.events,
     asOfUtc: fx.asOfUtc,
   });
   const shuffled = [...fx.events].reverse();
-  const b = replayChallenge({
+  const b = calculateChallenge({
     challenge: fx.challenge,
     events: shuffled,
     asOfUtc: fx.asOfUtc,
@@ -58,7 +61,7 @@ check("F27 drivers reconcile previousScore → currentScore", () => {
   assert.ok(fx);
   assert.ok(fx.previousReadinessScore != null);
   assert.ok(fx.previousReadinessFactors != null);
-  const result = replayChallenge({
+  const result = calculateChallenge({
     challenge: fx.challenge,
     events: fx.events,
     asOfUtc: fx.asOfUtc,
@@ -83,7 +86,7 @@ check("non-reconciled delta falls back to supportingEvidence", () => {
   const fx = PROP_OS_FIXTURES.find((f) => f.id === "F27_score_delta_drivers");
   assert.ok(fx);
   // Previous score without matching factor snapshot → not causal drivers.
-  const result = replayChallenge({
+  const result = calculateChallenge({
     challenge: fx.challenge,
     events: fx.events,
     asOfUtc: fx.asOfUtc,
@@ -98,7 +101,7 @@ check("non-reconciled delta falls back to supportingEvidence", () => {
 
 for (const fx of PROP_OS_FIXTURES) {
   check(fx.id, () => {
-    const result = replayChallenge({
+    const result = calculateChallenge({
       challenge: fx.challenge,
       events: fx.events,
       asOfUtc: fx.asOfUtc,

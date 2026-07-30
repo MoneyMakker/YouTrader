@@ -1,4 +1,4 @@
-import type { ConfidenceBlock, ConfidenceLevel } from "./types.ts";
+import type { ConfidenceBlock, ConfidenceLevel } from "./types";
 
 export const CONFIDENCE_POLICY_VERSION = "confidence-policy-v0" as const;
 

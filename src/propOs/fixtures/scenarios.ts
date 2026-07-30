@@ -1,11 +1,11 @@
-import type { ReadinessFactorMap } from "../scoreDrivers.ts";
+import type { ReadinessFactorMap } from "../scoreDrivers";
 import type {
   AccountingEvent,
   FixtureExpectation,
   PropAccountFixture,
   PropChallengeFixture,
   PropRuleSetSnapshot,
-} from "../types.ts";
+} from "../types";
 
 export type PropOsFixture = {
   id: string;

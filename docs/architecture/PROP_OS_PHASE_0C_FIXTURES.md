@@ -31,7 +31,7 @@ Phase 0C is the **executable source of truth** for engine behavior before produc
 - expected lifecycle / readiness / limitations / drivers;
 - edge cases required by PO 0B implementation conditions.
 
-Reference replay in `src/propOs/replay.ts` is **fixture infrastructure**, not a production engine.
+Reference replay historically lived in `src/propOs/replay.ts`. **Phase 1B** promoted the production engine to `src/propOs/engine.ts` (`calculateChallenge`). `replay.ts` is now a thin deprecated alias — fixtures run against the production engine only.
 
 ---
 
@@ -132,7 +132,7 @@ npm run typecheck
 
 Expected: isolated prop-os types PASS; fixture QA PASS (includes types gate); app typecheck PASS.
 
-**tsconfig scope:** `tsconfig.prop-os.json` includes only `src/propOs/**/*.ts`, `scripts/prop-os-fixtures-qa.ts`, and `scripts/prop-os-node-shim.d.ts`. App `tsconfig.json` continues to exclude `src/propOs`.
+**tsconfig scope:** `tsconfig.prop-os.json` includes `src/propOs/**/*.ts` and Prop OS QA scripts. App `tsconfig.json` includes `src/propOs` for type safety; App/UI imports remain process-forbidden until Phase 1E.
 
 ---
 

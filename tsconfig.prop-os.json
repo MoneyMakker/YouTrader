@@ -9,7 +9,6 @@
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedIndexedAccess": true,
@@ -18,6 +17,7 @@
   "include": [
     "src/propOs/**/*.ts",
     "scripts/prop-os-fixtures-qa.ts",
+    "scripts/prop-os-invariants-qa.ts",
     "scripts/prop-os-node-shim.d.ts"
   ],
   "exclude": ["node_modules"]

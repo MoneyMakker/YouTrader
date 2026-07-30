@@ -1,4 +1,4 @@
-import type { ConfidenceBlock, ReadinessDriver } from "./types.ts";
+import type { ConfidenceBlock, ReadinessDriver } from "./types";
 
 /**
  * Maximum |sum(driver.contribution) − (currentScore − previousScore)|
