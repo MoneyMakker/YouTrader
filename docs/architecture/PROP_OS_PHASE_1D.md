@@ -1,6 +1,6 @@
 # Prop OS — Internal Account Management (Phase 1D)
 
-**Status:** READY FOR REVIEW  
+**Status:** FINAL APPROVED  
 **Package:** `src/propOs/accounts/`  
 **Version:** `account-mgmt-v0`  
 **Engine:** remains `calculateChallenge` (no App wiring)
@@ -15,7 +15,7 @@ Commands
   → AccountReadModel (production-neutral)
 ```
 
-Forbidden until Phase 1E: App imports, Prop Pass UI, navigation, production apply, auto legacy assignment, backfill.
+Forbidden until Phase 1E App enablement: Prop Pass UI, navigation, production apply, auto legacy assignment, backfill.
 
 ## Commands
 
@@ -30,6 +30,7 @@ Forbidden until Phase 1E: App imports, Prop Pass UI, navigation, production appl
 | `transitionChallenge` | Allowed lifecycle edges; no breach revive |
 | `archiveAccount` | Soft archive; clears default if needed |
 | `getAccountReadModel` | Future UI shape; App must not import yet |
+| `listActiveChallengesForAccount` | Activation gate helper — no silent multi-pick |
 
 ## Assignment states
 
@@ -53,8 +54,8 @@ npm run test:prop-os-accounts-pg   # isolated PG (:55432)
 npm run test:prop-os-phase1d
 ```
 
-Default-account preference uses QA-only table `prop_os_internal_prefs` (not a production migration).
+Default-account preference: production-intended table is `prop_os_user_preferences` (Phase 1E migration file). Local PG QA uses that table after migrations apply. Do not treat `prop_os_internal_prefs` as a production dependency.
 
-## Waiting for
+## Next
 
-Product Owner approval before Phase 1E.
+Phase 1E Controlled Activation — [`PROP_OS_PHASE_1E.md`](./PROP_OS_PHASE_1E.md).

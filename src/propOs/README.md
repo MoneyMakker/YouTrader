@@ -30,4 +30,6 @@ npm run test:prop-os-accounts-pg
 npm run typecheck
 ```
 
-See `docs/architecture/PROP_OS_PHASE_1B.md`, `PROP_OS_PHASE_1C.md`, `PROP_OS_PHASE_1D.md`.
+See `docs/architecture/PROP_OS_PHASE_1B.md`, `PROP_OS_PHASE_1C.md`, `PROP_OS_PHASE_1D.md`, `PROP_OS_PHASE_1E.md`.
+
+Phase 1E adds dormant `src/propOs/activation/` — App remains disconnected while mode is `off`.

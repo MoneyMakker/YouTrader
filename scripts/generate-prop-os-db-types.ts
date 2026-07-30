@@ -1,18 +1,22 @@
 /**
- * Generate TypeScript Database types for Prop OS tables from the Phase 1A migration SQL.
- * Source of truth: supabase/migrations/20260730190000_prop_os_database_foundation.sql
+ * Generate TypeScript Database types for Prop OS tables from Prop OS migrations.
+ * Sources:
+ * - supabase/migrations/20260730190000_prop_os_database_foundation.sql
+ * - supabase/migrations/20260730210000_prop_os_controlled_activation_read.sql
  * Do not hand-edit the output file — re-run this script after schema changes.
  */
 import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const migrationPath = path.join(
-  root,
-  "supabase/migrations/20260730190000_prop_os_database_foundation.sql",
-);
+const migrationPaths = [
+  path.join(root, "supabase/migrations/20260730190000_prop_os_database_foundation.sql"),
+  path.join(
+    root,
+    "supabase/migrations/20260730210000_prop_os_controlled_activation_read.sql",
+  ),
+];
 const outPath = path.join(root, "src/types/propOsDatabase.ts");
-
 type Col = { name: string; ts: string; nullable: boolean };
 
 function mapType(sqlType: string, nullable: boolean): string {
@@ -77,11 +81,11 @@ function parseTables(sql: string): Record<string, Col[]> {
   return tables;
 }
 
-const sql = fs.readFileSync(migrationPath, "utf8");
+const sql = migrationPaths.map((p) => fs.readFileSync(p, "utf8")).join("\n\n");
 const tables = parseTables(sql);
 const names = Object.keys(tables).sort();
-if (names.length < 12) {
-  throw new Error(`Expected >=12 prop tables, parsed ${names.length}`);
+if (names.length < 13) {
+  throw new Error(`Expected >=13 prop tables (incl. preferences), parsed ${names.length}`);
 }
 
 function rowInterface(cols: Col[], mode: "Row" | "Insert" | "Update"): string {
@@ -113,7 +117,7 @@ function rowInterface(cols: Col[], mode: "Row" | "Insert" | "Update"): string {
 }
 
 let body = `/**
- * AUTO-GENERATED from supabase/migrations/20260730190000_prop_os_database_foundation.sql
+ * AUTO-GENERATED from Prop OS migrations (1A foundation + 1E activation read).
  * Re-run: npm run gen:prop-os-db-types
  * Do not hand-edit.
  */
@@ -156,6 +160,7 @@ body += `    };
       prop_os_enforce_challenge_account_owner: { Args: Record<string, never>; Returns: unknown };
       prop_os_enforce_assignment_owner: { Args: Record<string, never>; Returns: unknown };
       prop_os_enforce_challenge_no_silent_overwrite: { Args: Record<string, never>; Returns: unknown };
+      prop_os_enforce_pref_default_owner: { Args: Record<string, never>; Returns: unknown };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

@@ -83,7 +83,8 @@ Accepted commits: `6aa3339`, `1c93ee7`, `206f3e7`, `dc965c2`, `cece87a`, `e4976e
 | **1A** | Additive Database Foundation | SQL tables, RLS, immutability, types, schema tests — [`PROP_OS_PHASE_1A.md`](./architecture/PROP_OS_PHASE_1A.md) | FINAL APPROVED |
 | **1B** | Production Domain Engine | Pure `calculateChallenge` engine — [`PROP_OS_PHASE_1B.md`](./architecture/PROP_OS_PHASE_1B.md) | FINAL APPROVED |
 | **1C** | Shadow Calculation Pipeline | Isolated shadow runner + snapshots — [`PROP_OS_PHASE_1C.md`](./architecture/PROP_OS_PHASE_1C.md) | FINAL APPROVED |
-| **1D** | Internal Account Management | Accounts / challenges / assignments — [`PROP_OS_PHASE_1D.md`](./architecture/PROP_OS_PHASE_1D.md) | READY FOR REVIEW |
+| **1D** | Internal Account Management | Accounts / challenges / assignments — [`PROP_OS_PHASE_1D.md`](./architecture/PROP_OS_PHASE_1D.md) | FINAL APPROVED |
+| **1E** | Controlled Activation | Dormant activation layer — [`PROP_OS_PHASE_1E.md`](./architecture/PROP_OS_PHASE_1E.md) | READY FOR REVIEW |
 | **1E** | Controlled Product Activation | Feature-flagged read path | Not started (blocked on 1D APPROVE) |
 
 **1A must not:** Prop Pass UI, navigation change, legacy auto-assign, backfill, shadow, AI changes, `src/propOs` App import.

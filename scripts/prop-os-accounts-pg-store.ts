@@ -62,18 +62,21 @@ function mapChallenge(row: Record<string, unknown>): PropChallengeRecord {
   };
 }
 
+/**
+ * Phase 1E: preferences come from migration `prop_os_user_preferences`.
+ * Keep this helper as a no-op assert so older QA docs still call it safely.
+ * Do not recreate QA-only `prop_os_internal_prefs`.
+ */
 export function ensureInternalPrefsTable(db: string): void {
-  psql(
+  const exists = psql(
     db,
-    `create table if not exists public.prop_os_internal_prefs (
-       user_id uuid primary key references auth.users(id) on delete cascade,
-       default_account_id uuid references public.prop_accounts(id) on delete set null,
-       updated_at timestamptz not null default now()
-     );
-     alter table public.prop_os_internal_prefs enable row level security;
-     revoke all on public.prop_os_internal_prefs from anon, authenticated;
-     grant all on public.prop_os_internal_prefs to postgres, service_role;`,
+    `select to_regclass('public.prop_os_user_preferences') is not null`,
   );
+  if (exists !== "t" && exists !== "true") {
+    throw new Error(
+      "prop_os_user_preferences missing — apply Phase 1E migration locally before accounts PG QA",
+    );
+  }
 }
 
 export function ensureAuthUser(db: string, userId: string, email: string): void {
@@ -370,7 +373,7 @@ export function createPsqlAccountStore(db: string): AccountManagementStore {
     async getDefaultAccountId(userId) {
       const v = psql(
         db,
-        `select default_account_id::text from public.prop_os_internal_prefs
+        `select default_account_id::text from public.prop_os_user_preferences
          where user_id = ${sqlLiteral(userId)}::uuid`,
       );
       return v || null;
@@ -380,7 +383,7 @@ export function createPsqlAccountStore(db: string): AccountManagementStore {
       psql(
         db,
         `set role service_role;
-         insert into public.prop_os_internal_prefs (user_id, default_account_id, updated_at)
+         insert into public.prop_os_user_preferences (user_id, default_account_id, updated_at)
          values (
            ${sqlLiteral(userId)}::uuid,
            ${accountId ? `${sqlLiteral(accountId)}::uuid` : "null"},

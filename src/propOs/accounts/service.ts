@@ -430,6 +430,21 @@ export function createAccountManagementService(store: AccountManagementStore) {
     };
   }
 
+  /**
+   * List active-like challenges for an owned account.
+   * Used by Phase 1E activation gates — does not silently pick among multiples.
+   */
+  async function listActiveChallengesForAccount(
+    userId: string,
+    accountId: string,
+  ): Promise<PropChallengeRecord[]> {
+    const account = await store.getAccount(accountId);
+    if (!account) return [];
+    requireOwnership(userId, account.userId, "account");
+    const attempts = await store.listChallengesForAccount(accountId);
+    return attempts.filter((c) => isActiveChallengeStatus(c.status));
+  }
+
   return {
     createPropAccount,
     createChallengeAttempt,
@@ -440,6 +455,7 @@ export function createAccountManagementService(store: AccountManagementStore) {
     transitionChallenge,
     archiveAccount,
     getAccountReadModel,
+    listActiveChallengesForAccount,
   };
 }
 
