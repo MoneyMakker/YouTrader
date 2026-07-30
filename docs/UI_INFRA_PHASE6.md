@@ -1,10 +1,11 @@
 # UI Infrastructure — Phase 6
 
-**Status: READY FOR REVIEW**
+**Status: FINAL APPROVED** (conditional approval closed after PNG baselines)
 
 Component Hardening + Visual Regression Foundation (UI infra — **not** AI Phase 6).
 
-**Baseline HEAD:** `40ac066`  
+**Baseline HEAD (implementation):** `1e5e87b`  
+**Baselines commit:** `test(ui): add Phase 6 visual baselines`  
 **Phase 5 Hermes iOS / Android:** `10,800,599` / `10,814,641` B
 
 ## Scope
@@ -39,14 +40,17 @@ Canonical touch helper: `ydlMinTouchTargetStyle` / `ydlHitSlopForVisualSize`.
 
 - Gallery: `.rnstorybook/stories/Phase6VisualRegressionGallery.tsx`
 - Flows: `.maestro/ydl/visual_regression_*.yaml`
-- Baselines: `.maestro/ydl/baselines/` (PNG after capture)
-- Capture guide: `scripts/ui-infra-phase6-visual-capture.md`
-- **14** named screenshots; manual Git review (no heavy framework)
-- Simulator: **iPhone 17**, Storybook entry only
+- Baselines: `.maestro/ydl/baselines/` — **14/14 PNG present**
+- Capture: `scripts/capture-phase6-visual-baselines.sh` + `scripts/ui-infra-phase6-visual-capture.md`
+- Simulator: **iPhone 17**, Storybook capture mode (`EXPO_PUBLIC_YDL_VR_STORY`)
+- Maestro flows: dark / light / large-text / reduce-motion — **all passed** on capture
+- PNG artifact size (sum): **2,156,963 bytes** (~2.1 MiB)
+- Radar fixture: inline token surface (no auth, no modal dependency for capture)
 
 ## Production migration
 
-**Trading Radar `MetricExplanationSheet`** — a11y/testIDs/token polish; copy/values unchanged. Fixture gallery embeds the same component with `PHASE6_METRIC_FIXTURE` (no auth).
+**Trading Radar `MetricExplanationSheet`** — a11y/testIDs/token polish; copy/values unchanged.  
+VR gallery embeds a **token-faithful inline Radar fixture** with `PHASE6_METRIC_FIXTURE` (no auth) for deterministic screenshots.
 
 ## Drift
 
@@ -69,9 +73,9 @@ maestro test .maestro/ydl/visual_regression_dark.yaml
 
 ## Known limitations
 
-- PNG baselines may be empty until first Storybook/Maestro capture on iPhone 17.
 - Authenticated Radar production smoke remains in TestFlight checklist.
-- Status-bar noise is human-reviewed, not auto-failed.
+- Status-bar clock / transient Expo “Refreshing…” chrome is human-reviewed, not auto-failed.
+- Modal bottom-sheet capture is out of scope for VR gallery (inline fixture instead).
 
 ## Bundle
 
@@ -81,5 +85,5 @@ maestro test .maestro/ydl/visual_regression_dark.yaml
 | Phase 6 iOS / Android Hermes | `10,804,550` / `10,818,560` B |
 | JS delta iOS / Android | **+3,951 / +3,919 B** (~+3.9 KiB) |
 | Native dependency delta | none |
-| Screenshot PNG artifact size | 0 until first capture |
+| Screenshot PNG artifact size | **2,156,963 bytes** (14 PNG) |
 | Storybook exclusion | gallery under `.rnstorybook` only |

@@ -59,3 +59,6 @@ debug-storybook.log
 
 *storybook.log
 storybook-static
+
+# Maestro / Storybook capture scratch (committed baselines live in .maestro/ydl/baselines/)
+.maestro/ydl/.capture-out/

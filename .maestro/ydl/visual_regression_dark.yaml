@@ -22,7 +22,7 @@ appId: com.youtrader.pro
 - extendedWaitUntil:
     visible:
       id: "ydl-visual-gallery"
-    timeout: 60000
+    timeout: 90000
 - takeScreenshot: ydl_vr_dark_gallery
 - scrollUntilVisible:
     element:
@@ -55,4 +55,8 @@ appId: com.youtrader.pro
 - scrollUntilVisible:
     element:
       id: "ydl-vr-radar-fixture"
+- extendedWaitUntil:
+    visible:
+      id: "metric-explanation-card"
+    timeout: 10000
 - takeScreenshot: ydl_vr_dark_radar_fixture

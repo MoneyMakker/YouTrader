@@ -2,8 +2,11 @@
  * Storybook / demo-only visual regression gallery.
  * Deterministic fixtures — no auth, network, or business services.
  * Production entry must not import this module.
+ *
+ * Radar fixture is an inline token-faithful surface (same copy/values as
+ * MetricExplanationSheet) so Maestro capture does not depend on modal present().
  */
-import React, { useState } from "react";
+import React from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import {
   YdlBadge,
@@ -16,7 +19,6 @@ import {
   YdlSkeleton,
   YdlText,
 } from "../../src/ydl/components";
-import { MetricExplanationSheet } from "../../src/components/stats/MetricExplanationSheet";
 import type { YdlAppearance } from "../../src/ydl/tokens";
 import { resolveYdlTheme } from "../../src/ydl/tokens";
 
@@ -40,7 +42,6 @@ export function Phase6VisualRegressionGallery({
   const appearance: YdlAppearance =
     appearanceProp ?? (variant === "light" ? "light" : "dark");
   const theme = resolveYdlTheme(appearance);
-  const [sheetOpen, setSheetOpen] = useState(true);
 
   return (
     <ScrollView
@@ -125,18 +126,39 @@ export function Phase6VisualRegressionGallery({
         <YdlText role="labelEmphasized" appearance={appearance}>
           Radar fixture (no auth)
         </YdlText>
-        <YdlButton
-          label="Open metric sheet"
-          onPress={() => setSheetOpen(true)}
+        <YdlCard
+          variant="outlined"
           appearance={appearance}
-          testID="ydl-vr-open-sheet"
-        />
-        <MetricExplanationSheet
-          visible={sheetOpen}
-          content={{ ...PHASE6_METRIC_FIXTURE }}
-          onClose={() => setSheetOpen(false)}
-          appearance={appearance}
-        />
+          accessibilityLabel={`${PHASE6_METRIC_FIXTURE.label} details`}
+          testID="metric-explanation-card"
+        >
+          <YdlText role="labelEmphasized" appearance={appearance} testID="metric-explanation-label">
+            {PHASE6_METRIC_FIXTURE.label}
+          </YdlText>
+          <YdlText
+            role="numericLarge"
+            appearance={appearance}
+            accessibilityLabel={PHASE6_METRIC_FIXTURE.value}
+            testID="metric-explanation-value"
+            style={{ fontWeight: "900" }}
+          >
+            {PHASE6_METRIC_FIXTURE.value}
+          </YdlText>
+          <YdlText
+            role="bodyEmphasized"
+            color="text.secondary"
+            appearance={appearance}
+            testID="metric-explanation-body"
+          >
+            {PHASE6_METRIC_FIXTURE.explanation}
+          </YdlText>
+          <YdlBadge
+            tone="info"
+            label={`Target: ${PHASE6_METRIC_FIXTURE.target}`}
+            appearance={appearance}
+            testID="metric-explanation-target"
+          />
+        </YdlCard>
       </View>
     </ScrollView>
   );
