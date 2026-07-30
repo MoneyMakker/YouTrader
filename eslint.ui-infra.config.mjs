@@ -12,6 +12,8 @@ export default tseslint.config(
     files: [
       ".rnstorybook/**/*.{js,ts,tsx}",
       "src/ydl/haptics.ts",
+      "src/ydl/sheets/**/*.{ts,tsx}",
+      "src/ydl/lottie/**/*.{ts,tsx}",
       "src/components/ui/haptics.ts",
       "index.js",
     ],

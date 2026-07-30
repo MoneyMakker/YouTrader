@@ -53,9 +53,10 @@
     "storybook:start": "cross-env STORYBOOK_ENABLED=true expo start",
     "storybook:ios": "cross-env STORYBOOK_ENABLED=true expo start --ios",
     "storybook:android": "cross-env STORYBOOK_ENABLED=true expo start --android",
-    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/components/ui/haptics.ts index.js"
+    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/ydl/sheets src/ydl/lottie src/components/ui/haptics.ts index.js"
   },
   "dependencies": {
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
     "@react-native-google-signin/google-signin": "^16.1.2",
@@ -83,6 +84,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "~15.0.11",
     "i18next": "^26.3.4",
+    "lottie-react-native": "~7.3.1",
     "lucide-react-native": "^1.21.0",
     "posthog-react-native": "^4.53.0",
     "react": "19.1.0",
@@ -102,7 +104,6 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@eslint/js": "^9.32.0",
-    "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-community/slider": "5.0.1",
     "@storybook/addon-ondevice-actions": "10.5.1",
