@@ -116,6 +116,7 @@ export const YdlBottomSheetModal = forwardRef<YdlBottomSheetModalRef, YdlBottomS
         style={style}
         animationConfigs={ydlSheetAnimationConfigs()}
         accessible
+        accessibilityViewIsModal
         accessibilityLabel={accessibilityLabel}
         onChange={onChange}
       >

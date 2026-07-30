@@ -82,6 +82,13 @@ export function StatsPerformanceRadar({
         {points.map((point) => (
           <Pressable
             key={`label-${point.label}`}
+            accessibilityRole="button"
+            accessibilityLabel={
+              point.locked
+                ? `${point.label}. Pro. Opens upgrade`
+                : `${point.label}. ${point.value}. Opens metric explanation`
+            }
+            accessibilityHint={point.locked ? undefined : point.explanation}
             onPress={() => {
               if (point.locked) {
                 onUpgrade();
@@ -91,8 +98,15 @@ export function StatsPerformanceRadar({
             }}
             style={[styles.premiumRadarAxisLabel, point.locked && styles.premiumRadarAxisLabelLocked, { left: Math.max(0, Math.min(size - 86, point.lx - 43)), top: Math.max(0, Math.min(size - 38, point.ly - 18)) }]}
           >
-            <Text style={styles.premiumRadarAxisText}>{point.label}</Text>
-            <Text style={[styles.premiumRadarAxisValue, point.locked && styles.premiumRadarAxisValueLocked]}>{point.locked ? "PRO" : point.value}</Text>
+            <Text style={styles.premiumRadarAxisText} accessible={false}>
+              {point.label}
+            </Text>
+            <Text
+              style={[styles.premiumRadarAxisValue, point.locked && styles.premiumRadarAxisValueLocked]}
+              accessible={false}
+            >
+              {point.locked ? "PRO" : point.value}
+            </Text>
           </Pressable>
         ))}
       </View>

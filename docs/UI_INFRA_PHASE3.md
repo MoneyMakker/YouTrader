@@ -58,11 +58,22 @@ No direct `expo-symbols` / `expo-haptics` imports in these primitives.
 
 `back`, `close`, `add`, `edit`, `delete`, `search`, `settings`, `calendar`, `chart`, `journal`, `trade`, `profit`, `loss`, `warning`, `success`, `lock`, `unlock`, `share`, `info`, `notification`, `chevronRight`
 
-Policy: map real YouTrader concepts only. Do not grow speculative aliases. Unknown names fall back to `info` without throwing.
+Policy: map real YouTrader concepts only. Do not grow speculative aliases.
+
+**Unknown semantic names:** the public `YdlSymbol` prop is typed as `YdlSemanticSymbol` (unknown values unreachable at compile time). Runtime `resolveYdlSymbol(string)` still accepts a string for safety and:
+
+- falls back to `info` without throwing (production-safe)
+- emits a **development-only** `console.warn` when `__DEV__` is true
 
 ## Android fallback
 
-On Android / web, `SymbolView` receives a Lucide vector `fallback` (never emoji). Mapping lives in `AndroidSymbolFallback.tsx` inside the symbols adapter.
+On Android / web, `YdlSymbol` renders `AndroidSymbolFallback` (Lucide vectors) instead of `SymbolView` (`Platform.OS === "ios"` gate). Mapping lives in `AndroidSymbolFallback.tsx` inside the symbols adapter — **never emoji**.
+
+Focused QA (`npm run test:ui-infra-phase3`) asserts:
+
+- non-iOS branch renders the Lucide fallback component
+- `YDL_SYMBOL_ANDROID_FALLBACK` map exists
+- no emoji fallback tokens in `YdlSymbol.tsx`
 
 ## Accessibility standards
 
@@ -103,42 +114,88 @@ Focused audit also in `npm run test:ui-infra-phase3`.
 
 ## Bundle impact
 
-Measured production Hermes (Storybook disabled):
+Comparable Hermes JS bundles (Storybook disabled):
 
-| Platform | Size |
+| Baseline | Commit | iOS Hermes `.hbc` |
+|---|---|---|
+| Phase 2 | `dc121fa` | **10,723,913 B** |
+| Phase 3 | `4b22c31` | **10,747,998 B** |
+
+**Correct Phase 3 JS delta:** **+24,085 B** (≈ **+23.5 KiB**).
+
+Android Hermes (Phase 3 export): **10,762,111 B** (not used for the Phase 2→3 JS delta above).
+
+**Native (separate from Hermes JS delta):**
+
+| Item | Notes |
 |---|---|
-| iOS `.hbc` | **10,747,998 bytes (~10.75 MB)** |
-| Android `.hbc` | **10,762,111 bytes (~10.76 MB)** |
-
-Phase 2 baseline (pre–expo-symbols, approximate from prior export): ~10.49 MB iOS Hermes.  
-Phase 3 delta ≈ **+0.25 MB** JS Hermes (plus native `ExpoSymbols` pod).
+| `ExpoSymbols` / `expo-symbols@1.0.8` | New native pod linked in `ios/Podfile.lock` |
+| Native binary size delta | **Not** folded into the Hermes JS delta above unless measured from comparable built `.app` artifacts |
 
 - Storybook demos remain under `.rnstorybook/**` (entry-swapped; **absent** from production Hermes).
 - No new demo Lottie assets in this phase.
 - No new permissions / entitlements for symbols.
 - Production bundle contains `MetricExplanationSheet` / `YdlSymbol` (reference integration); does **not** contain `expo-symbols` string (adapter compiles through native module).
 
-## Validation commands
+## Phase 3 remediation validation (post–conditional approval)
 
-```bash
-npm install
-npm ls
-npm run typecheck
-npm run lint:ui-infra
-npm run test:ui-infra-phase3
-npx expo-doctor
-npx expo install --check
-npx expo export --platform ios
-npx expo export --platform android
-npx expo run:ios -d "iPhone 17"
-```
+### Corrected Hermes baseline
 
-## Known limitations
+| | Commit | iOS Hermes |
+|---|---|---|
+| Phase 2 | `dc121fa` | 10,723,913 B |
+| Phase 3 | `4b22c31` | 10,747,998 B |
+| **JS delta** | | **+24,085 B (~+23.5 KiB)** |
 
-- Most production icons still use Lucide directly; this phase does **not** replace them wholesale.
-- `YdlSymbolUnsafe` exists for rare migration / Storybook cases — do not use from feature screens.
-- Existing `BottomSheetPanel` remains for other call sites.
-- Motion Reduce Motion cache in `src/ydl/motion/accessibility.ts` remains for Lottie/sheets; new UI should prefer `useYdlReduceMotion` (local hook state).
+Native `ExpoSymbols` is tracked separately in Podfile.lock and is **not** included in the Hermes JS delta.
+
+### Unknown semantic symbols
+
+Typed `YdlSymbol` `name: YdlSemanticSymbol` makes unknown names unreachable at compile time. Runtime `resolveYdlSymbol(string)` still falls back to `info` and **`console.warn`s in `__DEV__` only**.
+
+### Production Radar sheet smoke (iPhone 17)
+
+| Check | Result | Notes |
+|---|---|---|
+| App launches | PASS | Dev client opens auth |
+| Email modal opens | PASS | Maestro |
+| Email field fill | PASS | Review account email |
+| Password secure field fill | **BLOCKED** | Maestro `inputText` does not populate `secureTextEntry` on this sim/OS; password remains empty; Sign In cannot complete |
+| Apple Sign In | **BLOCKED** | Routes to system Apple Account / Settings; no preconfigured sim Apple ID |
+| Stats → Trading Radar | **BLOCKED** | Depends on authenticated session |
+| Axis metric open/close / backdrop / pan-down / stale content | **BLOCKED** | Same auth gate |
+
+Code-path guarantees for the reference (when authenticated):
+
+- Axis `Pressable`: `accessibilityRole="button"` + meaningful `accessibilityLabel`
+- Sheet: `YdlBottomSheetModal` with `accessibilityViewIsModal`, close `YdlIconButton` labeled `t("close")`
+- Decorative `YdlSymbol` uses `decorative` / SR-hidden
+- `selected` cleared on close → no stale metric between openings
+- Flexible scroll content + `allowFontScaling` (no fixed clipping height on sheet body)
+
+### VoiceOver / Dynamic Type / Reduce Motion / Appearance
+
+| Surface | Result | Evidence |
+|---|---|---|
+| VoiceOver labels (triggers, close, decorative hide, modal) | **PASS (code)** / device VO after login **PENDING** | Radar + sheet + modal a11y props; `accessibilityViewIsModal` on modal sheet |
+| Dynamic Type / no clip | **PASS (code)** / device **PENDING** | `allowFontScaling`; no fixed height on sheet body / action row |
+| Reduce Motion | **PASS (code)** / device setting applied | Decorative footer chart omitted when `useYdlReduceMotion()`; sim `ReduceMotionEnabled=true` set during remediation |
+| Light / dark | **PASS (code + sim chrome)** | Sheet `appearance` follows `useColorScheme` / prop; sim toggled `appearance dark` during remediation; `YDL_SHEET_COLORS` light+dark |
+
+### Android fallback
+
+| Check | Result |
+|---|---|
+| Focused QA proves non-iOS path uses Lucide `AndroidSymbolFallback` | **PASS** (`npm run test:ui-infra-phase3`) |
+| Emulator runtime smoke | Not required when focused component/path proof passes |
+
+### Remediation code changes (this follow-up)
+
+- Radar axis triggers: button role + labels; child text `accessible={false}`
+- `YdlBottomSheetModal`: `accessibilityViewIsModal`
+- QA script: Android path + radar a11y + DEV warn assertions
+- Docs: corrected bundle baseline + validation tables
+
 
 ## Migration guidance
 

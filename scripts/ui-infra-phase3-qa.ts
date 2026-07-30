@@ -82,6 +82,24 @@ function main() {
   assert.match(symbolView, /accessibilityElementsHidden:\s*true/);
   assert.match(symbolView, /AndroidSymbolFallback/);
   assert.doesNotMatch(symbolView, /emoji|😀|✅/);
+  // Android / non-iOS path must render Lucide fallback, not SymbolView-only
+  assert.match(symbolView, /Platform\.OS === \"ios\"/);
+  assert.match(symbolView, /:\s*\(\s*[\s\S]*?fallback[\s\S]*?\)/);
+  assert.match(read("src/ydl/symbols/AndroidSymbolFallback.tsx"), /lucide-react-native/);
+  assert.match(read("src/ydl/symbols/AndroidSymbolFallback.tsx"), /YDL_SYMBOL_ANDROID_FALLBACK/);
+
+  // Typed public API uses YdlSemanticSymbol; resolveYdlSymbol(string) keeps runtime safety + DEV warn
+  assert.match(mapSrc, /console\.warn/);
+  assert.match(mapSrc, /__DEV__/);
+
+  const radar = read("src/components/stats/StatsPerformanceRadar.tsx");
+  assert.match(radar, /accessibilityRole=\"button\"/);
+  assert.match(radar, /accessibilityLabel=/);
+  assert.match(radar, /MetricExplanationSheet/);
+  assert.match(radar, /Opens metric explanation/);
+
+  const modalSheet = read("src/ydl/sheets/YdlBottomSheetModal.tsx");
+  assert.match(modalSheet, /accessibilityViewIsModal/);
 
   const labels = read("src/ydl/accessibility/labels.ts");
   assert.match(labels, /accessibilityElementsHidden:\s*true/);
@@ -105,6 +123,8 @@ function main() {
 
   const metricSheet = read("src/components/stats/MetricExplanationSheet.tsx");
   assert.match(metricSheet, /useYdlReduceMotion/);
+  assert.match(metricSheet, /allowFontScaling/);
+  assert.doesNotMatch(metricSheet, /height:\s*\d+/);
   assert.doesNotMatch(metricSheet, /from [\"']@gorhom\/bottom-sheet[\"']/);
   assert.doesNotMatch(metricSheet, /from [\"']lottie-react-native[\"']/);
   assert.doesNotMatch(metricSheet, /from [\"']expo-symbols[\"']/);
@@ -112,6 +132,8 @@ function main() {
   assert.match(metricSheet, /from [\"'].*ydl\/sheets/);
   assert.match(metricSheet, /from [\"'].*ydl\/components/);
   assert.match(metricSheet, /from [\"'].*ydl\/symbols/);
+  assert.match(metricSheet, /accessibilityLabel=\{t\(\"close\"\)\}/);
+  assert.match(metricSheet, /reduceMotion \? null/);
 
   const lottie = read("src/ydl/lottie/YdlLottie.tsx");
   assert.match(lottie, /reduceMotion|ReduceMotion|progress/);
