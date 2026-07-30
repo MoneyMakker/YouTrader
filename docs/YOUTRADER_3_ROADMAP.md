@@ -35,8 +35,8 @@ AI never invents metrics or pass odds.
 Infrastructure (YDL)                         ✅
 Phase 0 audit                                ✅ FINAL APPROVED
 Phase 0A Domain Schema                       ✅ APPROVED WITH CONDITIONS
-Phase 0B Calculation Engine                  ← specification
-Phase 0C Fixtures & Test Accounts
+Phase 0B Calculation Engine                  ✅ APPROVED WITH IMPLEMENTATION CONDITIONS
+Phase 0C Fixtures & Test Accounts            ← READY FOR REVIEW (`src/propOs/`)
 Phase 0D Migration Plan
 Prop Pass UI                                 (only after 0A–0D)
 …
@@ -58,8 +58,8 @@ Split into four subprojects:
 | ID | Name | Spec / code focus |
 |---|---|---|
 | **0A** | Domain Schema | Entities, relations, invariants, confidence contract — [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md) (**APPROVED WITH CONDITIONS**) |
-| **0B** | Calculation Engine | [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — money, DD/HWM, readiness-v0, confidence-policy-v0 |
-| **0C** | Fixtures & Test Accounts | Golden accounts/challenges/trades |
+| **0B** | Calculation Engine | [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — **APPROVED WITH IMPLEMENTATION CONDITIONS** |
+| **0C** | Fixtures & Test Accounts | [`PROP_OS_PHASE_0C_FIXTURES.md`](./architecture/PROP_OS_PHASE_0C_FIXTURES.md) — executable `src/propOs/` + `npm run test:prop-os-fixtures` |
 | **0D** | Migration Plan | Backfill, RLS, sync, rollback; `ruleSetSnapshot` persistence shape |
 
 ### Aggregate model (mandatory)

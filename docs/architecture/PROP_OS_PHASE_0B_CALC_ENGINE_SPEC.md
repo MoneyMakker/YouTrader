@@ -1,10 +1,11 @@
 # Phase 0B — Prop Calculation Engine Specification
 
-**Status:** READY FOR PRODUCT OWNER REVIEW  
+**Status:** APPROVED WITH IMPLEMENTATION CONDITIONS (Product Owner, 2026-07-30)  
 **Parent:** Phase 0 — Prop Domain Architecture  
 **Depends on:**  
 - [`PROP_OS_PHASE0_DATA_AUDIT.md`](./PROP_OS_PHASE0_DATA_AUDIT.md) — FINAL APPROVED  
 - [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./PROP_OS_PHASE_0A_DOMAIN_SPEC.md) — **APPROVED WITH SPEC CONDITIONS** (`1c93ee7`)  
+**Follow-on fixtures:** [`PROP_OS_PHASE_0C_FIXTURES.md`](./PROP_OS_PHASE_0C_FIXTURES.md)  
 **Date:** 2026-07-30  
 **Scope:** Canonical formulas, arithmetic, versioning, confidence policy, fixtures contract, invariants.  
 **Out of scope:** Production TypeScript implementation, SQL migrations, Prop Pass UI, package installs.
@@ -542,17 +543,31 @@ IF lifecycleStatus in {active, at_risk}:
 - [x] Dirty trade handling  
 - [x] Fixture + invariant contracts for 0C  
 
-**Not done:** executable code, SQL, UI, golden JSON files (0C).
+**Not done (0B):** production engine, SQL, UI. Executable fixtures live in 0C.
 
 ---
 
-## 16. STOP / next gate
+## 16. Product Owner implementation conditions (mandatory for 0C+)
 
-**Awaiting Product Owner review of Phase 0B.**
+Architecture of `calc-spec-v0` is **approved**. Before / during production implementation these conditions are binding:
 
-Suggested next:
+1. **Canonical event order** — `occurredAt → broker sequence / execution id → stable internal id`. Late/corrected trades require full replay.
+2. **Trade vs fill** — canonical accounting event must support partial fills/exits even if V1 stores aggregated trades.
+3. **Daily loss basis** — explicit RuleSet property (`dailyLossPolicyVersion`, `dailyLossBasis`); no single global formula.
+4. **EOD / DST** — IANA firm timezone, explicit rollover, DST spring/fall fixtures, overnight cross-boundary behavior.
+5. **Intraday HWM** — distinguish trade-only approximation vs verified equity stream; without stream → incomplete/unsupported, not fake precision.
+6. **Breach irreversible by default** — clear only via official reset, correcting event, or new attempt; audit trail required.
+7. **Readiness hard gates before weights** — insufficient config/data, unsupported calc, breached, passed, missing equity stream, stale state.
+8. **Causal score drivers** — drivers explain versioned snapshot delta; contributions sum to delta within rounding tolerance.
+9. **Output-specific confidence policies** — not one universal calculator (sample/recency/missing/stability/concentration for edge; data completeness for buffers).
+10. **Versioned explainable envelope** on every output (`calculationVersion`, `ruleSetVersion`, `inputRevision`, `calculatedAt`, `status`, `value`, `confidence`, `evidence`, `limitations`).
 
-```text
-APPROVE PHASE 0B — then Phase 0C Fixtures & Test Accounts
-(golden inputs/outputs implementing calc-spec-v0; still no Prop Pass UI)
-```
+**Production implementation remains forbidden** until explicitly opened after fixtures (0C) and migration plan (0D) gates.
+
+---
+
+## 17. STOP / next gate
+
+**Phase 0B — APPROVED WITH IMPLEMENTATION CONDITIONS.**
+
+Executable fixtures: Phase 0C (`src/propOs/`, `npm run test:prop-os-fixtures`).

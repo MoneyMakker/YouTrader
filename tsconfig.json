@@ -6,6 +6,8 @@
     "review-fix-backups",
     "recovery-backups",
     "scripts/ai-platform-v2/backups",
+    "scripts/prop-os-fixtures-qa.ts",
+    "src/propOs",
     "supabase/functions",
     "ios",
     "android",

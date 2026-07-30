@@ -369,7 +369,9 @@ expanding product breadth.
 > (0A Schema → 0B Engine → 0C Fixtures → 0D Migration). Audit:
 > `docs/architecture/PROP_OS_PHASE0_DATA_AUDIT.md` (**FINAL APPROVED**).
 > Domain spec: `docs/architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md` (**APPROVED WITH CONDITIONS**).
-> Calc engine spec: `docs/architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`.
+> Calc engine: `docs/architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`
+> (**APPROVED WITH IMPLEMENTATION CONDITIONS**). Fixtures: `src/propOs/` +
+> `docs/architecture/PROP_OS_PHASE_0C_FIXTURES.md` (READY FOR REVIEW).
 > Do not redesign AI Analytics → Prop Pass before 0A–0D approval.
 
 ### YT-014 — Standardize loading, empty, error, and offline states

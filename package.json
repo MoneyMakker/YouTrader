@@ -54,6 +54,7 @@
     "test:ui-infra-phase4": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase4-qa.ts",
     "test:ui-infra-phase5": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase5-qa.ts",
     "test:ui-infra-phase6": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase6-qa.ts",
+    "test:prop-os-fixtures": "node --experimental-strip-types --experimental-transform-types scripts/prop-os-fixtures-qa.ts",
     "storybook:start": "cross-env STORYBOOK_ENABLED=true expo start",
     "storybook:ios": "cross-env STORYBOOK_ENABLED=true expo start --ios",
     "storybook:android": "cross-env STORYBOOK_ENABLED=true expo start --android",
