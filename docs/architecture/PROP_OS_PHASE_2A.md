@@ -1,6 +1,6 @@
 # Prop Pass — Internal Read-Only Foundation (Phase 2A)
 
-**Status:** READY FOR REVIEW  
+**Status:** READY FOR FINAL REVIEW (Phase 2A remediation)  
 **Package:** `src/propPass/`  
 **Activation:** Phase 1E gateway (`createPropOsAppGateway`)  
 **App entry:** Settings → Prop Pass (Internal) — only when env is local/staging **and** mode is `internal_read_only` | `staging_preview`
@@ -16,6 +16,25 @@
 | `selection_required` | `null` | Multiple actives; no silent pick |
 
 Historical / breached attempts are never promoted to active by fallback. Selection is not an authorization boundary.
+
+## Live authenticated factory (remediation)
+
+Client-safe SELECT-only path for local/staging proof:
+
+```text
+YouTraderApp → registerPropPassSupabaseClient(supabase)
+  → getPropPassGateway
+  → tryCreatePropPassAccountsFactory (env + mode gated)
+  → createSupabasePropOsReadTransport | injected PropOsReadTransport
+  → createAuthenticatedPropOsReadStore (mutations forbidden)
+  → AccountManagementService.getAccountReadModel
+  → activation freshness / integrity
+  → PropPassUiState.available
+```
+
+Factory returns `null` in production / `off` / kill-switch / missing client. Never bundles service-role. Domain/UI stay transport-unaware.
+
+Isolated live QA DB: `prop_os_live2a` on local Postgres `:55432` only — not production.
 
 ## Architecture
 
@@ -43,9 +62,12 @@ Temporary challenge preview lives in screen/controller local state only — non-
 
 ```bash
 npm run test:prop-pass-phase2a
+npm run test:prop-pass-live-slice
 npm run test:prop-os-accounts
 npm run test:prop-os-activation
 ```
+
+Structured captures: `.tmp/prop-pass-live-captures/`
 
 ## Forbidden (still)
 
@@ -53,4 +75,4 @@ Production navigation, mutations, Pass Probability, AI, public rollout, producti
 
 ## Waiting for
 
-Product Owner approval.
+Product Owner FINAL approval.

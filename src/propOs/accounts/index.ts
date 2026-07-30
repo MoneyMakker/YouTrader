@@ -35,3 +35,11 @@ export type { AccountManagementStore } from "./store";
 export { createMemoryAccountStore, freshId } from "./memoryStore";
 export { createAccountManagementService } from "./service";
 export type { AccountManagementService } from "./service";
+export { createAuthenticatedPropOsReadStore } from "./authenticatedReadStore";
+export {
+  createSupabasePropOsReadTransport,
+} from "./authenticatedReadTransport";
+export type {
+  PropOsReadTransport,
+  SupabasePropOsReadClient,
+} from "./authenticatedReadTransport";

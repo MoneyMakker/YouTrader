@@ -116,6 +116,7 @@ import { SmartNotificationsSection } from "../notifications/SmartNotificationsSe
 import { SettingsAccountSection } from "../components/settings/SettingsAccountSection";
 import { isPropPassEntryVisible } from "../propPass";
 import { PropPassInternalScreen } from "../propPass/PropPassInternalScreen";
+import { registerPropPassSupabaseClient } from "../propPass/gatewayClient";
 import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "../api/finnhubCalendar";
 import {
   analyzeTrades,
@@ -430,6 +431,11 @@ import type { PerformanceGroup } from "./utils/stats";
 
 const AI_ASSISTANT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
+// Authenticated publishable-key client only — never service_role. No Prop OS I/O here.
+registerPropPassSupabaseClient(
+  (supabase as unknown as import("../propOs/accounts/authenticatedReadTransport").SupabasePropOsReadClient) ??
+    null,
+);
 
 function parseTagsInput(value?: string | null) {
   return [...new Set(

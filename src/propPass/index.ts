@@ -22,5 +22,8 @@ export {
   getPropPassGateway,
   peekPropPassAvailability,
   resetPropPassGatewayForTests,
+  setPropPassTestReadTransport,
+  registerPropPassSupabaseClient,
 } from "./gatewayClient";
 export { trackPropPassEvent } from "./analytics";
+export { tryCreatePropPassAccountsFactory } from "./authenticatedFactory";

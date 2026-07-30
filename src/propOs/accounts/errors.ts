@@ -7,7 +7,8 @@ export type AccountMgmtFailure =
   | "archived"
   | "cross_user"
   | "duplicate_assignment"
-  | "inferred_forbidden";
+  | "inferred_forbidden"
+  | "forbidden";
 
 export class AccountMgmtError extends Error {
   readonly failure: AccountMgmtFailure;
