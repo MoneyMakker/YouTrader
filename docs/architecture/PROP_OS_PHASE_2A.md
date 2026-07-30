@@ -1,6 +1,8 @@
 # Prop Pass — Internal Read-Only Foundation (Phase 2A)
 
-**Status:** READY FOR FINAL REVIEW (Phase 2A remediation)  
+**Status:** FINAL APPROVED (Phase 2A)  
+**Remediation:** live authenticated vertical slice (`b072f52`)  
+**Next:** Phase 2B — Internal Account & Challenge Setup (`docs/architecture/PROP_OS_PHASE_2B.md`)  
 **Package:** `src/propPass/`  
 **Activation:** Phase 1E gateway (`createPropOsAppGateway`)  
 **App entry:** Settings → Prop Pass (Internal) — only when env is local/staging **and** mode is `internal_read_only` | `staging_preview`

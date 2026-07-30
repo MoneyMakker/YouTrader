@@ -379,6 +379,15 @@ export function createPsqlAccountStore(db: string): AccountManagementStore {
       return v || null;
     },
 
+    async getSelectedChallengeId(userId) {
+      const v = psql(
+        db,
+        `select selected_challenge_id::text from public.prop_os_user_preferences
+         where user_id = ${sqlLiteral(userId)}::uuid`,
+      );
+      return v || null;
+    },
+
     async setDefaultAccountId(userId, accountId) {
       psql(
         db,
@@ -391,6 +400,23 @@ export function createPsqlAccountStore(db: string): AccountManagementStore {
          )
          on conflict (user_id) do update set
            default_account_id = excluded.default_account_id,
+           updated_at = now();
+         reset role;`,
+      );
+    },
+
+    async setSelectedChallengeId(userId, challengeId) {
+      psql(
+        db,
+        `set role service_role;
+         insert into public.prop_os_user_preferences (user_id, selected_challenge_id, updated_at)
+         values (
+           ${sqlLiteral(userId)}::uuid,
+           ${challengeId ? `${sqlLiteral(challengeId)}::uuid` : "null"},
+           now()
+         )
+         on conflict (user_id) do update set
+           selected_challenge_id = excluded.selected_challenge_id,
            updated_at = now();
          reset role;`,
       );

@@ -350,6 +350,13 @@ export function createAccountManagementService(store: AccountManagementStore) {
     if (def === accountId) {
       await store.setDefaultAccountId(userId, null);
     }
+    const selected = await store.getSelectedChallengeId(userId);
+    if (selected) {
+      const ch = await store.getChallenge(selected);
+      if (ch && ch.accountId === accountId) {
+        await store.setSelectedChallengeId(userId, null);
+      }
+    }
     return updated;
   }
 
@@ -390,7 +397,8 @@ export function createAccountManagementService(store: AccountManagementStore) {
     } else {
       challengeSelectionState = "selection_required";
       activeChallenge = null;
-      const selectedId = options?.selectedChallengeId ?? null;
+      const selectedId =
+        options?.selectedChallengeId ?? (await store.getSelectedChallengeId(userId));
       if (selectedId) {
         const selected = activeChallenges.find((c) => c.id === selectedId) ?? null;
         if (selected) {

@@ -10,6 +10,19 @@ const ALLOWED = new Set([
   "prop_pass_incomplete_data_displayed",
   "prop_pass_repository_fallback_displayed",
   "prop_pass_internal_preview_closed",
+  "prop_pass_onboarding_opened",
+  "prop_pass_template_selected",
+  "prop_pass_rule_confirmation_displayed",
+  "prop_pass_account_create_succeeded",
+  "prop_pass_account_create_failed",
+  "prop_pass_challenge_create_succeeded",
+  "prop_pass_challenge_create_failed",
+  "prop_pass_default_account_changed",
+  "prop_pass_challenge_selection_changed",
+  "prop_pass_account_archived",
+  "prop_pass_command_conflict",
+  "prop_pass_command_forbidden",
+  "prop_pass_command_latency",
 ]);
 
 export function trackPropPassEvent(

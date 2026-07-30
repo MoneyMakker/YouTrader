@@ -78,7 +78,9 @@
     "storybook:start": "cross-env STORYBOOK_ENABLED=true expo start",
     "storybook:ios": "cross-env STORYBOOK_ENABLED=true expo start --ios",
     "storybook:android": "cross-env STORYBOOK_ENABLED=true expo start --android",
-    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/ydl/sheets src/ydl/lottie src/ydl/symbols src/ydl/accessibility src/ydl/components src/ydl/motion src/ydl/tokens src/components/ui/haptics.ts src/components/stats/MetricExplanationSheet.tsx src/components/stats/StatsPerformanceRadar.tsx index.js && eslint --config eslint.ui-infra-imports.config.mjs \"src/**/*.{ts,tsx}\" App.tsx index.js"
+    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/ydl/sheets src/ydl/lottie src/ydl/symbols src/ydl/accessibility src/ydl/components src/ydl/motion src/ydl/tokens src/components/ui/haptics.ts src/components/stats/MetricExplanationSheet.tsx src/components/stats/StatsPerformanceRadar.tsx index.js && eslint --config eslint.ui-infra-imports.config.mjs \"src/**/*.{ts,tsx}\" App.tsx index.js",
+    "test:prop-pass-phase2b": "npm run test:prop-os-types && node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-phase2b-qa.ts",
+    "test:prop-pass-phase2b-pg": "bash scripts/prop-pass-phase2b-pg-qa.sh"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",

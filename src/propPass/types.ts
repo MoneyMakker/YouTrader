@@ -73,7 +73,7 @@ export type PropPassUiState =
   | { kind: "loading" }
   | { kind: "no_account" }
   | { kind: "no_active_challenge" }
-  | { kind: "challenge_selection_required"; challenges: ChallengeSummary[] }
+  | { kind: "challenge_selection_required"; challenges: ChallengeSummary[]; accountId: string | null }
   | { kind: "missing_rule_snapshot" }
   | { kind: "no_shadow_snapshot" }
   | { kind: "stale_snapshot"; reasonCodes: string[] }

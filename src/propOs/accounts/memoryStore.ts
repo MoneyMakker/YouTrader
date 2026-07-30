@@ -21,6 +21,7 @@ export function createMemoryAccountStore(): AccountManagementStore & {
   const assignments = new Map<string, PropTradeAssignmentRecord>(); // userId::tradeClientId
   const transitions: ChallengeTransitionRecord[] = [];
   const defaults = new Map<string, string | null>();
+  const selectedChallenges = new Map<string, string | null>();
   const engineSnaps = new Map<string, EngineSnapshotRow[]>();
   const scoreSnaps = new Map<string, ScoreSnapshotRow[]>();
 
@@ -68,6 +69,10 @@ export function createMemoryAccountStore(): AccountManagementStore & {
         },
         getDefaultAccountId: (u) => service.getDefaultAccountId(u),
         setDefaultAccountId: async () => {
+          throw Object.assign(new Error(`role ${role} denied`), { failure: "forbidden" });
+        },
+        getSelectedChallengeId: (u) => service.getSelectedChallengeId(u),
+        setSelectedChallengeId: async () => {
           throw Object.assign(new Error(`role ${role} denied`), { failure: "forbidden" });
         },
         getLatestEngineSnapshot: (id) => service.getLatestEngineSnapshot(id),
@@ -164,6 +169,14 @@ export function createMemoryAccountStore(): AccountManagementStore & {
     },
     async setDefaultAccountId(userId, accountId) {
       defaults.set(userId, accountId);
+    },
+    async getSelectedChallengeId(userId) {
+      return selectedChallenges.has(userId)
+        ? (selectedChallenges.get(userId) ?? null)
+        : null;
+    },
+    async setSelectedChallengeId(userId, challengeId) {
+      selectedChallenges.set(userId, challengeId);
     },
 
     async getLatestEngineSnapshot(challengeId) {

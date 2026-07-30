@@ -44,7 +44,11 @@ export function mapActivationToPropPassUiState(input: {
           ruleSetVersion: c.ruleSetVersion,
         }),
       );
-      return { kind: "challenge_selection_required", challenges };
+      return {
+        kind: "challenge_selection_required",
+        challenges,
+        accountId: result.data?.readModel.account?.id ?? null,
+      };
     }
     case "missing_rule_snapshot":
       return { kind: "missing_rule_snapshot" };
@@ -73,6 +77,7 @@ export function mapActivationToPropPassUiState(input: {
  */
 export function mapSelectionRequired(
   challenges: ChallengeSummary[],
+  accountId: string | null = null,
 ): PropPassUiState {
-  return { kind: "challenge_selection_required", challenges };
+  return { kind: "challenge_selection_required", challenges, accountId };
 }

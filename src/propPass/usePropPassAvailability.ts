@@ -197,6 +197,7 @@ export function usePropPassAvailability(input: {
             startedAt: c.startedAt,
             ruleSetVersion: c.ruleSetVersion,
           })),
+          accountId: result.data.readModel.account?.id ?? uiState.accountId,
         }
       : uiState;
 

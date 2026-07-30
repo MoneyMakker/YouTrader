@@ -32,6 +32,7 @@ export { canTransitionChallenge, isActiveChallengeStatus } from "./transitions";
 export { AccountMgmtError } from "./errors";
 export type { AccountMgmtFailure } from "./errors";
 export type { AccountManagementStore } from "./store";
+export type { PropOsAccountReadStore } from "./readStore";
 export { createMemoryAccountStore, freshId } from "./memoryStore";
 export { createAccountManagementService } from "./service";
 export type { AccountManagementService } from "./service";

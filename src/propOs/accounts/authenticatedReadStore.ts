@@ -141,6 +141,7 @@ export function createAuthenticatedPropOsReadStore(
     upsertAssignment: async () => denyWrite("upsertAssignment"),
     insertTransition: async () => denyWrite("insertTransition"),
     setDefaultAccountId: async () => denyWrite("setDefaultAccountId"),
+    setSelectedChallengeId: async () => denyWrite("setSelectedChallengeId"),
 
     async getAccount(accountId) {
       const rows = await transport.selectRows("prop_accounts", { id: accountId }, { limit: 1 });
@@ -228,6 +229,16 @@ export function createAuthenticatedPropOsReadStore(
         { limit: 1 },
       );
       const id = rows[0]?.default_account_id;
+      return id ? String(id) : null;
+    },
+
+    async getSelectedChallengeId(userId) {
+      const rows = await transport.selectRows(
+        "prop_os_user_preferences",
+        { user_id: userId },
+        { limit: 1 },
+      );
+      const id = rows[0]?.selected_challenge_id;
       return id ? String(id) : null;
     },
 

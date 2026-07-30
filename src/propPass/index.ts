@@ -27,3 +27,10 @@ export {
 } from "./gatewayClient";
 export { trackPropPassEvent } from "./analytics";
 export { tryCreatePropPassAccountsFactory } from "./authenticatedFactory";
+export {
+  runPropPassCommand,
+  registerPropPassRpcClient,
+  setPropPassTestWriteService,
+  resetPropPassCommandGatewayForTests,
+} from "./commandGateway";
+export { newPropOsClientRequestId } from "../propOs/commands/hash";
