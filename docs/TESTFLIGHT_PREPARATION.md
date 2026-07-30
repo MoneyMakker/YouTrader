@@ -184,9 +184,9 @@
 - [ ] Dark mode readability
 - [ ] Premium lock overlays
 
-### UI Infra — Trading Radar metric sheet (Phase 3–4 residual)
+### UI Infra — Trading Radar metric sheet (Phase 3–5 residual)
 
-Required before the **next TestFlight** build that includes UI infra Phases 1–4. Needs an **authenticated** simulator/device session. Auth has blocked automated Radar smoke (Maestro cannot fill `secureTextEntry`; Apple Sign In needs Apple ID) — do **not** bypass auth.
+Required before the **next TestFlight** build that includes UI infra Phases 1–5. Needs an **authenticated** simulator/device session. Auth has blocked automated Radar smoke (Maestro cannot fill `secureTextEntry`; Apple Sign In needs Apple ID) — do **not** bypass auth.
 
 **Phase 3 sheet / a11y**
 
@@ -214,6 +214,13 @@ Required before the **next TestFlight** build that includes UI infra Phases 1–
 - [ ] No haptic spam while dragging finger / repeated press-move
 - [ ] Backgrounding then foregrounding does not leave stuck animation state
 - [ ] Auth flow unchanged
+
+**Phase 5 design-system presentation (same Radar sheet)**
+
+- [ ] Sheet content uses YDL card/badge/text presentation without changing metric copy/values
+- [ ] Light and dark sheet appearance remain readable with token colors
+- [ ] Large Dynamic Type does not clip card/badge/text inside the sheet
+- [ ] No theme/provider crash on launch or appearance change
 
 ### Performance & Offline
 

@@ -1,16 +1,9 @@
-import React, { useCallback, useMemo } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
-import { YdlSymbol } from "../symbols";
+import React from "react";
+import type { StyleProp, ViewStyle } from "react-native";
 import type { YdlSemanticSymbol } from "../symbols";
-import { ydlCombinedAccessibilityLabel, YDL_MIN_TOUCH_TARGET } from "../accessibility";
-import { runYdlHaptic, type YdlHapticIntent } from "../haptics";
+import type { YdlHapticIntent } from "../haptics";
+import type { YdlAppearance } from "../tokens";
+import { YdlListItem } from "./YdlListItem";
 
 export type YdlActionRowProps = {
   title: string;
@@ -23,119 +16,13 @@ export type YdlActionRowProps = {
   haptic?: YdlHapticIntent | false;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  appearance?: YdlAppearance;
 };
 
-const PRESSED_OPACITY = 0.72;
-const DISABLED_OPACITY = 0.4;
-
 /**
- * Settings-style row: semantic leading symbol, flexible multiline text, optional trailing.
- * Fixed height is intentionally avoided so large Dynamic Type does not clip.
+ * Compatibility wrapper around `YdlListItem` (Phase 5 consolidation).
+ * Prefer `YdlListItem` for new screens.
  */
-export function YdlActionRow({
-  title,
-  subtitle,
-  leadingSymbol = "info",
-  trailingValue,
-  showChevron = true,
-  onPress,
-  disabled = false,
-  haptic = false,
-  style,
-  testID,
-}: YdlActionRowProps) {
-  const a11yLabel = useMemo(
-    () =>
-      ydlCombinedAccessibilityLabel(
-        title,
-        subtitle,
-        trailingValue,
-        showChevron && !trailingValue ? "Opens details" : undefined,
-      ),
-    [showChevron, subtitle, title, trailingValue],
-  );
-
-  const handlePress = useCallback(() => {
-    if (disabled) return;
-    if (haptic) runYdlHaptic(haptic);
-    onPress?.();
-  }, [disabled, haptic, onPress]);
-
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
-      accessibilityState={{ disabled }}
-      disabled={disabled || !onPress}
-      onPress={handlePress}
-      style={({ pressed }) => [
-        styles.row,
-        pressed && !disabled ? styles.pressed : null,
-        disabled ? styles.disabled : null,
-        style,
-      ]}
-    >
-      <YdlSymbol name={leadingSymbol} size="md" tintColor="#9AA3AD" decorative />
-      <View style={styles.textCol}>
-        <Text style={styles.title} allowFontScaling>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={styles.subtitle} allowFontScaling>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {trailingValue ? (
-        <Text style={styles.trailing} allowFontScaling>
-          {trailingValue}
-        </Text>
-      ) : null}
-      {showChevron ? (
-        <YdlSymbol name="chevronRight" size="sm" tintColor="#5B6570" decorative />
-      ) : null}
-    </Pressable>
-  );
+export function YdlActionRow(props: YdlActionRowProps) {
+  return <YdlListItem {...props} />;
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minHeight: YDL_MIN_TOUCH_TARGET,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  textCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  title: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "700",
-    color: "#F4F7F5",
-  },
-  subtitle: {
-    fontSize: 11,
-    lineHeight: 14,
-    color: "#9AA3AD",
-  },
-  trailing: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "600",
-    color: "#9AA3AD",
-    marginLeft: 6,
-    maxWidth: "36%",
-  },
-  pressed: {
-    opacity: PRESSED_OPACITY,
-  },
-  disabled: {
-    opacity: DISABLED_OPACITY,
-  },
-});

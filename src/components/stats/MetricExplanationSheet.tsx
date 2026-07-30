@@ -1,12 +1,18 @@
 import React, { useEffect, useMemo } from "react";
-import { StyleSheet, Text, View, useColorScheme } from "react-native";
+import { StyleSheet, View, useColorScheme } from "react-native";
 import {
   YdlBottomSheetModal,
   YdlModalSheetScrollView,
   YDL_SHEET_COLORS,
   type YdlSheetAppearance,
 } from "../../ydl/sheets";
-import { YdlIconButton, YdlSectionHeader } from "../../ydl/components";
+import {
+  YdlBadge,
+  YdlCard,
+  YdlIconButton,
+  YdlSectionHeader,
+  YdlText,
+} from "../../ydl/components";
 import { YdlSymbol } from "../../ydl/symbols";
 import { announceYdlAccessibility, useYdlReduceMotion } from "../../ydl/accessibility";
 import {
@@ -15,6 +21,7 @@ import {
   YdlStagger,
   parseYdlMetricDisplay,
 } from "../../ydl/motion";
+import { resolveYdlTheme, ydlSpace } from "../../ydl/tokens";
 import { t } from "../../i18n";
 
 export type MetricExplanationContent = {
@@ -33,9 +40,8 @@ export type MetricExplanationSheetProps = {
 };
 
 /**
- * Phase 3/4 production reference: read-only radar metric explanation.
- * Phase 4 adds restrained motion (fade + stagger + animated value) via YDL only.
- * Removable without affecting trade/auth/paywall/AI logic.
+ * Phase 3–5 production reference: read-only radar metric explanation.
+ * Presentation uses YDL tokens + primitives; metric copy/values unchanged.
  */
 export function MetricExplanationSheet({
   visible,
@@ -46,7 +52,8 @@ export function MetricExplanationSheet({
   const scheme = useColorScheme();
   const appearance: YdlSheetAppearance =
     appearanceProp ?? (scheme === "light" ? "light" : "dark");
-  const colors = YDL_SHEET_COLORS[appearance];
+  const sheetColors = YDL_SHEET_COLORS[appearance];
+  const theme = resolveYdlTheme(appearance);
   const reduceMotion = useYdlReduceMotion();
 
   const a11yLabel = useMemo(() => {
@@ -79,21 +86,31 @@ export function MetricExplanationSheet({
       }}
     >
       <YdlModalSheetScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingHorizontal: ydlSpace[16],
+            paddingBottom: ydlSpace[24],
+            gap: ydlSpace[12],
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.headerRow}>
+        <View style={[styles.headerRow, { gap: ydlSpace[8] }]}>
           <View style={styles.headerText}>
-            <View style={styles.titleRow}>
-              <YdlSymbol name="info" size="md" tintColor={colors.title} decorative />
-              <YdlSectionHeader title={content?.label || t("metricDefault")} />
+            <View style={[styles.titleRow, { gap: ydlSpace[8] }]}>
+              <YdlSymbol name="info" size="md" tintColor={sheetColors.title} decorative />
+              <YdlSectionHeader
+                title={content?.label || t("metricDefault")}
+                tintColor={sheetColors.title}
+              />
             </View>
           </View>
           <YdlIconButton
             symbol="close"
             accessibilityLabel={t("close")}
             onPress={onClose}
-            tintColor={colors.title}
+            tintColor={sheetColors.title}
             haptic="selection"
           />
         </View>
@@ -101,37 +118,45 @@ export function MetricExplanationSheet({
         {content ? (
           <YdlFade visible={visible} enter={!reduceMotion} key={content.label}>
             <YdlStagger entranceKey={content.label} preset="tight" offsetY={5}>
-              {parsed ? (
-                <YdlAnimatedNumber
-                  value={parsed.value}
-                  kind={parsed.kind}
-                  decimals={parsed.decimals}
-                  style={[styles.value, { color: colors.title }]}
-                  accessibilityLabel={content.value}
+              <YdlCard variant="outlined" appearance={appearance}>
+                {parsed ? (
+                  <YdlAnimatedNumber
+                    value={parsed.value}
+                    kind={parsed.kind}
+                    decimals={parsed.decimals}
+                    style={[
+                      theme.typography.numericLarge,
+                      { color: theme.colors.text.primary, fontWeight: "900" },
+                    ]}
+                    accessibilityLabel={content.value}
+                  />
+                ) : (
+                  <YdlText
+                    role="numericLarge"
+                    appearance={appearance}
+                    accessibilityLabel={content.value}
+                    style={{ fontWeight: "900" }}
+                  >
+                    {content.value}
+                  </YdlText>
+                )}
+                <YdlText role="bodyEmphasized" color="text.secondary" appearance={appearance}>
+                  {content.explanation}
+                </YdlText>
+                <YdlBadge
+                  tone="info"
+                  label={`${t("targetPrefix")}: ${content.target}`}
+                  symbol="chart"
+                  appearance={appearance}
                 />
-              ) : (
-                <Text
-                  style={[styles.value, { color: colors.title }]}
-                  allowFontScaling
-                  accessibilityRole="text"
-                  accessibilityLabel={content.value}
-                >
-                  {content.value}
-                </Text>
-              )}
-              <Text style={[styles.body, { color: colors.body }]} allowFontScaling>
-                {content.explanation}
-              </Text>
-              <Text style={[styles.body, { color: colors.body }]} allowFontScaling>
-                {t("targetPrefix")}: {content.target}
-              </Text>
+              </YdlCard>
               {reduceMotion ? null : (
                 <View
                   style={styles.footerIcon}
                   accessible={false}
                   importantForAccessibility="no"
                 >
-                  <YdlSymbol name="chart" size="sm" tintColor={colors.body} decorative />
+                  <YdlSymbol name="chart" size="sm" tintColor={sheetColors.body} decorative />
                 </View>
               )}
             </YdlStagger>
@@ -143,15 +168,10 @@ export function MetricExplanationSheet({
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: 18,
-    paddingBottom: 28,
-    gap: 10,
-  },
+  content: {},
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
   },
   headerText: {
     flex: 1,
@@ -160,21 +180,9 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-  },
-  value: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "900",
-    marginTop: 6,
-  },
-  body: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: "600",
   },
   footerIcon: {
-    marginTop: 10,
+    marginTop: ydlSpace[8],
     alignSelf: "flex-start",
     opacity: 0.7,
   },

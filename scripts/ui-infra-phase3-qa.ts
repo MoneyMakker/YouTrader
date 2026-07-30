@@ -116,14 +116,18 @@ function main() {
   assert.doesNotMatch(iconBtn, /from [\"']expo-haptics[\"']/);
 
   const actionRow = read("src/ydl/components/YdlActionRow.tsx");
-  assert.doesNotMatch(actionRow, /height:\s*\d+/);
-  assert.match(actionRow, /allowFontScaling/);
-  assert.match(actionRow, /ydlCombinedAccessibilityLabel/);
-  assert.match(actionRow, /if \(disabled\) return/);
+  assert.match(actionRow, /YdlListItem/);
+  const listItem = read("src/ydl/components/YdlListItem.tsx");
+  assert.doesNotMatch(listItem, /height:\s*\d+/);
+  assert.match(listItem, /YdlText/);
+  assert.match(read("src/ydl/components/YdlText.tsx"), /allowFontScaling/);
+  assert.match(listItem, /ydlCombinedAccessibilityLabel/);
+  assert.match(listItem, /if \(disabled\) return/);
 
   const metricSheet = read("src/components/stats/MetricExplanationSheet.tsx");
   assert.match(metricSheet, /useYdlReduceMotion/);
-  assert.match(metricSheet, /allowFontScaling/);
+  assert.match(metricSheet, /YdlText|YdlAnimatedNumber/);
+  assert.match(read("src/ydl/components/YdlText.tsx"), /allowFontScaling/);
   assert.doesNotMatch(metricSheet, /height:\s*\d+/);
   assert.doesNotMatch(metricSheet, /from [\"']@gorhom\/bottom-sheet[\"']/);
   assert.doesNotMatch(metricSheet, /from [\"']lottie-react-native[\"']/);

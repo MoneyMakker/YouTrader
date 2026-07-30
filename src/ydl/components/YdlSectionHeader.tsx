@@ -1,16 +1,30 @@
 import React from "react";
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 
 export type YdlSectionHeaderProps = {
   title: string;
   subtitle?: string;
   style?: StyleProp<ViewStyle>;
+  titleStyle?: StyleProp<TextStyle>;
+  /** Override title color (e.g. sheet appearance). */
+  tintColor?: string;
+  testID?: string;
 };
 
-export function YdlSectionHeader({ title, subtitle, style }: YdlSectionHeaderProps) {
+export function YdlSectionHeader({
+  title,
+  subtitle,
+  style,
+  titleStyle,
+  tintColor,
+  testID,
+}: YdlSectionHeaderProps) {
   return (
-    <View style={[styles.wrap, style]} accessibilityRole="header">
-      <Text style={styles.title} allowFontScaling>
+    <View testID={testID} style={[styles.wrap, style]} accessibilityRole="header">
+      <Text
+        style={[styles.title, tintColor ? { color: tintColor } : null, titleStyle]}
+        allowFontScaling
+      >
         {title}
       </Text>
       {subtitle ? (
@@ -26,6 +40,8 @@ const styles = StyleSheet.create({
   wrap: {
     gap: 4,
     paddingVertical: 6,
+    flexShrink: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: 18,

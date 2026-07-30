@@ -18,6 +18,7 @@ export default tseslint.config(
       "src/ydl/accessibility/**/*.{ts,tsx}",
       "src/ydl/components/**/*.{ts,tsx}",
       "src/ydl/motion/**/*.{ts,tsx}",
+      "src/ydl/tokens/**/*.{ts,tsx}",
       "src/components/ui/haptics.ts",
       "src/components/stats/MetricExplanationSheet.tsx",
       "src/components/stats/StatsPerformanceRadar.tsx",

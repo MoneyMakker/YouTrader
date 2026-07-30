@@ -52,10 +52,11 @@
     "test:revenge-trading": "npx tsx scripts/revenge-trading-qa.ts",
     "test:ui-infra-phase3": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase3-qa.ts",
     "test:ui-infra-phase4": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase4-qa.ts",
+    "test:ui-infra-phase5": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase5-qa.ts",
     "storybook:start": "cross-env STORYBOOK_ENABLED=true expo start",
     "storybook:ios": "cross-env STORYBOOK_ENABLED=true expo start --ios",
     "storybook:android": "cross-env STORYBOOK_ENABLED=true expo start --android",
-    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/ydl/sheets src/ydl/lottie src/ydl/symbols src/ydl/accessibility src/ydl/components src/ydl/motion src/components/ui/haptics.ts src/components/stats/MetricExplanationSheet.tsx src/components/stats/StatsPerformanceRadar.tsx index.js && eslint --config eslint.ui-infra-imports.config.mjs \"src/**/*.{ts,tsx}\" App.tsx index.js"
+    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/ydl/sheets src/ydl/lottie src/ydl/symbols src/ydl/accessibility src/ydl/components src/ydl/motion src/ydl/tokens src/components/ui/haptics.ts src/components/stats/MetricExplanationSheet.tsx src/components/stats/StatsPerformanceRadar.tsx index.js && eslint --config eslint.ui-infra-imports.config.mjs \"src/**/*.{ts,tsx}\" App.tsx index.js"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",
