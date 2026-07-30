@@ -1,6 +1,6 @@
 # Phase 0C — Prop OS Fixtures & Test Accounts
 
-**Status:** READY FOR PRODUCT OWNER REVIEW  
+**Status:** CONDITIONALLY APPROVED — remediation applied; awaiting FINAL APPROVAL  
 **Parent:** Phase 0 — Prop Domain Architecture  
 **Depends on:**  
 - [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — **APPROVED WITH IMPLEMENTATION CONDITIONS** (`206f3e7`)  
@@ -12,7 +12,11 @@
 
 **Calculation suite:** `calc-spec-v0`  
 **Executable root:** `src/propOs/`  
-**QA command:** `npm run test:prop-os-fixtures`
+**QA commands:**
+- `npm run test:prop-os-types` — isolated static TypeScript (`tsconfig.prop-os.json`)
+- `npm run test:prop-os-fixtures` — types **then** executable fixture checks
+
+**Security scan:** Aikido = **NOT RUN** (authentication failed). Non-blocking; must not be reported as PASS.
 
 ---
 
@@ -35,6 +39,7 @@ Reference replay in `src/propOs/replay.ts` is **fixture infrastructure**, not a 
 |---|---|
 | `src/propOs/**` | Import from `App.tsx` / `YouTraderApp.tsx` |
 | `scripts/prop-os-fixtures-qa.ts` | Production UI / Prop Pass screens |
+| `npm run test:prop-os-types` | — |
 | `npm run test:prop-os-fixtures` | Supabase migrations / RLS changes |
 | Docs under `docs/architecture/` | Fake live broker integration |
 | | AI coaching / probability surfaces |
@@ -99,25 +104,42 @@ Outputs carry versioned explainability (names may evolve, meaning locked):
 - `readinessScore` null when breached / insufficient / terminal
 - `limitations[]` (fees_missing, incomplete equity, approx, …)
 - `confidence` when score present
-- causal `drivers` on score delta (F27)
+- causal `drivers` on score delta (F27) — see §5.1
+
+### 5.1 Score-delta driver reconciliation (normative)
+
+| Rule | Contract |
+|---|---|
+| Causal drivers require | `previousReadinessScore` **and** `previousReadinessFactors` |
+| Contribution | `weight × (currentValue − previousValue) × 100` per factor |
+| Reconciliation | `\|sum(contribution) − (currentScore − previousScore)\| ≤ SCORE_DELTA_RECONCILIATION_TOLERANCE` |
+| Tolerance | **`1`** score point (integer `floor` rounding) |
+| Failure / missing snapshot | Factors go to `supportingEvidence` only; `drivers = []`; `driversReconciled = false` |
+
+“Causal-ish” is **not** a valid contract.
 
 ---
 
 ## 6. Verification
 
 ```bash
+npm run test:prop-os-types
 npm run test:prop-os-fixtures
+npm run typecheck
 ```
 
-Expected: `prop-os-fixtures-qa: PASS` (≥29 fixtures, shuffle + TZ checks).
+Expected: isolated prop-os types PASS; fixture QA PASS (includes types gate); app typecheck PASS.
 
+**tsconfig scope:** `tsconfig.prop-os.json` includes only `src/propOs/**/*.ts`, `scripts/prop-os-fixtures-qa.ts`, and `scripts/prop-os-node-shim.d.ts`. App `tsconfig.json` continues to exclude `src/propOs`.
 ---
 
 ## 7. STOP / next gate
 
-**Awaiting Product Owner review of Phase 0C.**
+**Phase 0C — CONDITIONALLY APPROVED; remediation complete; awaiting FINAL APPROVAL.**
 
-Suggested next (only after approve):
+Do **not** start Phase 0D until FINAL APPROVAL.
+
+Suggested next (only after FINAL APPROVE):
 
 ```text
 APPROVE PHASE 0D — Migration Plan

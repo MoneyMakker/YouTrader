@@ -1,5 +1,6 @@
 import { confidenceForRuleBuffers, confidenceFromTradeCount } from "./confidence.ts";
 import { inputRevision, sortAccountingEvents } from "./eventOrder.ts";
+import { buildScoreDeltaDrivers, type ReadinessFactorMap } from "./scoreDrivers.ts";
 import { tradingDayId } from "./tradingDay.ts";
 import type {
   AccountingEvent,
@@ -9,7 +10,6 @@ import type {
   PropChallengeFixture,
   PropEngineResultV0,
   PropRuleSetSnapshot,
-  ReadinessDriver,
 } from "./types.ts";
 
 function clamp01(x: number): number {
@@ -42,6 +42,8 @@ export type ReplayInput = {
   events: AccountingEvent[];
   asOfUtc: string;
   previousReadinessScore?: number | null;
+  /** Previous readiness factor snapshot required for causal score-delta drivers. */
+  previousReadinessFactors?: ReadinessFactorMap | null;
 };
 
 /**
@@ -295,7 +297,7 @@ export function replayChallenge(input: ReplayInput): PropEngineResultV0 {
         : 0.5 + 0.5 * tanh(rSamples.reduce((a, b) => a + b, 0) / rSamples.length / 0.5);
     const sampleAdequacy = clamp01(tradeCount / 50);
 
-    const inputs: Record<string, { value: number; weight: number }> = {
+    const inputs: ReadinessFactorMap = {
       targetProgress: { value: targetProgress, weight: 0.25 },
       dailyBufferHealth: { value: dailyBufferHealth, weight: 0.2 },
       ddBufferHealth: { value: ddBufferHealth, weight: 0.25 },
@@ -309,22 +311,23 @@ export function replayChallenge(input: ReplayInput): PropEngineResultV0 {
     const score = Math.floor(100 * raw);
     const previous = input.previousReadinessScore ?? null;
     const delta = previous == null ? null : score - previous;
-
-    const drivers: ReadinessDriver[] = Object.entries(inputs)
-      .map(([factor, { value, weight }]) => ({
-        factor,
-        contribution: weight * (value - 0.5) * 100,
-        evidence: { ...confidenceFromTradeCount(tradeCount), value },
-      }))
-      .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))
-      .slice(0, 3);
+    const confScore = confidenceFromTradeCount(tradeCount, feesMissing ? ["fees_incomplete"] : []);
+    const built = buildScoreDeltaDrivers({
+      currentFactors: inputs,
+      previousFactors: input.previousReadinessFactors,
+      currentScore: score,
+      previousScore: previous,
+      confidence: confScore,
+    });
 
     readiness = {
       score,
       previousScore: previous,
       delta,
-      drivers,
-      confidence: confidenceFromTradeCount(tradeCount, feesMissing ? ["fees_incomplete"] : []),
+      drivers: built.drivers,
+      supportingEvidence: built.supportingEvidence,
+      driversReconciled: built.reconciled,
+      confidence: confScore,
     };
   } else if (gate === "insufficient_trade_data") {
     readinessModel = "readiness-v0";
@@ -333,6 +336,7 @@ export function replayChallenge(input: ReplayInput): PropEngineResultV0 {
       previousScore: input.previousReadinessScore ?? null,
       delta: null,
       drivers: [],
+      supportingEvidence: [],
       confidence: confidenceFromTradeCount(tradeCount, ["insufficient_trade_data"]),
       gate,
     };
@@ -343,6 +347,7 @@ export function replayChallenge(input: ReplayInput): PropEngineResultV0 {
       previousScore: input.previousReadinessScore ?? null,
       delta: null,
       drivers: [],
+      supportingEvidence: [],
       confidence: confidenceFromTradeCount(tradeCount, ["unsupported_rule_calculation"]),
       gate,
     };

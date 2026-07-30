@@ -1,3 +1,4 @@
+import type { ReadinessFactorMap } from "../scoreDrivers.ts";
 import type {
   AccountingEvent,
   FixtureExpectation,
@@ -14,6 +15,7 @@ export type PropOsFixture = {
   events: AccountingEvent[];
   asOfUtc: string;
   previousReadinessScore?: number | null;
+  previousReadinessFactors?: ReadinessFactorMap | null;
   expect: FixtureExpectation;
 };
 
@@ -576,6 +578,15 @@ export const PROP_OS_FIXTURES: PropOsFixture[] = [
     ),
     asOfUtc: "2026-01-06T20:00:00.000Z",
     previousReadinessScore: 30,
+    // Prior snapshot that scores floor(100 * 0.3) = 30 under readiness-v0 weights.
+    previousReadinessFactors: {
+      targetProgress: { value: 0.3, weight: 0.25 },
+      dailyBufferHealth: { value: 0.3, weight: 0.2 },
+      ddBufferHealth: { value: 0.3, weight: 0.25 },
+      minDaysProgress: { value: 0.3, weight: 0.1 },
+      expectancyProxy: { value: 0.3, weight: 0.1 },
+      sampleAdequacy: { value: 0.3, weight: 0.1 },
+    },
     expect: { status: "active", readinessScore: true, expectScoreDelta: true },
   },
   {

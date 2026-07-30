@@ -6,6 +6,10 @@ import assert from "node:assert/strict";
 import { PROP_OS_FIXTURES } from "../src/propOs/fixtures/scenarios.ts";
 import { publicReadinessScore, replayChallenge } from "../src/propOs/replay.ts";
 import { sortAccountingEvents } from "../src/propOs/eventOrder.ts";
+import {
+  SCORE_DELTA_RECONCILIATION_TOLERANCE,
+  assertDriversReconcileDelta,
+} from "../src/propOs/scoreDrivers.ts";
 import { tradingDayId } from "../src/propOs/tradingDay.ts";
 
 let passed = 0;
@@ -49,6 +53,49 @@ check("canonical sort is stable for shuffle", () => {
   );
 });
 
+check("F27 drivers reconcile previousScore → currentScore", () => {
+  const fx = PROP_OS_FIXTURES.find((f) => f.id === "F27_score_delta_drivers");
+  assert.ok(fx);
+  assert.ok(fx.previousReadinessScore != null);
+  assert.ok(fx.previousReadinessFactors != null);
+  const result = replayChallenge({
+    challenge: fx.challenge,
+    events: fx.events,
+    asOfUtc: fx.asOfUtc,
+    previousReadinessScore: fx.previousReadinessScore,
+    previousReadinessFactors: fx.previousReadinessFactors,
+  });
+  assert.ok(result.readiness);
+  assert.equal(result.readiness.previousScore, fx.previousReadinessScore);
+  assert.ok(result.readiness.delta != null);
+  assert.equal(result.readiness.driversReconciled, true);
+  assert.ok(result.readiness.drivers.length >= 1);
+  assert.equal(result.readiness.supportingEvidence.length, 0);
+  assertDriversReconcileDelta({
+    previousScore: result.readiness.previousScore!,
+    currentScore: result.readiness.score,
+    drivers: result.readiness.drivers,
+    tolerance: SCORE_DELTA_RECONCILIATION_TOLERANCE,
+  });
+});
+
+check("non-reconciled delta falls back to supportingEvidence", () => {
+  const fx = PROP_OS_FIXTURES.find((f) => f.id === "F27_score_delta_drivers");
+  assert.ok(fx);
+  // Previous score without matching factor snapshot → not causal drivers.
+  const result = replayChallenge({
+    challenge: fx.challenge,
+    events: fx.events,
+    asOfUtc: fx.asOfUtc,
+    previousReadinessScore: 30,
+    previousReadinessFactors: null,
+  });
+  assert.ok(result.readiness);
+  assert.equal(result.readiness.drivers.length, 0);
+  assert.ok(result.readiness.supportingEvidence.length >= 1);
+  assert.equal(result.readiness.driversReconciled, false);
+});
+
 for (const fx of PROP_OS_FIXTURES) {
   check(fx.id, () => {
     const result = replayChallenge({
@@ -56,6 +103,7 @@ for (const fx of PROP_OS_FIXTURES) {
       events: fx.events,
       asOfUtc: fx.asOfUtc,
       previousReadinessScore: fx.previousReadinessScore,
+      previousReadinessFactors: fx.previousReadinessFactors,
     });
     const exp = fx.expect;
 
@@ -71,7 +119,13 @@ for (const fx of PROP_OS_FIXTURES) {
       assert.ok(pub! >= 0 && pub! <= 100);
       if (exp.expectScoreDelta) {
         assert.ok(result.readiness?.delta != null, `${fx.id} expected delta`);
+        assert.equal(result.readiness?.driversReconciled, true, `${fx.id} drivers must reconcile`);
         assert.ok((result.readiness?.drivers?.length ?? 0) >= 1);
+        assertDriversReconcileDelta({
+          previousScore: result.readiness!.previousScore!,
+          currentScore: result.readiness!.score,
+          drivers: result.readiness!.drivers,
+        });
       }
     } else {
       assert.equal(pub, exp.readinessScore, `${fx.id} readinessScore`);
@@ -106,3 +160,6 @@ for (const fx of PROP_OS_FIXTURES) {
 }
 
 console.log(`prop-os-fixtures-qa: PASS (${passed} checks)`);
+console.log(
+  `score-delta reconciliation tolerance=${SCORE_DELTA_RECONCILIATION_TOLERANCE}`,
+);

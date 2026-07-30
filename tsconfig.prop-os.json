@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "types": []
+  },
+  "include": [
+    "src/propOs/**/*.ts",
+    "scripts/prop-os-fixtures-qa.ts",
+    "scripts/prop-os-node-shim.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

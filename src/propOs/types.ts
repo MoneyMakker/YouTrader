@@ -172,9 +172,18 @@ export type PropEngineResultV0 = {
     score: number;
     previousScore: number | null;
     delta: number | null;
+    /**
+     * Causal score-delta drivers only.
+     * sum(contribution) must reconcile previousScore → score within
+     * SCORE_DELTA_RECONCILIATION_TOLERANCE when delta != null and drivers non-empty.
+     */
     drivers: ReadinessDriver[];
+    /** Non-causal factor levels / failed reconciliation — not score drivers. */
+    supportingEvidence: ReadinessDriver[];
     confidence: ConfidenceBlock;
     gate?: string;
+    /** True when drivers reconcile score delta within tolerance. */
+    driversReconciled?: boolean;
   };
 
   confidence: ConfidenceBlock;
