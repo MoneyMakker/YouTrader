@@ -41,8 +41,9 @@ Phase 0D Migration Plan                      ✅ FINAL APPROVED (`b740a9a`)
 ── Phase 0 architecture gate PASSED ──
 Phase 1A Additive Database Foundation        ✅ FINAL APPROVED
 Phase 1B Production Domain Engine            ✅ FINAL APPROVED
-Phase 1C Shadow Calculation Pipeline         ← READY FOR REVIEW
-Phase 1D Internal Account Management
+Phase 1C Shadow Calculation Pipeline         ✅ FINAL APPROVED
+Phase 1D Internal Account Management         ← READY FOR REVIEW
+Phase 1E Controlled Product Activation
 Phase 1D Internal Account Management
 Phase 1E Controlled Product Activation
 Prop Pass UI                                 (after 1A–1C evidence; not before)
@@ -81,9 +82,9 @@ Accepted commits: `6aa3339`, `1c93ee7`, `206f3e7`, `dc965c2`, `cece87a`, `e4976e
 |---|---|---|---|
 | **1A** | Additive Database Foundation | SQL tables, RLS, immutability, types, schema tests — [`PROP_OS_PHASE_1A.md`](./architecture/PROP_OS_PHASE_1A.md) | FINAL APPROVED |
 | **1B** | Production Domain Engine | Pure `calculateChallenge` engine — [`PROP_OS_PHASE_1B.md`](./architecture/PROP_OS_PHASE_1B.md) | FINAL APPROVED |
-| **1C** | Shadow Calculation Pipeline | Isolated shadow runner + snapshots — [`PROP_OS_PHASE_1C.md`](./architecture/PROP_OS_PHASE_1C.md) | READY FOR REVIEW |
-| **1D** | Internal Account Management | Opt-in accounts; no silent trade bind | Not started (blocked on 1C APPROVE) |
-| **1E** | Controlled Product Activation | Feature-flagged read path | Not started |
+| **1C** | Shadow Calculation Pipeline | Isolated shadow runner + snapshots — [`PROP_OS_PHASE_1C.md`](./architecture/PROP_OS_PHASE_1C.md) | FINAL APPROVED |
+| **1D** | Internal Account Management | Accounts / challenges / assignments — [`PROP_OS_PHASE_1D.md`](./architecture/PROP_OS_PHASE_1D.md) | READY FOR REVIEW |
+| **1E** | Controlled Product Activation | Feature-flagged read path | Not started (blocked on 1D APPROVE) |
 
 **1A must not:** Prop Pass UI, navigation change, legacy auto-assign, backfill, shadow, AI changes, `src/propOs` App import.
 

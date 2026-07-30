@@ -1,31 +1,33 @@
-# Prop OS domain package (Phase 1B + 1C)
+# Prop OS domain package (Phase 1B–1D)
 
-Production-grade **pure** calculation engine (`calculateChallenge`) plus isolated **shadow pipeline** (`src/propOs/shadow/`). No App UI, AI, or RevenueCat wiring.
+Production-grade **pure** calculation engine (`calculateChallenge`), isolated **shadow pipeline** (`src/propOs/shadow/`), and internal **account management** (`src/propOs/accounts/`).
+
+No App UI, AI, or RevenueCat wiring until Phase 1E.
 
 ## Rules
 
-- Import only domain contracts from this package.
-- Do **not** import from `App.tsx` / navigation / screens until Phase 1E activation gate.
-- Do **not** import deprecated `replayChallenge` in new code (static gate: `test:prop-os-shadow`).
-- Engine must not import Supabase, React, AsyncStorage, RevenueCat, AI, analytics, or UI tokens.
-- Shadow may use repository adapters; App still must not call the runner.
+- Do **not** import from `App.tsx` / navigation / screens until Phase 1E.
+- Do **not** import deprecated `replayChallenge` in new code.
+- Engine must not import Supabase / React / RevenueCat / AI / UI tokens.
+- Account management uses service-role stores only in isolated harnesses.
 
 ## Layout
 
 | Path | Role |
 |---|---|
 | `engine.ts` | Production `calculateChallenge` |
-| `replay.ts` | Deprecated thin alias → `calculateChallenge` |
-| `shadow/` | Phase 1C repository + mappers + runner + memory store |
+| `shadow/` | Phase 1C shadow runner + snapshots |
+| `accounts/` | Phase 1D internal account/challenge/assignment commands |
 | `fixtures/` | F01–F29 scenarios |
 
 ## Commands
 
 ```bash
-npm run test:prop-os-engine    # fixtures + invariants
-npm run test:prop-os-shadow    # shadow memory QA + alias gate
-npm run test:prop-os-shadow-pg # local PG smoke (optional)
+npm run test:prop-os-engine
+npm run test:prop-os-shadow
+npm run test:prop-os-accounts
+npm run test:prop-os-accounts-pg
 npm run typecheck
 ```
 
-See `docs/architecture/PROP_OS_PHASE_1B.md` and `PROP_OS_PHASE_1C.md`.
+See `docs/architecture/PROP_OS_PHASE_1B.md`, `PROP_OS_PHASE_1C.md`, `PROP_OS_PHASE_1D.md`.

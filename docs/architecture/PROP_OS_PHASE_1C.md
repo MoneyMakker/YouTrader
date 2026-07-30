@@ -1,8 +1,8 @@
 # Prop OS — Shadow Calculation Pipeline (Phase 1C)
 
-**Status:** READY FOR REVIEW → remediation complete; awaiting **FINAL APPROVAL**  
+**Status:** FINAL APPROVED  
 **Baseline commit:** `ee5c016`  
-**Remediation commit:** (this change) `test(domain): validate Prop OS shadow persistence`  
+**Remediation commit:** `89fef76`  
 **Package:** `src/propOs/shadow/`  
 **Runner:** `shadow-runner-v0`  
 **Engine:** `calculateChallenge` only (no `replayChallenge` in new code)
@@ -85,12 +85,17 @@ Batch continues when one challenge fails.
 
 ### Performance breakdown (isolated PG, diagnostic)
 
-| Events | prepSeed | dbRead | mapping | engine | snapshotWrite | readBack | totalRunner | peakMemory |
-|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1,000 | ~223 ms | ~132 ms | ~1 ms | ~41 ms | ~160 ms | ~21 ms | ~344 ms | NOT MEASURED |
-| 5,000 | ~758 ms | ~159 ms | ~1 ms | ~201 ms | ~159 ms | ~22 ms | ~565 ms | NOT MEASURED |
+Method:
 
-Not a mobile FPS claim. Not a release SLA.
+- `wallClockPipelineTotal` = single `runShadowChallenge` wall clock (`totalRunnerMs`)
+- `stageDiagnosticDurations` = separately sampled/attributed stages (`prepSeedMs`, `dbReadMs`, `mappingMs`, `engineMs`, `snapshotWriteMs`, `snapshotReadBackMs`)
+
+Do **not** sum `stageDiagnosticDurations` into `wallClockPipelineTotal` — prep seed is outside the runner, and stage timers can overlap bookkeeping with wall clock.
+
+| Events | wallClockPipelineTotal | prepSeed (diagnostic) | dbRead | mapping | engine | snapshotWrite | readBack | peakMemory |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1,000 | ~344 ms | ~223 ms | ~132 ms | ~1 ms | ~41 ms | ~160 ms | ~21 ms | NOT MEASURED |
+| 5,000 | ~565 ms | ~758 ms | ~159 ms | ~1 ms | ~201 ms | ~159 ms | ~22 ms | NOT MEASURED |
 
 ## Security
 

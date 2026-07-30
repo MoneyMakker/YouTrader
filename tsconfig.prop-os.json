@@ -22,6 +22,9 @@
     "scripts/prop-os-shadow-pg-roundtrip-qa.ts",
     "scripts/prop-os-psql-bridge.ts",
     "scripts/prop-os-shadow-pg-repository.ts",
+    "scripts/prop-os-accounts-qa.ts",
+    "scripts/prop-os-accounts-pg-qa.ts",
+    "scripts/prop-os-accounts-pg-store.ts",
     "scripts/prop-os-no-replay-alias-qa.ts",
     "scripts/prop-os-node-shim.d.ts"
   ],
