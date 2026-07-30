@@ -359,10 +359,16 @@ expanding product breadth.
 **Priority:** High
 
 > **Note (UI infrastructure track):** CEO-directed **UI Infra Phase 6**
-> (component hardening + visual regression foundation) is documented in
+> (component hardening + visual regression) is **FINAL APPROVED** with
+> 14/14 PNG baselines in `.maestro/ydl/baselines/` — see
 > `docs/UI_INFRA_PHASE6.md` and `docs/YDL_ADOPTION_POLICY.md`. It is **not**
 > the same as any “AI Phase 6” naming elsewhere. It supports Epic 6 goals but
 > does not renumber YT-014 / YT-015.
+>
+> **YouTrader 3.0 product track** starts at **0%** and begins with
+> Phase 0 (Prop Domain & Data Architecture) — see
+> `docs/YOUTRADER_3_ROADMAP.md`. Do not redesign AI Analytics → Prop Pass
+> before Phase 0 approval and an audit-only domain pass.
 
 ### YT-014 — Standardize loading, empty, error, and offline states
 
