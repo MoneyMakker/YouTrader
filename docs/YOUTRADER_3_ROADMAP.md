@@ -39,7 +39,7 @@ Phase 0B Calculation Engine                  ✅ FINAL APPROVED
 Phase 0C Fixtures & Test Accounts            ✅ FINAL APPROVED
 Phase 0D Migration Plan                      ✅ FINAL APPROVED (`b740a9a`)
 ── Phase 0 architecture gate PASSED ──
-Phase 1A Additive Database Foundation        ← migration contract (pre-SQL)
+Phase 1A Additive Database Foundation        ← READY FOR REVIEW
 Phase 1B Production Domain Engine
 Phase 1C Shadow Calculation Pipeline
 Phase 1D Internal Account Management
@@ -78,7 +78,7 @@ Accepted commits: `6aa3339`, `1c93ee7`, `206f3e7`, `dc965c2`, `cece87a`, `e4976e
 
 | ID | Name | Focus | Status |
 |---|---|---|---|
-| **1A** | Additive Database Foundation | SQL tables, RLS, immutability, types, schema tests — [`PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md`](./architecture/PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md) | Pre-SQL contract READY FOR REVIEW |
+| **1A** | Additive Database Foundation | SQL tables, RLS, immutability, types, schema tests — [`PROP_OS_PHASE_1A.md`](./architecture/PROP_OS_PHASE_1A.md) | READY FOR REVIEW |
 | **1B** | Production Domain Engine | Wire calc-spec behind repos (not UI) | Not started |
 | **1C** | Shadow Calculation Pipeline | Old/new compare | Not started |
 | **1D** | Internal Account Management | Opt-in accounts; no silent trade bind | Not started |

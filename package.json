@@ -56,6 +56,8 @@
     "test:ui-infra-phase6": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase6-qa.ts",
     "test:prop-os-types": "tsc -p tsconfig.prop-os.json --noEmit",
     "test:prop-os-fixtures": "npm run test:prop-os-types && node --experimental-strip-types --experimental-transform-types scripts/prop-os-fixtures-qa.ts",
+    "gen:prop-os-db-types": "node --experimental-strip-types --experimental-transform-types scripts/generate-prop-os-db-types.ts",
+    "test:prop-os-schema": "npm run gen:prop-os-db-types && node --experimental-strip-types --experimental-transform-types scripts/prop-os-schema-static-qa.ts",
     "storybook:start": "cross-env STORYBOOK_ENABLED=true expo start",
     "storybook:ios": "cross-env STORYBOOK_ENABLED=true expo start --ios",
     "storybook:android": "cross-env STORYBOOK_ENABLED=true expo start --android",

@@ -7,6 +7,8 @@
     "recovery-backups",
     "scripts/ai-platform-v2/backups",
     "scripts/prop-os-fixtures-qa.ts",
+    "scripts/prop-os-schema-static-qa.ts",
+    "scripts/generate-prop-os-db-types.ts",
     "src/propOs",
     "supabase/functions",
     "ios",

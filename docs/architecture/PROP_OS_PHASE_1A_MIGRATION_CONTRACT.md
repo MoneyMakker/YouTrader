@@ -1,10 +1,12 @@
 # Phase 1A — Additive Database Foundation · Migration Contract
 
-**Status:** READY FOR PRODUCT OWNER REVIEW (pre-SQL gate)  
+**Status:** IMPLEMENTED — READY FOR PRODUCT OWNER REVIEW  
 **Parent:** YouTrader 3.0 Implementation — after Phase 0 FINAL  
 **Depends on:**  
 - [`PROP_OS_PHASE_0D_MIGRATION_PLAN.md`](./PROP_OS_PHASE_0D_MIGRATION_PLAN.md) — **FINAL APPROVED** (`b740a9a`)  
 - Phase 0A–0C FINAL APPROVED  
+**Implementation report:** [`PROP_OS_PHASE_1A.md`](./PROP_OS_PHASE_1A.md)  
+**Rollback:** [`PROP_OS_PHASE_1A_ROLLBACK.md`](./PROP_OS_PHASE_1A_ROLLBACK.md) 
 
 **Date:** 2026-07-30  
 **Schema version:** `prop-os-schema-v0`  
@@ -344,13 +346,6 @@ After migrations exist (future):
 
 ## 8. STOP
 
-**Awaiting Product Owner FINAL APPROVE of `phase-1a-contract-v0`.**
+**Contract implemented** — see [`PROP_OS_PHASE_1A.md`](./PROP_OS_PHASE_1A.md).
 
-Suggested next command:
-
-```text
-APPROVE PHASE 1A — Additive Database Foundation
-(write and apply additive migrations per this contract; still no Prop Pass UI)
-```
-
-Until that approve: **do not write or apply SQL.**
+Awaiting Product Owner review of Phase 1A SQL foundation. Do not start Phase 1B until FINAL APPROVE.
