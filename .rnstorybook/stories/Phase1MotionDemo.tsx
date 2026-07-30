@@ -30,13 +30,13 @@ export function Phase1MotionDemo() {
         testID="phase1-pulse-button"
         onPressIn={() => {
           scale.value = withSpring(0.94, { damping: 16, stiffness: 320 });
-          runYdlHaptic("ImpactLight");
+          runYdlHaptic("impactLight");
         }}
         onPressOut={() => {
           scale.value = withSpring(1, { damping: 14, stiffness: 260 });
         }}
         onPress={() => {
-          runYdlHaptic("Success");
+          runYdlHaptic("success");
         }}
         style={[styles.button, animatedStyle]}
       >

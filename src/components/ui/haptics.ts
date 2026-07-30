@@ -1,27 +1,14 @@
 /**
- * UI haptics — thin bridge to YDL presets (expo-haptics + Vibration fallback).
+ * UI haptics — re-export only. Canonical implementation: src/ydl/haptics.ts
  */
-import { runYdlHaptic, ydlHapticPresets } from "../../ydl/haptics";
-
-export function lightHaptic() {
-  ydlHapticPresets.ImpactLight();
-}
-
-export function successHaptic() {
-  ydlHapticPresets.Success();
-}
-
-export function warningHaptic() {
-  ydlHapticPresets.Warning();
-}
-
-/** Selection / chip / secondary control feedback. */
-export function selectionHaptic() {
-  runYdlHaptic("Selection");
-}
-
 export {
-  ydlHapticPresets,
+  lightHaptic,
+  successHaptic,
+  warningHaptic,
+  selectionHaptic,
   runYdlHaptic,
+  ydlHapticIntents,
+  ydlHapticPresets,
+  type YdlHapticIntent,
   type YdlHapticPreset,
 } from "../../ydl/haptics";

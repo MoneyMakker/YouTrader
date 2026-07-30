@@ -1,76 +1,126 @@
-import { Platform, Vibration } from "react-native";
+import { Platform } from "react-native";
 import * as ExpoHaptics from "expo-haptics";
 
 /**
- * YouTrader Design Language — haptic presets.
- * Prefer expo-haptics on native; Vibration remains a safe fallback.
+ * YouTrader Design Language — canonical haptic intents.
+ * Only this module talks to expo-haptics. Callers use semantic intents.
+ * Unavailable platforms / failures no-op (no Vibration fallback).
  */
 
-function vibrate(pattern: number | number[]) {
+export type YdlHapticIntent =
+  | "selection"
+  | "success"
+  | "warning"
+  | "error"
+  | "impactLight"
+  | "impactMedium"
+  | "impactHeavy";
+
+/** @deprecated Prefer YdlHapticIntent + runYdlHaptic. Kept for existing callers. */
+export type YdlHapticPreset =
+  | "Selection"
+  | "Success"
+  | "Warning"
+  | "Error"
+  | "ImpactLight"
+  | "ImpactMedium"
+  | "ImpactHeavy";
+
+const PRESET_TO_INTENT: Record<YdlHapticPreset, YdlHapticIntent> = {
+  Selection: "selection",
+  Success: "success",
+  Warning: "warning",
+  Error: "error",
+  ImpactLight: "impactLight",
+  ImpactMedium: "impactMedium",
+  ImpactHeavy: "impactHeavy",
+};
+
+function canUseNativeHaptics(): boolean {
+  return Platform.OS === "ios" || Platform.OS === "android";
+}
+
+async function runIntent(intent: YdlHapticIntent): Promise<void> {
+  if (!canUseNativeHaptics()) return;
+
   try {
-    if (Platform.OS === "web") return;
-    Vibration.vibrate(pattern);
+    switch (intent) {
+      case "selection":
+        await ExpoHaptics.selectionAsync();
+        return;
+      case "success":
+        await ExpoHaptics.notificationAsync(ExpoHaptics.NotificationFeedbackType.Success);
+        return;
+      case "warning":
+        await ExpoHaptics.notificationAsync(ExpoHaptics.NotificationFeedbackType.Warning);
+        return;
+      case "error":
+        await ExpoHaptics.notificationAsync(ExpoHaptics.NotificationFeedbackType.Error);
+        return;
+      case "impactLight":
+        await ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Light);
+        return;
+      case "impactMedium":
+        await ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Medium);
+        return;
+      case "impactHeavy":
+        await ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Heavy);
+        return;
+      default: {
+        const _exhaustive: never = intent;
+        return _exhaustive;
+      }
+    }
   } catch {
-    // Haptics are optional.
+    // Haptics are optional; never crash the UI.
   }
 }
 
-async function impact(style: ExpoHaptics.ImpactFeedbackStyle, fallback: number) {
-  try {
-    if (Platform.OS === "web") return;
-    await ExpoHaptics.impactAsync(style);
-  } catch {
-    vibrate(fallback);
-  }
+export function runYdlHaptic(intent: YdlHapticIntent | YdlHapticPreset): void {
+  const resolved: YdlHapticIntent =
+    intent in PRESET_TO_INTENT
+      ? PRESET_TO_INTENT[intent as YdlHapticPreset]
+      : (intent as YdlHapticIntent);
+  void runIntent(resolved);
 }
 
-async function notification(
-  type: ExpoHaptics.NotificationFeedbackType,
-  fallback: number | number[],
-) {
-  try {
-    if (Platform.OS === "web") return;
-    await ExpoHaptics.notificationAsync(type);
-  } catch {
-    vibrate(fallback);
-  }
-}
-
-async function selection() {
-  try {
-    if (Platform.OS === "web") return;
-    await ExpoHaptics.selectionAsync();
-  } catch {
-    vibrate(8);
-  }
-}
-
-export const ydlHapticPresets = {
-  Selection: () => {
-    void selection();
-  },
-  Success: () => {
-    void notification(ExpoHaptics.NotificationFeedbackType.Success, [0, 14, 40, 12]);
-  },
-  Warning: () => {
-    void notification(ExpoHaptics.NotificationFeedbackType.Warning, [0, 20, 35, 20]);
-  },
-  Error: () => {
-    void notification(ExpoHaptics.NotificationFeedbackType.Error, [0, 28, 40, 28, 40, 28]);
-  },
-  ImpactLight: () => {
-    void impact(ExpoHaptics.ImpactFeedbackStyle.Light, 8);
-  },
-  ImpactMedium: () => {
-    void impact(ExpoHaptics.ImpactFeedbackStyle.Medium, 16);
-  },
-  ImpactHeavy: () => {
-    void impact(ExpoHaptics.ImpactFeedbackStyle.Heavy, 28);
-  },
+/** Semantic intent map (canonical). */
+export const ydlHapticIntents = {
+  selection: () => runYdlHaptic("selection"),
+  success: () => runYdlHaptic("success"),
+  warning: () => runYdlHaptic("warning"),
+  error: () => runYdlHaptic("error"),
+  impactLight: () => runYdlHaptic("impactLight"),
+  impactMedium: () => runYdlHaptic("impactMedium"),
+  impactHeavy: () => runYdlHaptic("impactHeavy"),
 } as const;
 
-export type YdlHapticPreset = keyof typeof ydlHapticPresets;
+/**
+ * Legacy preset names used across existing UI.
+ * Implementations delegate to semantic intents only.
+ */
+export const ydlHapticPresets = {
+  Selection: ydlHapticIntents.selection,
+  Success: ydlHapticIntents.success,
+  Warning: ydlHapticIntents.warning,
+  Error: ydlHapticIntents.error,
+  ImpactLight: ydlHapticIntents.impactLight,
+  ImpactMedium: ydlHapticIntents.impactMedium,
+  ImpactHeavy: ydlHapticIntents.impactHeavy,
+} as const;
 
-export function runYdlHaptic(preset: YdlHapticPreset) {
-  ydlHapticPresets[preset]();
+export function lightHaptic() {
+  runYdlHaptic("impactLight");
+}
+
+export function successHaptic() {
+  runYdlHaptic("success");
+}
+
+export function warningHaptic() {
+  runYdlHaptic("warning");
+}
+
+export function selectionHaptic() {
+  runYdlHaptic("selection");
 }
