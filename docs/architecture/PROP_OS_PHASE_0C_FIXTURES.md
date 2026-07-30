@@ -1,10 +1,12 @@
 # Phase 0C — Prop OS Fixtures & Test Accounts
 
-**Status:** CONDITIONALLY APPROVED — remediation applied; awaiting FINAL APPROVAL  
+**Status:** FINAL APPROVED (Product Owner, 2026-07-30)  
+**Commits accepted:** `cece87a`, `e4976e4`  
 **Parent:** Phase 0 — Prop Domain Architecture  
 **Depends on:**  
 - [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — **APPROVED WITH IMPLEMENTATION CONDITIONS** (`206f3e7`)  
 - [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./PROP_OS_PHASE_0A_DOMAIN_SPEC.md) — APPROVED WITH SPEC CONDITIONS  
+**Follow-on:** [`PROP_OS_PHASE_0D_MIGRATION_PLAN.md`](./PROP_OS_PHASE_0D_MIGRATION_PLAN.md)  
 
 **Date:** 2026-07-30  
 **Scope:** Executable deterministic fixtures, reference replay, focused QA — isolated from production.  
@@ -131,19 +133,13 @@ npm run typecheck
 Expected: isolated prop-os types PASS; fixture QA PASS (includes types gate); app typecheck PASS.
 
 **tsconfig scope:** `tsconfig.prop-os.json` includes only `src/propOs/**/*.ts`, `scripts/prop-os-fixtures-qa.ts`, and `scripts/prop-os-node-shim.d.ts`. App `tsconfig.json` continues to exclude `src/propOs`.
+
 ---
 
 ## 7. STOP / next gate
 
-**Phase 0C — CONDITIONALLY APPROVED; remediation complete; awaiting FINAL APPROVAL.**
+**Phase 0C — FINAL APPROVED.**
 
-Do **not** start Phase 0D until FINAL APPROVAL.
-
-Suggested next (only after FINAL APPROVE):
-
-```text
-APPROVE PHASE 0D — Migration Plan
-(schema / RLS / sync / rollback — still no Prop Pass UI)
-```
+Next: Phase 0D Migration Plan — [`PROP_OS_PHASE_0D_MIGRATION_PLAN.md`](./PROP_OS_PHASE_0D_MIGRATION_PLAN.md).
 
 **Production calculation engine implementation remains forbidden** until PO opens that gate after 0D (or an explicit implementation approve).

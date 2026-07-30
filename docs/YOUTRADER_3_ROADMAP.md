@@ -36,8 +36,8 @@ Infrastructure (YDL)                         ✅
 Phase 0 audit                                ✅ FINAL APPROVED
 Phase 0A Domain Schema                       ✅ APPROVED WITH CONDITIONS
 Phase 0B Calculation Engine                  ✅ APPROVED WITH IMPLEMENTATION CONDITIONS
-Phase 0C Fixtures & Test Accounts            ← READY FOR REVIEW (`src/propOs/`)
-Phase 0D Migration Plan
+Phase 0C Fixtures & Test Accounts            ✅ FINAL APPROVED (`cece87a`, `e4976e4`)
+Phase 0D Migration Plan                      ← READY FOR REVIEW
 Prop Pass UI                                 (only after 0A–0D)
 …
 ```
@@ -59,8 +59,8 @@ Split into four subprojects:
 |---|---|---|
 | **0A** | Domain Schema | Entities, relations, invariants, confidence contract — [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md) (**APPROVED WITH CONDITIONS**) |
 | **0B** | Calculation Engine | [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — **APPROVED WITH IMPLEMENTATION CONDITIONS** |
-| **0C** | Fixtures & Test Accounts | [`PROP_OS_PHASE_0C_FIXTURES.md`](./architecture/PROP_OS_PHASE_0C_FIXTURES.md) — executable `src/propOs/` + `npm run test:prop-os-fixtures` |
-| **0D** | Migration Plan | Backfill, RLS, sync, rollback; `ruleSetSnapshot` persistence shape |
+| **0C** | Fixtures & Test Accounts | [`PROP_OS_PHASE_0C_FIXTURES.md`](./architecture/PROP_OS_PHASE_0C_FIXTURES.md) — **FINAL APPROVED** |
+| **0D** | Migration Plan | [`PROP_OS_PHASE_0D_MIGRATION_PLAN.md`](./architecture/PROP_OS_PHASE_0D_MIGRATION_PLAN.md) — schema map, dual-path, RLS, rollback (not applied) |
 
 ### Aggregate model (mandatory)
 

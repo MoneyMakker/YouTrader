@@ -371,8 +371,9 @@ expanding product breadth.
 > Domain spec: `docs/architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md` (**APPROVED WITH CONDITIONS**).
 > Calc engine: `docs/architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`
 > (**APPROVED WITH IMPLEMENTATION CONDITIONS**). Fixtures: `src/propOs/` +
-> `docs/architecture/PROP_OS_PHASE_0C_FIXTURES.md` (READY FOR REVIEW).
-> Do not redesign AI Analytics → Prop Pass before 0A–0D approval.
+> `docs/architecture/PROP_OS_PHASE_0C_FIXTURES.md` (**FINAL APPROVED**).
+> Migration plan: `docs/architecture/PROP_OS_PHASE_0D_MIGRATION_PLAN.md`
+> (READY FOR REVIEW). Do not redesign AI Analytics → Prop Pass before 0A–0D approval.
 
 ### YT-014 — Standardize loading, empty, error, and offline states
 
