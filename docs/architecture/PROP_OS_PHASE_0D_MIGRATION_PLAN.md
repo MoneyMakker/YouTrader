@@ -1,13 +1,14 @@
 # Phase 0D — Prop OS Migration Plan
 
-**Status:** READY FOR PRODUCT OWNER REVIEW  
+**Status:** FINAL APPROVED (Product Owner, 2026-07-30)  
+**Commit accepted:** `b740a9a`  
 **Parent:** Phase 0 — Prop Domain Architecture  
 **Depends on:**  
 - [`PROP_OS_PHASE0_DATA_AUDIT.md`](./PROP_OS_PHASE0_DATA_AUDIT.md) — FINAL APPROVED  
-- [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./PROP_OS_PHASE_0A_DOMAIN_SPEC.md) — APPROVED WITH SPEC CONDITIONS  
-- [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — APPROVED WITH IMPLEMENTATION CONDITIONS  
+- [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./PROP_OS_PHASE_0A_DOMAIN_SPEC.md) — FINAL APPROVED  
+- [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — FINAL APPROVED  
 - [`PROP_OS_PHASE_0C_FIXTURES.md`](./PROP_OS_PHASE_0C_FIXTURES.md) — **FINAL APPROVED** (`cece87a`, `e4976e4`)  
-
+**Next:** [`PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md`](./PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md)
 **Date:** 2026-07-30  
 **Scope:** Safe, reversible plan from today’s journal model to Prop OS aggregates.  
 **Out of scope (forbidden in this phase):** applying SQL migrations; changing deployed Supabase schema; wiring `src/propOs` into App; production repositories; Prop Pass UI; deleting AI Analytics; navigation changes; backfill execution; feature-flag activation; new packages; probability surfaces; production calculation engine.
@@ -572,11 +573,10 @@ Prop Pass UI remains a **later** gate.
 
 ## 16. STOP / next gate
 
-**Awaiting Product Owner FINAL review of Phase 0D.**
+**Phase 0D — FINAL APPROVED.**  
+**Phase 0A–0D — FINAL APPROVED.** Architecture gate **PASSED**.
 
-```text
-APPROVE PHASE 0D — then compose Implementation Phase 1
-(schema additive + repos/shadow — still no Prop Pass UI)
-```
+Next: Phase 1A Additive Database Foundation — pre-SQL contract  
+[`PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md`](./PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md).
 
-Until FINAL APPROVE of **0A + 0B + 0C + 0D**, do not start production schema application or App integration.
+SQL / App integration starts only after FINAL APPROVE of the 1A migration contract.

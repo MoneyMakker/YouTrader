@@ -34,11 +34,17 @@ AI never invents metrics or pass odds.
 ```text
 Infrastructure (YDL)                         ✅
 Phase 0 audit                                ✅ FINAL APPROVED
-Phase 0A Domain Schema                       ✅ APPROVED WITH CONDITIONS
-Phase 0B Calculation Engine                  ✅ APPROVED WITH IMPLEMENTATION CONDITIONS
-Phase 0C Fixtures & Test Accounts            ✅ FINAL APPROVED (`cece87a`, `e4976e4`)
-Phase 0D Migration Plan                      ← READY FOR REVIEW
-Prop Pass UI                                 (only after 0A–0D)
+Phase 0A Domain Schema                       ✅ FINAL APPROVED
+Phase 0B Calculation Engine                  ✅ FINAL APPROVED
+Phase 0C Fixtures & Test Accounts            ✅ FINAL APPROVED
+Phase 0D Migration Plan                      ✅ FINAL APPROVED (`b740a9a`)
+── Phase 0 architecture gate PASSED ──
+Phase 1A Additive Database Foundation        ← migration contract (pre-SQL)
+Phase 1B Production Domain Engine
+Phase 1C Shadow Calculation Pipeline
+Phase 1D Internal Account Management
+Phase 1E Controlled Product Activation
+Prop Pass UI                                 (after 1A–1C evidence; not before)
 …
 ```
 
@@ -51,16 +57,34 @@ Naming note: React Native + Expo remains. UI language is **premium native iOS / 
 
 ## Phase 0 — Prop Domain Architecture
 
+**Status:** **FINAL APPROVED** (0 Audit + 0A–0D). Architecture gate **PASSED**.
+
 **Goal:** mathematical and product foundation. No major UI redesign.
 
 Split into four subprojects:
 
 | ID | Name | Spec / code focus |
 |---|---|---|
-| **0A** | Domain Schema | Entities, relations, invariants, confidence contract — [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md) (**APPROVED WITH CONDITIONS**) |
-| **0B** | Calculation Engine | [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — **APPROVED WITH IMPLEMENTATION CONDITIONS** |
+| **0A** | Domain Schema | [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md) — **FINAL APPROVED** |
+| **0B** | Calculation Engine | [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — **FINAL APPROVED** |
 | **0C** | Fixtures & Test Accounts | [`PROP_OS_PHASE_0C_FIXTURES.md`](./architecture/PROP_OS_PHASE_0C_FIXTURES.md) — **FINAL APPROVED** |
-| **0D** | Migration Plan | [`PROP_OS_PHASE_0D_MIGRATION_PLAN.md`](./architecture/PROP_OS_PHASE_0D_MIGRATION_PLAN.md) — schema map, dual-path, RLS, rollback (not applied) |
+| **0D** | Migration Plan | [`PROP_OS_PHASE_0D_MIGRATION_PLAN.md`](./architecture/PROP_OS_PHASE_0D_MIGRATION_PLAN.md) — **FINAL APPROVED** |
+
+Accepted commits: `6aa3339`, `1c93ee7`, `206f3e7`, `dc965c2`, `cece87a`, `e4976e4`, `b740a9a`.
+
+---
+
+## Phase 1 — Implementation (split)
+
+| ID | Name | Focus | Status |
+|---|---|---|---|
+| **1A** | Additive Database Foundation | SQL tables, RLS, immutability, types, schema tests — [`PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md`](./architecture/PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md) | Pre-SQL contract READY FOR REVIEW |
+| **1B** | Production Domain Engine | Wire calc-spec behind repos (not UI) | Not started |
+| **1C** | Shadow Calculation Pipeline | Old/new compare | Not started |
+| **1D** | Internal Account Management | Opt-in accounts; no silent trade bind | Not started |
+| **1E** | Controlled Product Activation | Feature-flagged read path | Not started |
+
+**1A must not:** Prop Pass UI, navigation change, legacy auto-assign, backfill, shadow, AI changes, `src/propOs` App import.
 
 ### Aggregate model (mandatory)
 

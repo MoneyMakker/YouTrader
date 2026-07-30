@@ -373,7 +373,10 @@ expanding product breadth.
 > (**APPROVED WITH IMPLEMENTATION CONDITIONS**). Fixtures: `src/propOs/` +
 > `docs/architecture/PROP_OS_PHASE_0C_FIXTURES.md` (**FINAL APPROVED**).
 > Migration plan: `docs/architecture/PROP_OS_PHASE_0D_MIGRATION_PLAN.md`
-> (READY FOR REVIEW). Do not redesign AI Analytics → Prop Pass before 0A–0D approval.
+> (**FINAL APPROVED**). Phase 0 architecture gate **PASSED**.
+> Phase 1A pre-SQL contract:
+> `docs/architecture/PROP_OS_PHASE_1A_MIGRATION_CONTRACT.md` (READY FOR REVIEW).
+> Do not ship Prop Pass UI before 1A–1C evidence; do not auto-assign legacy trades.
 
 ### YT-014 — Standardize loading, empty, error, and offline states
 
