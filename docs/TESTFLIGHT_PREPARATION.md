@@ -184,6 +184,21 @@
 - [ ] Dark mode readability
 - [ ] Premium lock overlays
 
+### UI Infra — Trading Radar metric sheet (Phase 3 residual)
+
+Required before the **next TestFlight** build that includes UI infra Phases 1–3 (`ffbbd8e`+). Needs an **authenticated** simulator/device session.
+
+- [ ] Stats → Trading Radar visible
+- [ ] Open each unlocked metric explanation trigger
+- [ ] Correct label / value / target / explanation per metric
+- [ ] Open/close repeatedly; no stale content between openings
+- [ ] Backdrop dismissal works
+- [ ] Pan-down-to-close works
+- [ ] VoiceOver: trigger role/label, decorative icons hidden, sheet title/content order, close label, focus stays in modal
+- [ ] Large Dynamic Type: title/value/target/explanation/close not clipped
+- [ ] Reduce Motion: sheet usable; decorative motion omitted/reduced; no continuous animation
+- [ ] Light + dark appearance; backdrop/handle/symbol tint legible
+
 ### Performance & Offline
 
 - [ ] Cold launch < 3s feel

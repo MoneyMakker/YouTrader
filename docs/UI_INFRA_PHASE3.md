@@ -1,6 +1,12 @@
 # UI Infrastructure — Phase 3
 
+**Status: FINAL APPROVED** (2026-07-30)  
+Closing commit: `ffbbd8e36ef48129be962db7b73b48505a87cab9`
+
 Symbols Foundation + Accessibility Foundation + one controlled production reference.
+
+**Residual (not a Phase 3 blocker):** authenticated device/TestFlight smoke for Radar sheet (backdrop, pan-down, VoiceOver focus, Dynamic Type, stale content) — tracked in `docs/TESTFLIGHT_PREPARATION.md` → *UI Infra — Trading Radar metric sheet*.
+
 
 ## Installed
 
