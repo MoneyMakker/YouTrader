@@ -13,9 +13,34 @@ declare module "node:assert/strict" {
   export default assert;
 }
 
+declare module "node:child_process" {
+  export function execSync(
+    command: string,
+    options?: { encoding?: string; cwd?: string },
+  ): string;
+  export function execFileSync(
+    file: string,
+    args: string[],
+    options?: {
+      encoding?: string;
+      env?: Record<string, string | undefined>;
+      stdio?: Array<"pipe" | "ignore" | "inherit">;
+      maxBuffer?: number;
+    },
+  ): string;
+}
+
+declare module "node:crypto" {
+  export function createHash(algorithm: string): {
+    update(data: string): { digest(encoding: string): string };
+  };
+}
+
 declare module "node:fs" {
   export function readdirSync(path: string): string[];
   export function readFileSync(path: string, encoding: string): string;
+  export function writeFileSync(path: string, data: string, encoding: string): void;
+  export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
   export function statSync(path: string): { isDirectory(): boolean };
 }
 
@@ -35,6 +60,7 @@ declare var console: {
 };
 
 declare var process: {
+  env: Record<string, string | undefined>;
   exit(code?: number): never;
 };
 
