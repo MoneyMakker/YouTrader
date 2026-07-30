@@ -28,6 +28,11 @@ export function resetPropPassCommandGatewayForTests(): void {
   inFlight = new Set();
 }
 
+/** Test/internal helper — never exposes service-role. */
+export function getPropPassRpcClientForTests(): PropOsRpcClient | null {
+  return rpcClient;
+}
+
 function mutationsAllowed(
   userId: string | null | undefined,
   env: Record<string, string | undefined>,

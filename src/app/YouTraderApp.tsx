@@ -9714,6 +9714,7 @@ function SettingsScreen({
   calendarEvents,
   onUpgrade,
   refreshDailyPropBuffer,
+  trades,
 }: {
   lang: Lang;
   setLang: (x: Lang) => void;
@@ -9742,6 +9743,7 @@ function SettingsScreen({
   calendarEvents: EconEvent[];
   onUpgrade: () => void;
   refreshDailyPropBuffer: () => Promise<void>;
+  trades: Trade[];
 }) {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
@@ -9978,6 +9980,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
           <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
             <PropPassInternalScreen
               userId={session?.user?.id ?? null}
+              trades={trades}
               onClose={() => setPropPassOpen(false)}
             />
           </SafeAreaView>
@@ -11611,6 +11614,7 @@ function App() {
               onChangePassword={changeAccountPassword}
               onChangeEmail={changeAccountEmail}
               calendarEvents={pushCalendarEvents}
+              trades={trades}
               onUpgrade={() =>
                 purchasePackage(
                   packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null,

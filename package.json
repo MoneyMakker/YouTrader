@@ -82,7 +82,9 @@
     "test:prop-pass-phase2b": "npm run test:prop-os-types && node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-phase2b-qa.ts",
     "test:prop-pass-phase2b-pg": "bash scripts/prop-pass-phase2b-pg-qa.sh",
     "test:prop-pass-phase2b-hardening-static": "node --experimental-strip-types --experimental-transform-types scripts/prop-os-command-hardening-static-qa.ts",
-    "test:prop-pass-phase2b-hardening-pg": "bash scripts/prop-pass-phase2b-hardening-pg-qa.sh"
+    "test:prop-pass-phase2b-hardening-pg": "bash scripts/prop-pass-phase2b-hardening-pg-qa.sh",
+    "test:prop-pass-phase2c": "npm run test:prop-os-types && node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-phase2c-qa.ts",
+    "test:prop-pass-phase2c-pg": "bash scripts/prop-pass-phase2c-pg-qa.sh"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",

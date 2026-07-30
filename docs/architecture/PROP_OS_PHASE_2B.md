@@ -1,8 +1,8 @@
 # Prop Pass — Internal Account & Challenge Setup (Phase 2B)
 
-**Status:** READY FOR FINAL REVIEW (security remediation)  
+**Status:** FINAL APPROVED  
 **Depends on:** Phase 2A FINAL APPROVED (`b072f52`)  
-**Baseline feature commit:** `932e9e9`  
+**Accepted commits:** `932e9e9` (onboarding) · `f835995` (command-boundary hardening)  
 **Package:** `src/propOs/commands/`, `src/propOs/templates/`, Prop Pass onboarding UI  
 **Mutation boundary:** `prop_os_cmd_*` SECURITY DEFINER RPCs (authenticated session only)
 
@@ -77,6 +77,6 @@ npm run test:prop-pass-live-slice
 
 Production apply, public nav, trade assignment UI, broker, Pass Probability, AI, Decision Engine, next roadmap phase.
 
-## Waiting for
+## Decision
 
-Product Owner **FINAL** review.
+Product Owner **FINAL APPROVED** Phase 2B. Technical platform foundation for Prop OS / internal Prop Pass is complete. Next roadmap phase may begin only with an explicit Product Owner task brief (one-task policy).

@@ -23,6 +23,18 @@ const ALLOWED = new Set([
   "prop_pass_command_conflict",
   "prop_pass_command_forbidden",
   "prop_pass_command_latency",
+  "prop_pass_assignment_flow_opened",
+  "prop_pass_assignment_trades_selected",
+  "prop_pass_assignment_preview_shown",
+  "prop_pass_assignment_submitted",
+  "prop_pass_assignment_succeeded",
+  "prop_pass_assignment_validation_failed",
+  "prop_pass_reassignment_confirmed",
+  "prop_pass_assignment_removed",
+  "prop_pass_recalculation_queued",
+  "prop_pass_recalculation_completed",
+  "prop_pass_recalculation_failed",
+  "prop_pass_assignment_conflict",
 ]);
 
 export function trackPropPassEvent(

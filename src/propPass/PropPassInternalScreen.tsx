@@ -10,8 +10,10 @@ import { trackPropPassEvent } from "./analytics";
 import { BufferHealthSection } from "./BufferHealthSection";
 import { runPropPassCommand } from "./commandGateway";
 import { PropPassOnboardingFlow } from "./PropPassOnboardingFlow";
+import { PropPassAssignmentFlow } from "./PropPassAssignmentFlow";
 import { usePropPassAvailability } from "./usePropPassAvailability";
 import type { ChallengeSummary, PropPassUiState, PropPassViewModel } from "./types";
+import type { Trade } from "../app/types";
 
 type Props = {
   userId: string | null | undefined;
@@ -19,6 +21,8 @@ type Props = {
   onClose: () => void;
   uiStateOverride?: PropPassUiState;
   developerMode?: boolean;
+  /** Journal trades for assignment (optional; empty → empty assignable list). */
+  trades?: Trade[];
 };
 
 export function PropPassInternalScreen({
@@ -27,12 +31,14 @@ export function PropPassInternalScreen({
   onClose,
   uiStateOverride,
   developerMode = typeof __DEV__ !== "undefined" && __DEV__,
+  trades = [],
 }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme();
   const controller = usePropPassAvailability({ userId, accountId });
   const uiState = uiStateOverride ?? controller.uiState;
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showAssignment, setShowAssignment] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [commandMessage, setCommandMessage] = useState<string | null>(null);
 
@@ -80,9 +86,31 @@ export function PropPassInternalScreen({
               controller.refresh();
             }}
           />
+        ) : showAssignment &&
+          userId &&
+          uiState.kind === "available" ? (
+          <PropPassAssignmentFlow
+            userId={userId}
+            accountId={uiState.model.account.id}
+            challengeId={uiState.model.challenge.id}
+            challengeStatus={uiState.model.challenge.status}
+            accountStatus={uiState.model.account.lifecycleStatus}
+            challengeStartedAt={uiState.model.challenge.startedAt ?? new Date().toISOString()}
+            trades={trades}
+            onClose={() => setShowAssignment(false)}
+            onCompleted={() => {
+              setShowAssignment(false);
+              setCommandMessage(t("propPass.assignment.successTitle"));
+              controller.refresh();
+            }}
+          />
         ) : (
           renderState(uiState, t, controller, developerMode, {
             onStartOnboarding: () => setShowOnboarding(true),
+            onStartAssignment: () => {
+              trackPropPassEvent("prop_pass_assignment_flow_opened", { userId });
+              setShowAssignment(true);
+            },
             archiveConfirm,
             setArchiveConfirm,
             userId: userId ?? null,
@@ -96,6 +124,7 @@ export function PropPassInternalScreen({
 
 type Actions = {
   onStartOnboarding: () => void;
+  onStartAssignment: () => void;
   archiveConfirm: boolean;
   setArchiveConfirm: (v: boolean) => void;
   userId: string | null;
@@ -207,6 +236,7 @@ function renderState(
           }}
           onMessage={actions.setCommandMessage}
           onRefresh={() => controller.refresh()}
+          onAssignTrades={actions.onStartAssignment}
         />
       );
     default:
@@ -327,6 +357,7 @@ function AvailableView({
   onArchived,
   onMessage,
   onRefresh,
+  onAssignTrades,
 }: {
   model: PropPassViewModel;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -337,6 +368,7 @@ function AvailableView({
   onArchived: () => void;
   onMessage: (msg: string | null) => void;
   onRefresh: () => void;
+  onAssignTrades: () => void;
 }) {
   const scoreLabel =
     model.readiness.score == null
@@ -359,6 +391,10 @@ function AvailableView({
             {model.account.firmName}
           </YdlText>
         ) : null}
+        <YdlButton
+          label={t("propPass.assignment.openCta")}
+          onPress={onAssignTrades}
+        />
         <YdlButton
           label={t("propPass.account.setDefault")}
           variant="secondary"
