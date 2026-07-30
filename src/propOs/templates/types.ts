@@ -31,6 +31,10 @@ export type PropOsRuleTemplate = {
   source: {
     evidence: string;
     effectiveDate: string;
+    /** ISO date when this template revision was verified for internal use. */
+    dateVerified: string;
+    /** Fields explicitly verified — never inferred from firm name. */
+    verifiedFields: readonly string[];
   };
 };
 

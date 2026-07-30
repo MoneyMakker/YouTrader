@@ -34,6 +34,17 @@ export const PROP_OS_INTERNAL_TEMPLATES: readonly PropOsRuleTemplate[] = [
     source: {
       evidence: "internal-verified-demo-seed-v1",
       effectiveDate: "2026-07-01",
+      dateVerified: "2026-07-15",
+      verifiedFields: [
+        "profitTargetMinor",
+        "dailyLossLimitMinor",
+        "dailyLossBasis",
+        "drawdown.kind",
+        "drawdown.amountMinor",
+        "minimumTradingDays",
+        "firmTimezone",
+        "supportedAccountSizesMinor",
+      ],
     },
   },
   {
@@ -61,6 +72,18 @@ export const PROP_OS_INTERNAL_TEMPLATES: readonly PropOsRuleTemplate[] = [
     source: {
       evidence: "internal-verified-demo-trailing-v1",
       effectiveDate: "2026-07-01",
+      dateVerified: "2026-07-15",
+      verifiedFields: [
+        "profitTargetMinor",
+        "dailyLossLimitMinor",
+        "dailyLossBasis",
+        "drawdown.kind",
+        "drawdown.amountMinor",
+        "drawdown.timing",
+        "minimumTradingDays",
+        "firmTimezone",
+        "supportedAccountSizesMinor",
+      ],
     },
   },
   {
@@ -104,6 +127,15 @@ export const PROP_OS_INTERNAL_TEMPLATES: readonly PropOsRuleTemplate[] = [
     source: {
       evidence: "user-confirmed-custom-path",
       effectiveDate: "2026-07-01",
+      dateVerified: "2026-07-15",
+      verifiedFields: [
+        "profitTargetMinor",
+        "dailyLossLimitMinor",
+        "drawdown.kind",
+        "drawdown.amountMinor",
+        "supportedAccountSizesMinor",
+        "explicitUserConfirmationRequired",
+      ],
     },
   },
 ] as const;
@@ -180,4 +212,20 @@ export function buildRuleConfirmationSummary(
     unsupportedFields: template.unsupportedFields,
     ruleSnapshot,
   };
+}
+
+/** Provenance matrix for Product Owner / security review. */
+export function listTemplateProvenance() {
+  return PROP_OS_INTERNAL_TEMPLATES.map((t) => ({
+    templateId: t.templateId,
+    templateVersion: t.version,
+    firmProgramName: `${t.displayName} / ${t.programLabel}`,
+    firmKey: t.firmKey,
+    effectiveDate: t.source.effectiveDate,
+    evidenceSource: t.source.evidence,
+    dateVerified: t.source.dateVerified,
+    verifiedFields: t.source.verifiedFields,
+    unknownOrUnsupportedFields: t.unsupportedFields,
+    supportedAccountSizesMinor: t.supportedAccountSizesMinor,
+  }));
 }

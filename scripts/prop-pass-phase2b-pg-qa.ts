@@ -44,10 +44,12 @@ function hash(commandType: string, body: unknown): string {
 
 function asAuth(userId: string, sql: string): string {
   return psql(`
+    begin;
     select set_config('request.jwt.claim.sub', '${userId}', true);
     select set_config('request.jwt.claim.role', 'authenticated', true);
     set local role authenticated;
     ${sql}
+    commit;
   `);
 }
 
@@ -60,10 +62,18 @@ function parseJson(raw: string): Record<string, unknown> {
   return JSON.parse(joined.slice(start, end + 1)) as Record<string, unknown>;
 }
 
+function allowlist(userId: string) {
+  psql(`select public.prop_os_cmd_admin_allowlist_add('${userId}'::uuid, 'phase2b-pg');`);
+}
+
 function main() {
   console.log("prop-pass-phase2b-pg-qa");
   ensureAuthUser(DB, OWNER, "owner-2b@example.com");
   ensureAuthUser(DB, OTHER, "other-2b@example.com");
+  allowlist(OWNER);
+  // OTHER intentionally not allowlisted for cross-user; add for ownership-forbidden path
+  allowlist(OTHER);
+  psql(`select public.prop_os_cmd_admin_set_enabled(true);`);
 
   check("unauthenticated command denied", () => {
     let denied = false;

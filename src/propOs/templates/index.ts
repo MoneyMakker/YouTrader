@@ -6,4 +6,5 @@ export {
   getPropOsTemplate,
   buildRuleSnapshotFromTemplate,
   buildRuleConfirmationSummary,
+  listTemplateProvenance,
 } from "./catalogue";

@@ -18,6 +18,7 @@ import {
   buildRuleConfirmationSummary,
   getPropOsTemplate,
   listPropOsInternalTemplates,
+  listTemplateProvenance,
 } from "../src/propOs/templates/index";
 import { mapActivationToPropPassUiState } from "../src/propPass/mapUiState";
 import { setPropPassTestWriteService, runPropPassCommand, resetPropPassCommandGatewayForTests } from "../src/propPass/commandGateway";
@@ -45,6 +46,23 @@ async function main() {
 
   const templates = listPropOsInternalTemplates();
   assert.equal(templates.length, 3);
+
+  await check("0. template provenance matrix complete", async () => {
+    const matrix = listTemplateProvenance();
+    assert.equal(matrix.length, 3);
+    for (const row of matrix) {
+      assert.ok(row.templateId);
+      assert.ok(row.templateVersion);
+      assert.ok(row.firmProgramName);
+      assert.ok(row.effectiveDate);
+      assert.ok(row.evidenceSource);
+      assert.ok(row.dateVerified);
+      assert.ok(row.verifiedFields.length > 0);
+      assert.ok(row.unknownOrUnsupportedFields.length > 0);
+      assert.ok(row.supportedAccountSizesMinor.length > 0);
+    }
+    capture("template-provenance", matrix);
+  });
 
   await check("1. eligible user with no account → empty read + onboarding path", async () => {
     const store = createMemoryAccountStore();
