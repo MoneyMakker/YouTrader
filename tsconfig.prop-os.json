@@ -18,6 +18,8 @@
     "src/propOs/**/*.ts",
     "scripts/prop-os-fixtures-qa.ts",
     "scripts/prop-os-invariants-qa.ts",
+    "scripts/prop-os-shadow-qa.ts",
+    "scripts/prop-os-no-replay-alias-qa.ts",
     "scripts/prop-os-node-shim.d.ts"
   ],
   "exclude": ["node_modules"]

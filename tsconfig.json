@@ -13,6 +13,8 @@
     "scripts/prop-os-schema-drift-qa.ts",
     "scripts/prop-os-fixtures-qa.ts",
     "scripts/prop-os-invariants-qa.ts",
+    "scripts/prop-os-shadow-qa.ts",
+    "scripts/prop-os-no-replay-alias-qa.ts",
     "supabase/functions",
     "ios",
     "android",

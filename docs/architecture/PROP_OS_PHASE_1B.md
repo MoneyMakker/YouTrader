@@ -1,7 +1,7 @@
 # Prop OS — Production Domain Engine (Phase 1B)
 
-**Status:** READY FOR REVIEW  
-**Package:** `src/propOs/`  
+**Status:** FINAL APPROVED  
+**Commit:** `33d43a2`  
 **Canonical API:** `calculateChallenge` (`engine.ts`)  
 **Calc / confidence:** `calc-spec-v0` / `confidence-policy-v0`
 
