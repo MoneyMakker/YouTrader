@@ -222,9 +222,12 @@ type ConfidenceBlock = {
   confidencePolicyVersion: string; // e.g. confidence-policy-v0
   limitations: string[];
 };
-```
 
-`confidence` is **computed by a versioned policy in the deterministic engine**, never assigned by UI.
+type InsightEvidence = ConfidenceBlock & {
+  metricId: string;
+  value: number | string;
+  window?: string; // e.g. "last_20_trades" | "weekday:Friday"
+};
 
 type DeterministicInsight = {
   id: string;
@@ -234,6 +237,8 @@ type DeterministicInsight = {
   modelVersion: string;
 };
 ```
+
+`confidence` is **computed by a versioned policy in the deterministic engine**, never assigned by UI.
 
 AI may turn `DeterministicInsight` into prose. AI may not invent `value` or `sampleSize`.
 
