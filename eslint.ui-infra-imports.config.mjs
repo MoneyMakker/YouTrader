@@ -10,6 +10,7 @@ export default tseslint.config({
     "src/ydl/symbols/**",
     "src/ydl/sheets/**",
     "src/ydl/lottie/**",
+    "src/ydl/motion/**",
     "src/ydl/haptics.ts",
     "**/node_modules/**",
     "**/dist/**",
@@ -44,6 +45,11 @@ export default tseslint.config({
             name: "expo-haptics",
             message:
               "Import haptics only via src/ydl/haptics (or src/components/ui/haptics re-export).",
+          },
+          {
+            name: "react-native-reanimated",
+            message:
+              "Import Reanimated only via src/ydl/motion (production motion primitives). Documented specialist visualization exceptions only.",
           },
         ],
       },

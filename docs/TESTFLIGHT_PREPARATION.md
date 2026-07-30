@@ -184,9 +184,11 @@
 - [ ] Dark mode readability
 - [ ] Premium lock overlays
 
-### UI Infra — Trading Radar metric sheet (Phase 3 residual)
+### UI Infra — Trading Radar metric sheet (Phase 3–4 residual)
 
-Required before the **next TestFlight** build that includes UI infra Phases 1–3 (`ffbbd8e`+). Needs an **authenticated** simulator/device session.
+Required before the **next TestFlight** build that includes UI infra Phases 1–4. Needs an **authenticated** simulator/device session. Auth has blocked automated Radar smoke (Maestro cannot fill `secureTextEntry`; Apple Sign In needs Apple ID) — do **not** bypass auth.
+
+**Phase 3 sheet / a11y**
 
 - [ ] Stats → Trading Radar visible
 - [ ] Open each unlocked metric explanation trigger
@@ -198,6 +200,20 @@ Required before the **next TestFlight** build that includes UI infra Phases 1–
 - [ ] Large Dynamic Type: title/value/target/explanation/close not clipped
 - [ ] Reduce Motion: sheet usable; decorative motion omitted/reduced; no continuous animation
 - [ ] Light + dark appearance; backdrop/handle/symbol tint legible
+
+**Phase 4 motion (same Radar interaction)**
+
+- [ ] App launches; no Reanimated/Worklets init error; no gesture/provider crash
+- [ ] Metric press feedback feels restrained; disabled/locked paths still work
+- [ ] Sheet open/close during and after entrance animation
+- [ ] Rapid repeated taps do not corrupt sheet/selection state
+- [ ] Rapid metric switching shows the **latest** metric (no stale animated value)
+- [ ] Animated number settles on the correct final display value
+- [ ] VoiceOver announces the final metric value cleanly (not intermediate frames)
+- [ ] Reduce Motion removes nonessential motion; interaction remains fully usable
+- [ ] No haptic spam while dragging finger / repeated press-move
+- [ ] Backgrounding then foregrounding does not leave stuck animation state
+- [ ] Auth flow unchanged
 
 ### Performance & Offline
 

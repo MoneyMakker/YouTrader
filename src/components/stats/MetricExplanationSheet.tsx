@@ -9,6 +9,12 @@ import {
 import { YdlIconButton, YdlSectionHeader } from "../../ydl/components";
 import { YdlSymbol } from "../../ydl/symbols";
 import { announceYdlAccessibility, useYdlReduceMotion } from "../../ydl/accessibility";
+import {
+  YdlAnimatedNumber,
+  YdlFade,
+  YdlStagger,
+  parseYdlMetricDisplay,
+} from "../../ydl/motion";
 import { t } from "../../i18n";
 
 export type MetricExplanationContent = {
@@ -27,9 +33,9 @@ export type MetricExplanationSheetProps = {
 };
 
 /**
- * Phase 3 production reference: read-only radar metric explanation.
+ * Phase 3/4 production reference: read-only radar metric explanation.
+ * Phase 4 adds restrained motion (fade + stagger + animated value) via YDL only.
  * Removable without affecting trade/auth/paywall/AI logic.
- * Imports only YDL adapters — no third-party UI packages.
  */
 export function MetricExplanationSheet({
   visible,
@@ -47,6 +53,11 @@ export function MetricExplanationSheet({
     if (!content) return t("metricDefault");
     return `${content.label}. ${content.value}`;
   }, [content]);
+
+  const parsed = useMemo(
+    () => (content ? parseYdlMetricDisplay(content.value) : null),
+    [content],
+  );
 
   useEffect(() => {
     if (visible && content) {
@@ -88,30 +99,43 @@ export function MetricExplanationSheet({
         </View>
 
         {content ? (
-          <>
-            <Text
-              style={[styles.value, { color: colors.title }]}
-              allowFontScaling
-              accessibilityRole="text"
-            >
-              {content.value}
-            </Text>
-            <Text style={[styles.body, { color: colors.body }]} allowFontScaling>
-              {content.explanation}
-            </Text>
-            <Text style={[styles.body, { color: colors.body }]} allowFontScaling>
-              {t("targetPrefix")}: {content.target}
-            </Text>
-            {reduceMotion ? null : (
-              <View
-                style={styles.footerIcon}
-                accessible={false}
-                importantForAccessibility="no"
-              >
-                <YdlSymbol name="chart" size="sm" tintColor={colors.body} decorative />
-              </View>
-            )}
-          </>
+          <YdlFade visible={visible} enter={!reduceMotion} key={content.label}>
+            <YdlStagger entranceKey={content.label} preset="tight" offsetY={5}>
+              {parsed ? (
+                <YdlAnimatedNumber
+                  value={parsed.value}
+                  kind={parsed.kind}
+                  decimals={parsed.decimals}
+                  style={[styles.value, { color: colors.title }]}
+                  accessibilityLabel={content.value}
+                />
+              ) : (
+                <Text
+                  style={[styles.value, { color: colors.title }]}
+                  allowFontScaling
+                  accessibilityRole="text"
+                  accessibilityLabel={content.value}
+                >
+                  {content.value}
+                </Text>
+              )}
+              <Text style={[styles.body, { color: colors.body }]} allowFontScaling>
+                {content.explanation}
+              </Text>
+              <Text style={[styles.body, { color: colors.body }]} allowFontScaling>
+                {t("targetPrefix")}: {content.target}
+              </Text>
+              {reduceMotion ? null : (
+                <View
+                  style={styles.footerIcon}
+                  accessible={false}
+                  importantForAccessibility="no"
+                >
+                  <YdlSymbol name="chart" size="sm" tintColor={colors.body} decorative />
+                </View>
+              )}
+            </YdlStagger>
+          </YdlFade>
         ) : null}
       </YdlModalSheetScrollView>
     </YdlBottomSheetModal>

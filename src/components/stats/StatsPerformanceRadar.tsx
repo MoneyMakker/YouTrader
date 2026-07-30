@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Svg, { Circle, Defs, Line, LinearGradient, Polygon, Stop } from "react-native-svg";
 import { t } from "../../i18n";
 import { MetricPillRow, TerminalGlassCard } from "../../app/ai/sharedUi";
 import { C } from "../../app/theme";
 import { styles } from "../../app/styles";
+import { YdlAnimatedPressable } from "../../ydl/motion";
 import { MetricExplanationSheet } from "./MetricExplanationSheet";
 
 /** Axis shape for the radar — kept local so Phase 3 does not require committing radarAxes. */
@@ -80,7 +81,7 @@ export function StatsPerformanceRadar({
           <Text style={styles.premiumRadarLabel}>{isPremium ? "PROFILE" : "PREVIEW"}</Text>
         </View>
         {points.map((point) => (
-          <Pressable
+          <YdlAnimatedPressable
             key={`label-${point.label}`}
             accessibilityRole="button"
             accessibilityLabel={
@@ -89,6 +90,9 @@ export function StatsPerformanceRadar({
                 : `${point.label}. ${point.value}. Opens metric explanation`
             }
             accessibilityHint={point.locked ? undefined : point.explanation}
+            haptic={point.locked ? false : "selection"}
+            scaleOnPress
+            opacityOnPress
             onPress={() => {
               if (point.locked) {
                 onUpgrade();
@@ -107,7 +111,7 @@ export function StatsPerformanceRadar({
             >
               {point.locked ? "PRO" : point.value}
             </Text>
-          </Pressable>
+          </YdlAnimatedPressable>
         ))}
       </View>
       <MetricPillRow

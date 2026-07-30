@@ -17,8 +17,10 @@ export default tseslint.config(
       "src/ydl/symbols/**/*.{ts,tsx}",
       "src/ydl/accessibility/**/*.{ts,tsx}",
       "src/ydl/components/**/*.{ts,tsx}",
+      "src/ydl/motion/**/*.{ts,tsx}",
       "src/components/ui/haptics.ts",
       "src/components/stats/MetricExplanationSheet.tsx",
+      "src/components/stats/StatsPerformanceRadar.tsx",
       "index.js",
     ],
     languageOptions: {
