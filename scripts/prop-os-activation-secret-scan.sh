@@ -19,6 +19,7 @@ scan() {
 
 scan "App.tsx"
 scan "src/propOs/activation"
+scan "src/propPass"
 if [[ -f src/app/YouTraderApp.tsx ]]; then
   scan "src/app/YouTraderApp.tsx"
 fi

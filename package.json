@@ -68,6 +68,7 @@
     "test:prop-os-activation-pg": "bash scripts/prop-os-activation-pg-qa.sh",
     "test:prop-os-activation-secrets": "bash scripts/prop-os-activation-secret-scan.sh",
     "test:prop-os-phase1e": "npm run test:prop-os-activation && npm run test:prop-os-activation-pg && npm run test:prop-os-activation-secrets",
+    "test:prop-pass-phase2a": "npm run test:prop-os-types && node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-phase2a-qa.ts",
     "gen:prop-os-db-types": "node --experimental-strip-types --experimental-transform-types scripts/generate-prop-os-db-types.ts",
     "gen:prop-os-db-types:live": "node --experimental-strip-types --experimental-transform-types scripts/generate-prop-os-db-types-live.ts",
     "test:prop-os-schema": "npm run gen:prop-os-db-types && node --experimental-strip-types --experimental-transform-types scripts/prop-os-schema-static-qa.ts",

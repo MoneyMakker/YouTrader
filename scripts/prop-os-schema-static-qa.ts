@@ -130,13 +130,15 @@ check("ownership timeline indexes present", () => {
   assert.ok(/prop_account_events_challenge_occurred_idx/i.test(sql));
 });
 
-check("src/propOs remains disconnected from App", () => {
+check("src/propOs remains disconnected from App shell", () => {
   const app = fs.readFileSync(path.join(root, "App.tsx"), "utf8");
   assert.equal(/propOs|prop_accounts|prop_challenges/.test(app), false);
   const you = fs.existsSync(path.join(root, "src/app/YouTraderApp.tsx"))
     ? fs.readFileSync(path.join(root, "src/app/YouTraderApp.tsx"), "utf8")
     : "";
+  // Phase 2A: App may import application layer `propPass`, never domain `propOs`.
   assert.equal(/from\s+['\"].*propOs/.test(you), false);
+  assert.equal(/calculateChallenge|createMemoryAccountStore|runShadow/.test(you), false);
 });
 
 console.log(`prop-os-schema-static-qa: PASS (${passed} checks)`);

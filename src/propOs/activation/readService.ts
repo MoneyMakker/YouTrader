@@ -23,6 +23,8 @@ import { DEFAULT_ACTIVATION_CONFIG } from "./types";
 export type PropOsReadRequest = {
   userId: string | null | undefined;
   accountId: string | null;
+  /** Explicit active-challenge selection (staging preview only; not persisted). */
+  selectedChallengeId?: string | null;
   /** Current input revision for freshness; null skips revision compare. */
   currentInputRevision?: string | null;
   nowUtc?: string;
@@ -60,6 +62,7 @@ export function createPropOsReadService(deps: PropOsReadServiceDeps) {
     mode: PropOsActivationResult<PropOsActivatedReadModel>["mode"],
     gate: PropOsReadModelGate,
     reasonCodes: string[],
+    data: PropOsActivatedReadModel | null = null,
   ): PropOsActivationResult<PropOsActivatedReadModel> {
     emit({ type: "read_model_available", available: false, gate });
     emit({ type: "fallback_activated", gate, reasonCodes });
@@ -69,7 +72,7 @@ export function createPropOsReadService(deps: PropOsReadServiceDeps) {
       gate,
       reasonCodes,
       diagnostics: diagnostics.list(),
-      data: null,
+      data,
     };
   }
 
@@ -174,6 +177,7 @@ export function createPropOsReadService(deps: PropOsReadServiceDeps) {
         readModel = await deps.accounts.getAccountReadModel(
           request.userId,
           request.accountId,
+          { selectedChallengeId: request.selectedChallengeId ?? null },
         );
       } catch (err) {
         emit({
@@ -196,7 +200,6 @@ export function createPropOsReadService(deps: PropOsReadServiceDeps) {
       const gated = await applyReadModelGates({
         readModel,
         userId: request.userId,
-        accounts: deps.accounts,
         config: policy.config,
         currentInputRevision: request.currentInputRevision ?? null,
         nowUtc: request.nowUtc ?? new Date().toISOString(),
@@ -206,7 +209,11 @@ export function createPropOsReadService(deps: PropOsReadServiceDeps) {
       });
 
       if (gated.gate !== "available") {
-        return fail(policy.mode, gated.gate, gated.reasonCodes);
+        return fail(policy.mode, gated.gate, gated.reasonCodes, {
+          readModel: gated.readModel,
+          gate: gated.gate,
+          freshnessReasons: gated.reasonCodes,
+        });
       }
 
       emit({ type: "read_model_available", available: true, gate: "available" });
@@ -247,7 +254,6 @@ export type PropOsReadService = ReturnType<typeof createPropOsReadService>;
 async function applyReadModelGates(input: {
   readModel: AccountReadModel;
   userId: string;
-  accounts: AccountManagementService;
   config: PropOsActivationConfig;
   currentInputRevision: string | null;
   nowUtc: string;
@@ -264,26 +270,7 @@ async function applyReadModelGates(input: {
     return { gate: "no_account", reasonCodes: ["no_account"], readModel };
   }
 
-  let actives;
-  try {
-    actives = await input.accounts.listActiveChallengesForAccount(
-      input.userId,
-      readModel.account.id,
-    );
-    input.emit({
-      type: "repository_latency",
-      operation: "list_active_challenges",
-      ms: 0,
-    });
-  } catch {
-    return {
-      gate: "repository_unavailable",
-      reasonCodes: ["challenge_list_failed"],
-      readModel,
-    };
-  }
-
-  if (actives.length > 1) {
+  if (readModel.challengeSelectionState === "selection_required") {
     return {
       gate: "multiple_active_challenges",
       reasonCodes: ["multiple_active_challenges_require_resolution"],
@@ -291,25 +278,15 @@ async function applyReadModelGates(input: {
     };
   }
 
-  if (actives.length === 0) {
-    if (
-      readModel.account.status === "archived" &&
-      readModel.historicalAttempts.length > 0
-    ) {
-      // Archived accounts remain historically readable per contract.
-    } else if (!readModel.historicalAttempts.length && !readModel.activeChallenge) {
-      return {
-        gate: "no_active_challenge",
-        reasonCodes: ["no_active_challenge"],
-        readModel,
-      };
-    }
+  if (readModel.challengeSelectionState === "none" || !readModel.activeChallenge) {
+    return {
+      gate: "no_active_challenge",
+      reasonCodes: ["no_active_challenge"],
+      readModel,
+    };
   }
 
-  if (
-    !readModel.ruleSnapshot &&
-    (readModel.activeChallenge || readModel.historicalAttempts[0])
-  ) {
+  if (!readModel.ruleSnapshot) {
     return {
       gate: "missing_rule_snapshot",
       reasonCodes: ["missing_rule_snapshot"],

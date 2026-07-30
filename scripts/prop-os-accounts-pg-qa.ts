@@ -256,9 +256,49 @@ async function main() {
     const rm = await svc.getAccountReadModel(USER, account.id);
     assert.ok(rm.account);
     assert.ok(rm.activeChallenge);
+    assert.equal(rm.challengeSelectionState, "resolved");
     assert.ok(rm.ruleSnapshot);
     assert.equal(rm.latestShadowSnapshot, null);
     assert.ok(rm.dataQuality.flags.includes("no_shadow_snapshot"));
+  });
+
+  await check("PG: multiple active → selection_required; explicit select resolves", async () => {
+    const account = await svc.createPropAccount({
+      userId: USER,
+      label: "PG SEL",
+      accountSizeMinor: 5_000_000,
+      firmTimezone: "America/New_York",
+      id: fixtureUuid("acc-pg-sel"),
+      nowUtc: NOW,
+      source: "import",
+    });
+    const a = await svc.createChallengeAttempt({
+      userId: USER,
+      accountId: account.id,
+      ruleSnapshot: rules("rs-pg-sel-1"),
+      id: fixtureUuid("ch-pg-sel-1"),
+      ruleSnapshotId: fixtureUuid("rule-pg-sel-1"),
+      nowUtc: NOW,
+    });
+    const b = await svc.createChallengeAttempt({
+      userId: USER,
+      accountId: account.id,
+      ruleSnapshot: rules("rs-pg-sel-2"),
+      id: fixtureUuid("ch-pg-sel-2"),
+      ruleSnapshotId: fixtureUuid("rule-pg-sel-2"),
+      nowUtc: "2026-01-11T12:00:00.000Z",
+    });
+    let rm = await svc.getAccountReadModel(USER, account.id);
+    assert.equal(rm.challengeSelectionState, "selection_required");
+    assert.equal(rm.activeChallenge, null);
+    assert.equal(rm.activeChallenges.length, 2);
+    assert.equal(rm.ruleSnapshot, null);
+    rm = await svc.getAccountReadModel(USER, account.id, {
+      selectedChallengeId: b.challenge.id,
+    });
+    assert.equal(rm.challengeSelectionState, "resolved");
+    assert.equal(rm.activeChallenge?.id, b.challenge.id);
+    assert.equal(a.challenge.id !== b.challenge.id, true);
   });
 
   console.log(`prop-os-accounts-pg-qa: PASS (${passed} checks)`);

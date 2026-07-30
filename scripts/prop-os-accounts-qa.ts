@@ -211,8 +211,100 @@ async function main() {
     });
     assert.equal(second.challenge.resetOfChallengeId, first.challenge.id);
     const rm = await svc.getAccountReadModel(USER, account.id);
+    assert.equal(rm.challengeSelectionState, "resolved");
     assert.equal(rm.activeChallenge?.id, second.challenge.id);
+    assert.equal(rm.activeChallenges.length, 1);
     assert.ok(rm.historicalAttempts.some((h) => h.id === first.challenge.id));
+  });
+
+  await check("read model: zero / one / multiple / explicit selection", async () => {
+    const store = createMemoryAccountStore();
+    const svc = createAccountManagementService(store);
+    const account = await svc.createPropAccount({
+      userId: USER,
+      label: "Multi",
+      accountSizeMinor: 5_000_000,
+      firmTimezone: "America/New_York",
+      id: "acc-sel",
+      nowUtc: NOW,
+    });
+    let rm = await svc.getAccountReadModel(USER, account.id);
+    assert.equal(rm.challengeSelectionState, "none");
+    assert.equal(rm.activeChallenge, null);
+    assert.equal(rm.activeChallenges.length, 0);
+
+    await svc.createChallengeAttempt({
+      userId: USER,
+      accountId: account.id,
+      ruleSnapshot: baseRules("rs-s1"),
+      id: "ch-s1",
+      nowUtc: NOW,
+    });
+    rm = await svc.getAccountReadModel(USER, account.id);
+    assert.equal(rm.challengeSelectionState, "resolved");
+    assert.equal(rm.activeChallenge?.id, "ch-s1");
+    assert.equal(rm.activeChallenges.length, 1);
+
+    await svc.createChallengeAttempt({
+      userId: USER,
+      accountId: account.id,
+      ruleSnapshot: baseRules("rs-s2"),
+      id: "ch-s2",
+      nowUtc: "2026-01-11T12:00:00.000Z",
+    });
+    rm = await svc.getAccountReadModel(USER, account.id);
+    assert.equal(rm.challengeSelectionState, "selection_required");
+    assert.equal(rm.activeChallenge, null);
+    assert.equal(rm.activeChallenges.length, 2);
+    assert.equal(rm.latestShadowSnapshot, null);
+    assert.equal(rm.ruleSnapshot, null);
+
+    rm = await svc.getAccountReadModel(USER, account.id, { selectedChallengeId: "ch-s2" });
+    assert.equal(rm.challengeSelectionState, "resolved");
+    assert.equal(rm.activeChallenge?.id, "ch-s2");
+
+    rm = await svc.getAccountReadModel(USER, account.id, { selectedChallengeId: "ch-missing" });
+    assert.equal(rm.challengeSelectionState, "selection_required");
+    assert.equal(rm.activeChallenge, null);
+
+    // cross-user selection cannot authorize
+    await assert.rejects(
+      () => svc.getAccountReadModel(USER_B, account.id, { selectedChallengeId: "ch-s1" }),
+      (e: unknown) => e instanceof AccountMgmtError && e.failure === "ownership_mismatch",
+    );
+  });
+
+  await check("historical breached never becomes active by fallback", async () => {
+    const store = createMemoryAccountStore();
+    const svc = createAccountManagementService(store);
+    const account = await svc.createPropAccount({
+      userId: USER,
+      label: "Hist",
+      accountSizeMinor: 5_000_000,
+      firmTimezone: "America/New_York",
+      id: "acc-hist",
+      nowUtc: NOW,
+    });
+    const { challenge } = await svc.createChallengeAttempt({
+      userId: USER,
+      accountId: account.id,
+      ruleSnapshot: baseRules("rs-h1"),
+      id: "ch-h1",
+      nowUtc: NOW,
+    });
+    await svc.transitionChallenge({
+      userId: USER,
+      challengeId: challenge.id,
+      toStatus: "breached",
+      reasonCode: "daily_loss",
+      actor: "engine",
+      nowUtc: NOW,
+    });
+    const rm = await svc.getAccountReadModel(USER, account.id);
+    assert.equal(rm.challengeSelectionState, "none");
+    assert.equal(rm.activeChallenge, null);
+    assert.ok(rm.historicalAttempts.some((h) => h.id === "ch-h1"));
+    assert.equal(rm.ruleSnapshot, null);
   });
 
   await check("passed → funded lifecycle", async () => {

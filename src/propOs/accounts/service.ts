@@ -11,6 +11,7 @@ import type {
   ChallengeTransitionRecord,
   CreateChallengeAttemptInput,
   CreatePropAccountInput,
+  GetAccountReadModelOptions,
   PropAccountRecord,
   PropChallengeRecord,
   PropRuleSnapshotRecord,
@@ -355,6 +356,7 @@ export function createAccountManagementService(store: AccountManagementStore) {
   async function getAccountReadModel(
     userId: string,
     accountId: string | null,
+    options?: GetAccountReadModelOptions,
   ): Promise<AccountReadModel> {
     const defaultAccountId = await store.getDefaultAccountId(userId);
     const resolvedId = accountId ?? defaultAccountId;
@@ -366,13 +368,41 @@ export function createAccountManagementService(store: AccountManagementStore) {
     if (!account) return emptyReadModel(defaultAccountId);
     requireOwnership(userId, account.userId, "account");
 
-    const attempts = (await store.listChallengesForAccount(account.id)).sort((a, b) =>
-      a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0,
-    );
-    const activeChallenge =
-      attempts.find((c) => isActiveChallengeStatus(c.status)) ?? null;
-    const historicalAttempts = attempts.filter((c) => c.id !== activeChallenge?.id);
-    const focusChallenge = activeChallenge ?? attempts[0] ?? null;
+    const attempts = await store.listChallengesForAccount(account.id);
+    const activeChallenges = attempts
+      .filter((c) => isActiveChallengeStatus(c.status))
+      .slice()
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const historicalAttempts = attempts
+      .filter((c) => !isActiveChallengeStatus(c.status))
+      .slice()
+      .sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
+
+    let challengeSelectionState: AccountReadModel["challengeSelectionState"] = "none";
+    let activeChallenge: PropChallengeRecord | null = null;
+
+    if (activeChallenges.length === 0) {
+      challengeSelectionState = "none";
+      activeChallenge = null;
+    } else if (activeChallenges.length === 1) {
+      challengeSelectionState = "resolved";
+      activeChallenge = activeChallenges[0]!;
+    } else {
+      challengeSelectionState = "selection_required";
+      activeChallenge = null;
+      const selectedId = options?.selectedChallengeId ?? null;
+      if (selectedId) {
+        const selected = activeChallenges.find((c) => c.id === selectedId) ?? null;
+        if (selected) {
+          challengeSelectionState = "resolved";
+          activeChallenge = selected;
+        }
+        // Invalid / cross-account selection: leave selection_required (not authorization).
+      }
+    }
+
+    // Snapshots/rules only for deterministically resolved active challenge — never historical fallback.
+    const focusChallenge = activeChallenge;
     const ruleSnapshot = focusChallenge
       ? await store.getRuleSnapshot(focusChallenge.id)
       : null;
@@ -389,7 +419,10 @@ export function createAccountManagementService(store: AccountManagementStore) {
 
     const flags: string[] = [];
     let level: AccountReadModel["dataQuality"]["level"] = "ok";
-    if (!focusChallenge) {
+    if (challengeSelectionState === "selection_required") {
+      flags.push("multiple_active_challenges");
+      level = "warn";
+    } else if (!focusChallenge) {
       flags.push("no_challenge");
       level = "warn";
     }
@@ -420,6 +453,8 @@ export function createAccountManagementService(store: AccountManagementStore) {
       account,
       defaultAccountId,
       activeChallenge,
+      activeChallenges,
+      challengeSelectionState,
       historicalAttempts,
       ruleSnapshot,
       assignedTradeCount,
@@ -466,6 +501,8 @@ function emptyReadModel(defaultAccountId: string | null): AccountReadModel {
     account: null,
     defaultAccountId,
     activeChallenge: null,
+    activeChallenges: [],
+    challengeSelectionState: "none",
     historicalAttempts: [],
     ruleSnapshot: null,
     assignedTradeCount: 0,

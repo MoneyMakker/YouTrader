@@ -101,7 +101,8 @@ export type PropOsActivationResult<T> =
       gate: PropOsReadModelGate;
       reasonCodes: string[];
       diagnostics: ActivationDiagnosticEvent[];
-      data: null;
+      /** Present when a read model was loaded but gated (e.g. selection_required). */
+      data: T | null;
     };
 
 export const DEFAULT_ACTIVATION_CONFIG: PropOsActivationConfig = {

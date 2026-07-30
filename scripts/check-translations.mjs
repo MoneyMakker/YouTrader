@@ -2,16 +2,36 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const appPath = path.join(root, "App.tsx");
 const enPath = path.join(root, "src/i18n/locales/en.json");
-const source = fs.readFileSync(appPath, "utf8");
 const en = JSON.parse(fs.readFileSync(enPath, "utf8"));
 const enKeys = new Set(Object.keys(en));
 
+function collectSourceFiles(dir, out = []) {
+  if (!fs.existsSync(dir)) return out;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectSourceFiles(full, out);
+      continue;
+    }
+    if (/\.(ts|tsx)$/.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+
+const sourceFiles = [
+  path.join(root, "App.tsx"),
+  ...collectSourceFiles(path.join(root, "src/app")),
+  ...collectSourceFiles(path.join(root, "src/propPass")),
+].filter((file) => fs.existsSync(file));
+
 const usedKeys = new Set();
 const usageRegex = /\bt\s*\(\s*["']([A-Za-z][A-Za-z0-9_.]*)["']/g;
-let match;
-while ((match = usageRegex.exec(source))) usedKeys.add(match[1]);
+for (const file of sourceFiles) {
+  const source = fs.readFileSync(file, "utf8");
+  let match;
+  while ((match = usageRegex.exec(source))) usedKeys.add(match[1]);
+}
 
 const missingUsed = [...usedKeys].filter((key) => !enKeys.has(key));
 if (missingUsed.length) {
@@ -30,4 +50,6 @@ for (const lang of langs) {
   }
 }
 
-console.log(`Translation check passed: ${enKeys.size} en keys, ${usedKeys.size} used in App.tsx`);
+console.log(
+  `Translation check passed: ${enKeys.size} en keys, ${usedKeys.size} used in App.tsx + src/app + src/propPass (${sourceFiles.length} files)`,
+);

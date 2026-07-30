@@ -119,10 +119,21 @@ export type ChallengeTransitionRecord = {
   at: string;
 };
 
+export type ChallengeSelectionState = "none" | "resolved" | "selection_required";
+
 export type AccountReadModel = {
   account: PropAccountRecord | null;
   defaultAccountId: string | null;
+  /**
+   * Non-null only when challengeSelectionState === "resolved"
+   * (exactly one active, or an explicitly selected active challenge).
+   * Never chosen by array order among multiples.
+   */
   activeChallenge: PropChallengeRecord | null;
+  /** All active-like challenges (active | at_risk). Stable list; not a silent pick. */
+  activeChallenges: PropChallengeRecord[];
+  challengeSelectionState: ChallengeSelectionState;
+  /** Non-active attempts (breached/passed/funded/reset/abandoned). Never promoted to active. */
   historicalAttempts: PropChallengeRecord[];
   ruleSnapshot: PropRuleSnapshotRecord | null;
   assignedTradeCount: number;
@@ -133,6 +144,15 @@ export type AccountReadModel = {
   };
   latestShadowSnapshot: EngineSnapshotRow | null;
   latestScoreSnapshot: ScoreSnapshotRow | null;
+};
+
+export type GetAccountReadModelOptions = {
+  /**
+   * Explicit challenge selection among active challenges.
+   * Preference / selection is not an authorization boundary.
+   * Invalid or cross-account ids leave selection_required.
+   */
+  selectedChallengeId?: string | null;
 };
 
 export type CreatePropAccountInput = {
