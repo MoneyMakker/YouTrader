@@ -50,10 +50,11 @@
     "prepare:release": "node scripts/release-command-center/run.mjs release",
     "test:local-ai-cache": "npx tsx scripts/local-ai-cache-qa.ts",
     "test:revenge-trading": "npx tsx scripts/revenge-trading-qa.ts",
+    "test:ui-infra-phase3": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase3-qa.ts",
     "storybook:start": "cross-env STORYBOOK_ENABLED=true expo start",
     "storybook:ios": "cross-env STORYBOOK_ENABLED=true expo start --ios",
     "storybook:android": "cross-env STORYBOOK_ENABLED=true expo start --android",
-    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/ydl/sheets src/ydl/lottie src/components/ui/haptics.ts index.js"
+    "lint:ui-infra": "eslint --config eslint.ui-infra.config.mjs .rnstorybook src/ydl/haptics.ts src/ydl/sheets src/ydl/lottie src/ydl/symbols src/ydl/accessibility src/ydl/components src/components/ui/haptics.ts src/components/stats/MetricExplanationSheet.tsx index.js && eslint --config eslint.ui-infra-imports.config.mjs \"src/**/*.{ts,tsx}\" App.tsx index.js"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",
@@ -82,6 +83,7 @@
     "expo-secure-store": "~15.0.7",
     "expo-sharing": "~14.0.7",
     "expo-status-bar": "~3.0.9",
+    "expo-symbols": "~1.0.8",
     "expo-web-browser": "~15.0.11",
     "i18next": "^26.3.4",
     "lottie-react-native": "~7.3.1",

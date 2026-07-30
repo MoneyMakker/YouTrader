@@ -2,8 +2,8 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 /**
- * Minimal ESLint foundation for Phase 1 UI infrastructure only.
- * Does not lint the rest of the repository.
+ * Minimal ESLint foundation for UI infrastructure adapters + demos.
+ * Production-wide third-party UI import bans live in eslint.ui-infra-imports.config.mjs.
  */
 export default tseslint.config(
   js.configs.recommended,
@@ -14,7 +14,11 @@ export default tseslint.config(
       "src/ydl/haptics.ts",
       "src/ydl/sheets/**/*.{ts,tsx}",
       "src/ydl/lottie/**/*.{ts,tsx}",
+      "src/ydl/symbols/**/*.{ts,tsx}",
+      "src/ydl/accessibility/**/*.{ts,tsx}",
+      "src/ydl/components/**/*.{ts,tsx}",
       "src/components/ui/haptics.ts",
+      "src/components/stats/MetricExplanationSheet.tsx",
       "index.js",
     ],
     languageOptions: {
