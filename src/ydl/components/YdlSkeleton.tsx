@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
+  AppState,
   StyleSheet,
   View,
   type StyleProp,
@@ -8,6 +9,7 @@ import {
 } from "react-native";
 import { useYdlReduceMotion } from "../accessibility";
 import { useYdlTheme, type YdlAppearance } from "../tokens";
+import { YDL_SKELETON_MAX_ANIMATED } from "./contracts";
 
 export type YdlSkeletonShape = "text" | "circle" | "rectangle";
 
@@ -15,7 +17,10 @@ export type YdlSkeletonProps = {
   shape?: YdlSkeletonShape;
   width?: number | `${number}%`;
   height?: number;
-  /** Prefer static; set true only for restrained pulse (RN Animated, not Reanimated). */
+  /**
+   * Prefer static (default false). Optional pulse uses RN Animated.
+   * Cap simultaneous animated skeletons with YDL_SKELETON_MAX_ANIMATED (=4).
+   */
   animated?: boolean;
   appearance?: YdlAppearance;
   style?: StyleProp<ViewStyle>;
@@ -24,7 +29,7 @@ export type YdlSkeletonProps = {
 
 /**
  * Decorative placeholder. Reduce Motion → always static.
- * Uses RN Animated for optional pulse — no Reanimated import (boundary preserved).
+ * Pulse stops on unmount and when app backgrounds.
  */
 export function YdlSkeleton({
   shape = "text",
@@ -39,13 +44,21 @@ export function YdlSkeleton({
   const reduceMotion = useYdlReduceMotion();
   const allowAnim = animated && !reduceMotion;
   const opacity = useRef(new Animated.Value(theme.opacity.skeleton)).current;
+  const loopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
-    if (!allowAnim) {
+    const stop = () => {
+      loopRef.current?.stop();
+      loopRef.current = null;
       opacity.stopAnimation();
       opacity.setValue(theme.opacity.skeleton);
+    };
+
+    if (!allowAnim) {
+      stop();
       return;
     }
+
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
@@ -60,13 +73,28 @@ export function YdlSkeleton({
         }),
       ]),
     );
+    loopRef.current = loop;
     loop.start();
-    return () => loop.stop();
-  }, [allowAnim, opacity, theme.opacity.skeleton, theme.opacity.skeletonPulseMax, theme.opacity.skeletonPulseMin]);
+
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next !== "active") stop();
+    });
+
+    return () => {
+      sub.remove();
+      stop();
+    };
+  }, [
+    allowAnim,
+    opacity,
+    theme.opacity.skeleton,
+    theme.opacity.skeletonPulseMax,
+    theme.opacity.skeletonPulseMin,
+  ]);
 
   const dims = {
-    text: { width: width ?? "80%", height: height ?? 12, radius: 6 },
-    circle: { width: width ?? 40, height: height ?? 40, radius: 999 },
+    text: { width: width ?? "80%", height: height ?? 12, radius: theme.radius.small },
+    circle: { width: width ?? 40, height: height ?? 40, radius: theme.radius.pill },
     rectangle: {
       width: width ?? "100%",
       height: height ?? 72,
@@ -102,6 +130,7 @@ export function YdlSkeletonCard({
   animated?: boolean;
 }) {
   const theme = useYdlTheme(appearance);
+  void YDL_SKELETON_MAX_ANIMATED;
   return (
     <View
       style={[

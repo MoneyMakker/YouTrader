@@ -40,8 +40,8 @@ export type MetricExplanationSheetProps = {
 };
 
 /**
- * Phase 3–5 production reference: read-only radar metric explanation.
- * Presentation uses YDL tokens + primitives; metric copy/values unchanged.
+ * Phase 3–6 production reference: read-only radar metric explanation.
+ * Phase 6 hardens a11y grouping and token presentation; copy/values unchanged.
  */
 export function MetricExplanationSheet({
   visible,
@@ -97,12 +97,13 @@ export function MetricExplanationSheet({
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.headerRow, { gap: ydlSpace[8] }]}>
-          <View style={styles.headerText}>
+          <View style={styles.headerText} accessibilityRole="header">
             <View style={[styles.titleRow, { gap: ydlSpace[8] }]}>
               <YdlSymbol name="info" size="md" tintColor={sheetColors.title} decorative />
               <YdlSectionHeader
                 title={content?.label || t("metricDefault")}
                 tintColor={sheetColors.title}
+                appearance={appearance}
               />
             </View>
           </View>
@@ -112,13 +113,19 @@ export function MetricExplanationSheet({
             onPress={onClose}
             tintColor={sheetColors.title}
             haptic="selection"
+            testID="metric-explanation-close"
           />
         </View>
 
         {content ? (
           <YdlFade visible={visible} enter={!reduceMotion} key={content.label}>
             <YdlStagger entranceKey={content.label} preset="tight" offsetY={5}>
-              <YdlCard variant="outlined" appearance={appearance}>
+              <YdlCard
+                variant="outlined"
+                appearance={appearance}
+                accessibilityLabel={`${content.label} details`}
+                testID="metric-explanation-card"
+              >
                 {parsed ? (
                   <YdlAnimatedNumber
                     value={parsed.value}
@@ -129,18 +136,25 @@ export function MetricExplanationSheet({
                       { color: theme.colors.text.primary, fontWeight: "900" },
                     ]}
                     accessibilityLabel={content.value}
+                    testID="metric-explanation-value"
                   />
                 ) : (
                   <YdlText
                     role="numericLarge"
                     appearance={appearance}
                     accessibilityLabel={content.value}
+                    testID="metric-explanation-value"
                     style={{ fontWeight: "900" }}
                   >
                     {content.value}
                   </YdlText>
                 )}
-                <YdlText role="bodyEmphasized" color="text.secondary" appearance={appearance}>
+                <YdlText
+                  role="bodyEmphasized"
+                  color="text.secondary"
+                  appearance={appearance}
+                  testID="metric-explanation-body"
+                >
                   {content.explanation}
                 </YdlText>
                 <YdlBadge
@@ -148,11 +162,12 @@ export function MetricExplanationSheet({
                   label={`${t("targetPrefix")}: ${content.target}`}
                   symbol="chart"
                   appearance={appearance}
+                  testID="metric-explanation-target"
                 />
               </YdlCard>
               {reduceMotion ? null : (
                 <View
-                  style={styles.footerIcon}
+                  style={[styles.footerIcon, { marginTop: ydlSpace[8] }]}
                   accessible={false}
                   importantForAccessibility="no"
                 >
@@ -182,7 +197,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   footerIcon: {
-    marginTop: ydlSpace[8],
     alignSelf: "flex-start",
     opacity: 0.7,
   },

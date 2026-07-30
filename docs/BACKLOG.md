@@ -358,6 +358,12 @@ expanding product breadth.
 
 **Priority:** High
 
+> **Note (UI infrastructure track):** CEO-directed **UI Infra Phase 6**
+> (component hardening + visual regression foundation) is documented in
+> `docs/UI_INFRA_PHASE6.md` and `docs/YDL_ADOPTION_POLICY.md`. It is **not**
+> the same as any “AI Phase 6” naming elsewhere. It supports Epic 6 goals but
+> does not renumber YT-014 / YT-015.
+
 ### YT-014 — Standardize loading, empty, error, and offline states
 
 | Field | Definition |

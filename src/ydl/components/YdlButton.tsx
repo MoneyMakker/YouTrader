@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { YdlAnimatedPressable } from "../motion";
 import { YdlSymbol, type YdlSemanticSymbol } from "../symbols";
-import { YDL_MIN_TOUCH_TARGET } from "../accessibility";
+import { YDL_MIN_TOUCH_TARGET, ydlMinTouchTargetStyle } from "../accessibility";
 import type { YdlHapticIntent } from "../haptics";
 import { useYdlTheme, type YdlAppearance } from "../tokens";
 import { YdlText } from "./YdlText";
@@ -16,8 +16,7 @@ import { YdlText } from "./YdlText";
 export type YdlButtonVariant = "primary" | "secondary" | "tertiary" | "destructive";
 export type YdlButtonSize = "small" | "medium" | "large";
 
-export type YdlButtonProps = {
-  label: string;
+type YdlButtonBase = {
   onPress?: () => void;
   variant?: YdlButtonVariant;
   size?: YdlButtonSize;
@@ -26,13 +25,25 @@ export type YdlButtonProps = {
   fullWidth?: boolean;
   leadingSymbol?: YdlSemanticSymbol;
   trailingSymbol?: YdlSemanticSymbol;
-  /** Icon-only requires non-empty `label` for accessibility. */
-  iconOnly?: boolean;
   haptic?: YdlHapticIntent | false;
   appearance?: YdlAppearance;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };
+
+export type YdlButtonProps =
+  | (YdlButtonBase & {
+      /** Visible label; also used as accessibility label. */
+      label: string;
+      iconOnly?: false;
+    })
+  | (YdlButtonBase & {
+      /** Required spoken label for icon-only controls. */
+      label: string;
+      iconOnly: true;
+      leadingSymbol?: YdlSemanticSymbol;
+      trailingSymbol?: YdlSemanticSymbol;
+    });
 
 const SIZE_PAD: Record<YdlButtonSize, { py: number; px: number; gap: number }> = {
   small: { py: 8, px: 12, gap: 6 },
@@ -42,6 +53,7 @@ const SIZE_PAD: Record<YdlButtonSize, { py: number; px: number; gap: number }> =
 
 /**
  * Restrained button — YdlAnimatedPressable, semantic tokens, no Reanimated import.
+ * `loading` implies disabled interaction (no callback / no haptic).
  */
 export function YdlButton({
   label,
@@ -94,6 +106,8 @@ export function YdlButton({
             };
 
   const pad = SIZE_PAD[size];
+  const resolvedLeading =
+    leadingSymbol ?? (variant === "destructive" && !iconOnly ? "warning" : undefined);
 
   const handlePress = useCallback(() => {
     if (isDisabled || inFlight.current) return;
@@ -106,14 +120,14 @@ export function YdlButton({
   }, [isDisabled, onPress]);
 
   const fg = isDisabled ? theme.colors.action.disabledText : colors.text;
+  const a11yLabel =
+    variant === "destructive" ? `${label}. Destructive action` : label;
 
   return (
     <YdlAnimatedPressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={
-        variant === "destructive" ? `${label}. Destructive action` : label
-      }
+      accessibilityLabel={a11yLabel}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       haptic={isDisabled ? false : haptic}
@@ -121,6 +135,7 @@ export function YdlButton({
       onPress={handlePress}
       style={[
         styles.base,
+        ydlMinTouchTargetStyle(),
         {
           backgroundColor: isDisabled ? theme.colors.action.disabled : colors.bg,
           borderColor: isDisabled ? theme.colors.action.disabled : colors.border,
@@ -134,7 +149,7 @@ export function YdlButton({
         style,
       ]}
     >
-      <View style={styles.inner} pointerEvents="none">
+      <View style={[styles.inner, { minHeight: 22, minWidth: iconOnly ? 22 : 48 }]} pointerEvents="none">
         {loading ? (
           <ActivityIndicator color={fg} />
         ) : iconOnly ? (
@@ -146,8 +161,8 @@ export function YdlButton({
           />
         ) : (
           <>
-            {leadingSymbol ? (
-              <YdlSymbol name={leadingSymbol} size="sm" tintColor={fg} decorative />
+            {resolvedLeading ? (
+              <YdlSymbol name={resolvedLeading} size="sm" tintColor={fg} decorative />
             ) : null}
             <YdlText
               role={size === "small" ? "labelEmphasized" : "callout"}
@@ -178,7 +193,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 20,
     gap: 8,
   },
 });

@@ -1,0 +1,11 @@
+# Reduce Motion / static skeleton — enable Reduce Motion in simulator before run.
+appId: com.youtrader.pro
+---
+- extendedWaitUntil:
+    visible:
+      id: "ydl-visual-gallery"
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-skeleton"
+- takeScreenshot: ydl_vr_reduce_motion_skeleton

@@ -1,8 +1,8 @@
 import React, { useCallback } from "react";
-import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { YdlAnimatedPressable } from "../motion";
 import { YdlSymbol, type YdlSemanticSymbol } from "../symbols";
-import { YDL_MIN_TOUCH_TARGET } from "../accessibility";
+import { YDL_MIN_TOUCH_TARGET, ydlMinTouchTargetStyle } from "../accessibility";
 import type { YdlHapticIntent } from "../haptics";
 import { useYdlTheme, type YdlAppearance } from "../tokens";
 import { YdlText } from "./YdlText";
@@ -12,6 +12,7 @@ export type YdlChipProps = {
   selected?: boolean;
   disabled?: boolean;
   leadingSymbol?: YdlSemanticSymbol;
+  /** When omitted, chip is static (no button role). */
   onPress?: () => void;
   haptic?: YdlHapticIntent | false;
   appearance?: YdlAppearance;
@@ -31,37 +32,31 @@ export function YdlChip({
   testID,
 }: YdlChipProps) {
   const theme = useYdlTheme(appearance);
+  const interactive = typeof onPress === "function" && !disabled;
 
   const handlePress = useCallback(() => {
     if (disabled) return;
     onPress?.();
   }, [disabled, onPress]);
 
-  return (
-    <YdlAnimatedPressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled, selected }}
-      disabled={disabled || !onPress}
-      haptic={disabled ? false : haptic}
-      minTouchTarget
-      onPress={handlePress}
-      style={[
-        styles.chip,
-        {
-          minHeight: YDL_MIN_TOUCH_TARGET,
-          backgroundColor: selected
-            ? theme.colors.surface.selected
-            : theme.colors.surface.interactive,
-          borderColor: selected ? theme.colors.border.strong : theme.colors.border.subtle,
-          borderWidth: selected ? 1.5 : StyleSheet.hairlineWidth,
-          borderRadius: theme.radius.chip,
-          opacity: disabled ? theme.opacity.disabled : 1,
-        },
-        style,
-      ]}
-    >
+  const chipStyle = [
+    styles.chip,
+    ydlMinTouchTargetStyle(),
+    {
+      minHeight: YDL_MIN_TOUCH_TARGET,
+      backgroundColor: selected
+        ? theme.colors.surface.selected
+        : theme.colors.surface.interactive,
+      borderColor: selected ? theme.colors.border.strong : theme.colors.border.subtle,
+      borderWidth: selected ? 1.5 : StyleSheet.hairlineWidth,
+      borderRadius: theme.radius.chip,
+      opacity: disabled ? theme.opacity.disabled : 1,
+    },
+    style,
+  ];
+
+  const content = (
+    <>
       {leadingSymbol ? (
         <YdlSymbol
           name={leadingSymbol}
@@ -69,6 +64,9 @@ export function YdlChip({
           tintColor={theme.colors.icon.secondary}
           decorative
         />
+      ) : null}
+      {selected ? (
+        <YdlSymbol name="success" size="sm" tintColor={theme.colors.status.positive} decorative />
       ) : null}
       <YdlText
         role="labelEmphasized"
@@ -80,6 +78,36 @@ export function YdlChip({
       >
         {label}
       </YdlText>
+    </>
+  );
+
+  if (!interactive) {
+    return (
+      <View
+        testID={testID}
+        accessibilityRole="text"
+        accessibilityLabel={selected ? `${label}. Selected` : label}
+        accessibilityState={{ disabled, selected }}
+        style={chipStyle}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <YdlAnimatedPressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled, selected }}
+      disabled={disabled}
+      haptic={disabled ? false : haptic}
+      minTouchTarget
+      onPress={handlePress}
+      style={chipStyle}
+    >
+      {content}
     </YdlAnimatedPressable>
   );
 }

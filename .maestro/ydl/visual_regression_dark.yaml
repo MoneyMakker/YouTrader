@@ -1,0 +1,58 @@
+# YDL Visual Regression — Maestro flows
+#
+# Environment (canonical):
+#   Simulator: iPhone 17 (portrait)
+#   Locale: en
+#   Build: Storybook (`STORYBOOK_ENABLED=true`)
+#   Appearance: set per flow / simulator setting
+#   Content size: standard unless large-text flow
+#   Reduce Motion: off unless reduce-motion flow
+#
+# Prerequisites:
+#   1. Start Storybook iOS: `npm run storybook:ios`
+#   2. Open story: YouTrader/Phase6/VisualRegressionGallery → DarkGallery (or Light)
+#   3. Run: maestro test .maestro/ydl/visual_regression_dark.yaml
+#
+# Baselines live in `.maestro/ydl/baselines/` (committed PNG).
+# Capture names must match baseline filenames without extension.
+# Review diffs manually via Git (no heavy visual-diff framework).
+
+appId: com.youtrader.pro
+---
+- extendedWaitUntil:
+    visible:
+      id: "ydl-visual-gallery"
+    timeout: 60000
+- takeScreenshot: ydl_vr_dark_gallery
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-buttons"
+- takeScreenshot: ydl_vr_dark_buttons
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-cards"
+- takeScreenshot: ydl_vr_dark_cards
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-badges-chips"
+- takeScreenshot: ydl_vr_dark_badges_chips
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-list"
+- takeScreenshot: ydl_vr_dark_list
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-empty"
+- takeScreenshot: ydl_vr_dark_empty
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-skeleton"
+- takeScreenshot: ydl_vr_dark_skeleton_static
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-banners"
+- takeScreenshot: ydl_vr_dark_banners
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-radar-fixture"
+- takeScreenshot: ydl_vr_dark_radar_fixture

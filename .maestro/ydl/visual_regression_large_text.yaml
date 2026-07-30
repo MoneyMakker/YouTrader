@@ -1,0 +1,8 @@
+# Large Dynamic Type sample — set iOS Accessibility larger text before run.
+appId: com.youtrader.pro
+---
+- extendedWaitUntil:
+    visible:
+      id: "ydl-visual-gallery"
+    timeout: 60000
+- takeScreenshot: ydl_vr_large_text_gallery

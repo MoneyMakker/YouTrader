@@ -184,9 +184,9 @@
 - [ ] Dark mode readability
 - [ ] Premium lock overlays
 
-### UI Infra — Trading Radar metric sheet (Phase 3–5 residual)
+### UI Infra — Trading Radar metric sheet (Phase 3–6 residual)
 
-Required before the **next TestFlight** build that includes UI infra Phases 1–5. Needs an **authenticated** simulator/device session. Auth has blocked automated Radar smoke (Maestro cannot fill `secureTextEntry`; Apple Sign In needs Apple ID) — do **not** bypass auth.
+Required before the **next TestFlight** build that includes UI infra Phases 1–6. Needs an **authenticated** simulator/device session. Auth has blocked automated Radar smoke (Maestro cannot fill `secureTextEntry`; Apple Sign In needs Apple ID) — do **not** bypass auth.
 
 **Phase 3 sheet / a11y**
 
@@ -221,6 +221,15 @@ Required before the **next TestFlight** build that includes UI infra Phases 1–
 - [ ] Light and dark sheet appearance remain readable with token colors
 - [ ] Large Dynamic Type does not clip card/badge/text inside the sheet
 - [ ] No theme/provider crash on launch or appearance change
+
+**Phase 6 hardening / visual regression**
+
+- [ ] Storybook VisualRegressionGallery launches on iPhone 17
+- [ ] Maestro YDL flows capture 14 named screenshots
+- [ ] Baselines reviewed/committed under `.maestro/ydl/baselines/`
+- [ ] Disabled/loading buttons do not fire
+- [ ] Skeleton static under Reduce Motion; no stuck pulse after background
+- [ ] Fixture Radar sheet matches production presentation (auth still separate)
 
 ### Performance & Offline
 

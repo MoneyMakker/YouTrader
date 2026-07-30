@@ -54,10 +54,12 @@ export function YdlListItem({
       destructive ? `${title}. Destructive` : title,
       subtitle,
       trailingValue,
-      showChevron && !trailingValue ? "Opens details" : undefined,
     );
     return selected ? `${base}. Selected` : base;
-  }, [destructive, selected, showChevron, subtitle, title, trailingValue]);
+  }, [destructive, selected, subtitle, title, trailingValue]);
+
+  const a11yHint =
+    onPress && showChevron && !trailingValue ? "Opens details" : undefined;
 
   const handlePress = useCallback(() => {
     if (disabled) return;
@@ -131,9 +133,11 @@ export function YdlListItem({
         testID={testID}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}
+        accessibilityHint={a11yHint}
         accessibilityState={{ disabled, selected }}
         disabled={disabled}
         haptic={false}
+        minTouchTarget
         onPress={handlePress}
         style={rowStyle}
       >

@@ -20,9 +20,39 @@ export type YdlActionRowProps = {
 };
 
 /**
- * Compatibility wrapper around `YdlListItem` (Phase 5 consolidation).
- * Prefer `YdlListItem` for new screens.
+ * Compatibility wrapper around `YdlListItem` (Phase 5/6 consolidation).
+ *
+ * Prefer `YdlListItem` for new screens. Do not expand this API independently —
+ * add capabilities on `YdlListItem` and map them here explicitly.
+ *
+ * Soft deprecation: keep imports working; no noisy runtime logs.
  */
-export function YdlActionRow(props: YdlActionRowProps) {
-  return <YdlListItem {...props} />;
+export function YdlActionRow({
+  title,
+  subtitle,
+  leadingSymbol,
+  trailingValue,
+  showChevron,
+  onPress,
+  disabled,
+  haptic,
+  style,
+  testID,
+  appearance,
+}: YdlActionRowProps) {
+  return (
+    <YdlListItem
+      title={title}
+      subtitle={subtitle}
+      leadingSymbol={leadingSymbol}
+      trailingValue={trailingValue}
+      showChevron={showChevron}
+      onPress={onPress}
+      disabled={disabled}
+      haptic={haptic}
+      style={style}
+      testID={testID}
+      appearance={appearance}
+    />
+  );
 }

@@ -1,0 +1,17 @@
+# Light-mode gallery screenshots. Same Storybook story with LightGallery args
+# and simulator appearance = Light.
+appId: com.youtrader.pro
+---
+- extendedWaitUntil:
+    visible:
+      id: "ydl-visual-gallery"
+    timeout: 60000
+- takeScreenshot: ydl_vr_light_gallery
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-buttons"
+- takeScreenshot: ydl_vr_light_buttons
+- scrollUntilVisible:
+    element:
+      id: "ydl-vr-radar-fixture"
+- takeScreenshot: ydl_vr_light_radar_fixture
