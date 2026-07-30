@@ -1,8 +1,10 @@
 # Phase 0A — Prop Domain Architecture Specification
 
-**Status:** READY FOR PRODUCT OWNER REVIEW  
+**Status:** APPROVED WITH SPEC CONDITIONS (Product Owner, 2026-07-30)  
+**Commit reviewed:** `1c93ee7`  
 **Parent:** Phase 0 — Prop Domain Architecture  
 **Depends on:** [`PROP_OS_PHASE0_DATA_AUDIT.md`](./PROP_OS_PHASE0_DATA_AUDIT.md) (**FINAL APPROVED**, `6aa3339`)  
+**Next:** [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md)  
 **Date:** 2026-07-30  
 **Scope:** Entities, relationships, invariants, model versions, confidence contracts.  
 **Out of scope:** Calculation formula freeze (0B), fixtures (0C), migration SQL (0D), UI, production code.
@@ -117,7 +119,8 @@ One evaluation or funded attempt with a **frozen** rule set version at start (ru
 | `accountId` | Parent account |
 | `phase` | `evaluation` \| `challenge` \| `funded` \| `live` (align with product vocabulary) |
 | `ruleSetVersion` | Immutable pointer |
-| `status` | `active` \| `passed` \| `failed` \| `reset` \| `abandoned` |
+| `ruleSetSnapshot` | **Frozen copy** of rules at challenge creation (exact persistence shape in 0D). Templates may evolve; history must not. |
+| `status` | `active` \| `passed` \| `failed`/`breached` \| `reset` \| `abandoned` (+ funded lifecycle as separate attempt/phase — never overwrite prior attempts) |
 | `startedAt` / `endedAt` | |
 | `startingBalance` | Explicit baseline |
 | `resetOfChallengeId?` | Link if this attempt replaces a failed one |
@@ -213,13 +216,15 @@ Historical graph must **not** rewrite when formulas change.
 Every deterministic insight card payload:
 
 ```ts
-type InsightEvidence = {
-  metricId: string;
-  value: number | string;
+type ConfidenceBlock = {
   sampleSize: number;
-  confidence: ConfidenceLevel;
-  window?: string; // e.g. "last_20_trades" | "weekday:Friday"
+  confidence: "insufficient" | "low" | "medium" | "high";
+  confidencePolicyVersion: string; // e.g. confidence-policy-v0
+  limitations: string[];
 };
+```
+
+`confidence` is **computed by a versioned policy in the deterministic engine**, never assigned by UI.
 
 type DeterministicInsight = {
   id: string;
@@ -336,7 +341,10 @@ Do not market Review/Prepare as Prevent.
 3. Deleting/archiving account does not hard-delete trades (soft archive / retain journal).  
 4. Changing `PropRuleSet` for an active challenge requires either: new `ruleSetVersion` + amendment event, or new challenge. Silent mutate forbidden.  
 5. Guest users: local-only accounts/challenges allowed; cloud sync binds on auth (0D).  
-6. Legacy trades without `challengeId`: assign to **Default Account / Default Challenge** on migration (0D) — never invent PnL.
+6. Legacy trades without challenge assignment: remain **`unassigned`**. Do **not** auto-bind entire user history to one challenge. Explicit assignment only.
+7. Challenge history is append-only attempts under an account (failed → new attempt → funded). Never rewrite a past attempt in place.
+8. All monetary fields carry currency + minor/decimal representation + gross/net + fees policy (see 0B).
+9. Domain time distinguishes UTC event time, firm timezone, trading-day boundary, and display timezone (see 0B).
 
 ---
 
@@ -356,17 +364,33 @@ Do not market Review/Prepare as Prevent.
 
 ---
 
-## 11. Open product decisions (block 0A → 0B freeze)
+## 11. Product decisions (PO defaults for 0B+)
 
-| # | Question | Impact |
+| # | Topic | Decision |
 |---|---|---|
-| 1 | Concurrent active challenges allowed in v1? | Account UX + Buffer Health |
-| 2 | Trading-day timezone: firm / exchange / device? | Daily loss correctness |
-| 3 | Equity for DD: realized only vs mark-to-market later? | Trailing accuracy |
-| 4 | Fees required for readiness-v0 or confidence penalty if missing? | Score honesty |
-| 5 | Default challenge backfill label/copy for legacy trades | Migration trust |
-| 6 | Confidence thresholds accept §5.2 as v0? | Engine + UI copy |
-| 7 | Firm subset for typed rules in v1 | Rule engine scope |
+| 1 | Concurrent active challenges | **Allowed** |
+| 2 | Trading-day timezone | **Prop firm timezone** (not device local) |
+| 3 | Equity for DD v0 | **Realized-only**; unrealized excluded until live session |
+| 4 | Fees | Net when present; missing fees marked; no silent invent |
+| 5 | Legacy trades | **`unassigned`** — no automatic challenge bind |
+| 6 | Confidence thresholds | Locked in `confidence-policy-v0` (0B) |
+| 7 | Firm typed-rules subset | Deferred to catalog/0D; snapshots required regardless |
+| — | V1 metric | **Prop Readiness Score** 0–100 |
+| — | Probability | **Forbidden** until calibration |
+| — | Multi-account | **Required** |
+| — | AI Analytics | Explanation layer only |
+| — | Intervention V1 | Post-trade + pre-session, not live prevention |
+| — | UI | Not before 0B–0D |
+
+### Approval conditions (must hold before schema implementation)
+
+1. Account ≠ Challenge; challenge attempts are historical, not overwritten.  
+2. `ruleSetVersion` + `ruleSetSnapshot` on every challenge.  
+3. Monetary units/currency/gross-net/fees explicit; no float truth for limits.  
+4. Domain time model (UTC / firm TZ / trading day / display TZ).  
+5. Explicit trade assignment; legacy `unassigned`.  
+6. Reproducible HWM / drawdown state machine (detailed in 0B).  
+7. Confidence = versioned policy output including `limitations[]`.
 
 ---
 
@@ -388,13 +412,7 @@ Do not market Review/Prepare as Prevent.
 
 ## 13. STOP / next gate
 
-**Awaiting Product Owner review of Phase 0A.**
+**Phase 0A — APPROVED WITH SPEC CONDITIONS.**
 
-Suggested next approve:
-
-```text
-APPROVE PHASE 0A — then start Phase 0B Calculation Engine specification
-(formulas, drawdown strategies math, readiness-v0 weights, confidence thresholds freeze)
-```
-
-No Prop Pass UI and no production implementation until 0A–0D gates as defined in the roadmap.
+Next: Phase 0B Calculation Engine specification  
+→ [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md)

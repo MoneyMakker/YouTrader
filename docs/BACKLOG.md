@@ -368,7 +368,8 @@ expanding product breadth.
 > **YouTrader 3.0 product track** starts with Phase 0 — Prop Domain Architecture
 > (0A Schema → 0B Engine → 0C Fixtures → 0D Migration). Audit:
 > `docs/architecture/PROP_OS_PHASE0_DATA_AUDIT.md` (**FINAL APPROVED**).
-> Domain spec: `docs/architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md`.
+> Domain spec: `docs/architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md` (**APPROVED WITH CONDITIONS**).
+> Calc engine spec: `docs/architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`.
 > Do not redesign AI Analytics → Prop Pass before 0A–0D approval.
 
 ### YT-014 — Standardize loading, empty, error, and offline states

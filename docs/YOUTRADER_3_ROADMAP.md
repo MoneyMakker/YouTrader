@@ -33,16 +33,13 @@ AI never invents metrics or pass odds.
 
 ```text
 Infrastructure (YDL)                         ✅
-Phase 0 audit                                ✅ FINAL APPROVED (6aa3339)
-Phase 0A Domain Schema                       ← specification
-Phase 0B Calculation Engine                  (after 0A approve)
+Phase 0 audit                                ✅ FINAL APPROVED
+Phase 0A Domain Schema                       ✅ APPROVED WITH CONDITIONS
+Phase 0B Calculation Engine                  ← specification
 Phase 0C Fixtures & Test Accounts
 Phase 0D Migration Plan
 Prop Pass UI                                 (only after 0A–0D)
-Performance Intelligence
-Decision Engine  (Replay → Pre-session → Real Intervention when live)
-Operating Modes
-Polish / release hardening
+…
 ```
 
 **Do not** ship UI “pass probability %” before domain + readiness model.  
@@ -60,10 +57,10 @@ Split into four subprojects:
 
 | ID | Name | Spec / code focus |
 |---|---|---|
-| **0A** | Domain Schema | Entities, relations, invariants, confidence contract — [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md) |
-| **0B** | Calculation Engine | Drawdown strategies math, readiness-v0, confidence thresholds, versioned formulas |
+| **0A** | Domain Schema | Entities, relations, invariants, confidence contract — [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md) (**APPROVED WITH CONDITIONS**) |
+| **0B** | Calculation Engine | [`PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md`](./architecture/PROP_OS_PHASE_0B_CALC_ENGINE_SPEC.md) — money, DD/HWM, readiness-v0, confidence-policy-v0 |
 | **0C** | Fixtures & Test Accounts | Golden accounts/challenges/trades |
-| **0D** | Migration Plan | Backfill User→Account→Challenge→Trade, RLS, sync, rollback |
+| **0D** | Migration Plan | Backfill, RLS, sync, rollback; `ruleSetSnapshot` persistence shape |
 
 ### Aggregate model (mandatory)
 
