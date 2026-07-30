@@ -1,11 +1,14 @@
 # Prop OS Phase 0 — Data Foundation Audit
 
-**Status:** READY FOR PRODUCT OWNER REVIEW  
+**Status:** FINAL APPROVED (Product Owner, 2026-07-30)  
 **Mode:** Audit-only (no production code, schema, navigation, UI, or package changes)  
 **Date:** 2026-07-30  
-**Related:** [`docs/YOUTRADER_3_ROADMAP.md`](../YOUTRADER_3_ROADMAP.md)
+**Commit:** `6aa3339`  
+**Related:** [`docs/YOUTRADER_3_ROADMAP.md`](../YOUTRADER_3_ROADMAP.md) · [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./PROP_OS_PHASE_0A_DOMAIN_SPEC.md)
 
 > **Verdict:** YouTrader today is a **user-scoped trading journal** with a **template-level Prop Risk overlay** and strong deterministic Stats utilities. It is **not** yet an account/challenge-scoped Prop Operating System. Passing UI (Prop Pass, Buffer Health, calibrated probability) before a domain model would invent numbers.
+>
+> **PO addendum:** add **Data Confidence Layer** (sample size + confidence on every engine insight) as a critical gap — addressed in Phase 0A domain contract.
 
 ---
 
@@ -216,7 +219,8 @@ Trade[] (journal)
 | True trailing / EOD vs intraday DD | No | Simplified buffer formula |
 | Consistency / scaling / news / payout evaluators | No | Stored as untyped records |
 | Live / pre-trade event source | No | Blocks Smart Intervention (Phase 4) |
-| Calibrated probability | No | Must ship as **Readiness Score** until validated |
+| Calibrated probability | No | Must ship as **Prop Readiness Score** until validated |
+| **Data Confidence Layer** (sample size + confidence on every insight) | Partial | Some confidence fields exist ad hoc; **not** a mandatory engine contract on all recommendations/edges |
 
 ### Reusable as-is
 
@@ -391,10 +395,9 @@ type PropReadinessSnapshot = {
 
 ## 12. STOP
 
-**Awaiting Product Owner review** of this audit before any Phase 0 implementation (types, migrations, engines, or Prop Pass UI).
+**Product Owner decision (2026-07-30): FINAL APPROVED.**
 
-Recommended next approve gate after review:
+Next gate executed as documentation: **Phase 0A Domain Architecture Specification**  
+→ [`PROP_OS_PHASE_0A_DOMAIN_SPEC.md`](./PROP_OS_PHASE_0A_DOMAIN_SPEC.md)
 
-```text
-APPROVE PHASE 0 IMPLEMENTATION — domain schema + calc specs + fixtures only
-```
+No Prop Pass UI / production domain code until 0A–0D approvals as sequenced in the roadmap.

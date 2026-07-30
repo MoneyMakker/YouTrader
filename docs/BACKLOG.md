@@ -365,10 +365,11 @@ expanding product breadth.
 > the same as any “AI Phase 6” naming elsewhere. It supports Epic 6 goals but
 > does not renumber YT-014 / YT-015.
 >
-> **YouTrader 3.0 product track** starts at **0%** and begins with
-> Phase 0 (Prop Domain & Data Architecture) — see
-> `docs/YOUTRADER_3_ROADMAP.md`. Do not redesign AI Analytics → Prop Pass
-> before Phase 0 approval and an audit-only domain pass.
+> **YouTrader 3.0 product track** starts with Phase 0 — Prop Domain Architecture
+> (0A Schema → 0B Engine → 0C Fixtures → 0D Migration). Audit:
+> `docs/architecture/PROP_OS_PHASE0_DATA_AUDIT.md` (**FINAL APPROVED**).
+> Domain spec: `docs/architecture/PROP_OS_PHASE_0A_DOMAIN_SPEC.md`.
+> Do not redesign AI Analytics → Prop Pass before 0A–0D approval.
 
 ### YT-014 — Standardize loading, empty, error, and offline states
 
