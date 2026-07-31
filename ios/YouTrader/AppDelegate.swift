@@ -61,7 +61,12 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
   }
 
   override func bundleURL() -> URL? {
-#if DEBUG
+    // Prefer embedded production/staging bundle whenever this binary was compiled
+    // with EXPO_CONFIGURATION_RELEASE (includes custom Release-Staging). Do not
+    // fall through to Metro just because Xcode attached a debugger.
+#if EXPO_CONFIGURATION_RELEASE
+    return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+#elseif DEBUG
     return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
