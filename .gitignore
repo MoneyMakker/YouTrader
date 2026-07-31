@@ -67,3 +67,6 @@ storybook-static
 .maestro/ydl/.capture-out/
 
 .tmp/
+
+# Local agent secrets (never commit)
+.codex/secrets/

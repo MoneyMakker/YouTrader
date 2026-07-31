@@ -87,8 +87,18 @@ async function callProcessor(name, body) {
 }
 
 const results = {};
-const allow = await signIn("tf-internal-allow@staging.youtrader.local", "YtStg!Allow112");
-const deny = await signIn("tf-internal-deny@staging.youtrader.local", "YtStg!Deny112");
+const allowEmail = process.env.STAGING_QA_ALLOW_EMAIL ?? "";
+const allowPassword = process.env.STAGING_QA_ALLOW_PASSWORD ?? "";
+const denyEmail = process.env.STAGING_QA_DENY_EMAIL ?? "";
+const denyPassword = process.env.STAGING_QA_DENY_PASSWORD ?? "";
+if (!allowEmail || !allowPassword || !denyEmail || !denyPassword) {
+  console.error(
+    "REFUSE: set STAGING_QA_ALLOW_EMAIL/PASSWORD and STAGING_QA_DENY_EMAIL/PASSWORD (see .codex/secrets/staging-qa-credentials.env)",
+  );
+  process.exit(2);
+}
+const allow = await signIn(allowEmail, allowPassword);
+const deny = await signIn(denyEmail, denyPassword);
 results.auth =
   allow.userId === ALLOW && deny.userId === DENY ? "PASS" : "FAIL uid mismatch";
 
