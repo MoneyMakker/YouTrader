@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { YdlButton } from "../ydl/components/YdlButton";
@@ -11,9 +11,14 @@ import { BufferHealthSection } from "./BufferHealthSection";
 import { runPropPassCommand } from "./commandGateway";
 import { PropPassOnboardingFlow } from "./PropPassOnboardingFlow";
 import { PropPassAssignmentFlow } from "./PropPassAssignmentFlow";
+import { PerformanceIntelligenceInternalPanel } from "./PerformanceIntelligenceInternalPanel";
 import { usePropPassAvailability } from "./usePropPassAvailability";
 import type { ChallengeSummary, PropPassUiState, PropPassViewModel } from "./types";
 import type { Trade } from "../app/types";
+import {
+  createMemoryIntelligenceStore,
+  type MemoryIntelligenceStore,
+} from "../propOs/intelligence";
 
 type Props = {
   userId: string | null | undefined;
@@ -23,6 +28,8 @@ type Props = {
   developerMode?: boolean;
   /** Journal trades for assignment (optional; empty → empty assignable list). */
   trades?: Trade[];
+  /** Optional PI memory store for QA injection; falls back to empty in-memory store. */
+  intelligenceStore?: MemoryIntelligenceStore;
 };
 
 export function PropPassInternalScreen({
@@ -32,13 +39,17 @@ export function PropPassInternalScreen({
   uiStateOverride,
   developerMode = typeof __DEV__ !== "undefined" && __DEV__,
   trades = [],
+  intelligenceStore: intelligenceStoreProp,
 }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme();
   const controller = usePropPassAvailability({ userId, accountId });
   const uiState = uiStateOverride ?? controller.uiState;
+  const fallbackIntelligenceStore = useMemo(() => createMemoryIntelligenceStore(), []);
+  const intelligenceStore = intelligenceStoreProp ?? fallbackIntelligenceStore;
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAssignment, setShowAssignment] = useState(false);
+  const [showIntelligence, setShowIntelligence] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [commandMessage, setCommandMessage] = useState<string | null>(null);
 
@@ -76,7 +87,16 @@ export function PropPassInternalScreen({
         </View>
       ) : null}
       <ScrollView contentContainerStyle={styles.body} accessibilityRole="scrollbar">
-        {showOnboarding && userId ? (
+        {showIntelligence && userId && uiState.kind === "available" ? (
+          <PerformanceIntelligenceInternalPanel
+            userId={userId}
+            accountId={uiState.model.account.id}
+            challengeId={uiState.model.challenge.id}
+            store={intelligenceStore}
+            assignmentRevision={intelligenceStore.assignmentRevision}
+            onClose={() => setShowIntelligence(false)}
+          />
+        ) : showOnboarding && userId ? (
           <PropPassOnboardingFlow
             userId={userId}
             onCancel={() => setShowOnboarding(false)}
@@ -111,6 +131,7 @@ export function PropPassInternalScreen({
               trackPropPassEvent("prop_pass_assignment_flow_opened", { userId });
               setShowAssignment(true);
             },
+            onOpenIntelligence: () => setShowIntelligence(true),
             archiveConfirm,
             setArchiveConfirm,
             userId: userId ?? null,
@@ -125,6 +146,7 @@ export function PropPassInternalScreen({
 type Actions = {
   onStartOnboarding: () => void;
   onStartAssignment: () => void;
+  onOpenIntelligence: () => void;
   archiveConfirm: boolean;
   setArchiveConfirm: (v: boolean) => void;
   userId: string | null;
@@ -237,6 +259,7 @@ function renderState(
           onMessage={actions.setCommandMessage}
           onRefresh={() => controller.refresh()}
           onAssignTrades={actions.onStartAssignment}
+          onOpenIntelligence={actions.onOpenIntelligence}
         />
       );
     default:
@@ -358,6 +381,7 @@ function AvailableView({
   onMessage,
   onRefresh,
   onAssignTrades,
+  onOpenIntelligence,
 }: {
   model: PropPassViewModel;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -369,6 +393,7 @@ function AvailableView({
   onMessage: (msg: string | null) => void;
   onRefresh: () => void;
   onAssignTrades: () => void;
+  onOpenIntelligence: () => void;
 }) {
   const scoreLabel =
     model.readiness.score == null
@@ -394,6 +419,14 @@ function AvailableView({
         <YdlButton
           label={t("propPass.assignment.openCta")}
           onPress={onAssignTrades}
+        />
+        <YdlButton
+          label={t("propPass.intelligence.openCta")}
+          variant="secondary"
+          onPress={() => {
+            trackPropPassEvent("prop_pass_intelligence_opened", { userId });
+            onOpenIntelligence();
+          }}
         />
         <YdlButton
           label={t("propPass.account.setDefault")}

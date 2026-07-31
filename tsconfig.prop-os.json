@@ -26,7 +26,9 @@
     "scripts/prop-os-accounts-pg-qa.ts",
     "scripts/prop-os-accounts-pg-store.ts",
     "scripts/prop-os-no-replay-alias-qa.ts",
-    "scripts/prop-os-node-shim.d.ts"
+    "scripts/prop-os-node-shim.d.ts",
+    "scripts/prop-pass-phase3a-qa.ts",
+    "scripts/prop-pass-phase3a-pg-qa.ts"
   ],
   "exclude": ["node_modules"]
 }

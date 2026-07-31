@@ -35,6 +35,20 @@ const ALLOWED = new Set([
   "prop_pass_recalculation_completed",
   "prop_pass_recalculation_failed",
   "prop_pass_assignment_conflict",
+  "prop_pass_intelligence_opened",
+  "prop_pass_intelligence_scope_selected",
+  "prop_pass_intelligence_calc_requested",
+  "prop_pass_intelligence_calc_queued",
+  "prop_pass_intelligence_calc_started",
+  "prop_pass_intelligence_calc_completed",
+  "prop_pass_intelligence_calc_failed",
+  "prop_pass_intelligence_snapshot_outdated",
+  "prop_pass_intelligence_insufficient_data",
+  "prop_pass_intelligence_finding_opened",
+  "prop_pass_intelligence_metric_drilldown",
+  "prop_pass_intelligence_calc_conflict",
+  "prop_pass_intelligence_forbidden",
+  "prop_pass_intelligence_calc_latency",
 ]);
 
 export function trackPropPassEvent(
@@ -44,6 +58,9 @@ export function trackPropPassEvent(
     mode?: string;
     userId?: string | null;
     reasonCodes?: string[];
+    scopeKind?: string;
+    durationMs?: number;
+    reasonCode?: string;
   },
 ): void {
   if (!ALLOWED.has(name)) return;
@@ -52,5 +69,8 @@ export function trackPropPassEvent(
     mode: props?.mode ?? null,
     user_ref: props?.userId ? redactId(props.userId) : null,
     reason_codes: props?.reasonCodes?.slice(0, 6).join(",") ?? null,
+    scope_kind: props?.scopeKind ?? null,
+    duration_ms: props?.durationMs ?? null,
+    reason_code: props?.reasonCode ?? null,
   });
 }
