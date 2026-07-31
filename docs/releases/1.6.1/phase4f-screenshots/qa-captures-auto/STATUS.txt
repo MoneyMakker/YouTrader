@@ -1,0 +1,12 @@
+2026-07-31T16:03:08.631Z phase_start phase=paywall
+2026-07-31T16:03:10.190Z captured phase_paywall
+2026-07-31T16:03:10.192Z auto_advance paywall
+2026-07-31T16:03:10.234Z phase_start phase=main
+2026-07-31T16:03:11.741Z captured phase_main
+2026-07-31T16:03:12.809Z captured tab_journal
+2026-07-31T16:03:13.923Z captured tab_stats
+2026-07-31T16:03:15.036Z captured tab_calc
+2026-07-31T16:03:16.180Z captured tab_news
+2026-07-31T16:03:17.293Z captured tab_calendar
+2026-07-31T16:03:18.411Z captured tab_settings
+2026-07-31T16:03:18.413Z walk_done

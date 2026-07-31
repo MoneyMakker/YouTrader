@@ -1,0 +1,28 @@
+# Simulator funnel — YouTrader recovery
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+    timeout: 45000
+- takeScreenshot: sim_funnel_01_after_launch
+# Advance onboarding if present
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+      - takeScreenshot: sim_funnel_02_after_onboarding
+# Dismiss paywall close if present
+- runFlow:
+    when:
+      visible: "Unlock Your Trading Edge"
+    commands:
+      - takeScreenshot: sim_funnel_03_paywall
+      - tapOn:
+          id: ".*"
+          optional: true
+# Prefer close control top-right via point if needed after screenshot review
+- takeScreenshot: sim_funnel_04_current

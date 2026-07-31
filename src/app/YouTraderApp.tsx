@@ -162,6 +162,10 @@ import {
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { isPropPassEntryVisible } from "../propPass/access";
 import {
+  isDeviceQaCaptureEnabled,
+  useDeviceQaCaptureWalk,
+} from "../qa/deviceQaCapture";
+import {
   enableCloudSignIn,
   enableNativeAppleSignIn,
   enableNativeGoogleSignIn,
@@ -10172,6 +10176,44 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     }
   }, [session?.user?.id]);
 
+  const appReady = tradesHydrated && authHydrated;
+  const acquisitionPhase = resolveAcquisitionPhase({
+    hydrated: appReady && acquisitionHydrated,
+    onboardingCompleted,
+    paywallCompleted,
+    authRequired,
+    hasSession: !!session?.user,
+    isPremium,
+    revenueCatReady: !revenueCatConfigured || revenueCatReady,
+  });
+  const propPassTabVisible = isPropPassEntryVisible(
+    undefined,
+    null,
+    session?.user?.id ?? null,
+  );
+  const qaTabIds = [
+    "journal",
+    "stats",
+    "calc",
+    ...(propPassTabVisible ? (["propPass"] as const) : []),
+    "news",
+    "calendar",
+    "settings",
+  ];
+  useDeviceQaCaptureWalk({
+    phase: acquisitionPhase,
+    tab,
+    tabIds: qaTabIds,
+    setTab: (id) => setTab(id as Tab),
+    ready:
+      isDeviceQaCaptureEnabled() &&
+      appReady &&
+      acquisitionHydrated &&
+      acquisitionPhase !== "loading",
+    onAdvanceFromOnboarding: completeProductOnboarding,
+    onAdvanceFromPaywall: dismissAcquisitionPaywall,
+  });
+
   useEffect(() => {
     if (firstRenderLogged.current) return;
     firstRenderLogged.current = true;
@@ -10203,8 +10245,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   useEffect(() => {
     if (tradesHydrated) recordMetric("journal_trade_count", trades.length);
   }, [trades.length, tradesHydrated]);
-
-  const appReady = tradesHydrated && authHydrated;
 
   useEffect(() => {
     if (!appReady) return;
@@ -11452,16 +11492,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
-  const acquisitionPhase = resolveAcquisitionPhase({
-    hydrated: acquisitionHydrated,
-    onboardingCompleted,
-    paywallCompleted,
-    authRequired,
-    hasSession: !!session?.user,
-    isPremium,
-    revenueCatReady: !revenueCatConfigured || revenueCatReady,
-  });
-
   if (acquisitionPhase === "loading") {
     return (
       <SafeAreaView style={styles.app}>
@@ -11526,7 +11556,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
-  const propPassTabVisible = isPropPassEntryVisible(undefined, null, session?.user?.id ?? null);
   const tabs: { id: Tab; label: string }[] = [
     { id: "journal", label: t("journal") },
     { id: "stats", label: t("stats") },

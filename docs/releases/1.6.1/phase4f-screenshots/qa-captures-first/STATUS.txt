@@ -1,0 +1,3 @@
+2026-07-31T15:59:40.602Z phase_start phase=paywall
+2026-07-31T15:59:41.939Z captured phase_paywall
+2026-07-31T15:59:41.941Z phase_done phase=paywall

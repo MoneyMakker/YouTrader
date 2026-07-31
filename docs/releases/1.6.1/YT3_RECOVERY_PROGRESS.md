@@ -6,7 +6,9 @@
 
 ## Phase 4F
 
-**FAILED / NO-GO** until physical evidence proves otherwise.
+**FAILED / NO-GO** — physical evidence collected; interactive auth + allowlisted Prop Pass still open.
+
+Evidence: `docs/releases/1.6.1/phase4f-screenshots/qa-captures-auto/`
 
 ## Commits so far
 
@@ -15,45 +17,35 @@
 | `963b2c5` | Audit + FAILED Phase 4F report |
 | `58fac91` | YDL dark product theme + readable status titles |
 | `ae8b4e1` | Acquisition funnel + Apple CTA restore + Prop Pass tab gate + copy |
-| (latest) | Assignment remote hydrate + YDL shell deps |
+| `cc17c56` | Assignment remote hydrate + YDL shell deps |
+| `a52242e` / `a73359a` / `87f2f56` | Progress / rebuild / tooling docs |
 
-## Restored in code (not yet physical PASS)
+## Uncommitted this session (not yet committed)
 
-- Onboarding → Paywall → Auth → Main state machine + unit QA
-- Apple CTA no longer silently hidden on staging
-- Prop Pass tab only when allowlisted + activation eligible
-- Dark-on-dark contrast (system light + missing title color)
-- Journal / paywall copy no longer pushes “AI coaching”
-- Assignment flow loads remote current assignments; no fake memory write success
+- `src/qa/deviceQaCapture.ts` — staging-only in-app capture + auto-advance walk  
+- `src/app/YouTraderApp.tsx` — wire capture walk into shell  
+- i18n — paywall “Performance Coach” (all locales)  
+- Phase 4F report + screenshot evidence under `docs/releases/1.6.1/phase4f-screenshots/`
 
-## Blocked / remaining
+## Proven on device (physical PNGs)
 
-1. **Apple provider on staging Supabase** — Management API PATCH **403**; still `provider_disabled` in Auth logs.  
-   **One manual action:** Dashboard → YouTrader Staging → Auth → Providers → Apple → Enable + Client ID `com.youtrader.pro` + secret.
-2. **Google E2E** — config present; physical proof required.
-3. **Rebuild + install Release-Staging 113** with Metro OFF on iPhone 4S and capture screenshots.
-4. **Allowlisted Prop Pass content** after rebuild (env already has `staging_preview` + allowlist in gitignored `.xcode.env.staging`).
-5. Aikido scan — auth token invalid this session.
+- Release-Staging **113** embed launch Metro OFF  
+- Paywall → Main auto path (session restored from Keychain)  
+- Tabs: Journal, Stats, Calculator, News, Calendar, Settings — **no AI Analytics tab**  
+- Journal empty copy references Prop Pass, not AI coaching  
+- Prop Pass tab **hidden** for non-allowlisted restored account  
+- Dark UI readable on Journal / Settings / Paywall  
 
-## Device rebuild (2026-07-31)
+## Still blocked
 
-| Check | Result |
-| --- | --- |
-| `xcodebuild` YouTrader-Staging / Release-Staging | **BUILD SUCCEEDED** |
-| Version / build | **1.6.1 (113)** |
-| Embedded `main.jsbundle` | Present (~11.16 MB) |
-| Install on iPhone 4S | **PASS** (`devicectl device install app`) |
-| Launch Metro OFF | **PASS** |
-| Cold/warm process launches | **PASS** (3/3 + 3/3 this session) |
-| Screenshots | **BLOCKED** — screenshotr / DeveloperDiskImage |
-| Apple / Google / funnel / Prop Pass interactive | **NOT PASS** without screenshots + Apple provider enable |
+1. **Apple provider on staging Supabase** — Management API PATCH **403**; still `provider_disabled`.  
+2. Onboarding + Auth CTA screens — need signed-out / Keychain-cleared install.  
+3. Allowlisted Prop Pass home content.  
+4. Google interactive E2E.  
+5. Aikido token invalid.  
+6. Stats “Stats Dashboard” low-contrast title (visual concern).
 
-Phase 4F remains **FAILED / NO-GO**.
+## Tooling note
 
-## Automation blockers (updated)
-
-- `idevicescreenshot` / screenshotr: Invalid service on iOS 26.6 despite usable DDI
-- Maestro 2.8.0 `driver-setup --apple-team-id=L6M4U8G8RC`: fails missing `MaestroDriverLib/Info.plist`
-- Staging Apple Auth provider: still disabled (`provider_disabled`); Management API PATCH 403
-
-Manual screenshots via Xcode Devices window are required until tooling is fixed.
+`idevicescreenshot` / Maestro remain broken on this iOS 26.6 + Xcode 26 stack.  
+Workaround used: `EXPO_PUBLIC_DEVICE_QA_CAPTURE=true` in gitignored `ios/.xcode.env.staging` (now commented off after pull).
