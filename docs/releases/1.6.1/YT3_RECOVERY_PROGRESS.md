@@ -35,8 +35,17 @@
 4. **Allowlisted Prop Pass content** after rebuild (env already has `staging_preview` + allowlist in gitignored `.xcode.env.staging`).
 5. Aikido scan — auth token invalid this session.
 
-## Do not claim
+## Device rebuild (2026-07-31)
 
-- Auth restored / PASS  
-- Phase 4F PASS  
-- Production ready  
+| Check | Result |
+| --- | --- |
+| `xcodebuild` YouTrader-Staging / Release-Staging | **BUILD SUCCEEDED** |
+| Version / build | **1.6.1 (113)** |
+| Embedded `main.jsbundle` | Present (~11.16 MB) |
+| Install on iPhone 4S | **PASS** (`devicectl device install app`) |
+| Launch Metro OFF | **PASS** |
+| Cold/warm process launches | **PASS** (3/3 + 3/3 this session) |
+| Screenshots | **BLOCKED** — screenshotr / DeveloperDiskImage |
+| Apple / Google / funnel / Prop Pass interactive | **NOT PASS** without screenshots + Apple provider enable |
+
+Phase 4F remains **FAILED / NO-GO**.
