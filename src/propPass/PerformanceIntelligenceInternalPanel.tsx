@@ -63,7 +63,8 @@ function formatRatio(
   if (!ratio) return t("propPass.intelligence.valueUnavailable");
   switch (ratio.kind) {
     case "value": {
-      const v = asPercent ? ratio.value * 100 : ratio.value;
+      const raw = ratio.valueScaled / 1_000_000;
+      const v = asPercent ? raw * 100 : raw;
       return asPercent
         ? `${v.toFixed(1)}${t("propPass.intelligence.unit.percent")}`
         : `${v.toFixed(2)}${t("propPass.intelligence.unit.ratio")}`;
@@ -88,7 +89,9 @@ function formatMinorRatio(
   t: (key: string) => string,
 ): string {
   if (!ratio) return t("propPass.intelligence.valueUnavailable");
-  if (ratio.kind === "value") return formatMinor(ratio.value, t);
+  if (ratio.kind === "value") {
+    return formatMinor(Math.round(ratio.valueScaled / 1_000_000), t);
+  }
   return t("propPass.intelligence.valueUnavailable");
 }
 

@@ -34,8 +34,12 @@ export type IntelligenceDataQuality =
   | { kind: "unsupported"; reasonCode: string }
   | { kind: "integrity_error"; reasonCode: string };
 
+/**
+ * Ratios use integer micro-units (valueScaled / PI_RATIO_SCALE).
+ * Never emit NaN/Infinity; use explicit undefined kinds.
+ */
 export type RatioOrUndefined =
-  | { kind: "value"; value: number }
+  | { kind: "value"; valueScaled: number }
   | { kind: "undefined_zero_loss" }
   | { kind: "undefined_zero_profit" }
   | { kind: "undefined_zero_denominator" }
@@ -66,6 +70,12 @@ export type DatasetSummary = {
   exclusionReasons: Record<string, number>;
   dataQuality: IntelligenceDataQuality;
   identityHash: string;
+  /** Findings generated before surface cap. */
+  findingsGenerated?: number;
+  /** Findings omitted by max-surface cap. */
+  findingsSuppressed?: number;
+  /** Segments omitted by cardinality cap (metrics still use full trade set). */
+  segmentsSuppressed?: number;
 };
 
 export type PerformanceMetrics = {

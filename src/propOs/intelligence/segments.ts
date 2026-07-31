@@ -81,7 +81,12 @@ function riskBucket(minor: number): string {
   return "high";
 }
 
-export function calculateSegments(trades: PerformanceTradeInput[]): SegmentMetric[] {
+export type SegmentsResult = {
+  segments: SegmentMetric[];
+  suppressed: number;
+};
+
+export function calculateSegments(trades: PerformanceTradeInput[]): SegmentsResult {
   const withRisk = trades.filter((t) => t.riskAmountMinor != null);
   const all = [
     ...group(trades, "instrument", (t) => t.instrument),
@@ -95,13 +100,16 @@ export function calculateSegments(trades: PerformanceTradeInput[]): SegmentMetri
       ? group(withRisk, "risk_bucket", (t) => riskBucket(t.riskAmountMinor!))
       : []),
   ];
-  // Deterministic cap: keep highest sampleSize then key
-  return [...all]
-    .sort((a, b) => {
-      if (b.sampleSize !== a.sampleSize) return b.sampleSize - a.sampleSize;
-      const ak = `${a.segmentType}:${a.segmentKey}`;
-      const bk = `${b.segmentType}:${b.segmentKey}`;
-      return ak < bk ? -1 : ak > bk ? 1 : 0;
-    })
-    .slice(0, 64);
+  // Cap is display-only; core performance metrics always use full trade set.
+  const ranked = [...all].sort((a, b) => {
+    if (b.sampleSize !== a.sampleSize) return b.sampleSize - a.sampleSize;
+    const ak = `${a.segmentType}:${a.segmentKey}`;
+    const bk = `${b.segmentType}:${b.segmentKey}`;
+    return ak < bk ? -1 : ak > bk ? 1 : 0;
+  });
+  const segments = ranked.slice(0, 64);
+  return {
+    segments,
+    suppressed: Math.max(0, ranked.length - segments.length),
+  };
 }

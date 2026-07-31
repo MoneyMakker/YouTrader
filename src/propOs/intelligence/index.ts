@@ -26,6 +26,23 @@ export {
 } from "./types";
 export { METRIC_CATALOGUE } from "./metricSpec";
 export {
+  PRECISION_CONTRACT,
+  PI_RATIO_SCALE,
+  roundHalfAwayFromZero,
+  ratioScaled,
+  scaledToNumber,
+} from "./precision";
+export {
+  CANONICAL_SERIALIZATION_CONTRACT,
+  canonicalSnapshotBytes,
+  canonicalSnapshotHash,
+} from "./canonical";
+export {
+  buildDatasetIdentityHash,
+  buildInputRevisionV1,
+  tradeMetricFingerprint,
+} from "./datasetIdentity";
+export {
   normalizePerformanceTrades,
   orderPerformanceTrades,
   takeRecentTrades,
@@ -34,6 +51,7 @@ export {
   calculatePerformanceMetrics,
   calculateRiskMetrics,
   calculateSequenceMetrics,
+  ratioDisplayValue,
 } from "./metrics";
 export { calculateSegments } from "./segments";
 export { evaluateFindings } from "./findings";
@@ -52,10 +70,19 @@ export {
 } from "./memoryStore";
 export {
   TRUSTED_PI_PROCESSOR_ROLES,
+  ASSIGNMENT_RECALC_PROCESSOR_ROLE,
   queueIntelligenceCalculation,
   processIntelligenceCalculation,
   failIntelligenceCalculation,
+  assertTrustedPiProcessorRole,
 } from "./processor";
+export {
+  attachPublicationState,
+  publishIntelligenceSnapshot,
+  type PublicationStage,
+  type MemoryPublicationStore,
+} from "./publication";
+export { rebuildCurrentProjection, projectionParity } from "./rebuild";
 export {
   createMemoryIntelligenceReadStore,
   runTrustedMemoryCalculation,

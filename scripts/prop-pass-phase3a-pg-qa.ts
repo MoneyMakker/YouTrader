@@ -241,7 +241,7 @@ function main() {
     `);
     const stale = psql(`
       begin;
-      set local role prop_os_recalc_processor;
+      set local role prop_os_performance_intelligence_processor;
       select public.prop_os_cmd_complete_performance_intelligence(
         '${OWNER}'::uuid,
         '${sk}',
@@ -268,6 +268,141 @@ function main() {
     const j = parseJson(stale);
     assert.equal(j.kind, "conflict");
     assert.equal(j.reasonCode, "stale_assignment_revision");
+  });
+
+  check("assignment recalc processor cannot EXECUTE PI complete", () => {
+    const can = psql(`
+      select has_function_privilege(
+        'prop_os_recalc_processor',
+        'public.prop_os_cmd_complete_performance_intelligence(uuid,text,bigint,jsonb)',
+        'EXECUTE'
+      )::text;
+    `);
+    assert.ok(can === "f" || can === "false");
+  });
+
+  check("PI processor has EXECUTE on complete; uniqueness index exists", () => {
+    const can = psql(`
+      select has_function_privilege(
+        'prop_os_performance_intelligence_processor',
+        'public.prop_os_cmd_complete_performance_intelligence(uuid,text,bigint,jsonb)',
+        'EXECUTE'
+      )::text;
+    `);
+    assert.ok(can === "t" || can === "true");
+    const idx = psql(`
+      select count(*)::text from pg_indexes
+      where indexname = 'prop_pi_snapshots_logical_identity_uidx';
+    `);
+    assert.equal(idx, "1");
+  });
+
+  check("publication failure injection rolls back current", () => {
+    psql(`
+      insert into public.prop_os_assignment_revisions (user_id, revision, updated_at)
+      values ('${OWNER}'::uuid, 3, now())
+      on conflict (user_id) do update set revision = 3, updated_at = now();
+      insert into public.prop_performance_intelligence_calc (
+        user_id, scope_key, scope_json, account_id, assignment_revision, state
+      ) values (
+        '${OWNER}'::uuid, '${sk}', '${scopeJson}'::jsonb, '${accId}'::uuid, 3, 'queued'
+      )
+      on conflict (user_id, scope_key) do update
+        set state = 'queued', assignment_revision = 3, updated_at = now();
+    `);
+    for (const stage of [
+      "pi_queue_claim",
+      "pi_snapshot_insert",
+      "pi_finding_insert",
+      "pi_current_projection",
+      "pi_queue_completion",
+      "pi_receipt_completion",
+    ]) {
+      let failed = false;
+      try {
+        psql(`
+          begin;
+          select set_config('prop_os.fail_after', '${stage}', true);
+          set local role prop_os_performance_intelligence_processor;
+          select public.prop_os_cmd_complete_performance_intelligence(
+            '${OWNER}'::uuid, '${sk}', 3,
+            jsonb_build_object(
+              'accountId', '${accId}',
+              'inputRevision', 'pi-rev-3:${stage}',
+              'status', 'current',
+              'metricSpecVersion', 'pi-metric-spec-v0',
+              'engineVersion', 'pi-engine-v0',
+              'clientRequestId', 'pireq-${stage}',
+              'scope', jsonb_build_object('kind','account','accountId','${accId}','includeArchivedChallenges',false),
+              'datasetSummary', jsonb_build_object('tradeCount', 0, 'identityHash', 'inj'),
+              'performance', '{}'::jsonb,
+              'risk', '{}'::jsonb,
+              'sequences', '{}'::jsonb,
+              'segments', '[]'::jsonb,
+              'findings', '[]'::jsonb,
+              'sourceRange', jsonb_build_object('earliestTradeAt', null, 'latestTradeAt', null),
+              'schemaVersion', 'prop-os-schema-v0'
+            )
+          );
+          commit;
+        `);
+      } catch {
+        failed = true;
+      }
+      assert.equal(failed, true, stage);
+      const cur = psql(`
+        select count(*)::text from public.prop_performance_intelligence_current
+        where user_id = '${OWNER}'::uuid and scope_key = '${sk}' and input_revision = 'pi-rev-3:${stage}';
+      `);
+      assert.equal(cur, "0", stage);
+      const completed = psql(`
+        select count(*)::text from public.prop_performance_intelligence_calc
+        where user_id = '${OWNER}'::uuid and scope_key = '${sk}' and state = 'completed'
+          and snapshot_id in (
+            select id from public.prop_performance_intelligence_snapshots
+            where input_revision = 'pi-rev-3:${stage}'
+          );
+      `);
+      assert.equal(completed, "0", stage);
+      const receipt = psql(`
+        select count(*)::text from public.prop_os_command_receipts
+        where user_id = '${OWNER}'::uuid and client_request_id = 'pireq-${stage}'
+          and result_status = 'success';
+      `);
+      assert.equal(receipt, "0", stage);
+    }
+    // successful retry
+    const ok = psql(`
+      begin;
+      select set_config('prop_os.fail_after', '', true);
+      set local role prop_os_performance_intelligence_processor;
+      select public.prop_os_cmd_complete_performance_intelligence(
+        '${OWNER}'::uuid, '${sk}', 3,
+        jsonb_build_object(
+          'accountId', '${accId}',
+          'inputRevision', 'pi-rev-3:ok',
+          'status', 'current',
+          'metricSpecVersion', 'pi-metric-spec-v0',
+          'engineVersion', 'pi-engine-v0',
+          'clientRequestId', 'pireq-ok-final',
+          'scope', jsonb_build_object('kind','account','accountId','${accId}','includeArchivedChallenges',false),
+          'datasetSummary', jsonb_build_object('tradeCount', 0, 'identityHash', 'ok'),
+          'performance', '{}'::jsonb,
+          'risk', '{}'::jsonb,
+          'sequences', '{}'::jsonb,
+          'segments', '[]'::jsonb,
+          'findings', '[]'::jsonb,
+          'sourceRange', jsonb_build_object('earliestTradeAt', null, 'latestTradeAt', null),
+          'schemaVersion', 'prop-os-schema-v0'
+        )
+      );
+      commit;
+    `);
+    assert.equal(parseJson(ok).kind, "success");
+    const parity = psql(`
+      select public.prop_os_pi_projection_parity('${OWNER}'::uuid)::text;
+    `);
+    assert.ok(parity.includes('"kind":"parity"') || parity.includes('\\"kind\\":\\"parity\\"') || parseJson(parity).kind === "parity");
   });
 
   check("cross-user snapshot read denied under RLS", () => {

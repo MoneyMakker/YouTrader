@@ -3,8 +3,12 @@
  * Pure domain: no React / Supabase / AI.
  */
 
+import { canonicalSnapshotBytes } from "./canonical";
+import {
+  buildDatasetIdentityHash,
+  buildInputRevisionV1,
+} from "./datasetIdentity";
 import { evaluateFindings } from "./findings";
-import { createHash, stableStringify } from "./hash";
 import {
   calculatePerformanceMetrics,
   calculateRiskMetrics,
@@ -15,7 +19,7 @@ import {
   orderPerformanceTrades,
   takeRecentTrades,
 } from "./normalize";
-import { buildInputRevision, scopeAccountId, scopeKey } from "./scope";
+import { scopeAccountId, scopeKey } from "./scope";
 import { calculateSegments } from "./segments";
 import type {
   IntelligenceDataQuality,
@@ -30,6 +34,7 @@ import {
   PI_MIN_SEGMENT_SAMPLE,
   PI_SCHEMA_VERSION,
 } from "./types";
+import { createHash } from "./hash";
 
 function newId(): string {
   return `pi_${Date.now().toString(16)}_${createHash(String(Math.random())).slice(0, 10)}`;
@@ -105,6 +110,9 @@ export function calculatePerformanceIntelligence(input: {
           reasonCode: "max_trades_exceeded",
         },
         identityHash: createHash("unsupported"),
+        findingsGenerated: 0,
+        findingsSuppressed: 0,
+        segmentsSuppressed: 0,
       },
       performance: emptyPerformance(),
       risk: emptyRisk(),
@@ -122,13 +130,17 @@ export function calculatePerformanceIntelligence(input: {
     trades = takeRecentTrades(trades, input.scope.count);
   }
 
-  const identityHash = createHash(
-    trades.map((t) => `${t.journalTradeId}:${t.netPnlMinor}`).join("|"),
-  );
-  const inputRevision = buildInputRevision({
+  const identityHash = buildDatasetIdentityHash({
+    scope: input.scope,
+    assignmentRevision: input.assignmentRevision,
+    trades,
+    metricSpecVersion: PI_METRIC_SPEC_VERSION,
+    engineVersion: PI_ENGINE_VERSION,
+  });
+  const inputRevision = buildInputRevisionV1({
     assignmentRevision: input.assignmentRevision,
     scope: input.scope,
-    identityHash,
+    datasetIdentityHash: identityHash,
     metricSpecVersion: PI_METRIC_SPEC_VERSION,
     engineVersion: PI_ENGINE_VERSION,
   });
@@ -136,13 +148,13 @@ export function calculatePerformanceIntelligence(input: {
   const performance = calculatePerformanceMetrics(trades);
   const risk = calculateRiskMetrics(trades);
   const sequences = calculateSequenceMetrics(trades);
-  const segments = calculateSegments(trades);
-  const findings = evaluateFindings({
+  const segmentResult = calculateSegments(trades);
+  const findingsResult = evaluateFindings({
     trades,
     performance,
     risk,
     sequences,
-    segments,
+    segments: segmentResult.segments,
   });
 
   let status: PerformanceIntelligenceSnapshot["status"] = "current";
@@ -191,12 +203,15 @@ export function calculatePerformanceIntelligence(input: {
       exclusionReasons: normalized.exclusionReasons,
       dataQuality: dq,
       identityHash,
+      findingsGenerated: findingsResult.generated,
+      findingsSuppressed: findingsResult.suppressed,
+      segmentsSuppressed: segmentResult.suppressed,
     },
     performance,
     risk,
     sequences,
-    segments,
-    findings,
+    segments: segmentResult.segments,
+    findings: findingsResult.surfaced,
     calculatedAt,
     sourceRange: {
       earliestTradeAt: times[0] ?? null,
@@ -210,8 +225,7 @@ export function calculatePerformanceIntelligence(input: {
 export function intelligenceSnapshotCoreBytes(
   snap: PerformanceIntelligenceSnapshot,
 ): string {
-  const { id: _id, calculatedAt: _c, ...core } = snap;
-  return stableStringify(core);
+  return canonicalSnapshotBytes(snap);
 }
 
 function emptyPerformance() {

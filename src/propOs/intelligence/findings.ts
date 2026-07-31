@@ -14,9 +14,15 @@ import type {
 } from "./types";
 import { PI_FINDING_SPEC_VERSION, PI_MAX_SURFACED_FINDINGS } from "./types";
 
-function expectancyValue(m: { kind: string; value?: number }): number | null {
-  return m.kind === "value" && typeof m.value === "number" ? m.value : null;
+function expectancyValue(m: { kind: string; valueScaled?: number }): number | null {
+  return m.kind === "value" && typeof m.valueScaled === "number" ? m.valueScaled : null;
 }
+
+export type FindingsResult = {
+  surfaced: DeterministicFinding[];
+  generated: number;
+  suppressed: number;
+};
 
 export function evaluateFindings(input: {
   trades: PerformanceTradeInput[];
@@ -24,11 +30,12 @@ export function evaluateFindings(input: {
   risk: RiskMetrics;
   sequences: SequenceMetrics;
   segments: SegmentMetric[];
-}): DeterministicFinding[] {
+}): FindingsResult {
   const f = METRIC_CATALOGUE.findings;
   const out: DeterministicFinding[] = [];
   const baseline = expectancyValue(input.performance.expectancyPerTradeMinor);
   const hash = createHash(input.trades.map((t) => t.journalTradeId).join(","));
+  const absExpDiffScaled = f.minAbsoluteExpectancyDiffMinor; // already minor; compare on valueScaled of expectancy (minor*scale/1)
 
   if (input.trades.length < f.minSegmentSample) {
     out.push({
@@ -51,9 +58,11 @@ export function evaluateFindings(input: {
     if (baseline == null || segExp == null) continue;
     const diff = segExp - baseline;
     const rel = baseline === 0 ? Math.abs(diff) : Math.abs(diff / Math.abs(baseline));
+    // expectancy valueScaled is net/trades * PI_RATIO_SCALE; compare abs minor via /scale
+    const absDiffMinor = Math.abs(diff) / 1_000_000;
     if (
       diff < 0 &&
-      Math.abs(diff) >= f.minAbsoluteExpectancyDiffMinor &&
+      absDiffMinor >= absExpDiffScaled &&
       rel >= f.minRelativeExpectancyDiff
     ) {
       out.push({
@@ -76,7 +85,7 @@ export function evaluateFindings(input: {
 
   if (
     input.risk.positionSizeDispersion.kind === "value" &&
-    input.risk.positionSizeDispersion.value >= f.positionSizeCvThreshold &&
+    input.risk.positionSizeDispersion.valueScaled / 1_000_000 >= f.positionSizeCvThreshold &&
     input.trades.length >= f.minComparisonSample
   ) {
     out.push({
@@ -87,7 +96,7 @@ export function evaluateFindings(input: {
       metricKey: "positionSizeDispersion",
       sampleSize: input.trades.length,
       evidence: {
-        segmentValue: input.risk.positionSizeDispersion.value,
+        segmentValue: input.risk.positionSizeDispersion.valueScaled / 1_000_000,
         baselineValue: f.positionSizeCvThreshold,
       },
       reasonCode: "high_position_size_dispersion",
@@ -96,7 +105,8 @@ export function evaluateFindings(input: {
 
   if (
     input.risk.largestWinShareOfProfit.kind === "value" &&
-    input.risk.largestWinShareOfProfit.value >= f.concentrationShareThreshold &&
+    input.risk.largestWinShareOfProfit.valueScaled / 1_000_000 >=
+      f.concentrationShareThreshold &&
     input.performance.winningTrades >= 2
   ) {
     out.push({
@@ -106,14 +116,17 @@ export function evaluateFindings(input: {
       polarity: "neutral",
       metricKey: "largestWinShareOfProfit",
       sampleSize: input.performance.winningTrades,
-      evidence: { segmentValue: input.risk.largestWinShareOfProfit.value },
+      evidence: {
+        segmentValue: input.risk.largestWinShareOfProfit.valueScaled / 1_000_000,
+      },
       reasonCode: "profit_concentration_in_largest_win",
     });
   }
 
   if (
     input.sequences.avgSameDayTradeCount.kind === "value" &&
-    input.sequences.avgSameDayTradeCount.value >= f.sameDayOvertradeThreshold &&
+    input.sequences.avgSameDayTradeCount.valueScaled / 1_000_000 >=
+      f.sameDayOvertradeThreshold &&
     input.trades.length >= f.minComparisonSample
   ) {
     out.push({
@@ -123,29 +136,51 @@ export function evaluateFindings(input: {
       polarity: "neutral",
       metricKey: "avgSameDayTradeCount",
       sampleSize: input.trades.length,
-      evidence: { segmentValue: input.sequences.avgSameDayTradeCount.value },
+      evidence: {
+        segmentValue: input.sequences.avgSameDayTradeCount.valueScaled / 1_000_000,
+      },
       reasonCode: "elevated_same_day_trade_frequency",
     });
   }
 
-  // Priority + cap
   const rank = new Map<string, number>(f.orderingPriority.map((k, i) => [k, i]));
   out.sort((a, b) => {
-    const ak = `${a.category}.${a.reasonCode.includes("insufficient") ? "insufficient_sample" : a.metricKey}`;
-    const bk = `${b.category}.${b.reasonCode.includes("insufficient") ? "insufficient_sample" : b.metricKey}`;
-    const ra = rank.get(a.reasonCode.includes("insufficient") ? "data_quality.insufficient_sample" : 
-      a.reasonCode.includes("instrument") ? "instrument.lower_expectancy" :
-      a.reasonCode.includes("dispersion") ? "risk.high_size_dispersion" :
-      a.reasonCode.includes("concentration") ? "risk.profit_concentration" :
-      a.reasonCode.includes("same_day") ? "time.same_day_overtrade" : ak) ?? 99;
-    const rb = rank.get(b.reasonCode.includes("insufficient") ? "data_quality.insufficient_sample" :
-      b.reasonCode.includes("instrument") ? "instrument.lower_expectancy" :
-      b.reasonCode.includes("dispersion") ? "risk.high_size_dispersion" :
-      b.reasonCode.includes("concentration") ? "risk.profit_concentration" :
-      b.reasonCode.includes("same_day") ? "time.same_day_overtrade" : bk) ?? 99;
+    const ra =
+      rank.get(
+        a.reasonCode.includes("insufficient")
+          ? "data_quality.insufficient_sample"
+          : a.reasonCode.includes("instrument")
+            ? "instrument.lower_expectancy"
+            : a.reasonCode.includes("dispersion")
+              ? "risk.high_size_dispersion"
+              : a.reasonCode.includes("concentration")
+                ? "risk.profit_concentration"
+                : a.reasonCode.includes("same_day")
+                  ? "time.same_day_overtrade"
+                  : `${a.category}.${a.metricKey}`,
+      ) ?? 99;
+    const rb =
+      rank.get(
+        b.reasonCode.includes("insufficient")
+          ? "data_quality.insufficient_sample"
+          : b.reasonCode.includes("instrument")
+            ? "instrument.lower_expectancy"
+            : b.reasonCode.includes("dispersion")
+              ? "risk.high_size_dispersion"
+              : b.reasonCode.includes("concentration")
+                ? "risk.profit_concentration"
+                : b.reasonCode.includes("same_day")
+                  ? "time.same_day_overtrade"
+                  : `${b.category}.${b.metricKey}`,
+      ) ?? 99;
     if (ra !== rb) return ra - rb;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 
-  return out.slice(0, PI_MAX_SURFACED_FINDINGS);
+  const surfaced = out.slice(0, PI_MAX_SURFACED_FINDINGS);
+  return {
+    surfaced,
+    generated: out.length,
+    suppressed: Math.max(0, out.length - surfaced.length),
+  };
 }

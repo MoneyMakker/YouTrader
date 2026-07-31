@@ -1,7 +1,14 @@
 /**
- * Core / risk / sequence metric calculations (integer minor units).
+ * Core / risk / sequence metric calculations.
+ * Money: integer minor units. Ratios: integer scaled (PI_RATIO_SCALE).
  */
 
+import {
+  normalizeNegZeroScaled,
+  ratioScaled,
+  roundHalfAwayFromZero,
+  scaledToNumber,
+} from "./precision";
 import type {
   PerformanceMetrics,
   PerformanceTradeInput,
@@ -10,20 +17,29 @@ import type {
   SequenceMetrics,
 } from "./types";
 
-function ratio(num: number, den: number, zeroKind: RatioOrUndefined["kind"]): RatioOrUndefined {
+function ratio(
+  num: number,
+  den: number,
+  zeroKind: RatioOrUndefined["kind"],
+): RatioOrUndefined {
   if (den === 0) {
     if (zeroKind === "undefined_zero_loss") return { kind: "undefined_zero_loss" };
     if (zeroKind === "undefined_zero_profit") return { kind: "undefined_zero_profit" };
     return { kind: "undefined_zero_denominator" };
   }
-  return { kind: "value", value: num / den };
+  return {
+    kind: "value",
+    valueScaled: normalizeNegZeroScaled(ratioScaled(num, den)),
+  };
 }
 
-function median(nums: number[]): number | null {
+function medianScaled(nums: number[]): number | null {
   if (nums.length === 0) return null;
   const s = [...nums].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
-  return s.length % 2 === 0 ? (s[mid - 1]! + s[mid]!) / 2 : s[mid]!;
+  if (s.length % 2 === 1) return s[mid]!;
+  // mean of two middle via integer (for money) or scaled average
+  return roundHalfAwayFromZero((s[mid - 1]! + s[mid]!) / 2);
 }
 
 function stdev(nums: number[]): number | null {
@@ -41,20 +57,35 @@ export function calculatePerformanceMetrics(
   const be = trades.filter((t) => t.netPnlMinor === 0);
   const net = trades.reduce((a, t) => a + t.netPnlMinor, 0);
   const grossProfit = wins.reduce((a, t) => a + t.netPnlMinor, 0);
-  const grossLoss = losses.reduce((a, t) => a + t.netPnlMinor, 0); // negative or 0
+  const grossLoss = losses.reduce((a, t) => a + t.netPnlMinor, 0);
   const classified = wins.length + losses.length + be.length;
   const avgWin =
     wins.length === 0
       ? ({ kind: "undefined_zero_denominator" } as RatioOrUndefined)
-      : { kind: "value" as const, value: Math.round(grossProfit / wins.length) };
+      : {
+          kind: "value" as const,
+          valueScaled: normalizeNegZeroScaled(
+            ratioScaled(grossProfit, wins.length),
+          ),
+        };
   const avgLoss =
     losses.length === 0
       ? ({ kind: "undefined_zero_denominator" } as RatioOrUndefined)
-      : { kind: "value" as const, value: Math.round(grossLoss / losses.length) };
+      : {
+          kind: "value" as const,
+          valueScaled: normalizeNegZeroScaled(
+            ratioScaled(grossLoss, losses.length),
+          ),
+        };
 
   let payoff: RatioOrUndefined = { kind: "undefined_zero_denominator" };
-  if (avgWin.kind === "value" && avgLoss.kind === "value" && avgLoss.value !== 0) {
-    payoff = { kind: "value", value: Math.abs(avgWin.value) / Math.abs(avgLoss.value) };
+  if (avgWin.kind === "value" && avgLoss.kind === "value" && avgLoss.valueScaled !== 0) {
+    payoff = {
+      kind: "value",
+      valueScaled: normalizeNegZeroScaled(
+        ratioScaled(Math.abs(avgWin.valueScaled), Math.abs(avgLoss.valueScaled)),
+      ),
+    };
   } else if (losses.length === 0 && wins.length > 0) {
     payoff = { kind: "undefined_zero_loss" };
   }
@@ -97,7 +128,11 @@ export function calculateRiskMetrics(trades: PerformanceTradeInput[]): RiskMetri
       : ({ kind: "unavailable", reasonCode: "no_gross_profit" } as RatioOrUndefined);
   const largestLossShare =
     perf.largestLossMinor != null && perf.grossLossMinor < 0
-      ? ratio(Math.abs(perf.largestLossMinor), Math.abs(perf.grossLossMinor), "undefined_zero_loss")
+      ? ratio(
+          Math.abs(perf.largestLossMinor),
+          Math.abs(perf.grossLossMinor),
+          "undefined_zero_loss",
+        )
       : ({ kind: "unavailable", reasonCode: "no_gross_loss" } as RatioOrUndefined);
 
   const byInst = new Map<string, number>();
@@ -108,49 +143,65 @@ export function calculateRiskMetrics(trades: PerformanceTradeInput[]): RiskMetri
   const topShare =
     totalAbs === 0
       ? ({ kind: "undefined_zero_denominator" } as RatioOrUndefined)
-      : {
-          kind: "value" as const,
-          value: Math.max(0, ...byInst.values()) / totalAbs,
-        };
+      : ratio(Math.max(0, ...byInst.values()), totalAbs, "undefined_zero_denominator");
 
   const meanSize = sizes.length ? sizes.reduce((a, b) => a + b, 0) / sizes.length : null;
   const sdSize = stdev(sizes);
   const sizeCv =
     meanSize != null && meanSize !== 0 && sdSize != null
-      ? ({ kind: "value" as const, value: sdSize / Math.abs(meanSize) } as RatioOrUndefined)
+      ? ratio(sdSize, Math.abs(meanSize), "undefined_zero_denominator")
       : ({ kind: "unavailable", reasonCode: "insufficient_size_data" } as RatioOrUndefined);
 
   const meanRisk = risks.length ? risks.reduce((a, b) => a + b, 0) / risks.length : null;
   const sdRisk = stdev(risks);
   const riskCv =
     meanRisk != null && meanRisk !== 0 && sdRisk != null
-      ? ({ kind: "value" as const, value: sdRisk / Math.abs(meanRisk) } as RatioOrUndefined)
+      ? ratio(sdRisk, Math.abs(meanRisk), "undefined_zero_denominator")
       : ({ kind: "unavailable", reasonCode: "insufficient_risk_data" } as RatioOrUndefined);
 
   return {
     averagePositionSize: meanSize == null
       ? { kind: "unavailable", reasonCode: "missing_size" }
-      : { kind: "value", value: meanSize },
+      : {
+          kind: "value",
+          valueScaled: normalizeNegZeroScaled(ratioScaled(meanSize, 1)),
+        },
     medianPositionSize: (() => {
-      const m = median(sizes);
+      const m = medianScaled(sizes);
       return m == null
         ? { kind: "unavailable" as const, reasonCode: "missing_size" }
-        : { kind: "value" as const, value: m };
+        : {
+            kind: "value" as const,
+            valueScaled: normalizeNegZeroScaled(ratioScaled(m, 1)),
+          };
     })(),
     positionSizeDispersion: sizeCv,
     averageRiskAmountMinor: meanRisk == null
       ? { kind: "unavailable", reasonCode: "missing_risk" }
-      : { kind: "value", value: Math.round(meanRisk) },
+      : {
+          kind: "value",
+          valueScaled: normalizeNegZeroScaled(
+            ratioScaled(roundHalfAwayFromZero(meanRisk), 1),
+          ),
+        },
     maximumRiskAmountMinor: risks.length ? Math.max(...risks) : null,
     riskDispersion: riskCv,
     averageRMultiple: rs.length
-      ? { kind: "value", value: rs.reduce((a, b) => a + b, 0) / rs.length }
+      ? {
+          kind: "value",
+          valueScaled: normalizeNegZeroScaled(
+            ratioScaled(rs.reduce((a, b) => a + b, 0), rs.length),
+          ),
+        }
       : { kind: "unavailable", reasonCode: "missing_r" },
     medianRMultiple: (() => {
-      const m = median(rs);
+      const m = medianScaled(rs);
       return m == null
         ? { kind: "unavailable" as const, reasonCode: "missing_r" }
-        : { kind: "value" as const, value: m };
+        : {
+            kind: "value" as const,
+            valueScaled: normalizeNegZeroScaled(ratioScaled(m, 1)),
+          };
     })(),
     bestRMultiple: rs.length ? Math.max(...rs) : null,
     worstRMultiple: rs.length ? Math.min(...rs) : null,
@@ -167,7 +218,7 @@ export function calculateRiskMetrics(trades: PerformanceTradeInput[]): RiskMetri
 export function calculateSequenceMetrics(
   trades: PerformanceTradeInput[],
 ): SequenceMetrics {
-  const ordered = trades; // caller must pass chronological
+  const ordered = trades;
   let curWin = 0;
   let curLoss = 0;
   let maxWin = 0;
@@ -212,15 +263,16 @@ export function calculateSequenceMetrics(
   const avgSameDay =
     dayCounts.length === 0
       ? ({ kind: "undefined_zero_denominator" } as RatioOrUndefined)
-      : {
-          kind: "value" as const,
-          value: dayCounts.reduce((a, b) => a + b, 0) / dayCounts.length,
-        };
+      : ratio(
+          dayCounts.reduce((a, b) => a + b, 0),
+          dayCounts.length,
+          "undefined_zero_denominator",
+        );
 
   const avg = (xs: number[]): RatioOrUndefined =>
     xs.length === 0
       ? { kind: "unavailable", reasonCode: "no_samples" }
-      : { kind: "value", value: Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) };
+      : ratio(xs.reduce((a, b) => a + b, 0), xs.length, "undefined_zero_denominator");
 
   return {
     currentWinSequence: curWin,
@@ -233,4 +285,10 @@ export function calculateSequenceMetrics(
     avgSameDayTradeCount: avgSameDay,
     dataQuality: { kind: "complete" },
   };
+}
+
+/** Presentation helper — not used inside engine math. */
+export function ratioDisplayValue(r: RatioOrUndefined): number | null {
+  if (r.kind !== "value") return null;
+  return scaledToNumber(r.valueScaled);
 }

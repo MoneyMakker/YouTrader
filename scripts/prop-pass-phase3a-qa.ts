@@ -5,16 +5,21 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  ASSIGNMENT_RECALC_PROCESSOR_ROLE,
   METRIC_CATALOGUE,
   PI_MAX_TRADES_PER_SCOPE,
   PI_METRIC_SPEC_VERSION,
   PI_MIN_SEGMENT_SAMPLE,
   TRUSTED_PI_PROCESSOR_ROLES,
+  assertTrustedPiProcessorRole,
+  attachPublicationState,
   calculatePerformanceIntelligence,
   calculatePerformanceMetrics,
   calculateRiskMetrics,
   calculateSequenceMetrics,
   calculateSegments,
+  canonicalSnapshotBytes,
+  canonicalSnapshotHash,
   createMemoryIntelligenceReadStore,
   createMemoryIntelligenceStore,
   evaluateFindings,
@@ -23,7 +28,10 @@ import {
   markScopesOutdatedForAssignment,
   normalizePerformanceTrades,
   processIntelligenceCalculation,
+  projectionParity,
+  publishIntelligenceSnapshot,
   queueIntelligenceCalculation,
+  rebuildCurrentProjection,
   runTrustedMemoryCalculation,
   scopeKey,
   type IntelligenceScope,
@@ -140,7 +148,7 @@ async function main() {
     assert.equal(snap.performance.netRealizedPnlMinor, 20_000);
     assert.equal(snap.performance.profitFactor.kind, "undefined_zero_loss");
     assert.equal(snap.performance.winRate.kind, "value");
-    if (snap.performance.winRate.kind === "value") assert.equal(snap.performance.winRate.value, 1);
+    if (snap.performance.winRate.kind === "value") assert.equal(snap.performance.winRate.valueScaled, 1_000_000);
   });
 
   await check("metric.3 one losing trade", () => {
@@ -148,7 +156,7 @@ async function main() {
     assert.equal(snap.performance.losingTrades, 1);
     assert.equal(snap.performance.netRealizedPnlMinor, -8_000);
     assert.equal(snap.performance.profitFactor.kind, "value");
-    if (snap.performance.profitFactor.kind === "value") assert.equal(snap.performance.profitFactor.value, 0);
+    if (snap.performance.profitFactor.kind === "value") assert.equal(snap.performance.profitFactor.valueScaled, 0);
   });
 
   await check("metric.4 all winning", () => {
@@ -165,7 +173,7 @@ async function main() {
     assert.equal(snap.performance.winningTrades, 0);
     assert.equal(snap.performance.grossProfitMinor, 0);
     assert.equal(snap.performance.profitFactor.kind, "value");
-    if (snap.performance.profitFactor.kind === "value") assert.equal(snap.performance.profitFactor.value, 0);
+    if (snap.performance.profitFactor.kind === "value") assert.equal(snap.performance.profitFactor.valueScaled, 0);
   });
 
   await check("metric.6 break-even", () => {
@@ -186,7 +194,7 @@ async function main() {
     const snap = calc(facts);
     assert.equal(snap.performance.grossProfitMinor, 0);
     assert.equal(snap.performance.profitFactor.kind, "value");
-    if (snap.performance.profitFactor.kind === "value") assert.equal(snap.performance.profitFactor.value, 0);
+    if (snap.performance.profitFactor.kind === "value") assert.equal(snap.performance.profitFactor.valueScaled, 0);
   });
 
   await check("metric.9 mixed wins/losses", () => {
@@ -260,7 +268,7 @@ async function main() {
     assert.equal(snap.performance.largestWinMinor, 5_000_000);
     assert.ok(
       snap.risk.largestWinShareOfProfit.kind === "value" &&
-        snap.risk.largestWinShareOfProfit.value > 0.9,
+        snap.risk.largestWinShareOfProfit.valueScaled / 1_000_000 > 0.9,
     );
   });
 
@@ -336,7 +344,7 @@ async function main() {
     const snap = calc(facts);
     assert.equal(snap.sequences.avgSameDayTradeCount.kind, "value");
     if (snap.sequences.avgSameDayTradeCount.kind === "value") {
-      assert.ok(snap.sequences.avgSameDayTradeCount.value >= METRIC_CATALOGUE.findings.sameDayOvertradeThreshold);
+      assert.ok(snap.sequences.avgSameDayTradeCount.valueScaled / 1_000_000 >= METRIC_CATALOGUE.findings.sameDayOvertradeThreshold);
     }
     const finding = snap.findings.find((f) => f.reasonCode === "elevated_same_day_trade_frequency");
     assert.ok(finding);
@@ -556,24 +564,24 @@ async function main() {
 
   await check("e2e.20 instrument segment", () => {
     const trades = normalizePerformanceTrades(mixedFacts(8)).included;
-    const segs = calculateSegments(trades);
+    const segs = calculateSegments(trades).segments;
     assert.ok(segs.some((s) => s.segmentType === "instrument"));
     capture("segment", segs.filter((s) => s.segmentType === "instrument").slice(0, 3));
   });
 
   await check("e2e.21 direction segment", () => {
     const trades = normalizePerformanceTrades(mixedFacts(8)).included;
-    assert.ok(calculateSegments(trades).some((s) => s.segmentType === "direction"));
+    assert.ok(calculateSegments(trades).segments.some((s) => s.segmentType === "direction"));
   });
 
   await check("e2e.22 weekday segment", () => {
     const trades = normalizePerformanceTrades(mixedFacts(8)).included;
-    assert.ok(calculateSegments(trades).some((s) => s.segmentType === "weekday_utc"));
+    assert.ok(calculateSegments(trades).segments.some((s) => s.segmentType === "weekday_utc"));
   });
 
   await check("e2e.23 time-bucket segment", () => {
     const trades = normalizePerformanceTrades(mixedFacts(8)).included;
-    assert.ok(calculateSegments(trades).some((s) => s.segmentType === "session_utc"));
+    assert.ok(calculateSegments(trades).segments.some((s) => s.segmentType === "session_utc"));
   });
 
   await check("e2e.24 risk data absent", () => {
@@ -613,15 +621,22 @@ async function main() {
   await check("e2e.26 finding suppressed below sample threshold", () => {
     const trades = normalizePerformanceTrades(mixedFacts(4)).included;
     const perf = calculatePerformanceMetrics(trades);
+    const segs = calculateSegments(trades);
     const findings = evaluateFindings({
       trades,
       performance: perf,
       risk: calculateRiskMetrics(trades),
       sequences: calculateSequenceMetrics(trades),
-      segments: calculateSegments(trades),
+      segments: segs.segments,
     });
-    assert.ok(findings.some((f) => f.reasonCode === "insufficient_sample"));
-    assert.ok(findings.every((f) => f.sampleSize < PI_MIN_SEGMENT_SAMPLE || f.reasonCode !== "instrument_lower_historical_expectancy"));
+    assert.ok(findings.surfaced.some((f) => f.reasonCode === "insufficient_sample"));
+    assert.ok(
+      findings.surfaced.every(
+        (f) =>
+          f.sampleSize < PI_MIN_SEGMENT_SAMPLE ||
+          f.reasonCode !== "instrument_lower_historical_expectancy",
+      ),
+    );
   });
 
   await check("e2e.27 cross-user read denied (owner scope only)", async () => {
@@ -636,8 +651,19 @@ async function main() {
   });
 
   await check("e2e.28 non-allowlisted calc request (memory N/A — roles doc)", () => {
-    assert.ok(!TRUSTED_PI_PROCESSOR_ROLES.includes("authenticated" as never));
-    assert.ok(TRUSTED_PI_PROCESSOR_ROLES.includes("prop_os_recalc_processor"));
+    assert.ok(
+      !(TRUSTED_PI_PROCESSOR_ROLES as readonly string[]).includes("authenticated"),
+    );
+    assert.ok(
+      !(TRUSTED_PI_PROCESSOR_ROLES as readonly string[]).includes(
+        "prop_os_recalc_processor",
+      ),
+    );
+    assert.ok(
+      (TRUSTED_PI_PROCESSOR_ROLES as readonly string[]).includes(
+        "prop_os_performance_intelligence_processor",
+      ),
+    );
   });
 
   await check("e2e.29 direct DML denied (memory N/A — note only)", () => {
@@ -671,6 +697,128 @@ async function main() {
     const before = JSON.parse(JSON.stringify(store.facts));
     runTrustedMemoryCalculation(store, ACCOUNT_SCOPE, 1, { asOfUtc: FIXED_AS_OF });
     assert.deepEqual(store.facts, before);
+  });
+
+  // --- Remediation: publication, rebuild, numeric, inputRevision, privileges ---
+  await check("remediation.publication failure injection all stages", () => {
+    const stages = [
+      "queue_claim",
+      "snapshot_insert",
+      "finding_insert",
+      "current_projection",
+      "queue_completion",
+      "receipt_completion",
+    ] as const;
+    for (const stage of stages) {
+      const store = attachPublicationState(seedStore());
+      store.failAfter = stage;
+      const snap = calculatePerformanceIntelligence({
+        userId: OWNER,
+        scope: ACCOUNT_SCOPE,
+        assignmentRevision: 1,
+        facts: store.facts,
+        asOfUtc: FIXED_AS_OF,
+      });
+      const r = publishIntelligenceSnapshot(store, ACCOUNT_SCOPE, snap, `req-${stage}`);
+      assert.equal(r.kind, "failed", stage);
+      assert.equal(store.currentByScope.has(scopeKey(ACCOUNT_SCOPE)), false, stage);
+      const calc = store.calc.get(scopeKey(ACCOUNT_SCOPE));
+      assert.ok(!calc || calc.kind !== "completed", stage);
+      assert.ok(!store.receipts.some((x) => x.resultStatus === "success" && x.clientRequestId === `req-${stage}`), stage);
+      // retry succeeds
+      store.failAfter = null;
+      const snap2 = calculatePerformanceIntelligence({
+        userId: OWNER,
+        scope: ACCOUNT_SCOPE,
+        assignmentRevision: 1,
+        facts: store.facts,
+        asOfUtc: FIXED_AS_OF,
+      });
+      const ok = publishIntelligenceSnapshot(store, ACCOUNT_SCOPE, snap2, `req-${stage}-retry`);
+      assert.equal(ok.kind, "success", stage);
+    }
+  });
+
+  await check("remediation.projection rebuild parity", () => {
+    const store = seedStore();
+    runTrustedMemoryCalculation(store, ACCOUNT_SCOPE, 1, { asOfUtc: FIXED_AS_OF });
+    runTrustedMemoryCalculation(store, { kind: "recent_trades", accountId: ACC, count: 20 }, 1, {
+      asOfUtc: FIXED_AS_OF,
+    });
+    markScopesOutdatedForAssignment(store, 2);
+    runTrustedMemoryCalculation(store, ACCOUNT_SCOPE, 2, { asOfUtc: FIXED_AS_OF });
+    const before = projectionParity(store);
+    assert.equal(before.kind, "parity");
+    store.currentByScope.clear();
+    assert.equal(projectionParity(store).kind, "drift");
+    rebuildCurrentProjection(store);
+    assert.equal(projectionParity(store).kind, "parity");
+  });
+
+  await check("remediation.canonical serialization byte equality", () => {
+    const facts = mixedFacts(12);
+    const a = calc(facts);
+    const b = calc(facts);
+    assert.equal(canonicalSnapshotBytes(a), canonicalSnapshotBytes(b));
+    assert.equal(intelligenceSnapshotCoreBytes(a), intelligenceSnapshotCoreBytes(b));
+    assert.equal(canonicalSnapshotHash(a), canonicalSnapshotHash(b));
+  });
+
+  await check("remediation.inputRevision sensitivity", () => {
+    const facts = mixedFacts(10);
+    const base = calc(facts);
+    const pnlChanged = calc(
+      facts.map((f, i) => (i === 0 ? { ...f, pnlMajor: (f.pnlMajor ?? 0) + 1 } : f)),
+    );
+    assert.notEqual(base.datasetSummary.identityHash, pnlChanged.datasetSummary.identityHash);
+    assert.notEqual(base.inputRevision, pnlChanged.inputRevision);
+    const same = calc(facts);
+    assert.equal(base.inputRevision, same.inputRevision);
+  });
+
+  await check("remediation.PI processor roles isolated from assignment processor", () => {
+    assert.ok(TRUSTED_PI_PROCESSOR_ROLES.includes("prop_os_performance_intelligence_processor"));
+    assert.ok(
+      !(TRUSTED_PI_PROCESSOR_ROLES as readonly string[]).includes(
+        "prop_os_recalc_processor",
+      ),
+    );
+    assert.equal(ASSIGNMENT_RECALC_PROCESSOR_ROLE, "prop_os_recalc_processor");
+    assert.equal(assertTrustedPiProcessorRole("authenticated"), false);
+    assert.equal(assertTrustedPiProcessorRole("prop_os_performance_intelligence_processor"), true);
+  });
+
+  await check("remediation.formula catalogue reconciliation sample", () => {
+    assert.equal(METRIC_CATALOGUE.formulas.profitFactor.zeroDenominator, "undefined_zero_loss");
+    assert.equal(METRIC_CATALOGUE.formulas.winRate.zeroDenominator, "undefined_zero_denominator");
+    const allWin = calc([
+      fact({ tradeClientId: "w1", pnlMajor: 10 }),
+      fact({ tradeClientId: "w2", pnlMajor: 20, occurredAtUtc: "2026-02-02T15:00:00.000Z" }),
+    ]);
+    assert.equal(allWin.performance.profitFactor.kind, "undefined_zero_loss");
+    assert.equal(allWin.performance.winRate.kind, "value");
+    if (allWin.performance.winRate.kind === "value") {
+      assert.equal(allWin.performance.winRate.valueScaled, 1_000_000);
+    }
+  });
+
+  await check("remediation.performance limits contract", () => {
+    const t0 = Date.now();
+    const snap = calc(mixedFacts(100));
+    const ms = Date.now() - t0;
+    const bytes = canonicalSnapshotBytes(snap).length;
+    capture("performance-limits", {
+      maxTrades: PI_MAX_TRADES_PER_SCOPE,
+      maxSegments: 64,
+      maxFindings: 8,
+      sampleTrades: 100,
+      durationMs: ms,
+      snapshotCoreBytes: bytes,
+      segments: snap.segments.length,
+      findingsSuppressed: snap.datasetSummary.findingsSuppressed ?? 0,
+    });
+    assert.ok(ms < 5_000);
+    assert.ok(bytes > 100);
   });
 
   await check("scenario matrix artifact (32 Phase 3A E2E + 25 metric fixtures)", () => {

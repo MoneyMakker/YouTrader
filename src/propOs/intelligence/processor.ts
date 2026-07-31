@@ -7,14 +7,21 @@ import {
   getCurrentSnapshot,
   type MemoryIntelligenceStore,
 } from "./memoryStore";
+import {
+  attachPublicationState,
+  publishIntelligenceSnapshot,
+} from "./publication";
 import { scopeAccountId, scopeKey } from "./scope";
 import type { IntelligenceScope, PerformanceIntelligenceSnapshot } from "./types";
 
 export const TRUSTED_PI_PROCESSOR_ROLES = [
   "postgres",
   "service_role",
-  "prop_os_recalc_processor",
+  "prop_os_performance_intelligence_processor",
 ] as const;
+
+/** Assignment/challenge recalc processor — must NOT appear here. */
+export const ASSIGNMENT_RECALC_PROCESSOR_ROLE = "prop_os_recalc_processor" as const;
 
 export function queueIntelligenceCalculation(
   store: MemoryIntelligenceStore,
@@ -42,12 +49,13 @@ export function queueIntelligenceCalculation(
 
 /**
  * Process queued calculation. Rejects stale assignment revisions.
+ * Publishes via atomic publication stages.
  */
 export function processIntelligenceCalculation(
   store: MemoryIntelligenceStore,
   scope: IntelligenceScope,
   claimedAssignmentRevision: number,
-  opts?: { asOfUtc?: string },
+  opts?: { asOfUtc?: string; clientRequestId?: string },
 ):
   | { kind: "success"; snapshot: PerformanceIntelligenceSnapshot }
   | { kind: "conflict"; reasonCode: string }
@@ -57,9 +65,6 @@ export function processIntelligenceCalculation(
     return { kind: "conflict", reasonCode: "stale_assignment_revision" };
   }
   const job = store.calc.get(sk);
-  if (!job || (job.kind !== "queued" && job.kind !== "running" && job.kind !== "failed")) {
-    // allow direct process if queued missing but revision matches
-  }
   if (job && job.kind !== "not_required" && job.assignmentRevision > claimedAssignmentRevision) {
     return { kind: "conflict", reasonCode: "stale_assignment_revision" };
   }
@@ -91,35 +96,20 @@ export function processIntelligenceCalculation(
       asOfUtc: opts?.asOfUtc,
     });
 
-    // Stale check after compute
     if (claimedAssignmentRevision !== store.assignmentRevision) {
       return { kind: "conflict", reasonCode: "stale_assignment_revision" };
     }
 
-    // Idempotent: same inputRevision already current
-    const cur = getCurrentSnapshot(store, scope);
-    if (cur && cur.inputRevision === snap.inputRevision && cur.assignmentRevision === snap.assignmentRevision) {
-      store.calc.set(sk, {
-        kind: "completed",
-        assignmentRevision: claimedAssignmentRevision,
-        scopeKey: sk,
-        snapshotId: cur.id,
-      });
-      return { kind: "success", snapshot: cur };
-    }
-
-    if (snap.status === "current" || snap.status === "insufficient_data" || snap.status === "incomplete_data") {
-      // keep status from engine; mark current pointer
-    }
-    store.snapshots.push(snap);
-    store.currentByScope.set(sk, snap.id);
-    store.calc.set(sk, {
-      kind: "completed",
-      assignmentRevision: claimedAssignmentRevision,
-      scopeKey: sk,
-      snapshotId: snap.id,
-    });
-    return { kind: "success", snapshot: snap };
+    const pubStore = attachPublicationState(store);
+    const pub = publishIntelligenceSnapshot(
+      pubStore,
+      scope,
+      snap,
+      opts?.clientRequestId ?? `pi-mem-${snap.inputRevision.slice(0, 24)}`,
+    );
+    if (pub.kind === "success") return { kind: "success", snapshot: pub.snapshot };
+    if (pub.kind === "conflict") return pub;
+    return pub;
   } catch {
     store.calc.set(sk, {
       kind: "failed",
@@ -141,7 +131,6 @@ export function failIntelligenceCalculation(
     return { kind: "conflict", reasonCode: "stale_assignment_revision" };
   }
   const sk = scopeKey(scope);
-  // Do not promote any snapshot
   store.calc.set(sk, {
     kind: "failed",
     assignmentRevision: claimedAssignmentRevision,
@@ -149,4 +138,8 @@ export function failIntelligenceCalculation(
     reasonCode,
   });
   return { kind: "success" };
+}
+
+export function assertTrustedPiProcessorRole(role: string): boolean {
+  return (TRUSTED_PI_PROCESSOR_ROLES as readonly string[]).includes(role);
 }
