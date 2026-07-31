@@ -10725,22 +10725,40 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         setAuthHydrated(true);
       }
     }, 6000);
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
+
+    const hydrateAuth = async () => {
+      try {
+        // Staging-only: clear persisted session/onboarding before first getSession.
+        const { runStagingQaReset } = await import("../qa/stagingQaReset");
+        const initialUrl = await Linking.getInitialURL();
+        const reset = await runStagingQaReset({ deepLinkUrl: initialUrl });
+        if (reset.attempted && reset.allowed && reset.reason === "reset_ok" && __DEV__) {
+          console.info("[YTQA] startup reset applied", {
+            clearedAsyncKeys: reset.clearedAsyncKeys,
+            signedOutSupabase: reset.signedOutSupabase,
+          });
+        }
+      } catch (error) {
+        logger.error(error, { feature: "qa", action: "staging_qa_reset" });
+      }
+      if (cancelled) return;
+      try {
+        const { data } = await supabase.auth.getSession();
         if (cancelled) return;
         clearTimeout(safety);
         setSession(data.session);
         setAuthHydrated(true);
-      })
-      .catch((error) => {
+      } catch (error) {
         if (cancelled) return;
         clearTimeout(safety);
         logger.error(error, { feature: "supabase", action: "get_session" });
         logStartupError("auth_get_session", error);
         captureAppError(error, { feature: "auth", action: "get_session" });
         setAuthHydrated(true);
-      });
+      }
+    };
+
+    void hydrateAuth();
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       clearTimeout(safety);
       setSession(nextSession);
@@ -10804,6 +10822,20 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     const handleUrl = async (url: string) => {
       if (!url) return;
       try {
+        if (url.toLowerCase().startsWith("youtrader://qa/reset-auth")) {
+          const { runStagingQaReset } = await import("../qa/stagingQaReset");
+          const reset = await runStagingQaReset({ deepLinkUrl: url });
+          if (reset.allowed && reset.reason === "reset_ok") {
+            setSession(null);
+            setOnboardingCompleted(false);
+            setPaywallCompleted(false);
+            setAcquisitionHydrated(false);
+            Alert.alert("QA reset", "Staging auth/onboarding state cleared.");
+          } else if (!reset.allowed) {
+            Alert.alert("QA reset blocked", reset.reason);
+          }
+          return;
+        }
         const result = await processAuthDeepLink(url);
         if (result.kind === "email_confirmed") {
           Alert.alert(
@@ -11547,6 +11579,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           emailModalCopy={emailModalCopy}
           showApple={enableNativeAppleSignIn}
           showGoogle={enableNativeGoogleSignIn}
+          appleConfigWarning={null}
+          googleConfigWarning={
+            sanitizedRuntimeConfigReport().appEnvironment === "staging" && enableNativeGoogleSignIn
+              ? "Staging Supabase Google provider is disabled or incomplete (needs Web client ID + secret). Apple remains available. Do not hide this CTA."
+              : null
+          }
           onSignIn={signInWithProvider}
           onSignInWithEmailPassword={signInWithEmailPasswordHandler}
           onSignUpWithEmailPassword={signUpWithEmailPasswordHandler}

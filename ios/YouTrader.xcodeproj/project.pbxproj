@@ -275,7 +275,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-YouTrader/expo-configure-project.sh\"\n";
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\n# Load staging overlay before Expo reads dotenv / generates provider.\nif [[ -f \"$SRCROOT/source-xcode-env.sh\" ]]; then\n  # shellcheck disable=SC1091\n  source \"$SRCROOT/source-xcode-env.sh\"\nfi\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-YouTrader/expo-configure-project.sh\"\n";
 		};
 		257328D1DFFB497DF7FA862E /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;

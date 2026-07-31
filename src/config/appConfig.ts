@@ -25,6 +25,19 @@ function looksLikePlaceholder(value: string) {
   return PLACEHOLDER_SNIPPETS.some((snippet) => normalized.includes(snippet));
 }
 
+function resolveAppEnvironment() {
+  return (
+    process.env.EXPO_PUBLIC_APP_ENV ||
+    process.env.APP_ENV ||
+    ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+/** Known production Supabase project ref — must never be used by staging builds. */
+const PRODUCTION_SUPABASE_HOST_MARKER = "izzrlsgumyabdvlmwlwn";
+
 function resolveSupabaseUrl() {
   const url = (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim();
   if (looksLikePlaceholder(url)) return "";
@@ -32,6 +45,22 @@ function resolveSupabaseUrl() {
     const parsed = new URL(url);
     if (!parsed.hostname.endsWith(".supabase.co")) return "";
     if (parsed.hostname.startsWith("your")) return "";
+    const appEnv = resolveAppEnvironment();
+    const stagingLike =
+      appEnv === "staging" ||
+      appEnv === "development" ||
+      appEnv === "local" ||
+      appEnv === "dev";
+    // Fail closed: staging Metro/Xcode builds must not silently talk to production.
+    if (stagingLike && parsed.hostname.includes(PRODUCTION_SUPABASE_HOST_MARKER)) {
+      if (__DEV__) {
+        console.error(
+          "[YouTrader:config] refusing production Supabase host while APP_ENV is staging-like",
+          { appEnv, host: parsed.hostname },
+        );
+      }
+      return "";
+    }
   } catch {
     return "";
   }

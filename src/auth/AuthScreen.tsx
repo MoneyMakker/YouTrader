@@ -27,14 +27,16 @@ import {
   StatusSpinner,
 } from "../components/ui/premium";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./types";
+import { ydlLegacyGraphite } from "../ydl/color";
 
+/** Auth screen palette — bridged from YDL dark semantic tokens (graphite legacy). */
 const C = {
-  bg: "#000000",
-  text: "#FFFFFF",
-  sub: "#9CA3AF",
-  green: "#A3FF12",
-  purple: "#B026FF",
-  btnBg: "#0A0C10",
+  bg: ydlLegacyGraphite.bg,
+  text: ydlLegacyGraphite.text,
+  sub: ydlLegacyGraphite.sub,
+  green: ydlLegacyGraphite.green,
+  purple: ydlLegacyGraphite.purple,
+  btnBg: ydlLegacyGraphite.card,
 };
 
 const FADE_MS = 560;
@@ -47,6 +49,13 @@ type Props = {
   showApple: boolean;
   /** When false, hide Google CTA — never show a button that cannot authenticate. */
   showGoogle?: boolean;
+  /**
+   * Staging QA: explicit configuration failure while keeping Apple CTA visible.
+   * Never used to hide the button.
+   */
+  appleConfigWarning?: string | null;
+  /** Staging QA: Google provider/config failure while CTA remains visible when showGoogle. */
+  googleConfigWarning?: string | null;
   onSignIn: (provider: AuthProvider) => void | Promise<void>;
   onSignInWithEmailPassword: (email: string, password: string) => Promise<void>;
   onSignUpWithEmailPassword: (email: string, password: string) => Promise<"confirmation_sent" | "signed_in">;
@@ -152,6 +161,8 @@ export function AuthScreen({
   emailModalCopy,
   showApple,
   showGoogle = true,
+  appleConfigWarning = null,
+  googleConfigWarning = null,
   onSignIn,
   onSignInWithEmailPassword,
   onSignUpWithEmailPassword,
@@ -251,6 +262,17 @@ export function AuthScreen({
             </View>
 
             <Animated.View style={[styles.actions, { opacity: actionsOpacity, transform: [{ translateY: actionsY }] }]}>
+              {appleConfigWarning || googleConfigWarning ? (
+                <View style={styles.qaConfigBanner} accessibilityRole="alert">
+                  <Text style={styles.qaConfigTitle}>QA configuration failure</Text>
+                  {appleConfigWarning ? (
+                    <Text style={styles.qaConfigBody}>{appleConfigWarning}</Text>
+                  ) : null}
+                  {googleConfigWarning ? (
+                    <Text style={styles.qaConfigBody}>{googleConfigWarning}</Text>
+                  ) : null}
+                </View>
+              ) : null}
               {showApple ? (
                 <Animated.View style={{ opacity: appleOpacity, transform: [{ translateY: appleY }] }}>
                   <AppleAuthentication.AppleAuthenticationButton
@@ -350,6 +372,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   actions: { gap: 13, marginTop: 24, width: "100%" },
+  qaConfigBanner: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255, 196, 72, 0.45)",
+    backgroundColor: "rgba(255, 196, 72, 0.08)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  qaConfigTitle: {
+    color: "#FFC448",
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    textTransform: "uppercase",
+  },
+  qaConfigBody: {
+    color: C.sub,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   appleBtn: { width: "100%", height: 54 },
   btnGlow: {
     borderRadius: 18,

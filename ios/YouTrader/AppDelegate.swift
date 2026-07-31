@@ -64,9 +64,12 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
     // Prefer embedded production/staging bundle whenever this binary was compiled
     // with EXPO_CONFIGURATION_RELEASE (includes custom Release-Staging). Do not
     // fall through to Metro just because Xcode attached a debugger.
+    //
+    // Debug + Debug-Staging use EXPO_CONFIGURATION_DEBUG and the DEBUG active
+    // compilation condition so Metro can serve JS on iphonesimulator.
 #if EXPO_CONFIGURATION_RELEASE
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
-#elseif DEBUG
+#elseif EXPO_CONFIGURATION_DEBUG || DEBUG
     return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
