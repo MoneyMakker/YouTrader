@@ -1,0 +1,35 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- repeat:
+    times: 4
+    commands:
+      - runFlow:
+          when:
+            visible: "Continue"
+          commands:
+            - tapOn: "Continue"
+            - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Unlock Your Trading Edge"
+    commands:
+      - tapOn:
+          point: "92%,8%"
+- extendedWaitUntil:
+    visible: "Continue with Google"
+    timeout: 30000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_auth_before
+- tapOn: "Continue with Google"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_after_tap
+- extendedWaitUntil:
+    visible: ".*Google.*|Continue|Cancel|Safari|accounts.google|Sign in"
+    timeout: 25000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_oauth_ui

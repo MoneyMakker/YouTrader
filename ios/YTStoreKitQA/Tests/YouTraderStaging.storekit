@@ -1,0 +1,132 @@
+{
+  "identifier" : "YouTraderStaging",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21493418",
+      "localizations" : [
+
+      ],
+      "name" : "YouTrader Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "12.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "yt_monthly_local",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Monthly Performance Coach access",
+              "displayName" : "YouTrader Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "youtrader_pro_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "YouTrader Pro Monthly",
+          "subscriptionGroupID" : "21493418",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "99.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "yt_yearly_local",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Annual Performance Coach access",
+              "displayName" : "YouTrader Pro Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "youtrader_pro_yearly__",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "YouTrader Pro Annual",
+          "subscriptionGroupID" : "21493418",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

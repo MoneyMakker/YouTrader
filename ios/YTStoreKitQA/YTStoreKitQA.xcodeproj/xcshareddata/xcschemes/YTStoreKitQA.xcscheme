@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1130"
-   version = "1.3">
+   LastUpgradeVersion = "1430"
+   version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
-      buildImplicitDependencies = "YES">
+      buildImplicitDependencies = "YES"
+      runPostActionsOnFailure = "NO">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -14,34 +15,47 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "YouTrader.app"
-               BlueprintName = "YouTrader"
-               ReferencedContainer = "container:YouTrader.xcodeproj">
+               BlueprintIdentifier = "74B88D68F797F27F7108716D"
+               BuildableName = "YTStoreKitQA.app"
+               BlueprintName = "YTStoreKitQA"
+               ReferencedContainer = "container:YTStoreKitQA.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
-      buildConfiguration = "Debug-Staging"
+      buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES">
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "74B88D68F797F27F7108716D"
+            BuildableName = "YTStoreKitQA.app"
+            BlueprintName = "YTStoreKitQA"
+            ReferencedContainer = "container:YTStoreKitQA.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
       <Testables>
          <TestableReference
-            skipped = "NO">
+            skipped = "NO"
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "YouTraderTests.xctest"
-               BlueprintName = "YouTraderTests"
-               ReferencedContainer = "container:YouTrader.xcodeproj">
+               BlueprintIdentifier = "BC302F33B5994AA2E9D87A4B"
+               BuildableName = "YTStoreKitQATests.xctest"
+               BlueprintName = "YTStoreKitQATests"
+               ReferencedContainer = "container:YTStoreKitQA.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
-      buildConfiguration = "Debug-Staging"
+      buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
@@ -54,24 +68,20 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "YouTrader.app"
-            BlueprintName = "YouTrader"
-            ReferencedContainer = "container:YouTrader.xcodeproj">
+            BlueprintIdentifier = "74B88D68F797F27F7108716D"
+            BuildableName = "YTStoreKitQA.app"
+            BlueprintName = "YTStoreKitQA"
+            ReferencedContainer = "container:YTStoreKitQA.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
-         <CommandLineArgument
-            argument = "-YTQAResetAuth"
-            isEnabled = "NO">
-         </CommandLineArgument>
       </CommandLineArguments>
       <StoreKitConfigurationFileReference
-         identifier = "../YouTraderStaging.storekit">
+         identifier = "../../../YouTraderStaging.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
-      buildConfiguration = "Release-Staging"
+      buildConfiguration = "Release"
       shouldUseLaunchSchemeArgsEnv = "YES"
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
@@ -80,18 +90,20 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "YouTrader.app"
-            BlueprintName = "YouTrader"
-            ReferencedContainer = "container:YouTrader.xcodeproj">
+            BlueprintIdentifier = "74B88D68F797F27F7108716D"
+            BuildableName = "YTStoreKitQA.app"
+            BlueprintName = "YTStoreKitQA"
+            ReferencedContainer = "container:YTStoreKitQA.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </ProfileAction>
    <AnalyzeAction
-      buildConfiguration = "Debug-Staging">
+      buildConfiguration = "Debug">
    </AnalyzeAction>
    <ArchiveAction
-      buildConfiguration = "Release-Staging"
+      buildConfiguration = "Release"
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>

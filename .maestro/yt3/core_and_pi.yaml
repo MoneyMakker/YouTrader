@@ -1,0 +1,32 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Journal|Prop Pass|Stats"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/core_j_01
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/core_s_01
+- tapOn: "Calculator"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/core_c_01
+- tapOn: "News"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/core_n_01
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/core_cal_01
+- tapOn: "Settings"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/core_set_01
+- tapOn: "Prop Pass"
+- extendedWaitUntil:
+    visible: "Prop Pass|Buffer|Performance|Challenge"
+    timeout: 40000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/pi_home_01
+- scroll
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/pi_scrolled_01
+- runFlow:
+    when:
+      visible: "Request calculation"
+    commands:
+      - tapOn: "Request calculation"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/pi_after_request_01

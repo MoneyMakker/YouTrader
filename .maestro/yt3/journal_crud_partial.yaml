@@ -1,0 +1,25 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/journal_before_crud
+- runFlow:
+    when:
+      visible: "Log your first trade"
+    commands:
+      - tapOn: "Log your first trade"
+- runFlow:
+    when:
+      visible: ".*Add.*|New trade|Create|\\+"
+    commands:
+      - tapOn: ".*Add.*|New trade|Create"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/journal_after_add_attempt
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_populated
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_scrolled
+- tapOn: "Calculator"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_ready

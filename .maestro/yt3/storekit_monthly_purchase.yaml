@@ -1,0 +1,66 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings"
+    commands:
+      - tapOn:
+          point: "92%,88%"
+- runFlow:
+    when:
+      visible: ".*RevenueCat.*"
+    commands:
+      - tapOn:
+          point: "92%,93%"
+- repeat:
+    times: 4
+    commands:
+      - runFlow:
+          when:
+            visible: "Continue"
+          commands:
+            - tapOn: "Continue"
+            - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Unlock Your Trading Edge|MONTHLY|YEARLY|Continue with Apple"
+    timeout: 40000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/storekit_paywall
+- runFlow:
+    when:
+      visible: "Unlock Your Trading Edge"
+    commands:
+      - scroll
+      - scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/storekit_paywall_scrolled
+- runFlow:
+    when:
+      visible: "MONTHLY"
+    commands:
+      - tapOn: "MONTHLY"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/storekit_monthly_selected
+- runFlow:
+    when:
+      visible: ".*7-Day.*|Start .*Pro"
+    commands:
+      - tapOn: ".*7-Day.*|Start .*Pro"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/storekit_monthly_after_cta
+- runFlow:
+    when:
+      visible: "Sign in to Apple Account"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/storekit_BLOCKED_apple_account
+- runFlow:
+    when:
+      visible: "Confirm|Subscribe|Buy|OK"
+    commands:
+      - tapOn: "Confirm|Subscribe|Buy|OK"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/storekit_monthly_result
