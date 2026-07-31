@@ -10,3 +10,20 @@ ios/Pods/
 android/build/
 android/app/build/
 DerivedData/
+
+# Local scratch — never ship PG sockets / QA captures / prior artifacts to EAS
+.tmp/
+dist/
+build/
+builds/
+*.xcarchive/
+*.ipa
+YouTrader-*.ipa
+.worktrees/
+.parallel-code/
+recovery-backups/
+review-fix-backups/
+.codex/
+docs/releases/**/captures/
+maestro-*/
+.maestro/ydl/.capture-out/
