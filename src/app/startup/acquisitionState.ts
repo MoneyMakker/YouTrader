@@ -82,3 +82,36 @@ export const ACQUISITION_PAYWALL_DEVICE_KEY = "yt-acquisition-paywall-device-v1"
 export function acquisitionPaywallUserKey(userId: string): string {
   return `yt-acquisition-paywall-user-v1:${userId}`;
 }
+
+/**
+ * UI flags after a successful staging QA auth reset.
+ * Storage has already been cleared; apply signed-out acquisition state immediately.
+ *
+ * Critical: keep `acquisitionHydrated=true`. Flipping it to false while
+ * `session.user.id` is already null does not re-trigger the hydrate effect,
+ * leaving the shell stuck on "Loading your journal...".
+ * Staging-only callers invoke this after gated QA reset — production never reaches it.
+ */
+export type StagingQaResetAcquisitionUi = {
+  session: null;
+  onboardingCompleted: false;
+  paywallCompleted: false;
+  acquisitionHydrated: true;
+};
+
+export function stagingQaResetAcquisitionUi(): StagingQaResetAcquisitionUi {
+  return {
+    session: null,
+    onboardingCompleted: false,
+    paywallCompleted: false,
+    acquisitionHydrated: true,
+  };
+}
+
+/**
+ * Reproduce the infinite-loading bug class for tests:
+ * signed-out + acquisition flags cleared + hydrated=false → loading forever.
+ */
+export function isStuckAcquisitionLoading(input: AcquisitionInput): boolean {
+  return resolveAcquisitionPhase(input) === "loading" && !input.hydrated;
+}

@@ -158,6 +158,7 @@ import {
   ACQUISITION_PAYWALL_DEVICE_KEY,
   acquisitionPaywallUserKey,
   resolveAcquisitionPhase,
+  stagingQaResetAcquisitionUi,
 } from "./startup/acquisitionState";
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { isPropPassEntryVisible } from "../propPass/access";
@@ -9592,7 +9593,13 @@ function PremiumScreen({
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.modalHeader}>
         <Text style={styles.h1NoMargin}>{t("premiumLocked")}</Text>
-        <Pressable onPress={onClose} style={styles.closeCircle}>
+        <Pressable
+          onPress={onClose}
+          style={styles.closeCircle}
+          testID="acquisition-paywall-close"
+          accessibilityLabel="Close"
+          accessibilityRole="button"
+        >
           <Text style={styles.closeX}>×</Text>
         </Pressable>
       </View>
@@ -10832,10 +10839,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           const { runStagingQaReset } = await import("../qa/stagingQaReset");
           const reset = await runStagingQaReset({ deepLinkUrl: url });
           if (reset.allowed && reset.reason === "reset_ok") {
-            setSession(null);
-            setOnboardingCompleted(false);
-            setPaywallCompleted(false);
-            setAcquisitionHydrated(false);
+            // Storage is already cleared. Apply signed-out acquisition state
+            // via stagingQaResetAcquisitionUi() — keeps acquisitionHydrated true
+            // so a null→null session does not stick on "Loading your journal...".
+            const ui = stagingQaResetAcquisitionUi();
+            setSession(ui.session);
+            setOnboardingCompleted(ui.onboardingCompleted);
+            setPaywallCompleted(ui.paywallCompleted);
+            setAcquisitionHydrated(ui.acquisitionHydrated);
             Alert.alert("QA reset", "Staging auth/onboarding state cleared.");
           } else if (!reset.allowed) {
             Alert.alert("QA reset blocked", reset.reason);
@@ -10880,6 +10891,17 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             Alert.alert("QA email login failed", error?.message || "no_session");
             return;
           }
+          // Returning-user QA path: skip marketing onboarding/paywall so Journal is reachable.
+          // Await storage before setSession so the acquisition hydrate effect cannot race-clear flags.
+          await AsyncStorage.multiSet([
+            [ACQUISITION_ONBOARDING_KEY, "1"],
+            [ACQUISITION_PAYWALL_DEVICE_KEY, "1"],
+            [POST_AUTH_PAYWALL_SEEN_KEY, "1"],
+            [acquisitionPaywallUserKey(data.session.user.id), "1"],
+          ]);
+          setOnboardingCompleted(true);
+          setPaywallCompleted(true);
+          setAcquisitionHydrated(true);
           setSession(data.session);
           setAuthHydrated(true);
           setAuthBusy(false);
