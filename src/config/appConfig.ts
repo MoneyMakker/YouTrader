@@ -81,12 +81,18 @@ function resolveRevenueCatApiKey() {
 }
 
 export const REVENUECAT_API_KEY = resolveRevenueCatApiKey();
+/** Must match RevenueCat entitlement lookup_key exactly (dashboard: "YouTrader Pro"). */
 export const REVENUECAT_ENTITLEMENT_ID =
-  process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || "pro";
+  process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || "YouTrader Pro";
 export const REVENUECAT_IOS_PRODUCT_ID =
   process.env.EXPO_PUBLIC_REVENUECAT_IOS_PRODUCT_ID || "youtrader_pro_monthly";
+/**
+ * App Store Connect product id as registered in RevenueCat.
+ * Live store identifier is currently `youtrader_pro_yearly__` (trailing underscores).
+ * Override via EXPO_PUBLIC_REVENUECAT_IOS_YEARLY_PRODUCT_ID when ASC is cleaned up.
+ */
 export const REVENUECAT_IOS_YEARLY_PRODUCT_ID =
-  process.env.EXPO_PUBLIC_REVENUECAT_IOS_YEARLY_PRODUCT_ID || "youtrader_pro_yearly";
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_YEARLY_PRODUCT_ID || "youtrader_pro_yearly__";
 export const isExpoGo =
   Constants.appOwnership === "expo" || Constants.executionEnvironment === "storeClient";
 
@@ -162,5 +168,41 @@ export function releaseConfigSummary() {
     cloudSignIn: enableCloudSignIn,
     nativeApple: enableNativeAppleSignIn,
     nativeGoogle: enableNativeGoogleSignIn,
+  };
+}
+
+/** Sanitized runtime report for staging/TestFlight startup diagnosis — no secrets. */
+export function sanitizedRuntimeConfigReport() {
+  let supabaseHost = "";
+  try {
+    supabaseHost = supabaseUrl ? new URL(supabaseUrl).hostname : "";
+  } catch {
+    supabaseHost = "";
+  }
+  const appEnvironment = (
+    process.env.EXPO_PUBLIC_APP_ENV ||
+    process.env.APP_ENV ||
+    (__DEV__ ? "development" : "production")
+  )
+    .trim()
+    .toLowerCase();
+  const activationMode = (
+    process.env.EXPO_PUBLIC_PROP_OS_ACTIVATION_MODE ||
+    process.env.EXPO_PUBLIC_PROP_PASS_ACTIVATION_MODE ||
+    "off"
+  )
+    .trim()
+    .toLowerCase();
+  return {
+    appEnvironment,
+    supabaseHost,
+    activationMode,
+    revenueCatConfigured: isRevenueCatConfigured,
+    googleSignInConfigured: isGoogleNativeSignInConfigured,
+    propOsEnabledForEnvironment:
+      appEnvironment === "staging" ||
+      appEnvironment === "development" ||
+      appEnvironment === "local" ||
+      appEnvironment === "dev",
   };
 }

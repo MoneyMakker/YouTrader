@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  SafeAreaProvider,
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { YouTraderSafeAreaProvider } from "./YouTraderSafeAreaProvider";
+import { StartupFailureFallback } from "./StartupFailureFallback";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import * as FileSystem from "expo-file-system/legacy";
@@ -115,7 +116,6 @@ import { LOCK_SCREEN_BUFFER_KEY } from "../notifications/dailyTradingBrief";
 import { SmartNotificationsSection } from "../notifications/SmartNotificationsSection";
 import { SettingsAccountSection } from "../components/settings/SettingsAccountSection";
 import { isPropPassEntryVisible } from "../propPass";
-import { PropPassInternalScreen } from "../propPass/PropPassInternalScreen";
 import { registerPropPassSupabaseClient } from "../propPass/gatewayClient";
 import { registerPropPassRpcClient } from "../propPass/commandGateway";
 import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "../api/finnhubCalendar";
@@ -149,10 +149,11 @@ import { identifyAnalyticsUser, resetAnalyticsUser } from "../lib/analytics";
 import { captureAppError, logCrashlyticsBreadcrumb, scheduleMonitoringInit, setMonitoringUser, wrapAppWithSentry } from "../observability/monitoring";
 import { recordMetric } from "../observability/metrics";
 import { getPosthogClient } from "../lib/posthog";
-import { logStartupError, logStartupPerf, markAppStart } from "../lib/startupPerf";
+import { logStartupCheckpoint, logStartupError, logStartupPerf, markAppStart } from "../lib/startupPerf";
 import { logger } from "../lib/logger";
 import {
   enableCloudSignIn,
+  enableNativeGoogleSignIn,
   isExpoGo,
   isRevenueCatConfigured,
   isSupabaseConfigured,
@@ -160,6 +161,7 @@ import {
   REVENUECAT_ENTITLEMENT_ID,
   REVENUECAT_IOS_PRODUCT_ID,
   REVENUECAT_IOS_YEARLY_PRODUCT_ID,
+  sanitizedRuntimeConfigReport,
   supabase,
   userFacingBillingError,
   appVersionDisplayLabel,
@@ -433,13 +435,27 @@ import type { PerformanceGroup } from "./utils/stats";
 const AI_ASSISTANT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Authenticated publishable-key client only — never service_role. No Prop OS I/O here.
-registerPropPassSupabaseClient(
-  (supabase as unknown as import("../propOs/accounts/authenticatedReadTransport").SupabasePropOsReadClient) ??
-    null,
-);
-registerPropPassRpcClient(
-  (supabase as unknown as import("../propOs/commands/rpcWriteService").PropOsRpcClient) ?? null,
-);
+// Must never throw during module evaluation (TestFlight black-screen risk).
+try {
+  registerPropPassSupabaseClient(
+    (supabase as unknown as import("../propOs/accounts/authenticatedReadTransport").SupabasePropOsReadClient) ??
+      null,
+  );
+  registerPropPassRpcClient(
+    (supabase as unknown as import("../propOs/commands/rpcWriteService").PropOsRpcClient) ?? null,
+  );
+} catch (error) {
+  logStartupError("prop_pass_client_register", error);
+}
+
+const LazyPropPassInternalScreen = React.lazy(async () => {
+  const mod = await import("../propPass/PropPassInternalScreen");
+  return { default: mod.PropPassInternalScreen };
+});
+
+logStartupCheckpoint("S06");
+logStartupCheckpoint("S07", JSON.stringify(sanitizedRuntimeConfigReport()));
+logStartupCheckpoint("S08", isSupabaseConfigured ? "supabase_ready" : "supabase_absent");
 
 function parseTagsInput(value?: string | null) {
   return [...new Set(
@@ -9982,11 +9998,13 @@ YouTrader does not knowingly collect data from or market to individuals under th
           onRequestClose={() => setPropPassOpen(false)}
         >
           <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-            <PropPassInternalScreen
-              userId={session?.user?.id ?? null}
-              trades={trades}
-              onClose={() => setPropPassOpen(false)}
-            />
+            <React.Suspense fallback={null}>
+              <LazyPropPassInternalScreen
+                userId={session?.user?.id ?? null}
+                trades={trades}
+                onClose={() => setPropPassOpen(false)}
+              />
+            </React.Suspense>
           </SafeAreaView>
         </Modal>
 
@@ -10121,25 +10139,21 @@ class AppErrorBoundary extends React.Component<
   render() {
     if (this.state.error) {
       return (
-        <SafeAreaProvider>
-          <SafeAreaView style={styles.app}>
-            <View style={styles.errorBoundaryScreen}>
-              <EmptyStateCard
-                kind="error"
-                tone="neutral"
-                title="Restart the app"
-                message="Something went wrong while loading YouTrader. Close the app completely, then open it again. Your journal data is not shown here for privacy."
-              />
-            </View>
-          </SafeAreaView>
-        </SafeAreaProvider>
+        <SafeAreaView style={styles.app}>
+          <View style={styles.errorBoundaryScreen}>
+            <StartupFailureFallback
+              reasonCode="root_render_error"
+              onRetry={() => this.setState({ error: null })}
+            />
+          </View>
+        </SafeAreaView>
       );
     }
     return this.props.children;
   }
 }
 
-function App() {
+function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const firstRenderLogged = useRef(false);
   const authReadyLogged = useRef(false);
   const [tab, setTab] = useState<Tab>("journal");
@@ -10209,6 +10223,17 @@ function App() {
     if (firstRenderLogged.current) return;
     firstRenderLogged.current = true;
     logStartupPerf("first_render");
+    logStartupCheckpoint("S09");
+    // Staging-only controlled failure for fallback QA — never leave an indefinite black screen.
+    if ((process.env.EXPO_PUBLIC_FORCE_STARTUP_FAILURE || "").trim() === "true") {
+      logStartupError("forced_startup_failure");
+      return;
+    }
+    onVisibleShell?.();
+  }, [onVisibleShell]);
+
+  useEffect(() => {
+    logStartupCheckpoint("S10");
   }, []);
 
   useEffect(() => {
@@ -10711,17 +10736,20 @@ function App() {
       .getSession()
       .then(({ data }) => {
         if (cancelled) return;
+        clearTimeout(safety);
         setSession(data.session);
         setAuthHydrated(true);
       })
       .catch((error) => {
         if (cancelled) return;
+        clearTimeout(safety);
         logger.error(error, { feature: "supabase", action: "get_session" });
         logStartupError("auth_get_session", error);
         captureAppError(error, { feature: "auth", action: "get_session" });
         setAuthHydrated(true);
       });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      clearTimeout(safety);
       setSession(nextSession);
       setAuthHydrated(true);
     });
@@ -11461,33 +11489,32 @@ function App() {
 
   if (!appReady) {
     return (
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.app}>
-          <StatusBar style="light" backgroundColor="#000000" />
-          <View style={styles.lockScreen}>
-            <AppStartupSkeleton />
-            <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
-          </View>
-        </SafeAreaView>
-      </SafeAreaProvider>
+      <SafeAreaView style={styles.app}>
+        <StatusBar style="light" backgroundColor="#000000" />
+        <View style={styles.lockScreen}>
+          <AppStartupSkeleton />
+          <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (authRequired && !session?.user) {
     return (
-      <SafeAreaProvider>
+      <View style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
         <AuthScreen
           busy={authBusy}
           copy={authScreenCopy}
           emailModalCopy={emailModalCopy}
           showApple={Platform.OS === "ios"}
+          showGoogle={enableNativeGoogleSignIn}
           onSignIn={signInWithProvider}
           onSignInWithEmailPassword={signInWithEmailPasswordHandler}
           onSignUpWithEmailPassword={signUpWithEmailPasswordHandler}
           onRequestPasswordReset={requestPasswordResetHandler}
         />
-      </SafeAreaProvider>
+      </View>
     );
   }
 
@@ -11504,8 +11531,7 @@ function App() {
   const showForcedPaywall = showPostAuthPaywall && !isPremium;
   const locked = (!isPremium && premiumTabs.includes(tab)) || showForcedPaywall;
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.app}>
+    <SafeAreaView style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
         <View style={styles.body}>
           {locked ? (
@@ -11675,13 +11701,19 @@ function App() {
           </React.Suspense>
         ) : null}
       </SafeAreaView>
-    </SafeAreaProvider>
   );
 }
 
 function AppRoot() {
   const [posthogReady, setPosthogReady] = useState(false);
+  const [shellMounted, setShellMounted] = useState(false);
+  const [startupTimedOut, setStartupTimedOut] = useState(false);
+  const [startupEpoch, setStartupEpoch] = useState(0);
   const posthogClient = posthogReady ? getPosthogClient() : undefined;
+
+  useEffect(() => {
+    logStartupCheckpoint("S05");
+  }, []);
 
   useEffect(() => {
     const task = InteractionManager.runAfterInteractions(() => {
@@ -11690,18 +11722,59 @@ function AppRoot() {
     return () => task.cancel();
   }, []);
 
-  const app = (
-    <AppErrorBoundary>
+  const shellMountedRef = useRef(false);
+  useEffect(() => {
+    shellMountedRef.current = shellMounted;
+  }, [shellMounted]);
+
+  useEffect(() => {
+    setShellMounted(false);
+    setStartupTimedOut(false);
+    const watchdog = setTimeout(() => {
+      if (shellMountedRef.current) return;
+      logStartupError("startup_watchdog_timeout");
+      setStartupTimedOut(true);
+    }, 15000);
+    return () => clearTimeout(watchdog);
+  }, [startupEpoch]);
+
+  useEffect(() => {
+    if (!shellMounted) return;
+    setStartupTimedOut(false);
+    logStartupCheckpoint("S12");
+    logStartupCheckpoint("S13");
+    logStartupCheckpoint("S14");
+  }, [shellMounted]);
+
+  const appTree = (
+    <AppErrorBoundary key={startupEpoch}>
       <StatsTimeRangeProvider>
-        <App />
+        <App key={startupEpoch} onVisibleShell={() => setShellMounted(true)} />
       </StatsTimeRangeProvider>
     </AppErrorBoundary>
   );
-  if (!posthogClient) return app;
-  return (
+
+  const wrapped = posthogClient ? (
     <PostHogProvider client={posthogClient} autocapture={false}>
-      {app}
+      {appTree}
     </PostHogProvider>
+  ) : (
+    appTree
+  );
+
+  return (
+    <YouTraderSafeAreaProvider>
+      {startupTimedOut && !shellMounted ? (
+        <SafeAreaView style={styles.app}>
+          <StartupFailureFallback
+            reasonCode="startup_shell_timeout"
+            onRetry={() => setStartupEpoch((value) => value + 1)}
+          />
+        </SafeAreaView>
+      ) : (
+        wrapped
+      )}
+    </YouTraderSafeAreaProvider>
   );
 }
 

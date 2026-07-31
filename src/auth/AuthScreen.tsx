@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -25,6 +24,7 @@ import {
   GlowBorderCard,
   PremiumLoadingBar,
   ShimmerPlaceholder,
+  StatusSpinner,
 } from "../components/ui/premium";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "./types";
 
@@ -45,6 +45,8 @@ type Props = {
   copy: AuthScreenCopy;
   emailModalCopy: EmailAuthModalCopy;
   showApple: boolean;
+  /** When false, hide Google CTA — never show a button that cannot authenticate. */
+  showGoogle?: boolean;
   onSignIn: (provider: AuthProvider) => void | Promise<void>;
   onSignInWithEmailPassword: (email: string, password: string) => Promise<void>;
   onSignUpWithEmailPassword: (email: string, password: string) => Promise<"confirmation_sent" | "signed_in">;
@@ -137,7 +139,7 @@ function AuthProviderButton({
           scaleTo={0.975}
           contentStyle={[styles.providerBtn, { borderColor }, busy && styles.disabled]}
         >
-          {busy ? <ActivityIndicator color={C.green} /> : <Text style={styles.providerText}>{label}</Text>}
+          {busy ? <StatusSpinner size="sm" accessibilityLabel="Signing in" style={{ marginVertical: 0 }} /> : <Text style={styles.providerText}>{label}</Text>}
         </AnimatedPressable>
       </Animated.View>
     </Animated.View>
@@ -149,6 +151,7 @@ export function AuthScreen({
   copy,
   emailModalCopy,
   showApple,
+  showGoogle = true,
   onSignIn,
   onSignInWithEmailPassword,
   onSignUpWithEmailPassword,
@@ -260,20 +263,22 @@ export function AuthScreen({
                 </Animated.View>
               ) : null}
 
-              <AuthProviderButton
-                label={copy.google}
-                borderColor="rgba(163,255,18,0.55)"
-                glowColor={C.green}
-                busy={busy}
-                delay={buttonBaseDelay}
-                onPress={() => void onSignIn("google")}
-              />
+              {showGoogle ? (
+                <AuthProviderButton
+                  label={copy.google}
+                  borderColor="rgba(163,255,18,0.55)"
+                  glowColor={C.green}
+                  busy={busy}
+                  delay={buttonBaseDelay}
+                  onPress={() => void onSignIn("google")}
+                />
+              ) : null}
               <AuthProviderButton
                 label={copy.email}
                 borderColor="rgba(176,38,255,0.5)"
                 glowColor={C.purple}
                 busy={busy}
-                delay={buttonBaseDelay + 70}
+                delay={buttonBaseDelay + (showGoogle ? 70 : 0)}
                 onPress={() => setEmailOpen(true)}
               />
             </Animated.View>
