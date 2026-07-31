@@ -70,3 +70,8 @@ storybook-static
 
 # Local agent secrets (never commit)
 .codex/secrets/
+
+# Project-local tooling (JDK archives, Maestro QA logs)
+.tools/
+docs/releases/**/qa-artifacts/
+.maestro/.qa-out/

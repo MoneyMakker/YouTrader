@@ -1,0 +1,12 @@
+# Minimal simulator smoke — proves Maestro+JRE without auth complexity.
+appId: com.youtrader.pro
+name: YT3 Maestro smoke — launch shell
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+    timeout: 45000
+- takeScreenshot: maestro_smoke_launch
+- assertVisible:
+    text: ".*"
