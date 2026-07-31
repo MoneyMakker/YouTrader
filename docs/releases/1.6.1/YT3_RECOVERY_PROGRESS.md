@@ -49,3 +49,11 @@
 | Apple / Google / funnel / Prop Pass interactive | **NOT PASS** without screenshots + Apple provider enable |
 
 Phase 4F remains **FAILED / NO-GO**.
+
+## Automation blockers (updated)
+
+- `idevicescreenshot` / screenshotr: Invalid service on iOS 26.6 despite usable DDI
+- Maestro 2.8.0 `driver-setup --apple-team-id=L6M4U8G8RC`: fails missing `MaestroDriverLib/Info.plist`
+- Staging Apple Auth provider: still disabled (`provider_disabled`); Management API PATCH 403
+
+Manual screenshots via Xcode Devices window are required until tooling is fixed.
