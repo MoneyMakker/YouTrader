@@ -20,10 +20,11 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 
 prepare_react_native_project!
 
-# Map custom Release-Staging app config onto CocoaPods :release so module maps
-# resolve under ArchiveIntermediates/.../Release-Staging-iphoneos.
+# Map custom staging configs onto CocoaPods debug/release so module maps
+# resolve under ArchiveIntermediates/.../{Debug,Release}-Staging-iphoneos.
 project 'YouTrader', {
   'Debug' => :debug,
+  'Debug-Staging' => :debug,
   'Release' => :release,
   'Release-Staging' => :release,
 }
@@ -72,23 +73,38 @@ target 'YouTrader' do
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
 
-    # Ensure every pod target has an explicit Release-Staging configuration that
-    # mirrors Release (CocoaPods otherwise only generates Debug/Release).
+    # Ensure every pod target has explicit Debug-Staging / Release-Staging
+    # configs that mirror Debug / Release (CocoaPods otherwise only generates
+    # Debug/Release).
     installer.pods_project.targets.each do |target|
+      debug_config = target.build_configurations.find { |c| c.name == 'Debug' }
       release_config = target.build_configurations.find { |c| c.name == 'Release' }
-      next unless release_config
 
-      staging = target.build_configurations.find { |c| c.name == 'Release-Staging' }
-      unless staging
-        staging = target.add_build_configuration('Release-Staging', :release)
+      if debug_config
+        debug_staging = target.build_configurations.find { |c| c.name == 'Debug-Staging' }
+        unless debug_staging
+          debug_staging = target.add_build_configuration('Debug-Staging', :debug)
+        end
+        debug_staging.build_settings.merge!(debug_config.build_settings)
       end
-      staging.build_settings.merge!(release_config.build_settings)
+
+      if release_config
+        release_staging = target.build_configurations.find { |c| c.name == 'Release-Staging' }
+        unless release_staging
+          release_staging = target.add_build_configuration('Release-Staging', :release)
+        end
+        release_staging.build_settings.merge!(release_config.build_settings)
+      end
     end
 
     installer.pods_project.build_configurations.each do |config|
-      next unless config.name == 'Release-Staging'
-      release = installer.pods_project.build_configurations.find { |c| c.name == 'Release' }
-      config.build_settings.merge!(release.build_settings) if release
+      if config.name == 'Debug-Staging'
+        debug = installer.pods_project.build_configurations.find { |c| c.name == 'Debug' }
+        config.build_settings.merge!(debug.build_settings) if debug
+      elsif config.name == 'Release-Staging'
+        release = installer.pods_project.build_configurations.find { |c| c.name == 'Release' }
+        config.build_settings.merge!(release.build_settings) if release
+      end
     end
   end
 end

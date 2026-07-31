@@ -27,6 +27,7 @@
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		BC84BD69A7AE83313A1596C3 /* Pods-YouTrader.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YouTrader.release.xcconfig"; path = "Target Support Files/Pods-YouTrader/Pods-YouTrader.release.xcconfig"; sourceTree = "<group>"; };
 		C69729405AAAC7FFD66A09E5 /* Pods-YouTrader.release-staging.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YouTrader.release-staging.xcconfig"; path = "Target Support Files/Pods-YouTrader/Pods-YouTrader.release-staging.xcconfig"; sourceTree = "<group>"; };
+		D1E2F3A45B6C7D8E9F0A1B2C /* Pods-YouTrader.debug-staging.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-YouTrader.debug-staging.xcconfig"; path = "Target Support Files/Pods-YouTrader/Pods-YouTrader.debug-staging.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		EF5C41B05560715AFA8B8E1A /* libPods-YouTrader.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-YouTrader.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = YouTrader/AppDelegate.swift; sourceTree = "<group>"; };
@@ -80,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				0CA66BB40C784D9C9E0EF3A1 /* Pods-YouTrader.debug.xcconfig */,
+				D1E2F3A45B6C7D8E9F0A1B2C /* Pods-YouTrader.debug-staging.xcconfig */,
 				BC84BD69A7AE83313A1596C3 /* Pods-YouTrader.release.xcconfig */,
 				C69729405AAAC7FFD66A09E5 /* Pods-YouTrader.release-staging.xcconfig */,
 			);
@@ -227,75 +229,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then
-  source \"$PODS_ROOT/../.xcode.env\"
-fi
-if [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then
-  source \"$PODS_ROOT/../.xcode.env.local\"
-fi
-if [[ \"$CONFIGURATION\" = *Staging* ]]; then
-  if [[ -f \"$PODS_ROOT/../.xcode.env.staging\" ]]; then
-    source \"$PODS_ROOT/../.xcode.env.staging\"
-  else
-    echo \"error: ios/.xcode.env.staging not found; Release-Staging builds require staging env vars (copy from .xcode.env.staging.example)\" >&2
-    exit 1
-  fi
-fi
-
-# The project root by default is one level up from the ios directory
-export PROJECT_ROOT=\"$PROJECT_DIR\"/..
-
-# Debug configs rely on Metro. Never skip embedding for Release / Release-Staging.
-if [[ \"$CONFIGURATION\" = *Debug* ]]; then
-  export SKIP_BUNDLING=1
-else
-  unset SKIP_BUNDLING
-  export FORCE_BUNDLING=1
-fi
-if [[ -z \"$ENTRY_FILE\" ]]; then
-  # Set the entry JS file using the bundler's entry resolution.
-  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"
-fi
-
-if [[ -z \"$CLI_PATH\" ]]; then
-  # Use Expo CLI
-  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"
-fi
-if [[ -z \"$BUNDLE_COMMAND\" ]]; then
-  # Default Expo CLI command for bundling
-  export BUNDLE_COMMAND=\"export:embed\"
-fi
-
-# Source .xcode.env.updates if it exists to allow
-# SKIP_BUNDLING to be unset if needed
-if [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then
-  source \"$PODS_ROOT/../.xcode.env.updates\"
-fi
-# Source local changes to allow overrides
-# if needed
-if [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then
-  source \"$PODS_ROOT/../.xcode.env.local\"
-fi
-
-# Re-assert non-Debug embedding after local overrides (prevents accidental SKIP_BUNDLING).
-if [[ \"$CONFIGURATION\" != *Debug* ]]; then
-  unset SKIP_BUNDLING
-  export FORCE_BUNDLING=1
-fi
-
-echo \"note: Bundle RN phase CONFIGURATION=$CONFIGURATION SKIP_BUNDLING=${SKIP_BUNDLING:-} FORCE_BUNDLING=${FORCE_BUNDLING:-} NODE_BINARY=$NODE_BINARY\"
-
-`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`
-
-if [[ \"$CONFIGURATION\" != *Debug* ]]; then
-  EMBEDDED_BUNDLE=\"$CONFIGURATION_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/main.jsbundle\"
-  if [[ ! -f \"$EMBEDDED_BUNDLE\" ]]; then
-    echo \"error: main.jsbundle missing after embed for CONFIGURATION=$CONFIGURATION (expected $EMBEDDED_BUNDLE). Release-Staging/Release must embed JS; do not rely on Metro.\" >&2
-    exit 1
-  fi
-  echo \"note: embedded main.jsbundle OK ($(wc -c < \"$EMBEDDED_BUNDLE\" | tr -d ' ') bytes) path=$EMBEDDED_BUNDLE\"
-fi
-";
+			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\nif [[ \"$CONFIGURATION\" = *Staging* ]]; then\n  if [[ -f \"$PODS_ROOT/../.xcode.env.staging\" ]]; then\n    source \"$PODS_ROOT/../.xcode.env.staging\"\n  else\n    echo \"error: ios/.xcode.env.staging not found; Release-Staging builds require staging env vars (copy from .xcode.env.staging.example)\" >&2\n    exit 1\n  fi\nfi\n\n# The project root by default is one level up from the ios directory\nexport PROJECT_ROOT=\"$PROJECT_DIR\"/..\n\n# Debug configs rely on Metro. Never skip embedding for Release / Release-Staging.\nif [[ \"$CONFIGURATION\" = *Debug* ]]; then\n  export SKIP_BUNDLING=1\nelse\n  unset SKIP_BUNDLING\n  export FORCE_BUNDLING=1\nfi\nif [[ -z \"$ENTRY_FILE\" ]]; then\n  # Set the entry JS file using the bundler's entry resolution.\n  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"\nfi\n\nif [[ -z \"$CLI_PATH\" ]]; then\n  # Use Expo CLI\n  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"\nfi\nif [[ -z \"$BUNDLE_COMMAND\" ]]; then\n  # Default Expo CLI command for bundling\n  export BUNDLE_COMMAND=\"export:embed\"\nfi\n\n# Source .xcode.env.updates if it exists to allow\n# SKIP_BUNDLING to be unset if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.updates\"\nfi\n# Source local changes to allow overrides\n# if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n# Re-assert non-Debug embedding after local overrides (prevents accidental SKIP_BUNDLING).\nif [[ \"$CONFIGURATION\" != *Debug* ]]; then\n  unset SKIP_BUNDLING\n  export FORCE_BUNDLING=1\nfi\n\necho \"note: Bundle RN phase CONFIGURATION=$CONFIGURATION SKIP_BUNDLING=${SKIP_BUNDLING:-} FORCE_BUNDLING=${FORCE_BUNDLING:-} NODE_BINARY=$NODE_BINARY\"\n\n`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`\n\nif [[ \"$CONFIGURATION\" != *Debug* ]]; then\n  EMBEDDED_BUNDLE=\"$CONFIGURATION_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/main.jsbundle\"\n  if [[ ! -f \"$EMBEDDED_BUNDLE\" ]]; then\n    echo \"error: main.jsbundle missing after embed for CONFIGURATION=$CONFIGURATION (expected $EMBEDDED_BUNDLE). Release-Staging/Release must embed JS; do not rely on Metro.\" >&2\n    exit 1\n  fi\n  echo \"note: embedded main.jsbundle OK ($(wc -c < \"$EMBEDDED_BUNDLE\" | tr -d ' ') bytes) path=$EMBEDDED_BUNDLE\"\nfi\n";
 		};
 		08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -728,6 +662,112 @@ fi
 			};
 			name = "Release-Staging";
 		};
+		D9E5G3B14F6D0C8700345678 /* Debug-Staging */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D1E2F3A45B6C7D8E9F0A1B2C /* Pods-YouTrader.debug-staging.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 113;
+				DEVELOPMENT_TEAM = L6M4U8G8RC;
+				ENABLE_BITCODE = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"FB_SONARKIT_ENABLED=1",
+				);
+				INFOPLIST_FILE = YouTrader/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = YouTrader;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.6.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+					"-lc++",
+				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
+				PRODUCT_BUNDLE_IDENTIFIER = com.youtrader.pro;
+				PRODUCT_NAME = YouTrader;
+				SWIFT_OBJC_BRIDGING_HEADER = "YouTrader/YouTrader-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				YOUTRADER_APP_ENV = staging;
+			};
+			name = "Debug-Staging";
+		};
+		E0F6H4C25G7E1D9800456789 /* Debug-Staging */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					/usr/lib/swift,
+					"$(inherited)",
+				);
+				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
+				USE_HERMES = true;
+				YOUTRADER_APP_ENV = staging;
+			};
+			name = "Debug-Staging";
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -735,6 +775,7 @@ fi
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
+				D9E5G3B14F6D0C8700345678 /* Debug-Staging */,
 				13B07F951A680F5B00A75B9A /* Release */,
 				A7C3E1F92D4B8A6500123456 /* Release-Staging */,
 			);
@@ -745,6 +786,7 @@ fi
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
+				E0F6H4C25G7E1D9800456789 /* Debug-Staging */,
 				83CBBA211A601CBA00E9B192 /* Release */,
 				B8D4F2A03E5C9B7600234567 /* Release-Staging */,
 			);
