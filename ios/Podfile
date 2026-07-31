@@ -20,6 +20,14 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 
 prepare_react_native_project!
 
+# Map custom Release-Staging app config onto CocoaPods :release so module maps
+# resolve under ArchiveIntermediates/.../Release-Staging-iphoneos.
+project 'YouTrader', {
+  'Debug' => :debug,
+  'Release' => :release,
+  'Release-Staging' => :release,
+}
+
 target 'YouTrader' do
   use_expo_modules!
 
@@ -63,5 +71,24 @@ target 'YouTrader' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Ensure every pod target has an explicit Release-Staging configuration that
+    # mirrors Release (CocoaPods otherwise only generates Debug/Release).
+    installer.pods_project.targets.each do |target|
+      release_config = target.build_configurations.find { |c| c.name == 'Release' }
+      next unless release_config
+
+      staging = target.build_configurations.find { |c| c.name == 'Release-Staging' }
+      unless staging
+        staging = target.add_build_configuration('Release-Staging', :release)
+      end
+      staging.build_settings.merge!(release_config.build_settings)
+    end
+
+    installer.pods_project.build_configurations.each do |config|
+      next unless config.name == 'Release-Staging'
+      release = installer.pods_project.build_configurations.find { |c| c.name == 'Release' }
+      config.build_settings.merge!(release.build_settings) if release
+    end
   end
 end

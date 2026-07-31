@@ -34,10 +34,11 @@ export function usePropPassAvailability(input: {
   );
   const seq = useRef(0);
 
-  const access = resolvePropPassAccess(undefined, peekPropPassAvailability(input.userId));
+  const peek = peekPropPassAvailability(input.userId);
+  const access = resolvePropPassAccess(undefined, peek, input.userId);
   const entryVisible =
     (input.enabled ?? true) &&
-    isPropPassEntryVisible(undefined, peekPropPassAvailability(input.userId));
+    isPropPassEntryVisible(undefined, peek, input.userId);
 
   const refresh = useCallback(
     (opts?: { selectedChallengeId?: string | null }) => {

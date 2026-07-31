@@ -9748,7 +9748,11 @@ function SettingsScreen({
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const [propPassOpen, setPropPassOpen] = useState(false);
-  const propPassEntryVisible = isPropPassEntryVisible();
+  const propPassEntryVisible = isPropPassEntryVisible(
+    undefined,
+    undefined,
+    session?.user?.id ?? null,
+  );
   const choose = (l: Lang) => {
     void changeAppLanguage(l).then(() => setLang(l));
   };

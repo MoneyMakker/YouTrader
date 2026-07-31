@@ -160,6 +160,7 @@ async function main() {
           reasonCodes: [],
           killSwitch: false,
         },
+        USER,
       ),
       false,
     );
@@ -173,8 +174,39 @@ async function main() {
           reasonCodes: ["eligible"],
           killSwitch: false,
         },
+        USER,
       ),
       true,
+    );
+    assert.equal(
+      isPropPassEntryVisible(
+        { EXPO_PUBLIC_APP_ENV: "staging" },
+        {
+          mode: "staging_preview",
+          eligible: false,
+          gate: "ineligible",
+          reasonCodes: ["not_allowlisted"],
+          killSwitch: false,
+        },
+        USER,
+      ),
+      false,
+      "non-allowlisted must not see entry",
+    );
+    assert.equal(
+      isPropPassEntryVisible(
+        { EXPO_PUBLIC_APP_ENV: "staging" },
+        {
+          mode: "staging_preview",
+          eligible: true,
+          gate: "available",
+          reasonCodes: ["eligible"],
+          killSwitch: false,
+        },
+        null,
+      ),
+      false,
+      "unauthenticated must not flash entry",
     );
   });
 

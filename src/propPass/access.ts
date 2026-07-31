@@ -24,12 +24,13 @@ export function isPropPassEnvironmentAllowed(
 export function resolvePropPassAccess(
   env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
   availability?: PropOsAvailability | null,
+  userId?: string | null,
 ): PropPassAccess {
   const environmentAllowed = isPropPassEnvironmentAllowed(env);
   let peek = availability;
   if (!peek) {
     try {
-      peek = peekPropPassAvailability(null);
+      peek = peekPropPassAvailability(userId ?? null);
     } catch {
       return {
         environmentAllowed,
@@ -41,8 +42,14 @@ export function resolvePropPassAccess(
   }
   const modeOk =
     peek.mode === "internal_read_only" || peek.mode === "staging_preview";
+  // Hide until authenticated + allowlisted — prevents flash for ineligible users.
   const entryVisible =
-    environmentAllowed && modeOk && !peek.killSwitch && peek.mode !== "off";
+    environmentAllowed &&
+    modeOk &&
+    !peek.killSwitch &&
+    peek.mode !== "off" &&
+    !!userId &&
+    peek.eligible === true;
   return {
     environmentAllowed,
     entryVisible,
@@ -54,6 +61,7 @@ export function resolvePropPassAccess(
 export function isPropPassEntryVisible(
   env?: Record<string, string | undefined>,
   availability?: PropOsAvailability | null,
+  userId?: string | null,
 ): boolean {
-  return resolvePropPassAccess(env, availability).entryVisible;
+  return resolvePropPassAccess(env, availability, userId).entryVisible;
 }

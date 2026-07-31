@@ -5,6 +5,9 @@ node_modules/
 .env
 .env.*
 !.env.example
+.env.staging
+.env.eas.staging
+ios/.xcode.env.staging
 scripts/market-intel-worker/.env
 
 # Expo and build output
@@ -62,3 +65,5 @@ storybook-static
 
 # Maestro / Storybook capture scratch (committed baselines live in .maestro/ydl/baselines/)
 .maestro/ydl/.capture-out/
+
+.tmp/
