@@ -105,32 +105,15 @@ export const enableCloudSignIn =
 export const IOS_BUNDLE_IDENTIFIER =
   Constants.expoConfig?.ios?.bundleIdentifier || "com.youtrader.pro";
 
-function resolveAppEnvironment(): string {
-  return (
-    process.env.EXPO_PUBLIC_APP_ENV ||
-    process.env.APP_ENV ||
-    (__DEV__ ? "development" : "production")
-  )
-    .trim()
-    .toLowerCase();
-}
-
-const STAGING_LIKE_ENVS = new Set(["staging", "development", "local", "dev"]);
-
 /**
- * Native Apple (signInWithIdToken) requires the Supabase Apple provider enabled
- * with Client ID `com.youtrader.pro`. Staging projects often leave Apple off —
- * hide the CTA there unless explicitly opted in after provider setup.
+ * Native Apple (signInWithIdToken) on iOS when Supabase is configured.
+ *
+ * Staging must not silently hide the CTA when the provider is misconfigured —
+ * that is a failed configuration to repair (enable Apple on staging Auth),
+ * not a reason to remove the product control. See YT3_REGRESSION_AUDIT R1.
  */
-export const enableNativeAppleSignIn = (() => {
-  if (Platform.OS !== "ios" || !isSupabaseConfigured) return false;
-  const appEnvironment = resolveAppEnvironment();
-  const stagingLike = STAGING_LIKE_ENVS.has(appEnvironment);
-  const stagingOptIn =
-    (process.env.EXPO_PUBLIC_ENABLE_NATIVE_APPLE_SIGN_IN || "").trim() === "true";
-  if (stagingLike && !stagingOptIn) return false;
-  return true;
-})();
+export const enableNativeAppleSignIn =
+  Platform.OS === "ios" && isSupabaseConfigured;
 
 function resolveGoogleClientId(envKey: string): string {
   const value = (process.env[envKey] || "").trim();

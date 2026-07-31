@@ -115,9 +115,11 @@ import { configureNotificationHandler } from "../notifications/push";
 import { LOCK_SCREEN_BUFFER_KEY } from "../notifications/dailyTradingBrief";
 import { SmartNotificationsSection } from "../notifications/SmartNotificationsSection";
 import { SettingsAccountSection } from "../components/settings/SettingsAccountSection";
-import { isPropPassEntryVisible } from "../propPass";
 import { registerPropPassSupabaseClient } from "../propPass/gatewayClient";
 import { registerPropPassRpcClient } from "../propPass/commandGateway";
+import { YdlTabBar } from "../ydl/shell";
+import { useYdlTheme } from "../ydl/tokens";
+import { YdlFade } from "../ydl/motion";
 import { fetchFinnhubEconomicCalendar, mapFinnhubEconomicRows } from "../api/finnhubCalendar";
 import {
   analyzeTrades,
@@ -151,6 +153,14 @@ import { recordMetric } from "../observability/metrics";
 import { getPosthogClient } from "../lib/posthog";
 import { logStartupCheckpoint, logStartupError, logStartupPerf, markAppStart } from "../lib/startupPerf";
 import { logger } from "../lib/logger";
+import {
+  ACQUISITION_ONBOARDING_KEY,
+  ACQUISITION_PAYWALL_DEVICE_KEY,
+  acquisitionPaywallUserKey,
+  resolveAcquisitionPhase,
+} from "./startup/acquisitionState";
+import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
+import { isPropPassEntryVisible } from "../propPass/access";
 import {
   enableCloudSignIn,
   enableNativeAppleSignIn,
@@ -9764,12 +9774,6 @@ function SettingsScreen({
 }) {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
-  const [propPassOpen, setPropPassOpen] = useState(false);
-  const propPassEntryVisible = isPropPassEntryVisible(
-    undefined,
-    undefined,
-    session?.user?.id ?? null,
-  );
   const choose = (l: Lang) => {
     void changeAppLanguage(l).then(() => setLang(l));
   };
@@ -9972,43 +9976,6 @@ YouTrader does not knowingly collect data from or market to individuals under th
           </View>
         </Card>
 
-        {propPassEntryVisible ? (
-          <Card style={styles.settingsQuietCard}>
-            <Text style={styles.settingsSectionTitle} maxFontSizeMultiplier={1.25}>
-              {t("propPass.settingsEntryTitle")}
-            </Text>
-            <Text style={styles.settingsSectionSub} maxFontSizeMultiplier={1.25}>
-              {t("propPass.settingsEntryBody")}
-            </Text>
-            <Pressable
-              onPress={() => setPropPassOpen(true)}
-              style={[styles.secondaryBig, { marginTop: 12 }]}
-              accessibilityRole="button"
-              accessibilityLabel={t("propPass.settingsEntryA11y")}
-              testID="prop-pass-settings-entry"
-            >
-              <Text style={styles.secondaryText}>{t("propPass.settingsEntryCta")}</Text>
-            </Pressable>
-          </Card>
-        ) : null}
-
-        <Modal
-          visible={propPassOpen}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setPropPassOpen(false)}
-        >
-          <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-            <React.Suspense fallback={null}>
-              <LazyPropPassInternalScreen
-                userId={session?.user?.id ?? null}
-                trades={trades}
-                onClose={() => setPropPassOpen(false)}
-              />
-            </React.Suspense>
-          </SafeAreaView>
-        </Modal>
-
         <Card style={styles.settingsQuietCard}>
           <Text style={styles.settingsSectionTitle} maxFontSizeMultiplier={1.25}>Legal</Text>
           <Pressable onPress={() => Alert.alert(t("termsRiskPrivacy"), legalInfo)} style={styles.legalRow} accessibilityRole="button" accessibilityLabel={t("termsRiskPrivacy")}>
@@ -10046,78 +10013,17 @@ YouTrader does not knowingly collect data from or market to individuals under th
 }
 
 function TabGlyph({ id, active }: { id: Tab; active: boolean }) {
-  const color = active ? "#96FF00" : "#7D8795";
+  const theme = useYdlTheme("dark");
+  const color = active ? theme.colors.action.primary : theme.colors.text.tertiary;
   const iconProps = { size: UI_ICON_SIZE + 5, color, strokeWidth: UI_ICON_STROKE };
   if (id === "journal") return <BookOpen {...iconProps} />;
   if (id === "stats") return <ChartColumnIncreasing {...iconProps} />;
-  if (id === "ai") return <BrainCircuit {...iconProps} />;
+  if (id === "propPass") return <ShieldCheck {...iconProps} />;
   if (id === "calc") return <CalculatorIcon {...iconProps} />;
   if (id === "news") return <Newspaper {...iconProps} />;
   if (id === "calendar") return <CalendarDays {...iconProps} />;
   if (id === "settings") return <SettingsIcon {...iconProps} />;
   return null;
-}
-
-function TabButton({
-  id,
-  label,
-  active,
-  onPress,
-}: {
-  id: Tab;
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const activeAnim = useRef(new Animated.Value(active ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(activeAnim, {
-      toValue: active ? 1 : 0,
-      duration: 200,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-  }, [active, activeAnim]);
-
-  const scale = activeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1] });
-  const indicatorScale = activeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] });
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={styles.tab}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-    >
-      <Animated.View
-        style={[
-          styles.tabIconWrap,
-          active && styles.tabIconGlow,
-          { transform: [{ scale }] },
-        ]}
-      >
-        <TabGlyph id={id} active={active} />
-      </Animated.View>
-      <Text
-        style={[styles.tabText, active && styles.tabTextActive]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.56}
-      >
-        {label}
-      </Text>
-      <Animated.View
-        style={[
-          styles.tabActiveUnderline,
-          {
-            opacity: activeAnim,
-            transform: [{ scaleX: indicatorScale }],
-          },
-        ]}
-      />
-    </Pressable>
-  );
 }
 
 type AppErrorBoundaryState = { error: Error | null };
@@ -10157,6 +10063,7 @@ class AppErrorBoundary extends React.Component<
 function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const firstRenderLogged = useRef(false);
   const authReadyLogged = useRef(false);
+  const shellTheme = useYdlTheme("dark");
   const [tab, setTab] = useState<Tab>("journal");
   const [lang, setLang] = useState<Lang>("en");
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -10173,7 +10080,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [storeProducts, setStoreProducts] = useState<PurchasesStoreProduct[]>([]);
   const [paywallError, setPaywallError] = useState("");
   const [showRestorePurchases, setShowRestorePurchases] = useState(false);
-  const [showPostAuthPaywall, setShowPostAuthPaywall] = useState(false);
+  const [acquisitionHydrated, setAcquisitionHydrated] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [paywallCompleted, setPaywallCompleted] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<"off" | "syncing" | "synced" | "error">("off");
   const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in and upgrade to Pro to sync your journal.");
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
@@ -10197,28 +10106,71 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const isPremium = proAccess.isPro;
   const cloudSyncEnabled = authConfigured && !!session?.user.id;
   const currentTradeSignature = useMemo(() => tradesSignature(trades), [trades]);
+  /** Legacy key — still honored so existing installs are not re-paywalled. */
   const POST_AUTH_PAYWALL_SEEN_KEY = "yt-post-auth-paywall-seen-v1";
 
   useEffect(() => {
-    if (!authHydrated || !session?.user?.id || !revenueCatReady) return;
-    if (isPremium) {
-      setShowPostAuthPaywall(false);
-      void AsyncStorage.setItem(POST_AUTH_PAYWALL_SEEN_KEY, "1");
-      return;
-    }
+    if (!authHydrated) return;
     let cancelled = false;
-    void AsyncStorage.getItem(POST_AUTH_PAYWALL_SEEN_KEY).then((seen) => {
-      if (!cancelled && !seen) setShowPostAuthPaywall(true);
-    });
+    void (async () => {
+      try {
+        const [onboarding, devicePaywall, legacyPaywall] = await Promise.all([
+          AsyncStorage.getItem(ACQUISITION_ONBOARDING_KEY),
+          AsyncStorage.getItem(ACQUISITION_PAYWALL_DEVICE_KEY),
+          AsyncStorage.getItem(POST_AUTH_PAYWALL_SEEN_KEY),
+        ]);
+        let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
+        let onboardingDone = onboarding === "1";
+        const userId = session?.user?.id;
+        if (userId) {
+          const userPaywall = await AsyncStorage.getItem(acquisitionPaywallUserKey(userId));
+          if (userPaywall === "1") paywallDone = true;
+          // Existing authenticated users skip marketing onboarding once.
+          if (!onboardingDone) {
+            onboardingDone = true;
+            void AsyncStorage.setItem(ACQUISITION_ONBOARDING_KEY, "1");
+          }
+        }
+        if (cancelled) return;
+        setOnboardingCompleted(onboardingDone);
+        setPaywallCompleted(paywallDone);
+        setAcquisitionHydrated(true);
+      } catch {
+        if (!cancelled) {
+          setOnboardingCompleted(false);
+          setPaywallCompleted(isPremium);
+          setAcquisitionHydrated(true);
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [authHydrated, isPremium, revenueCatReady, session?.user?.id]);
+  }, [authHydrated, isPremium, session?.user?.id]);
 
-  const dismissPostAuthPaywall = useCallback(() => {
-    setShowPostAuthPaywall(false);
-    void AsyncStorage.setItem(POST_AUTH_PAYWALL_SEEN_KEY, "1");
+  useEffect(() => {
+    if (isPremium) setPaywallCompleted(true);
+  }, [isPremium]);
+
+  useEffect(() => {
+    const visible = isPropPassEntryVisible(undefined, null, session?.user?.id ?? null);
+    if (tab === "propPass" && !visible) setTab("journal");
+  }, [session?.user?.id, tab]);
+
+  const completeProductOnboarding = useCallback(() => {
+    setOnboardingCompleted(true);
+    void AsyncStorage.setItem(ACQUISITION_ONBOARDING_KEY, "1");
   }, []);
+
+  const dismissAcquisitionPaywall = useCallback(() => {
+    setPaywallCompleted(true);
+    void AsyncStorage.setItem(ACQUISITION_PAYWALL_DEVICE_KEY, "1");
+    void AsyncStorage.setItem(POST_AUTH_PAYWALL_SEEN_KEY, "1");
+    const userId = session?.user?.id;
+    if (userId) {
+      void AsyncStorage.setItem(acquisitionPaywallUserKey(userId), "1");
+    }
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (firstRenderLogged.current) return;
@@ -11500,7 +11452,62 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
-  if (authRequired && !session?.user) {
+  const acquisitionPhase = resolveAcquisitionPhase({
+    hydrated: acquisitionHydrated,
+    onboardingCompleted,
+    paywallCompleted,
+    authRequired,
+    hasSession: !!session?.user,
+    isPremium,
+    revenueCatReady: !revenueCatConfigured || revenueCatReady,
+  });
+
+  if (acquisitionPhase === "loading") {
+    return (
+      <SafeAreaView style={styles.app}>
+        <StatusBar style="light" backgroundColor="#000000" />
+        <View style={styles.lockScreen}>
+          <AppStartupSkeleton />
+          <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (acquisitionPhase === "onboarding") {
+    return (
+      <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
+        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
+        <ProductOnboardingScreen
+          title={t("productOnboardingTitle")}
+          body={t("productOnboardingBody")}
+          cta={t("productOnboardingCta")}
+          onContinue={completeProductOnboarding}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (acquisitionPhase === "paywall") {
+    return (
+      <SafeAreaView style={styles.app}>
+        <StatusBar style="light" backgroundColor="#000000" />
+        <PremiumScreen
+          lang={lang}
+          onClose={dismissAcquisitionPaywall}
+          packages={packages}
+          storeProducts={storeProducts}
+          purchaseBusy={purchaseBusy}
+          paywallError={paywallError}
+          showRestorePurchases={showRestorePurchases}
+          onPurchase={purchasePackage}
+          onRestore={restorePurchases}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (acquisitionPhase === "auth") {
     return (
       <View style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
@@ -11519,29 +11526,27 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
+  const propPassTabVisible = isPropPassEntryVisible(undefined, null, session?.user?.id ?? null);
   const tabs: { id: Tab; label: string }[] = [
     { id: "journal", label: t("journal") },
     { id: "stats", label: t("stats") },
     { id: "calc", label: t("calc") },
-    { id: "ai", label: t("aiAnalytics") },
+    ...(propPassTabVisible ? [{ id: "propPass" as const, label: t("propPass.tab") }] : []),
     { id: "news", label: t("news") },
     { id: "calendar", label: t("calendar") },
     { id: "settings", label: t("settings") },
   ];
   const premiumTabs: Tab[] = [];
-  const showForcedPaywall = showPostAuthPaywall && !isPremium;
-  const locked = (!isPremium && premiumTabs.includes(tab)) || showForcedPaywall;
+  const locked = !isPremium && premiumTabs.includes(tab);
   return (
-    <SafeAreaView style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
+    <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
+        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
         <View style={styles.body}>
+          <YdlFade key={tab} style={{ flex: 1 }} enter>
           {locked ? (
             <PremiumScreen
               lang={lang}
-              onClose={() => {
-                if (showForcedPaywall) dismissPostAuthPaywall();
-                else setTab("calc");
-              }}
+              onClose={() => setTab("calc")}
               packages={packages}
               storeProducts={storeProducts}
               purchaseBusy={purchaseBusy}
@@ -11570,7 +11575,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
               onTradeDeleted={markCloudTradeDeleted}
-              onContinueToReview={() => setTab(isPremium ? "ai" : "stats")}
+              onContinueToReview={() => setTab("stats")}
               cloudSyncEnabled={cloudSyncEnabled}
               cloudSyncStatus={cloudSyncStatus}
             />
@@ -11589,23 +11594,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               onRestore={restorePurchases}
               session={session}
             />
-          ) : tab === "ai" ? (
-            <AiAnalysisScreen
-              lang={lang}
-              trades={trades}
-              propTemplates={propTemplates}
-              isPremium={isPremium}
-              packages={packages}
-              storeProducts={storeProducts}
-              purchaseBusy={purchaseBusy}
-              paywallError={paywallError}
-              showRestorePurchases={showRestorePurchases}
-              onPurchase={purchasePackage}
-              onRestore={restorePurchases}
-              session={session}
-              onOpenJournal={() => setTab("journal")}
-              onOpenNews={() => setTab("news")}
-            />
+          ) : tab === "propPass" ? (
+            <React.Suspense fallback={null}>
+              <LazyPropPassInternalScreen
+                userId={session?.user?.id ?? null}
+                trades={trades}
+                presentation="tab"
+              />
+            </React.Suspense>
           ) : tab === "news" ? (
             <NewsScreen
               lang={lang}
@@ -11654,6 +11650,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               }
             />
           )}
+          </YdlFade>
         </View>
         <ChangePasswordModal
           visible={resetPasswordOpen}
@@ -11685,17 +11682,15 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             </ScrollView>
           </SafeAreaView>
         </Modal>
-        <View style={styles.tabbar}>
-          {tabs.map((x) => (
-            <TabButton
-              key={x.id}
-              id={x.id}
-              label={x.label}
-              active={tab === x.id}
-              onPress={() => setTab(x.id)}
-            />
-          ))}
-        </View>
+        <YdlTabBar<Tab>
+          tabs={tabs.map((x) => ({
+            id: x.id,
+            label: x.label,
+            glyph: <TabGlyph id={x.id} active={tab === x.id} />,
+          }))}
+          activeId={tab}
+          onSelect={setTab}
+        />
         {shareExportHostReady ? (
           <React.Suspense fallback={null}>
             <LazyStatCardExportHost />

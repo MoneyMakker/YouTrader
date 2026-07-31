@@ -11,7 +11,8 @@ export type PropPassAccess = {
 const STAGING_ENVS = new Set(["development", "staging", "local", "dev"]);
 
 /**
- * Local / staging only. Production builds never show Prop Pass entry when off.
+ * Local / staging environments may expose Prop Pass when mode + allowlist pass.
+ * Primary tab visibility is decided by `isPropPassEntryVisible` (AppShell).
  */
 export function isPropPassEnvironmentAllowed(
   env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},

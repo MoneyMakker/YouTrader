@@ -1,61 +1,38 @@
-# Apple Sign-In — staging diagnosis (1.6.1)
+# Apple Sign-In — staging recovery status (1.6.1)
 
-## Observed UI
+## Product policy (updated)
 
-Physical device (`YouTrader-Staging` / Release-Staging):
+Do **not** silently hide the Apple CTA on staging when Auth is misconfigured.
+Show the button on iOS when Supabase is configured; treat a disabled provider as a **failed configuration to repair**.
 
-> Sign in failed — Apple sign in couldn't be completed.
+App gate (`src/config/appConfig.ts`):
 
-## Root cause (runtime evidence)
+`enableNativeAppleSignIn = Platform.OS === "ios" && isSupabaseConfigured`
 
-Staging Auth logs (`zleojeqkzizeyerhjpur`, service `auth`):
+## Native capability
 
-- HTTP `400` on `/token`
-- `grant_type`: `id_token`
-- Message: `Provider (issuer "https://appleid.apple.com") is not enabled`
-- `error_code`: `provider_disabled`
+- Entitlement `com.apple.developer.applesignin` = Default
+- Bundle `com.youtrader.pro`
+- Native `signInWithIdToken` path in `src/auth/appleSignIn.ts`
 
-Interpretation:
+## Staging Supabase Auth
 
-1. Native Apple sheet can complete and return an identity token.
-2. Supabase staging rejects `signInWithIdToken` because the Apple provider is disabled.
-3. This is not an App ID / entitlement stripping issue.
-
-## Native capability (PASS)
-
-From `ios/YouTrader/YouTrader.entitlements` and the installed Release-Staging `.app`:
-
-- Entitlement `com.apple.developer.applesignin` = `Default`
-- Bundle / application-identifier: `L6M4U8G8RC.com.youtrader.pro`
-- Sign in with Apple present on the target / provisioning used for device install
-
-No signing secrets recorded here.
-
-## Staging provider (FAIL until configured)
-
-| Check | Result |
+| Check | Status |
 | --- | --- |
-| Apple provider enabled on staging | **No** (`provider_disabled`) |
-| Native client / bundle id `com.youtrader.pro` | Correct for native flow |
-| Redirect / localhost dependency | N/A for native `id_token` |
-| Production Supabase touched | **No** |
+| Project | YouTrader Staging (`zleojeqkzizeyerhjpur`) only — production untouched |
+| Apple provider enabled | **BLOCKED** — Management API PATCH returned **403 Forbidden** for the current CLI token |
+| Prior runtime evidence | `provider_disabled` on `/token` id_token exchange |
 
-## Chosen product behavior — Option B
+### Minimal manual action required (one step)
 
-Hide Apple CTA when `EXPO_PUBLIC_APP_ENV` is staging-like unless:
+In Supabase Dashboard → **YouTrader Staging** → Authentication → Providers → **Apple**:
 
-`EXPO_PUBLIC_ENABLE_NATIVE_APPLE_SIGN_IN=true`
+1. Enable Apple.
+2. Set Client IDs to include native bundle `com.youtrader.pro` (same App ID as production).
+3. Paste the Apple Secret Key / Services configuration used for YouTrader (do not commit secrets).
 
-Wire:
+After that, rebuild Release-Staging **113** (no build bump) and re-run physical Apple E2E.
 
-- `showApple={enableNativeAppleSignIn}` on AuthScreen
-- same gate in Settings account signed-out buttons
+## Google
 
-Email auth remains available. Production continues to show Apple when `APP_ENV` is production and Supabase is configured.
-
-## Build 114
-
-Do not start build 114 until:
-
-- this guard is on device, and
-- allowlisted / non-allowlisted interactive email matrix passes.
+Staging `.xcode.env.staging` already supplies Google client IDs and Info.plist has the reversed client URL scheme. Physical E2E still required; do not declare PASS from config alone.
