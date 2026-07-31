@@ -47,25 +47,17 @@ PY
 }
 
 is_healthy() {
-  local pid=""
-  if [[ -f "$PID_FILE" ]]; then
-    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-  fi
-  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-    if curl -fsS "http://127.0.0.1:$PORT/status" >/dev/null 2>&1 \
-      || curl -fsS "http://127.0.0.1:$PORT" >/dev/null 2>&1; then
-      return 0
-    fi
-  fi
-  # Fall back: listener owned by this repo's expo start
   local listen_pid
   listen_pid="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
   if [[ -n "$listen_pid" ]]; then
     local cmd
     cmd="$(ps -p "$listen_pid" -o command= 2>/dev/null || true)"
-    if [[ "$cmd" == *"youtrader-final"* ]] || [[ "$cmd" == *"expo start"* ]]; then
+    if [[ "$cmd" == *"expo"* ]] || [[ "$cmd" == *"metro"* ]] || [[ "$cmd" == *"youtrader-final"* ]]; then
       echo "$listen_pid" > "$PID_FILE"
-      return 0
+      if curl -fsS "http://127.0.0.1:$PORT/status" >/dev/null 2>&1 \
+        || curl -fsS "http://127.0.0.1:$PORT" >/dev/null 2>&1; then
+        return 0
+      fi
     fi
   fi
   return 1
@@ -164,7 +156,16 @@ fi
 
 write_env_overlay | tee -a "$LOG"
 
-if [[ "${YT_METRO_WATCH:-0}" != "1" ]] || ! command -v watchman >/dev/null 2>&1; then
+if [[ "${YT_METRO_WATCH:-0}" == "1" ]]; then
+  # Expo getenv.boolish rejects empty CI=""; must fully unset for watch mode.
+  unset CI
+  # Watchman is preferred but not required — Expo falls back to Node FS events.
+  if command -v watchman >/dev/null 2>&1; then
+    echo "metro mode=watch (watchman)" | tee -a "$LOG"
+  else
+    echo "metro mode=watch (node-fs; watchman not installed)" | tee -a "$LOG"
+  fi
+else
   export CI=1
   echo "metro mode=CI (no watch)" | tee -a "$LOG"
 fi
@@ -173,11 +174,35 @@ EXPO_ARGS=(npx expo start --dev-client --port "$PORT" --localhost)
 [[ "$CLEAR" == "1" || "$MODE" == "clear" ]] && EXPO_ARGS+=(--clear)
 
 echo "starting Metro host=$HOST app_env=$EXPO_PUBLIC_APP_ENV port=$PORT clear=$CLEAR log=$LOG" | tee -a "$LOG"
-nohup "${EXPO_ARGS[@]}" >>"$LOG" 2>&1 &
-echo $! > "$PID_FILE"
-echo "metro_pid=$(cat "$PID_FILE")" | tee -a "$LOG"
+# Detach into a new session so Metro survives the launching shell (Cursor tool
+# sessions kill process-group children even under nohup).
+NPM_PID="$(
+  python3 - "$LOG" "${EXPO_ARGS[@]}" <<'PY'
+import os, sys, subprocess
+log_path = sys.argv[1]
+args = sys.argv[2:]
+log_f = open(log_path, "a", buffering=1)
+proc = subprocess.Popen(
+    args,
+    stdin=subprocess.DEVNULL,
+    stdout=log_f,
+    stderr=subprocess.STDOUT,
+    start_new_session=True,
+    env=os.environ.copy(),
+    cwd=os.getcwd(),
+)
+print(proc.pid)
+PY
+)"
+echo "$NPM_PID" > "$PID_FILE"
+echo "metro_npm_pid=$NPM_PID detached=1" | tee -a "$LOG"
 
 wait_ready
-# Bundle endpoint probe (may 404 until first client; status/root is enough for health)
+# Prefer the actual listening Node PID for liveness checks.
+LISTEN_PID="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)"
+if [[ -n "$LISTEN_PID" ]]; then
+  echo "$LISTEN_PID" > "$PID_FILE"
+  echo "metro_listen_pid=$LISTEN_PID" | tee -a "$LOG"
+fi
 curl -fsS "http://127.0.0.1:$PORT/status" >>"$LOG" 2>&1 || true
 echo "metro_start_ok" | tee -a "$LOG"

@@ -1,0 +1,12 @@
+appId: com.youtrader.pro
+---
+# Returning non-allowlisted: Prop Pass tab must be absent.
+- extendedWaitUntil:
+    visible: "Journal|Today|Stats"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeC_01_main
+- assertNotVisible: "Prop Pass"
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeC_02_stats_no_prop
+- tapOn: "Settings"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeC_03_settings

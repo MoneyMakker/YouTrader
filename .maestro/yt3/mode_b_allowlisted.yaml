@@ -1,0 +1,14 @@
+appId: com.youtrader.pro
+---
+# Returning allowlisted: after email-login allow deeplink.
+- extendedWaitUntil:
+    visible: "Journal|Today|Stats|Prop Pass"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeB_01_main
+- tapOn: "Prop Pass"
+- extendedWaitUntil:
+    visible: "Prop Pass|Buffer|Challenge|Performance"
+    timeout: 30000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeB_02_prop_pass
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeB_03_prop_pass_scrolled

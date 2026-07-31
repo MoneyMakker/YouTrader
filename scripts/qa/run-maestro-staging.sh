@@ -79,6 +79,16 @@ if [[ -f "$ROOT/.codex/secrets/staging-qa-credentials.env" ]]; then
   set +a
 fi
 
+# Idempotent email fixture + identity preflight before dependent Maestro flows.
+UDID="${YT_SIMULATOR_UDID:-A6BA9300-8C72-44CE-9CDD-19E096070626}"
+if [[ "${YT_SKIP_EMAIL_PREFLIGHT:-0}" != "1" ]]; then
+  echo "running email fixture preflight udid=$UDID" | tee -a "$LOG"
+  if ! "$ROOT/scripts/qa/preflight-email-fixture-staging.sh" "$UDID" 2>&1 | tee -a "$LOG"; then
+    echo "error: email fixture preflight failed" | tee -a "$LOG" >&2
+    exit 5
+  fi
+fi
+
 OUT_DIR="$ART_DIR/maestro-$STAMP"
 mkdir -p "$OUT_DIR"
 echo "running maestro flow=$FLOW_PATH out=$OUT_DIR" | tee -a "$LOG"

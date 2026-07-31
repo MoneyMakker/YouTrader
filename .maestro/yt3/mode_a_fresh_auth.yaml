@@ -1,0 +1,43 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Continue|Continue with Apple|Unlock Your Trading Edge|Journal"
+    timeout: 60000
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeA_01_onboarding
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn:
+          point: "18%,92%"
+- extendedWaitUntil:
+    visible: "Unlock Your Trading Edge|Continue with Apple|MONTHLY"
+    timeout: 25000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeA_02_paywall
+- runFlow:
+    when:
+      visible: "Unlock Your Trading Edge"
+    commands:
+      - tapOn:
+          id: "acquisition-paywall-close"
+- runFlow:
+    when:
+      visible: "Unlock Your Trading Edge"
+    commands:
+      - tapOn:
+          text: "Close"
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 25000
+- assertVisible: "Continue with Google"
+- assertVisible: "Continue with Email"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeA_03_auth_ctas
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeA_04_auth_scrolled
