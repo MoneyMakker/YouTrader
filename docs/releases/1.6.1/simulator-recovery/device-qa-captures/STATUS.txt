@@ -1,0 +1,20 @@
+2026-07-31T17:22:14.805Z phase_start phase=onboarding
+2026-07-31T17:22:16.658Z captured phase_onboarding
+2026-07-31T17:22:16.660Z auto_advance onboarding
+2026-07-31T17:22:16.754Z phase_start phase=paywall
+2026-07-31T17:22:18.274Z captured phase_paywall
+2026-07-31T17:22:18.275Z auto_advance paywall
+2026-07-31T17:22:18.426Z phase_start phase=auth
+2026-07-31T17:22:19.972Z captured phase_auth
+2026-07-31T17:22:19.973Z phase_done phase=auth
+2026-07-31T17:22:33.927Z phase_start phase=main
+2026-07-31T17:24:10.330Z phase_start phase=main
+2026-07-31T17:24:12.017Z captured phase_main
+2026-07-31T17:24:13.142Z captured tab_journal
+2026-07-31T17:24:14.245Z captured tab_stats
+2026-07-31T17:24:15.371Z captured tab_calc
+2026-07-31T17:24:16.470Z captured tab_propPass
+2026-07-31T17:24:17.576Z captured tab_news
+2026-07-31T17:24:18.704Z captured tab_calendar
+2026-07-31T17:24:19.856Z captured tab_settings
+2026-07-31T17:24:19.857Z walk_done

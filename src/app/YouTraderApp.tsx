@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -10214,6 +10214,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     onAdvanceFromPaywall: dismissAcquisitionPaywall,
   });
 
+  useLayoutEffect(() => {
+    // Mark shell as visible as soon as App commits — do not wait for a later
+    // useEffect tick (Metro/CI cold start raced the 15–45s watchdog while paywall/auth
+    // were already on screen).
+    onVisibleShell?.();
+  }, [onVisibleShell]);
+
   useEffect(() => {
     if (firstRenderLogged.current) return;
     firstRenderLogged.current = true;
@@ -10224,8 +10231,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       logStartupError("forced_startup_failure");
       return;
     }
-    onVisibleShell?.();
-  }, [onVisibleShell]);
+  }, []);
 
   useEffect(() => {
     logStartupCheckpoint("S10");
@@ -10834,6 +10840,83 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           } else if (!reset.allowed) {
             Alert.alert("QA reset blocked", reset.reason);
           }
+          return;
+        }
+        if (url.toLowerCase().startsWith("youtrader://qa/email-login")) {
+          const {
+            isStagingQaEmailLoginAllowed,
+            parseStagingQaEmailLoginUrl,
+            readStagingQaEmailFixture,
+          } = await import("../qa/stagingQaEmailLogin");
+          if (!isStagingQaEmailLoginAllowed()) {
+            Alert.alert("QA email login blocked", "staging_only");
+            return;
+          }
+          const role = parseStagingQaEmailLoginUrl(url);
+          if (!role) {
+            Alert.alert("QA email login", "Invalid role. Use role=allow|deny.");
+            return;
+          }
+          const fixture = await readStagingQaEmailFixture(role);
+          if (!fixture) {
+            Alert.alert(
+              "QA email login",
+              "Fixture missing. Run scripts/staging-qa-seed-email-fixture.sh after install.",
+            );
+            return;
+          }
+          if (!supabase) {
+            Alert.alert("QA email login", "Supabase client unavailable.");
+            return;
+          }
+          setAuthBusy(true);
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: fixture.email,
+            password: fixture.password,
+          });
+          if (error || !data.session) {
+            setAuthBusy(false);
+            console.info("[YTQA] email login failed", { role, code: error?.code || "no_session" });
+            Alert.alert("QA email login failed", error?.message || "no_session");
+            return;
+          }
+          setSession(data.session);
+          setAuthHydrated(true);
+          setAuthBusy(false);
+          console.info("[YTQA] email login ok", {
+            role,
+            userPrefix: (data.session.user.id || "").slice(0, 8),
+          });
+          return;
+        }
+        if (url.toLowerCase().startsWith("youtrader://qa/tab")) {
+          const { isStagingQaEmailLoginAllowed } = await import("../qa/stagingQaEmailLogin");
+          if (!isStagingQaEmailLoginAllowed()) {
+            Alert.alert("QA tab blocked", "staging_only");
+            return;
+          }
+          let tabId = "journal";
+          try {
+            tabId = new URL(url).searchParams.get("id") || "journal";
+          } catch {
+            const match = url.match(/[?&]id=([a-zA-Z]+)/);
+            if (match) tabId = match[1];
+          }
+          const allowed = new Set([
+            "journal",
+            "stats",
+            "calc",
+            "propPass",
+            "news",
+            "calendar",
+            "settings",
+          ]);
+          if (!allowed.has(tabId)) {
+            Alert.alert("QA tab", `Unsupported tab id: ${tabId}`);
+            return;
+          }
+          setTab(tabId as Tab);
+          console.info("[YTQA] tab forced", { tabId });
           return;
         }
         const result = await processAuthDeepLink(url);
@@ -11579,10 +11662,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           emailModalCopy={emailModalCopy}
           showApple={enableNativeAppleSignIn}
           showGoogle={enableNativeGoogleSignIn}
-          appleConfigWarning={null}
+          appleConfigWarning={
+            sanitizedRuntimeConfigReport().appEnvironment === "staging" && enableNativeAppleSignIn
+              ? "Staging Apple provider enabled for native id_token exchange. If Sign in fails with provider_disabled, Management API secret still needs secure restore — CTA stays visible."
+              : null
+          }
           googleConfigWarning={
             sanitizedRuntimeConfigReport().appEnvironment === "staging" && enableNativeGoogleSignIn
-              ? "Staging Supabase Google provider is disabled or incomplete (needs Web client ID + secret). Apple remains available. Do not hide this CTA."
+              ? "Staging Google provider enabled. Confirm Web client + secret and iOS reverse client ID; CTA stays visible for QA."
               : null
           }
           onSignIn={signInWithProvider}
@@ -11793,11 +11880,15 @@ function AppRoot() {
   useEffect(() => {
     setShellMounted(false);
     setStartupTimedOut(false);
+    // Debug/staging Metro cold bundles can exceed 15s on this host (no Watchman / CI mode).
+    const env = (process.env.EXPO_PUBLIC_APP_ENV || process.env.APP_ENV || "").trim().toLowerCase();
+    const stagingLike = env === "staging" || env === "development" || env === "local" || env === "dev" || __DEV__;
+    const watchdogMs = stagingLike ? 45000 : 15000;
     const watchdog = setTimeout(() => {
       if (shellMountedRef.current) return;
       logStartupError("startup_watchdog_timeout");
       setStartupTimedOut(true);
-    }, 15000);
+    }, watchdogMs);
     return () => clearTimeout(watchdog);
   }, [startupEpoch]);
 

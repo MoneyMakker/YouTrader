@@ -172,10 +172,16 @@ export async function runStagingQaReset(options?: {
   let revenueCatLoggedOut = false;
   if (Platform.OS !== "web") {
     try {
+      // Anonymous / already-logged-out SDK throws; treat as cleared for QA.
       await Purchases.logOut();
       revenueCatLoggedOut = true;
-    } catch {
-      revenueCatLoggedOut = false;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/logOut was called|already|anonymous/i.test(message)) {
+        revenueCatLoggedOut = true;
+      } else {
+        revenueCatLoggedOut = false;
+      }
     }
   }
 

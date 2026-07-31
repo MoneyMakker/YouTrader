@@ -118,7 +118,8 @@ export function useDeviceQaCaptureWalk(input: {
       for (const id of tabIds) {
         if (cancelled) return;
         setTab(id);
-        await delay(1000);
+        // Prop Pass and other lazy screens need bundle + network settle time.
+        await delay(id === "propPass" ? 3500 : 1600);
         await captureDeviceQaScreen(`tab_${id}`);
       }
       await appendStatus("walk_done");

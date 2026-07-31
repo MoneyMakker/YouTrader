@@ -41,9 +41,14 @@ fi
 echo "metro staging host=$HOST app_env=${EXPO_PUBLIC_APP_ENV} port=$RCT_METRO_PORT"
 
 # Expo dotenv loads .env then .env.local. Root .env may point at production.
-# Always materialize a staging .env.local overlay (gitignored) before start.
+# Quarantine a production-pointing .env for this Metro session and write a
+# staging-only .env + .env.local overlay (both gitignored patterns / local).
 python3 - <<'PY'
 from pathlib import Path
+import os
+import shutil
+
+PROD_MARKER = "izzrlsgumyabdvlmwlwn"
 staging = Path("ios/.xcode.env.staging").read_text()
 lines = []
 for raw in staging.splitlines():
@@ -55,13 +60,23 @@ for raw in staging.splitlines():
     key = line.split("=", 1)[0]
     if key.startswith("EXPO_PUBLIC_") or key in {"APP_ENV"}:
         lines.append(line)
-# Preserve explicit QA reset from the parent shell when set.
-import os
 qa = os.environ.get("EXPO_PUBLIC_QA_RESET_AUTH", "0").strip() or "0"
 lines = [l for l in lines if not l.startswith("EXPO_PUBLIC_QA_RESET_AUTH=")]
 lines.append(f"EXPO_PUBLIC_QA_RESET_AUTH={qa}")
-Path(".env.local").write_text("\n".join(lines) + "\n")
+overlay = "\n".join(lines) + "\n"
+Path(".env.local").write_text(overlay)
 print("note: wrote .env.local staging overlay")
+
+env_path = Path(".env")
+if env_path.exists():
+    text = env_path.read_text()
+    if PROD_MARKER in text:
+        quarantine = Path(".env.production.quarantine")
+        if not quarantine.exists():
+            shutil.copy2(env_path, quarantine)
+            print("note: quarantined production .env -> .env.production.quarantine")
+        env_path.write_text(overlay)
+        print("note: replaced .env with staging-only overlay for Metro session")
 PY
 
 # macOS without Watchman hits EMFILE under Expo's file watcher. Prefer CI mode
