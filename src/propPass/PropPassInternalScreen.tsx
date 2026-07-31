@@ -17,13 +17,18 @@ import type { ChallengeSummary, PropPassUiState, PropPassViewModel } from "./typ
 import type { Trade } from "../app/types";
 import {
   createMemoryIntelligenceStore,
+  createSupabaseIntelligenceReadStore,
   type MemoryIntelligenceStore,
 } from "../propOs/intelligence";
+import { supabase } from "../config/appConfig";
 
 type Props = {
   userId: string | null | undefined;
   accountId?: string | null;
-  onClose: () => void;
+  /** Optional — omitted for primary-tab presentation. */
+  onClose?: () => void;
+  /** `tab` = primary product home; `modal` = legacy Settings preview. */
+  presentation?: "tab" | "modal";
   uiStateOverride?: PropPassUiState;
   developerMode?: boolean;
   /** Journal trades for assignment (optional; empty → empty assignable list). */
@@ -36,17 +41,22 @@ export function PropPassInternalScreen({
   userId,
   accountId,
   onClose,
+  presentation = "modal",
   uiStateOverride,
   developerMode = typeof __DEV__ !== "undefined" && __DEV__,
   trades = [],
   intelligenceStore: intelligenceStoreProp,
 }: Props) {
   const { t } = useTranslation();
-  const theme = useYdlTheme();
+  const theme = useYdlTheme("dark");
   const controller = usePropPassAvailability({ userId, accountId });
   const uiState = uiStateOverride ?? controller.uiState;
   const fallbackIntelligenceStore = useMemo(() => createMemoryIntelligenceStore(), []);
   const intelligenceStore = intelligenceStoreProp ?? fallbackIntelligenceStore;
+  const remoteIntelligenceStore = useMemo(() => {
+    if (!userId || !supabase) return null;
+    return createSupabaseIntelligenceReadStore(supabase, userId);
+  }, [userId]);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAssignment, setShowAssignment] = useState(false);
   const [showIntelligence, setShowIntelligence] = useState(false);
@@ -55,30 +65,40 @@ export function PropPassInternalScreen({
 
   useEffect(() => {
     trackPropPassEvent("prop_pass_opened", {
-      mode: controller.entryVisible ? "internal" : "off",
+      mode: presentation === "tab" ? "primary_tab" : controller.entryVisible ? "internal" : "off",
       userId,
     });
     return () => {
       trackPropPassEvent("prop_pass_internal_preview_closed", { userId });
     };
-  }, [controller.entryVisible, userId]);
+  }, [controller.entryVisible, presentation, userId]);
 
   return (
     <View
       style={[styles.root, { backgroundColor: theme.colors.background.primary }]}
-      testID="prop-pass-internal-screen"
+      testID={presentation === "tab" ? "prop-pass-primary-screen" : "prop-pass-internal-screen"}
     >
       <View style={styles.header}>
-        <YdlText role="title">{t("propPass.title")}</YdlText>
-        <YdlButton
-          label={t("propPass.close")}
-          variant="tertiary"
-          onPress={onClose}
-        />
+        <YdlText role="title">
+          {t(presentation === "tab" ? "propPass.productTitle" : "propPass.title")}
+        </YdlText>
+        {presentation === "modal" && onClose ? (
+          <YdlButton
+            label={t("propPass.close")}
+            variant="tertiary"
+            onPress={onClose}
+          />
+        ) : null}
       </View>
-      <YdlText role="caption" color="text.secondary">
-        {t("propPass.internalBanner")}
-      </YdlText>
+      {presentation === "modal" ? (
+        <YdlText role="caption" color="text.secondary">
+          {t("propPass.internalBanner")}
+        </YdlText>
+      ) : (
+        <YdlText role="caption" color="text.secondary">
+          {t("propPass.productBanner")}
+        </YdlText>
+      )}
       {commandMessage ? (
         <View accessibilityLiveRegion="polite">
           <YdlText role="caption" color="text.secondary">
@@ -92,7 +112,9 @@ export function PropPassInternalScreen({
             userId={userId}
             accountId={uiState.model.account.id}
             challengeId={uiState.model.challenge.id}
-            store={intelligenceStore}
+            store={remoteIntelligenceStore ? undefined : intelligenceStore}
+            readStoreOverride={remoteIntelligenceStore ?? undefined}
+            runLocalTrustedCalc={!remoteIntelligenceStore}
             assignmentRevision={intelligenceStore.assignmentRevision}
             onClose={() => setShowIntelligence(false)}
           />
@@ -510,6 +532,33 @@ function AvailableView({
             at: model.freshness.calculatedAt ?? "—",
           })}
         </YdlText>
+        <YdlText role="caption" color="text.secondary">
+          {t("propPass.assignment.assignedCount", { count: model.assignedTradeCount })}
+        </YdlText>
+        <YdlButton
+          label={t("propPass.refreshCta")}
+          variant="secondary"
+          onPress={onRefresh}
+        />
+      </YdlCard>
+
+      <YdlCard>
+        <YdlText role="label">{t("propPass.history.title")}</YdlText>
+        {model.historicalAttempts.length === 0 ? (
+          <YdlText role="caption" color="text.secondary">
+            {t("propPass.history.empty")}
+          </YdlText>
+        ) : (
+          model.historicalAttempts.slice(0, 8).map((h) => (
+            <YdlText key={h.id} role="caption" color="text.secondary">
+              {t("propPass.history.row", {
+                status: h.status,
+                started: h.startedAt.slice(0, 10),
+                id: h.id.slice(0, 8),
+              })}
+            </YdlText>
+          ))
+        )}
       </YdlCard>
 
       <YdlCard>

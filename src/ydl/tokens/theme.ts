@@ -1,4 +1,3 @@
-import { useColorScheme } from "react-native";
 import { ydlThemeDark } from "./theme.dark";
 import { ydlThemeLight } from "./theme.light";
 import type { YdlAppearance, YdlTheme } from "./theme.types";
@@ -16,15 +15,20 @@ export function resolveYdlTheme(appearance: YdlAppearance | null | undefined): Y
   return appearance === "light" ? ydlThemeLight : ydlThemeDark;
 }
 
-/** System appearance → theme. Null/unspecified → dark (product default). */
+/**
+ * Product appearance for core surfaces.
+ * YouTrader is a dark-terminal app. Following iOS Light mode here put
+ * light-theme ink (#0E141D) on dark shell surfaces — invisible headings.
+ * Light theme remains available only via explicit `appearance="light"` overrides
+ * (sheets / Storybook), never via system scheme for the main product shell.
+ */
 export function useYdlColorScheme(): YdlAppearance {
-  const scheme = useColorScheme();
-  return scheme === "light" ? "light" : "dark";
+  return "dark";
 }
 
 export function useYdlTheme(override?: YdlAppearance): YdlTheme {
-  const system = useYdlColorScheme();
-  return resolveYdlTheme(override ?? system);
+  const product = useYdlColorScheme();
+  return resolveYdlTheme(override ?? product);
 }
 
 export function useYdlSemanticColor(path: YdlSemanticColorPath, override?: YdlAppearance): string {

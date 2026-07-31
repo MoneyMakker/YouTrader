@@ -203,18 +203,27 @@ export function resolveYdlSemanticColor(
   return { color: bucket[key], known: true };
 }
 
-/** Flat legacy map for older ydlColor imports (dark terminal). */
+/**
+ * Flat semantic map for dark-terminal product surfaces.
+ * Prefer these (or theme hooks with appearance="dark") over raw hex.
+ * Do not use text.inverse on background.primary.
+ */
 export const ydlColor = {
   Background: ydlSemanticColorsDark.background.primary,
+  BackgroundPrimary: ydlSemanticColorsDark.background.primary,
   BackgroundSecondary: ydlSemanticColorsDark.background.secondary,
   Surface: ydlSemanticColorsDark.surface.card,
+  SurfacePrimary: ydlSemanticColorsDark.surface.card,
   SurfaceSecondary: ydlSemanticColorsDark.surface.interactive,
   SurfaceElevated: ydlSemanticColorsDark.background.elevated,
   SurfaceFloating: ydlSemanticColorsDark.background.elevated,
   Border: ydlSemanticColorsDark.border.subtle,
+  BorderDefault: ydlSemanticColorsDark.border.subtle,
   BorderStrong: ydlSemanticColorsDark.border.strong,
   Divider: ydlSemanticColorsDark.border.subtle,
   Accent: ydlSemanticColorsDark.action.primary,
+  AccentPrimary: ydlSemanticColorsDark.action.primary,
+  AccentSecondary: ydlSemanticColorsDark.status.info,
   AccentGlow: ydlPrimitiveColor.accentSoft,
   Positive: ydlSemanticColorsDark.status.positive,
   PositiveSoft: ydlSemanticColorsDark.status.positiveSoft,
@@ -223,9 +232,13 @@ export const ydlColor = {
   Warning: ydlSemanticColorsDark.status.warning,
   WarningSoft: ydlSemanticColorsDark.status.warningSoft,
   Info: ydlSemanticColorsDark.status.info,
+  Focus: ydlSemanticColorsDark.status.info,
   TextPrimary: ydlSemanticColorsDark.text.primary,
   TextSecondary: ydlSemanticColorsDark.text.secondary,
   TextMuted: ydlSemanticColorsDark.text.tertiary,
+  TextDisabled: ydlSemanticColorsDark.action.disabledText,
+  TabActive: ydlSemanticColorsDark.status.positive,
+  TabInactive: ydlSemanticColorsDark.text.tertiary,
   White: ydlPrimitiveColor.white,
 } as const;
 

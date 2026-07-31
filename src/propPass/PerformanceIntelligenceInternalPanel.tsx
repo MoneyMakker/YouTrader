@@ -27,6 +27,8 @@ import {
   type IntelligenceCalcState,
   type IntelligenceScope,
   type MemoryIntelligenceStore,
+  type PerformanceIntelligenceReadStore,
+  type PerformanceIntelligenceRequestStore,
   type PerformanceIntelligenceSnapshot,
   type RatioOrUndefined,
   type SegmentMetric,
@@ -37,7 +39,12 @@ type Props = {
   userId: string;
   accountId: string;
   challengeId?: string | null;
-  store: MemoryIntelligenceStore;
+  /** Optional memory store for QA / offline demo. Ignored when readStoreOverride set. */
+  store?: MemoryIntelligenceStore;
+  /** Product path: remote or injected read+request store. */
+  readStoreOverride?: PerformanceIntelligenceReadStore & PerformanceIntelligenceRequestStore;
+  /** When true (default for memory), run local trusted calc after queue. Remote skips. */
+  runLocalTrustedCalc?: boolean;
   assignmentRevision: number;
   onClose: () => void;
 };
@@ -204,12 +211,20 @@ export function PerformanceIntelligenceInternalPanel({
   accountId,
   challengeId,
   store,
+  readStoreOverride,
+  runLocalTrustedCalc,
   assignmentRevision,
   onClose,
 }: Props) {
   const { t } = useTranslation();
-  const theme = useYdlTheme();
-  const readStore = useMemo(() => createMemoryIntelligenceReadStore(store), [store]);
+  const theme = useYdlTheme("dark");
+  const memoryReadStore = useMemo(
+    () => (store ? createMemoryIntelligenceReadStore(store) : null),
+    [store],
+  );
+  const readStore = readStoreOverride ?? memoryReadStore;
+  const allowLocalTrusted =
+    runLocalTrustedCalc ?? (!readStoreOverride && !!store);
   const scopeChips = useMemo(
     () => buildScopeChips(accountId, challengeId),
     [accountId, challengeId],
@@ -225,6 +240,7 @@ export function PerformanceIntelligenceInternalPanel({
   const displayState = resolveDisplayState(calcState, snapshot);
 
   const refresh = useCallback(async () => {
+    if (!readStore) return;
     const scope = selectedChip.scope;
     const [snap, calc] = await Promise.all([
       readStore.getCurrentSnapshot(scope),
@@ -254,6 +270,15 @@ export function PerformanceIntelligenceInternalPanel({
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!readStoreOverride) return;
+    if (calcState.kind !== "queued" && calcState.kind !== "running") return;
+    const id = setInterval(() => {
+      void refresh();
+    }, 2500);
+    return () => clearInterval(id);
+  }, [calcState.kind, readStoreOverride, refresh]);
+
   const handleScopeSelect = (chip: ScopeChip) => {
     setSelectedChipId(chip.id);
     trackPropPassEvent("prop_pass_intelligence_scope_selected", {
@@ -263,6 +288,10 @@ export function PerformanceIntelligenceInternalPanel({
   };
 
   const handleRequestCalculation = async (recalculate: boolean) => {
+    if (!readStore) {
+      setErrorMessage(t("propPass.intelligence.valueUnavailable"));
+      return;
+    }
     setBusy(true);
     setErrorMessage(null);
     const started = Date.now();
@@ -285,7 +314,7 @@ export function PerformanceIntelligenceInternalPanel({
           scopeKind: selectedChip.scopeKind,
         });
       }
-      if (queued.kind !== "completed" || recalculate) {
+      if (allowLocalTrusted && store && (queued.kind !== "completed" || recalculate)) {
         trackPropPassEvent("prop_pass_intelligence_calc_started", {
           userId,
           scopeKind: selectedChip.scopeKind,
