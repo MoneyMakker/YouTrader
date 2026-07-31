@@ -16,8 +16,15 @@ export type TradeAssignmentSource =
 /** Append-only event states (Phase 2C). */
 export type TradeAssignmentEventState = "assigned" | "superseded" | "removed";
 
+/**
+ * Canonical identity: `journalTradeId` = `trade_journal.id`.
+ * `tradeClientId` = immutable owner-scoped provenance alias (`trade_journal.client_id`),
+ * also used as App `Trade.id` in command payloads. See `identityContract.ts`.
+ */
 export type PropOsTradeIdentity = {
-  /** Canonical journal identity = Trade.id / trade_journal.client_id */
+  /** Canonical journal PK (`trade_journal.id`) when resolved; null = unsupported. */
+  journalTradeId?: string | null;
+  /** Provenance alias (`trade_journal.client_id` / App Trade.id). */
   tradeClientId: string;
   userId: string;
   providerSource?: string | null;

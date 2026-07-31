@@ -1,6 +1,19 @@
 /**
  * Deterministic engine ordering for assigned trades.
- * Same assignment set → same ordered input.
+ * Same assignment revision → byte-for-byte equivalent ordered engine input.
+ *
+ * Contract:
+ * 1. Canonical occurred-at: exit → entry → trade_date (resolved upstream).
+ * 2. UTC: `occurredAtUtc` must already be ISO-8601 UTC (Z / +00:00).
+ * 3. Sort: occurredAtUtc ASC, then tradeClientId ASC (stable tie-breaker).
+ * 4. Realized P&L required (major → minor cents); missing rows excluded upstream.
+ * 5. Fees/commissions: feesMinor from journal fees (0 if absent; never invented).
+ * 6. Open trades: excluded by assignability (`open_trade_unsupported`).
+ * 7. Partial fills / grouped executions: one input row per fact; no silent merge.
+ * 8. Reversed/cancelled: voided=true; sorted with peers; engine ignores voided.
+ * 9. Challenge window: filter before ordering (assignability).
+ * 10. Future timestamps: allowed if within challenge window; ordered normally.
+ * 11. Malformed timestamps: rejected upstream (`malformed_timestamp`).
  */
 
 import type { AssignableTradeFact } from "./types";
@@ -18,31 +31,33 @@ function toMinor(major: number): number {
   return Math.round(major * 100);
 }
 
-/**
- * Primary: occurredAtUtc ASC
- * Tie-breaker: tradeClientId ASC
- * Grouped executions: same tradeClientId stay contiguous by occurredAt
- * Timezone: callers must normalize to UTC ISO before ordering
- * Partial fills: each fact row is one ordered unit (no silent merge)
- * Fees: included as feesMinor; not invented
- * Cancelled/reversed: voided=true rows sort with peers but engine may ignore
- * Outside window: filtered before ordering by assignability
- */
+/** Normalize to canonical UTC ISO string; returns null if malformed. */
+export function normalizeOccurredAtUtc(raw: string | null | undefined): string | null {
+  if (raw == null || !String(raw).trim()) return null;
+  const ms = Date.parse(String(raw).trim());
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
 export function orderTradesForEngine(
   trades: AssignableTradeFact[],
   opts?: { voidedIds?: ReadonlySet<string> },
 ): OrderedTradeInput[] {
   const voided = opts?.voidedIds ?? new Set<string>();
-  const rows = trades
-    .filter((t) => t.occurredAtUtc)
-    .map((t) => ({
+  const rows: OrderedTradeInput[] = [];
+  for (const t of trades) {
+    const occurredAtUtc = normalizeOccurredAtUtc(t.occurredAtUtc);
+    if (!occurredAtUtc) continue;
+    if (t.pnlMajor == null || Number.isNaN(t.pnlMajor)) continue;
+    rows.push({
       tradeClientId: t.identity.tradeClientId,
-      occurredAtUtc: t.occurredAtUtc as string,
+      occurredAtUtc,
       realizedPnlMinor: toMinor(t.pnlMajor),
       feesMinor: toMinor(t.feesMajor ?? 0),
       contracts: t.contracts,
       voided: voided.has(t.identity.tradeClientId),
-    }));
+    });
+  }
 
   rows.sort((a, b) => {
     if (a.occurredAtUtc < b.occurredAtUtc) return -1;
@@ -52,6 +67,11 @@ export function orderTradesForEngine(
     return 0;
   });
   return rows;
+}
+
+/** Byte-stable JSON for equality proofs across the same assignment revision. */
+export function orderedEngineInputBytes(ordered: OrderedTradeInput[]): string {
+  return JSON.stringify(ordered);
 }
 
 /** Stable revision fingerprint for snapshot input_revision. */

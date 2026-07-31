@@ -160,8 +160,14 @@ function passesFilter(row: AssignableTradeRow, filter: AssignmentListFilter): bo
   return true;
 }
 
+/**
+ * Prop Pass compatibility for recalculation.
+ * Prior snapshots remain readable while queued/running/failed, but must be
+ * exposed as `outdated` — never silently `current`.
+ */
 export function mapRecalcToPropPassKind(
   state: PropOsRecalculationState,
+  opts?: { hasPriorCompatibleSnapshot?: boolean },
 ):
   | "current"
   | "outdated"
@@ -170,12 +176,15 @@ export function mapRecalcToPropPassKind(
   | "no_compatible_snapshot" {
   switch (state.kind) {
     case "not_required":
+      return "current";
     case "completed":
       return "current";
     case "queued":
     case "running":
+      if (opts?.hasPriorCompatibleSnapshot) return "outdated";
       return "recalculation_pending";
     case "failed":
+      if (opts?.hasPriorCompatibleSnapshot) return "outdated";
       return "recalculation_failed";
     default:
       return "no_compatible_snapshot";

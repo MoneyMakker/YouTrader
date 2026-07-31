@@ -253,25 +253,54 @@ function main() {
     psql(`select public.prop_os_cmd_admin_set_enabled(true);`);
   });
 
-  check("complete recalc stale protection", () => {
+  check("App authenticated cannot complete recalculation", () => {
+    const can = psql(`
+      select has_function_privilege(
+        'authenticated',
+        'public.prop_os_cmd_complete_recalculation(text,text,uuid,bigint,bigint)',
+        'EXECUTE'
+      )::text;
+    `);
+    assert.ok(can === "f" || can === "false");
+    let denied = false;
+    try {
+      asAuth(
+        OWNER,
+        `select public.prop_os_cmd_complete_recalculation(
+          'req-recalc-auth', 'h', '${chId}'::uuid, 1, 1
+        );`,
+      );
+    } catch {
+      denied = true;
+    }
+    assert.equal(denied, true);
+  });
+
+  check("processor complete requires snapshots; stale claim conflicts", () => {
     const rev = Number(
       psql(`select assignment_revision from public.prop_os_challenge_recalc where challenge_id = '${chId}'::uuid`),
     );
-    const h1 = hash("complete_recalculation", { challengeId: chId, rev, snap: 1 });
-    const ok = asAuth(
-      OWNER,
-      `select public.prop_os_cmd_complete_recalculation(
-        'req-recalc-1', '${h1}', '${chId}'::uuid, ${rev}, 1
-      );`,
-    );
-    assert.equal(parseJson(ok).kind, "success");
-    const stale = asAuth(
-      OWNER,
-      `select public.prop_os_cmd_complete_recalculation(
-        'req-recalc-stale', 'hstale', '${chId}'::uuid, ${rev - 1}, 99
-      );`,
-    );
+    const incomplete = psql(`
+      begin;
+      set local role prop_os_recalc_processor;
+      select public.prop_os_cmd_complete_recalculation(
+        'req-recalc-1', 'h1', '${chId}'::uuid, ${rev}, ${rev}
+      );
+      commit;
+    `);
+    assert.equal(parseJson(incomplete).kind, "conflict");
+    assert.equal(parseJson(incomplete).reasonCode, "snapshots_incomplete");
+
+    const stale = psql(`
+      begin;
+      set local role prop_os_recalc_processor;
+      select public.prop_os_cmd_complete_recalculation(
+        'req-recalc-stale', 'hstale', '${chId}'::uuid, ${rev - 1}, ${rev - 1}
+      );
+      commit;
+    `);
     assert.equal(parseJson(stale).kind, "conflict");
+    assert.equal(parseJson(stale).reasonCode, "stale_recalculation");
   });
 
   console.log(`prop-pass-phase2c-pg-qa: PASS (${passed})`);

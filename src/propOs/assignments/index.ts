@@ -20,12 +20,16 @@ export { ASSIGNMENT_BULK_MAX, ASSIGNMENT_SCHEMA_VERSION } from "./types";
 export {
   buildTradeIdentity,
   isStableTradeIdentity,
+  hasCanonicalJournalIdentity,
   tradeIdentityKey,
   detectDuplicateIdentities,
+  PROP_OS_JOURNAL_TRADE_IDENTITY,
 } from "./identity";
 export {
   orderTradesForEngine,
   assignmentInputRevision,
+  normalizeOccurredAtUtc,
+  orderedEngineInputBytes,
   type OrderedTradeInput,
 } from "./ordering";
 export { evaluateAssignability, resolveOccurredAtUtc } from "./assignability";
@@ -47,3 +51,10 @@ export {
   mapRecalcToPropPassKind,
 } from "./memoryReadStore";
 export { createRpcAssignmentWriteService } from "./rpcWriteService";
+export {
+  TRUSTED_RECALC_PROCESSOR_ROLES,
+  prepareTrustedRecalculation,
+  factsFromExecutionRows,
+  type TrustedRecalcInput,
+  type TrustedRecalcPrepared,
+} from "./trustedRecalcProcessor";

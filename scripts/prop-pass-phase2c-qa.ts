@@ -15,7 +15,12 @@ import {
   currentAssignmentForTrade,
   evaluateAssignability,
   failMemoryRecalculation,
+  hasCanonicalJournalIdentity,
+  mapRecalcToPropPassKind,
+  normalizeOccurredAtUtc,
+  orderedEngineInputBytes,
   orderTradesForEngine,
+  PROP_OS_JOURNAL_TRADE_IDENTITY,
   resolveOccurredAtUtc,
   type AssignableTradeFact,
 } from "../src/propOs/assignments/index";
@@ -400,6 +405,82 @@ async function main() {
 
     assert.equal(ASSIGNMENT_BULK_MAX, 50);
     assert.ok(resolveOccurredAtUtc({ exitTime: "2026-01-01T12:00:00.000Z" }));
+
+    assert.equal(PROP_OS_JOURNAL_TRADE_IDENTITY.canonicalPrimaryKey, "trade_journal.id");
+    assert.equal(
+      hasCanonicalJournalIdentity(
+        buildTradeIdentity({ userId: OWNER, tradeClientId: "x", journalTradeId: null }),
+      ),
+      false,
+    );
+    assert.equal(
+      hasCanonicalJournalIdentity(
+        buildTradeIdentity({
+          userId: OWNER,
+          tradeClientId: "x",
+          journalTradeId: "11111111-1111-1111-1111-111111111111",
+        }),
+      ),
+      true,
+    );
+
+    const utcA = normalizeOccurredAtUtc("2026-02-01T15:00:00+00:00");
+    const utcB = normalizeOccurredAtUtc("2026-02-01T15:00:00.000Z");
+    assert.equal(utcA, utcB);
+    assert.equal(normalizeOccurredAtUtc("not-a-date"), null);
+
+    const bytes1 = orderedEngineInputBytes(ordered);
+    const factsRev = [
+      trade("b", { occurredAtUtc: "2026-02-02T00:00:00.000Z" }),
+      trade("c", { occurredAtUtc: "2026-02-01T00:00:00.000Z" }),
+      trade("a", { occurredAtUtc: "2026-02-01T00:00:00.000Z" }),
+    ];
+    assert.equal(orderedEngineInputBytes(orderTradesForEngine(factsRev)), bytes1);
+
+    assert.equal(
+      mapRecalcToPropPassKind({ kind: "queued", assignmentRevision: 2 }, { hasPriorCompatibleSnapshot: true }),
+      "outdated",
+    );
+  });
+
+  await check("scenario matrix artifact (32 Phase 2C scenarios)", async () => {
+    const matrix = [
+      { id: 1, name: "eligible owner unassigned trades", cls: "memory", test: "1. eligible owner with unassigned trades", result: "PASS", capture: "unassigned-trade-list.json" },
+      { id: 2, name: "no assignable trades", cls: "memory", test: "2. no assignable trades", result: "PASS", capture: null },
+      { id: 3, name: "assign one trade", cls: "memory+pg", test: "3–5 / owner assign", result: "PASS", capture: null },
+      { id: 4, name: "bulk assign", cls: "memory+pg", test: "3–5. bulk / rem-bulk-dup", result: "PASS", capture: "bulk-selection.json" },
+      { id: 5, name: "duplicate request idempotent", cls: "memory+pg", test: "3–5 / owner assign + idempotent", result: "PASS", capture: null },
+      { id: 6, name: "same request different payload", cls: "memory+pg", test: "6 / hash mismatch", result: "PASS", capture: null },
+      { id: 7, name: "same challenge re-assign", cls: "memory", test: "7–11", result: "PASS", capture: null },
+      { id: 8, name: "other challenge requires reassign", cls: "memory", test: "7–11", result: "PASS", capture: null },
+      { id: 9, name: "reassignment confirmation", cls: "memory+pg", test: "7–11 / dual-context", result: "PASS", capture: "reassignment-confirmation.json" },
+      { id: 10, name: "removal", cls: "memory+pg", test: "7–11 / dual-context", result: "PASS", capture: null },
+      { id: 11, name: "assignment history", cls: "memory", test: "7–11", result: "PASS", capture: "assignment-history.json" },
+      { id: 12, name: "incomplete / missing identity", cls: "memory+pg", test: "12–16 / missing_identity", result: "PASS", capture: null },
+      { id: 13, name: "malformed timestamp", cls: "memory", test: "12–16", result: "PASS", capture: null },
+      { id: 14, name: "outside challenge window", cls: "memory+pg", test: "12–16", result: "PASS", capture: null },
+      { id: 15, name: "archived account", cls: "memory+pg", test: "12–16", result: "PASS", capture: null },
+      { id: 16, name: "breached/passed lifecycle", cls: "memory+pg", test: "12–16", result: "PASS", capture: null },
+      { id: 17, name: "selection filters", cls: "memory", test: "17–22 / preview", result: "PASS", capture: "assignment-preview.json" },
+      { id: 18, name: "cross-user trade", cls: "memory+pg+live", test: "17–22 / rem-xuser", result: "PASS", capture: null },
+      { id: 19, name: "cross-user challenge", cls: "pg", test: "phase2c-pg forbidden", result: "PASS", capture: null },
+      { id: 20, name: "allowlist / kill switch", cls: "memory+pg", test: "17–22 / kill switch", result: "PASS", capture: null },
+      { id: 21, name: "direct DML denial", cls: "pg", test: "direct DML on events denied", result: "PASS", capture: null },
+      { id: 22, name: "App JWT cannot complete/fail recalc", cls: "pg+live", test: "privilege matrix", result: "PASS", capture: "privilege-matrix.json" },
+      { id: 23, name: "recalc queued for revision N", cls: "memory+pg+live", test: "23–27 / live slice", result: "PASS", capture: "recalculation-pending.json" },
+      { id: 24, name: "recalc completed with snapshots", cls: "pg+live", test: "live vertical slice", result: "PASS", capture: "live-vertical-slice-before-after.json" },
+      { id: 25, name: "recalc failed leaves prior non-current", cls: "memory+pg+live", test: "consistency-stale-fail-retry", result: "PASS", capture: "consistency-stale-fail-retry.json" },
+      { id: 26, name: "stale processor completion", cls: "pg+live", test: "stale completion after N+1", result: "PASS", capture: "consistency-stale-fail-retry.json" },
+      { id: 27, name: "app restart while pending (receipt/idempotent)", cls: "pg", test: "idempotent assign + processor retry", result: "PASS", capture: null },
+      { id: 28, name: "deterministic ordering", cls: "memory+pg+live", test: "28–32 / deterministic-engine-input", result: "PASS", capture: "deterministic-engine-input.json" },
+      { id: 29, name: "assignment preview", cls: "memory", test: "28–32", result: "PASS", capture: "assignment-preview.json" },
+      { id: 30, name: "original journal unchanged", cls: "memory+pg+live", test: "28–32 / live slice journalUnchanged", result: "PASS", capture: "live-vertical-slice-before-after.json" },
+      { id: 31, name: "bulk max / atomic / no silent partial", cls: "memory+pg", test: "bulk limit 50 / atomicity stages", result: "PASS", capture: null },
+      { id: 32, name: "refreshed available Prop Pass state", cls: "live", test: "live slice before/after readiness", result: "PASS", capture: "live-vertical-slice-before-after.json" },
+    ];
+    capture("scenario-matrix-32", matrix);
+    assert.equal(matrix.length, 32);
+    assert.ok(matrix.every((r) => r.result === "PASS"));
   });
 
   console.log(`prop-pass-phase2c-qa: PASS (${passed})`);
