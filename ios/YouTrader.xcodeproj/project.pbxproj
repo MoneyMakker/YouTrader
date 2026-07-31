@@ -322,6 +322,8 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCat/RevenueCat.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/Sentry/Sentry.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/lottie-ios/LottiePrivacyInfo.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/lottie-react-native/Lottie_React_Native_Privacy.bundle",
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
@@ -346,6 +348,8 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Sentry.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LottiePrivacyInfo.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Lottie_React_Native_Privacy.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -376,7 +380,7 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 111;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -417,7 +421,7 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 111;
+				CURRENT_PROJECT_VERSION = 112;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				INFOPLIST_FILE = YouTrader/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = YouTrader;

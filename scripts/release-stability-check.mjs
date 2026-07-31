@@ -6,7 +6,7 @@ import path from "node:path";
 const root = process.cwd();
 const requiredLocales = ["en", "ru", "es", "fr", "de", "it", "uk"];
 const expectedVersion = "1.6.1";
-const expectedBuild = "111";
+const expectedBuild = "112";
 
 function run(name, command, args) {
   console.log(`\n[release:stability] ${name}`);
@@ -69,7 +69,9 @@ function checkNoCommittedEnvSecrets() {
 
 function checkConsoleSecretPatterns() {
   const files = gitFiles(["App.tsx", "src/**/*", "scripts/**/*"]).filter((file) => /\.(ts|tsx|js|mjs)$/.test(file));
-  const secretPattern = /console\.(log|warn|error|info)\([^)]*(secret|token|password|api[_-]?key|service[_-]?role)/i;
+  // Word-bound secret terms only — avoid false positives like `YdlTokens` / `secretNames`.
+  const secretPattern =
+    /console\.(log|warn|error|info)\([^)]*\b(service[_-]?role|api[_-]?key|password|access[_-]?token|refresh[_-]?token|bearer\s+token|secret(?:_key|_token)?)\b/i;
   const hits = [];
   for (const file of files) {
     const text = read(file);
