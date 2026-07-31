@@ -3,25 +3,29 @@
  * Does not calculate pass/drawdown/readiness — preview is informational only.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { Trade } from "../app/types";
+import { supabase } from "../config/appConfig";
 import { YdlButton } from "../ydl/components/YdlButton";
 import { YdlCard } from "../ydl/components/YdlCard";
 import { YdlText } from "../ydl/components/YdlText";
 import { useYdlTheme } from "../ydl/tokens";
+import { createAuthenticatedPropOsReadStore } from "../propOs/accounts/authenticatedReadStore";
+import { createSupabasePropOsReadTransport } from "../propOs/accounts/authenticatedReadTransport";
+import { isAssignedState } from "../propOs/accounts/assignmentState";
 import {
   ASSIGNMENT_BULK_MAX,
   buildAssignmentImpactPreview,
   buildTradeIdentity,
   createMemoryAssignmentReadStore,
   createMemoryAssignmentStore,
-  createMemoryAssignmentWriteService,
   evaluateAssignability,
   resolveOccurredAtUtc,
   type AssignableTradeRow,
   type AssignmentImpactPreview,
+  type PropTradeAssignmentEvent,
 } from "../propOs/assignments/index";
 import { newPropOsClientRequestId } from "../propOs/commands/hash";
 import { createRpcAssignmentWriteService } from "../propOs/assignments/rpcWriteService";
@@ -50,7 +54,7 @@ type Props = {
   onClose: () => void;
   onCompleted: () => void;
   /** Inject write service for QA. */
-  writeServiceOverride?: ReturnType<typeof createMemoryAssignmentWriteService> | null;
+  writeServiceOverride?: ReturnType<typeof createRpcAssignmentWriteService> | null;
 };
 
 function tradeToFact(userId: string, trade: Trade) {
@@ -71,6 +75,46 @@ function tradeToFact(userId: string, trade: Trade) {
   };
 }
 
+function toAssignmentEvent(row: {
+  id: string;
+  userId: string;
+  tradeClientId: string;
+  accountId: string | null;
+  challengeId: string | null;
+  state: string;
+  assignedAt: string | null;
+  createdAt: string;
+}): PropTradeAssignmentEvent | null {
+  if (
+    !isAssignedState(
+      row.state as
+        | "assigned_manual"
+        | "assigned_verified_import"
+        | "unassigned"
+        | "excluded"
+        | "invalid",
+    )
+  ) {
+    return null;
+  }
+  return {
+    id: row.id,
+    userId: row.userId,
+    tradeClientId: row.tradeClientId,
+    accountId: row.accountId,
+    challengeId: row.challengeId,
+    source: row.state === "assigned_verified_import" ? "verified_import" : "manual",
+    state: "assigned",
+    effectiveAt: row.assignedAt || row.createdAt,
+    actor: "system",
+    clientRequestId: `hydrate:${row.id}`,
+    reasonCode: null,
+    supersededAssignmentId: null,
+    assignmentRevision: 0,
+    createdAt: row.createdAt,
+  };
+}
+
 export function PropPassAssignmentFlow({
   userId,
   accountId,
@@ -85,41 +129,75 @@ export function PropPassAssignmentFlow({
   writeServiceOverride = null,
 }: Props) {
   const { t } = useTranslation();
-  const theme = useYdlTheme();
+  const theme = useYdlTheme("dark");
   const [step, setStep] = useState<Step>("list");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filterAssigned, setFilterAssigned] = useState<"all" | "unassigned" | "assigned">("unassigned");
   const [preview, setPreview] = useState<AssignmentImpactPreview | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [currentByTradeId, setCurrentByTradeId] = useState<
+    Record<string, PropTradeAssignmentEvent>
+  >({});
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!supabase) return;
+      try {
+        const store = createAuthenticatedPropOsReadStore(
+          createSupabasePropOsReadTransport(
+            supabase as unknown as import("../propOs/accounts/authenticatedReadTransport").SupabasePropOsReadClient,
+          ),
+        );
+        const list = await store.listAssignmentsForChallenge(challengeId);
+        if (cancelled) return;
+        const next: Record<string, PropTradeAssignmentEvent> = {};
+        for (const row of list) {
+          const ev = toAssignmentEvent(row);
+          if (ev) next[ev.tradeClientId] = ev;
+        }
+        setCurrentByTradeId(next);
+      } catch {
+        // Keep empty map — new assigns still work once RPC is available.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [challengeId, userId]);
 
   const rows: AssignableTradeRow[] = useMemo(() => {
-    return trades.map((tr) => {
-      const fact = tradeToFact(userId, tr);
-      const verdict = evaluateAssignability({
-        userId,
-        trade: fact,
-        current: null,
-        challenge: {
-          accountId,
-          challengeId,
-          accountStatus,
-          challengeStatus,
-          startedAt: challengeStartedAt,
-          endedAt: challengeEndedAt,
-        },
+    return trades
+      .map((tr) => {
+        const fact = tradeToFact(userId, tr);
+        const current = currentByTradeId[tr.id] ?? null;
+        const verdict = evaluateAssignability({
+          userId,
+          trade: fact,
+          current,
+          challenge: {
+            accountId,
+            challengeId,
+            accountStatus,
+            challengeStatus,
+            startedAt: challengeStartedAt,
+            endedAt: challengeEndedAt,
+          },
+        });
+        const row: AssignableTradeRow = {
+          trade: fact,
+          currentAssignment: current,
+          assignable: verdict.ok,
+          rejectReason: verdict.reason,
+        };
+        return row;
+      })
+      .filter((r) => {
+        if (filterAssigned === "assigned") return !!r.currentAssignment;
+        if (filterAssigned === "unassigned") return !r.currentAssignment;
+        return true;
       });
-      const row: AssignableTradeRow = {
-        trade: fact,
-        currentAssignment: null,
-        assignable: verdict.ok,
-        rejectReason: verdict.reason,
-      };
-      return row;
-    }).filter((r) => {
-      if (filterAssigned === "unassigned") return r.assignable || r.rejectReason !== null;
-      return true;
-    });
   }, [
     trades,
     userId,
@@ -130,6 +208,7 @@ export function PropPassAssignmentFlow({
     challengeStartedAt,
     challengeEndedAt,
     filterAssigned,
+    currentByTradeId,
   ]);
 
   const visibleIds = rows.map((r) => r.trade.identity.tradeClientId);
@@ -181,33 +260,8 @@ export function PropPassAssignmentFlow({
     try {
       const svc = await getWriteService();
       if (!svc) {
-        // Local memory path for internal preview without RPC client wiring
-        const store = createMemoryAssignmentStore();
-        store.accounts.set(accountId, { userId, status: accountStatus });
-        store.challenges.set(challengeId, {
-          userId,
-          accountId,
-          status: challengeStatus,
-          startedAt: challengeStartedAt,
-          endedAt: challengeEndedAt,
-        });
-        for (const r of rows) store.trades.push(r.trade);
-        const mem = createMemoryAssignmentWriteService({ userId, store });
-        const result = reassign
-          ? await mem.reassignTrades({
-              clientRequestId: newPropOsClientRequestId(),
-              accountId,
-              challengeId,
-              tradeClientIds: [...selected],
-              confirmReassignment: true,
-            })
-          : await mem.assignTrades({
-              clientRequestId: newPropOsClientRequestId(),
-              accountId,
-              challengeId,
-              tradeClientIds: [...selected],
-            });
-        handleResult(result.kind, result.kind === "conflict" ? result.reasonCode : undefined);
+        setStep("failed");
+        setMessage(t("propPass.assignment.rpcUnavailable"));
         return;
       }
       const result = reassign
@@ -224,6 +278,30 @@ export function PropPassAssignmentFlow({
             challengeId,
             tradeClientIds: [...selected],
           });
+      handleResult(result.kind, result.kind === "conflict" ? result.reasonCode : undefined);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitRemove() {
+    setBusy(true);
+    setMessage(null);
+    trackPropPassEvent("prop_pass_assignment_removed", { userId });
+    try {
+      const svc = await getWriteService();
+      const ids = [...selected];
+      if (!svc) {
+        setStep("failed");
+        setMessage(t("propPass.assignment.rpcUnavailable"));
+        return;
+      }
+      const result = await svc.removeTradeAssignments({
+        clientRequestId: newPropOsClientRequestId(),
+        accountId,
+        tradeClientIds: ids,
+        reasonCode: "user_removed",
+      });
       handleResult(result.kind, result.kind === "conflict" ? result.reasonCode : undefined);
     } finally {
       setBusy(false);
@@ -291,6 +369,15 @@ export function PropPassAssignmentFlow({
             <YdlButton
               label={t("propPass.assignment.previewCta")}
               onPress={openPreview}
+              disabled={selected.size === 0}
+            />
+            <YdlButton
+              label={t("propPass.assignment.removeCta")}
+              variant="destructive"
+              onPress={() => {
+                if (selected.size === 0) return;
+                setStep("remove_confirm");
+              }}
               disabled={selected.size === 0}
             />
           </View>
@@ -385,6 +472,26 @@ export function PropPassAssignmentFlow({
                 submitAssign(true);
               }}
               disabled={busy}
+            />
+          </View>
+        </YdlCard>
+      ) : null}
+
+      {step === "remove_confirm" ? (
+        <YdlCard>
+          <YdlText role="bodyEmphasized">{t("propPass.assignment.removeTitle")}</YdlText>
+          <YdlText role="body" color="text.secondary">
+            {t("propPass.assignment.removeBody", { count: selected.size })}
+          </YdlText>
+          <View style={styles.row}>
+            <YdlButton label={t("propPass.assignment.back")} variant="secondary" onPress={() => setStep("list")} />
+            <YdlButton
+              label={t("propPass.assignment.removeConfirm")}
+              variant="destructive"
+              disabled={busy}
+              onPress={() => {
+                void submitRemove();
+              }}
             />
           </View>
         </YdlCard>

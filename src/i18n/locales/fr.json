@@ -1397,5 +1397,6 @@
   "propPass.assignment.removeConfirm": "Confirmer le retrait",
   "productOnboardingTitle": "Notez. Analysez. Progressez.",
   "productOnboardingBody": "YouTrader vous aide à progresser chaque jour — journal, revue et discipline.",
-  "productOnboardingCta": "Continuer"
+  "productOnboardingCta": "Continuer",
+  "propPass.assignment.rpcUnavailable": "Service d’assignation indisponible. Vérifiez la connexion et réessayez."
 }

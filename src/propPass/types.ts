@@ -42,6 +42,13 @@ export type PropPassViewModel = {
     status: string;
     startedAt?: string;
   };
+  /** Non-active attempts — display only; never auto-promoted. */
+  historicalAttempts: Array<{
+    id: string;
+    status: string;
+    startedAt: string;
+  }>;
+  assignedTradeCount: number;
   progress: {
     currentBalance?: PropPassMoney;
     profitTarget?: PropPassMoney;

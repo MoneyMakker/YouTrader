@@ -84,6 +84,9 @@ export {
 } from "./publication";
 export { rebuildCurrentProjection, projectionParity } from "./rebuild";
 export {
+  createSupabaseIntelligenceReadStore,
+} from "./supabaseReadStore";
+export {
   createMemoryIntelligenceReadStore,
   runTrustedMemoryCalculation,
   type PerformanceIntelligenceReadStore,

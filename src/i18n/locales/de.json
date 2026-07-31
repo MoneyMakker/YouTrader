@@ -1397,5 +1397,6 @@
   "propPass.assignment.removeConfirm": "Entfernen bestätigen",
   "productOnboardingTitle": "Loggen. Prüfen. Verbessern.",
   "productOnboardingBody": "YouTrader hilft dir, jeden Trading-Tag zu verbessern — mit Journal, Review und Disziplin.",
-  "productOnboardingCta": "Weiter"
+  "productOnboardingCta": "Weiter",
+  "propPass.assignment.rpcUnavailable": "Zuweisungsdienst nicht verfügbar. Verbindung prüfen und erneut versuchen."
 }

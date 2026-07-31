@@ -1399,5 +1399,6 @@
   "propPass.assignment.removeConfirm": "Подтвердить удаление",
   "productOnboardingTitle": "Лог. Разбор. Рост.",
   "productOnboardingBody": "YouTrader помогает улучшаться каждый торговый день — с чистого журнала, разбора и дисциплины.",
-  "productOnboardingCta": "Продолжить"
+  "productOnboardingCta": "Продолжить",
+  "propPass.assignment.rpcUnavailable": "Сервис назначения недоступен. Проверьте соединение и повторите."
 }

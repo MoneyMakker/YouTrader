@@ -1397,5 +1397,6 @@
   "propPass.assignment.removeConfirm": "Confirm remove",
   "productOnboardingTitle": "Log. Review. Improve.",
   "productOnboardingBody": "YouTrader helps you improve every trading day — starting with a clear journal, then review and discipline.",
-  "productOnboardingCta": "Continue"
+  "productOnboardingCta": "Continue",
+  "propPass.assignment.rpcUnavailable": "Assignment service is unavailable. Check connection and try again."
 }

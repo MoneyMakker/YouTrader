@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { C } from "../../../theme/colors";
+import { ydlStatusBlock } from "../../../ydl/status";
+import { ydlSpace } from "../../../ydl/space";
 import { AnimatedPressable } from "./AnimatedPressable";
 import { PremiumCard } from "./PremiumCard";
 import { premiumTone, type PremiumTone } from "./tokens";
@@ -12,6 +13,8 @@ export type EmptyStateCardProps = {
   actionLabel?: string;
   onActionPress?: () => void;
   tone?: PremiumTone;
+  /** empty = possibility; error = calm recovery (no alarming red surface). */
+  kind?: "empty" | "error";
   style?: StyleProp<ViewStyle>;
 };
 
@@ -22,18 +25,42 @@ export function EmptyStateCard({
   actionLabel,
   onActionPress,
   tone = "purple",
+  kind = "empty",
   style,
 }: EmptyStateCardProps) {
   const toneConfig = premiumTone[tone];
+  const a11y = message ? `${title}. ${message}` : title;
 
   return (
-    <PremiumCard tone={tone} style={[styles.card, style]} contentStyle={styles.content}>
-      {icon ? <View style={[styles.iconShell, { backgroundColor: toneConfig.soft }]}>{icon}</View> : null}
-      <Text style={styles.title}>{title}</Text>
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+    <PremiumCard
+      tone={kind === "error" ? "neutral" : tone}
+      style={[styles.card, style]}
+      contentStyle={styles.content}
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel={a11y}
+      accessibilityLiveRegion={kind === "error" ? "polite" : undefined}
+    >
+      {icon ? (
+        <View
+          style={[styles.iconShell, { backgroundColor: toneConfig.soft }]}
+          importantForAccessibility="no"
+        >
+          {icon}
+        </View>
+      ) : null}
+      <Text style={styles.title} maxFontSizeMultiplier={1.3} importantForAccessibility="no">
+        {title}
+      </Text>
+      {message ? (
+        <Text style={styles.message} maxFontSizeMultiplier={1.25} importantForAccessibility="no">
+          {message}
+        </Text>
+      ) : null}
       {actionLabel && onActionPress ? (
         <AnimatedPressable
           accessibilityRole="button"
+          accessibilityLabel={actionLabel}
           onPress={onActionPress}
           haptic
           style={styles.actionPressable}
@@ -52,42 +79,38 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 4,
+    gap: ydlStatusBlock.gap,
+    paddingVertical: ydlSpace.lg,
+    paddingHorizontal: ydlSpace.sm,
   },
   iconShell: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
+    width: ydlStatusBlock.iconShell,
+    height: ydlStatusBlock.iconShell,
+    borderRadius: ydlStatusBlock.iconRadius,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
   },
   title: {
-    color: C.text,
-    fontSize: 16,
-    fontWeight: "800",
-    textAlign: "center",
+    ...ydlStatusBlock.title,
   },
   message: {
-    color: C.sub,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: "center",
+    ...ydlStatusBlock.body,
+    maxWidth: 320,
   },
   actionPressable: {
-    marginTop: 4,
+    marginTop: ydlSpace.xxs,
+    alignSelf: "stretch",
   },
   action: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: 14,
+    minHeight: ydlStatusBlock.actionMinHeight,
+    paddingHorizontal: ydlSpace.md,
+    borderRadius: ydlStatusBlock.iconRadius,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   actionText: {
-    fontSize: 13,
-    fontWeight: "800",
+    ...ydlStatusBlock.body,
+    fontWeight: "700",
   },
 });

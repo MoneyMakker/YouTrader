@@ -82,6 +82,12 @@ export function mapActivatedReadModelToViewModel(
       status: challenge.status,
       startedAt: challenge.startedAt,
     },
+    historicalAttempts: readModel.historicalAttempts.map((h) => ({
+      id: h.id,
+      status: h.status,
+      startedAt: h.startedAt,
+    })),
+    assignedTradeCount: readModel.assignedTradeCount,
     progress: {
       currentBalance: equityMinor != null ? money(equityMinor, currency) : undefined,
       profitTarget:
@@ -105,7 +111,7 @@ export function mapActivatedReadModelToViewModel(
       limitations,
     },
     freshness: {
-      status: "current",
+      status: readModel.dataQuality.flags.includes("stale_snapshot") ? "stale" : "current",
       calculatedAt: engine?.calculated_at,
     },
   };

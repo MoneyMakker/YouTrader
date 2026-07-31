@@ -1397,5 +1397,6 @@
   "propPass.assignment.removeConfirm": "Conferma rimozione",
   "productOnboardingTitle": "Registra. Rivedi. Migliora.",
   "productOnboardingBody": "YouTrader ti aiuta a migliorare ogni giorno — diario, revisione e disciplina.",
-  "productOnboardingCta": "Continua"
+  "productOnboardingCta": "Continua",
+  "propPass.assignment.rpcUnavailable": "Servizio di assegnazione non disponibile. Controlla la connessione e riprova."
 }
