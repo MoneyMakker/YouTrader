@@ -74,15 +74,20 @@ function seedLiveSlice(): void {
   ensureAuthUser(DB, OWNER, "owner-live2a@example.com");
   ensureAuthUser(DB, OTHER, "other-live2a@example.com");
 
+  // Fresh isolated DB only (shell dropdb/createdb). Never DELETE immutable
+  // engine/score/rule snapshots — immutability triggers must stay enforced.
+  const existing = psql(`
+    select count(*)::text from public.prop_engine_snapshots
+    where id in ('${ENG}'::uuid, '${ENG_INC}'::uuid, '${ENG_INT}'::uuid)
+  `);
+  assert.equal(
+    existing,
+    "0",
+    "Phase 2A live slice requires a fresh isolated database (re-run via prop-pass-live-vertical-slice-qa.sh)",
+  );
+
   psql(`
     set role service_role;
-    delete from public.prop_score_snapshots where user_id in ('${OWNER}'::uuid, '${OTHER}'::uuid);
-    delete from public.prop_engine_snapshots where user_id in ('${OWNER}'::uuid, '${OTHER}'::uuid);
-    delete from public.prop_trade_assignments where user_id in ('${OWNER}'::uuid, '${OTHER}'::uuid);
-    delete from public.prop_challenge_rule_snapshots where user_id in ('${OWNER}'::uuid, '${OTHER}'::uuid);
-    delete from public.prop_challenges where user_id in ('${OWNER}'::uuid, '${OTHER}'::uuid);
-    delete from public.prop_os_user_preferences where user_id in ('${OWNER}'::uuid, '${OTHER}'::uuid);
-    delete from public.prop_accounts where user_id in ('${OWNER}'::uuid, '${OTHER}'::uuid);
 
     insert into public.prop_accounts (
       id, user_id, firm_key, label, account_size_minor, currency, firm_timezone,

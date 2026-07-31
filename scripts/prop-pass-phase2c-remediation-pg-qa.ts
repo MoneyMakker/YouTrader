@@ -902,6 +902,118 @@ function main() {
     assert.equal(pnlBefore, pnlAfter);
   });
 
+  check("identity triplet: matching ids succeed; mismatch / cross-user rejected", () => {
+    seedJournal(OWNER, "id-a", 12, "2026-02-07T10:00:00Z");
+    seedJournal(OWNER, "id-b", 13, "2026-02-07T11:00:00Z");
+    const idA = psql(
+      `select id::text from public.trade_journal where user_id = '${OWNER}'::uuid and client_id = 'id-a'`,
+    );
+    const idB = psql(
+      `select id::text from public.trade_journal where user_id = '${OWNER}'::uuid and client_id = 'id-b'`,
+    );
+    const otherId = psql(
+      `select id::text from public.trade_journal where user_id = '${OTHER}'::uuid and client_id = 'other-slice'`,
+    );
+
+    const pairOk = psql(
+      `select public.prop_os_assignment_assert_identity_pair('${OWNER}'::uuid, '${idA}'::uuid, 'id-a')::text`,
+    );
+    assert.ok(pairOk === "t" || pairOk === "true");
+
+    // Matching pair insert succeeds (event append for QA identity proof).
+    psql(`
+      insert into public.prop_trade_assignment_events (
+        id, user_id, trade_client_id, journal_trade_id, account_id, challenge_id,
+        source, state, effective_at, actor, client_request_id, reason_code,
+        superseded_assignment_id, assignment_revision, created_at
+      ) values (
+        gen_random_uuid(), '${OWNER}'::uuid, 'id-a', '${idA}'::uuid, '${accId}'::uuid, '${chId}'::uuid,
+        'manual', 'assigned', now(), 'system', 'id-match-ok', null, null, 900001, now()
+      );
+    `);
+
+    let mismatchRejected = false;
+    try {
+      psql(`
+        insert into public.prop_trade_assignment_events (
+          id, user_id, trade_client_id, journal_trade_id, account_id, challenge_id,
+          source, state, effective_at, actor, client_request_id, reason_code,
+          superseded_assignment_id, assignment_revision, created_at
+        ) values (
+          gen_random_uuid(), '${OWNER}'::uuid, 'id-b', '${idA}'::uuid, '${accId}'::uuid, '${chId}'::uuid,
+          'manual', 'assigned', now(), 'system', 'id-mismatch', null, null, 900002, now()
+        );
+      `);
+    } catch {
+      mismatchRejected = true;
+    }
+    assert.equal(mismatchRejected, true);
+
+    let crossRejected = false;
+    try {
+      psql(`
+        insert into public.prop_trade_assignment_events (
+          id, user_id, trade_client_id, journal_trade_id, account_id, challenge_id,
+          source, state, effective_at, actor, client_request_id, reason_code,
+          superseded_assignment_id, assignment_revision, created_at
+        ) values (
+          gen_random_uuid(), '${OWNER}'::uuid, 'id-a', '${otherId}'::uuid, '${accId}'::uuid, '${chId}'::uuid,
+          'manual', 'assigned', now(), 'system', 'id-xuser', null, null, 900003, now()
+        );
+      `);
+    } catch {
+      crossRejected = true;
+    }
+    assert.equal(crossRejected, true);
+
+    // Duplicate import alias cannot create a second journal target.
+    let dupAliasRejected = false;
+    try {
+      psql(`
+        begin;
+        select set_config('request.jwt.claim.sub', '${OWNER}', true);
+        select set_config('request.jwt.claim.role', 'authenticated', true);
+        insert into public.trade_journal (
+          id, user_id, client_id, trade_date, symbol, direction, contracts, pnl,
+          entry_time, exit_time, mood, notes, created_at, updated_at
+        ) values (
+          gen_random_uuid(), '${OWNER}'::uuid, 'id-a', '2026-02-07', 'ES', 'LONG', 1, 99,
+          '2026-02-07T10:00:00Z', '2026-02-07T10:00:00Z', 'ok', '', now(), now()
+        );
+        commit;
+      `);
+    } catch {
+      dupAliasRejected = true;
+    }
+    assert.equal(dupAliasRejected, true);
+
+    // Projection rebuild retains canonical journal_trade_id on live projection path.
+    const rebuilt = parseJson(
+      asProcessor(`select public.prop_os_assignment_rebuild_projection('${OWNER}'::uuid);`),
+    );
+    assert.equal(rebuilt.kind, "success");
+    const jidLive = psql(`
+      select e.journal_trade_id::text
+      from public.prop_trade_assignment_events e
+      where e.user_id = '${OWNER}'::uuid and e.trade_client_id = 'id-a' and e.state = 'assigned'
+      order by e.assignment_revision desc limit 1
+    `);
+    assert.equal(jidLive, idA);
+    const parity = parseJson(
+      psql(`select public.prop_os_assignment_projection_parity('${OWNER}'::uuid);`),
+    );
+    assert.equal(parity.kind, "success", JSON.stringify(parity));
+    void idB;
+    capture("identity-triplet-invariant", {
+      matchingOk: true,
+      mismatchRejected,
+      crossRejected,
+      dupAliasRejected,
+      journalTradeId: idA,
+      contract: PROP_OS_JOURNAL_TRADE_IDENTITY.assignmentEventFk.identityTriplet,
+    });
+  });
+
   console.log(`prop-pass-phase2c-remediation-pg-qa: PASS (${passed})`);
 }
 

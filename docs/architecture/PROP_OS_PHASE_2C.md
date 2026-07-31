@@ -28,8 +28,10 @@ Original journal P&L / timestamps / instruments are never mutated by assignment.
 | --- | --- | --- |
 | DB PK | `trade_journal.id` (uuid) | Canonical journal trade primary key |
 | Provenance alias | `trade_journal.client_id` | Owner-scoped UNIQUE; immutable after insert; App `Trade.id` for command payloads |
-| Event FK | `prop_trade_assignment_events.journal_trade_id` | → `trade_journal.id` |
+| Triplet unique | `(user_id, id, client_id)` on `trade_journal` | Enables composite assignment FK |
+| Event FK | `journal_trade_id` | → `trade_journal.id` |
 | Event FK | `(user_id, trade_client_id)` | → `trade_journal(user_id, client_id)` |
+| Event FK (invariant) | `(user_id, journal_trade_id, trade_client_id)` | → `trade_journal(user_id, id, client_id)` — rejects Trade A id + Trade B client_id |
 
 Soft-deleted (`deleted_at IS NOT NULL`) → unsupported for assignment.  
 Cross-user `client_id` collision → owner-scoped lookup fails; no access grant.  
@@ -68,6 +70,7 @@ Owner id and assignment revision are derived from `prop_challenges` + `prop_os_c
 
 - `supabase/migrations/20260730240000_prop_os_trade_assignment_commands.sql`
 - `supabase/migrations/20260730250000_prop_os_assignment_recalc_hardening.sql`
+- `supabase/migrations/20260730260000_prop_os_assignment_identity_invariant.sql`
 
 **Do not apply to production** without Ops approval.
 

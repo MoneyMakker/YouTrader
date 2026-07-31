@@ -22,6 +22,7 @@ if [[ ! -f .tmp/bootstrap_supabase_roles.sql ]]; then
 fi
 
 echo "prop-pass-live-vertical-slice-qa: using $(psql --version)"
+echo "prop-pass-live-vertical-slice-qa: recreating isolated DB (no snapshot DELETE)"
 dropdb --if-exists "$DB" >/dev/null 2>&1 || true
 createdb "$DB"
 psql -d "$DB" -v ON_ERROR_STOP=1 -f .tmp/bootstrap_supabase_roles.sql >/dev/null
@@ -32,4 +33,14 @@ done < <(ls -1 supabase/migrations/*.sql | sort)
 node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types \
   scripts/prop-pass-live-vertical-slice-qa.ts
 
-echo "prop-pass-live-vertical-slice-qa: PASS"
+# Prove snapshot immutability remains enforced (no privileged App DELETE path).
+if psql -d "$DB" -v ON_ERROR_STOP=1 -c "delete from public.prop_engine_snapshots;" >/dev/null 2>&1; then
+  echo "prop-pass-live-vertical-slice-qa: FAIL — engine snapshot DELETE was allowed"
+  exit 1
+fi
+if psql -d "$DB" -v ON_ERROR_STOP=1 -c "delete from public.prop_score_snapshots;" >/dev/null 2>&1; then
+  echo "prop-pass-live-vertical-slice-qa: FAIL — score snapshot DELETE was allowed"
+  exit 1
+fi
+
+echo "prop-pass-live-vertical-slice-qa: PASS (immutability preserved)"
