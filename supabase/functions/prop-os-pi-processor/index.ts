@@ -29,51 +29,62 @@ function assertTrustedProcessor(req: Request): boolean {
   return false;
 }
 
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ kind: "method_not_allowed" }), { status: 405 });
-  }
-  if (!assertTrustedProcessor(req)) {
-    return new Response(JSON.stringify({ kind: "forbidden" }), { status: 403 });
-  }
+  if (req.method !== "POST") return json({ kind: "method_not_allowed" }, 405);
+  if (!assertTrustedProcessor(req)) return json({ kind: "forbidden" }, 403);
+
   const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return new Response(JSON.stringify({ kind: "invalid_body" }), { status: 400 });
-  }
+  if (!body || typeof body !== "object") return json({ kind: "invalid_body" }, 400);
+
   const url = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const sb = createClient(url, serviceKey, { auth: { persistSession: false } });
   const op = String((body as { op?: string }).op ?? "");
-  let rpc = "";
-  let args: Record<string, unknown> = {};
+
+  if (op === "ping") {
+    return json({ kind: "pong", processor: "pi" });
+  }
+
   if (op === "complete") {
-    rpc = "prop_os_cmd_complete_performance_intelligence";
-    args = {
-      p_user_id: (body as any).userId,
-      p_scope_key: (body as any).scopeKey,
-      p_assignment_revision: (body as any).assignmentRevision,
-      p_snapshot: (body as any).snapshot,
-    };
-  } else if (op === "fail") {
-    rpc = "prop_os_cmd_fail_performance_intelligence";
-    args = {
-      p_user_id: (body as any).userId,
-      p_scope_key: (body as any).scopeKey,
-      p_assignment_revision: (body as any).assignmentRevision,
-      p_reason_code: (body as any).reasonCode ?? "pi_failed",
-    };
-  } else if (op === "ping") {
-    return new Response(JSON.stringify({ kind: "pong", processor: "pi" }), {
-      headers: { "Content-Type": "application/json" },
+    const { data, error } = await sb.rpc("prop_os_cmd_complete_performance_intelligence", {
+      p_user_id: (body as { userId?: string }).userId,
+      p_scope_key: (body as { scopeKey?: string }).scopeKey,
+      p_assignment_revision: (body as { assignmentRevision?: number }).assignmentRevision,
+      p_snapshot: (body as { snapshot?: unknown }).snapshot,
     });
-  } else {
-    return new Response(JSON.stringify({ kind: "unknown_op" }), { status: 400 });
+    if (error) return json({ kind: "rpc_error", message: error.message }, 500);
+    return json(data ?? { kind: "success" });
   }
-  const { data, error } = await sb.rpc(rpc, args);
-  if (error) {
-    return new Response(JSON.stringify({ kind: "rpc_error", message: error.message }), { status: 500 });
+
+  if (op === "fail") {
+    const { data, error } = await sb.rpc("prop_os_cmd_fail_performance_intelligence", {
+      p_user_id: (body as { userId?: string }).userId,
+      p_scope_key: (body as { scopeKey?: string }).scopeKey,
+      p_assignment_revision: (body as { assignmentRevision?: number }).assignmentRevision,
+      p_reason_code: (body as { reasonCode?: string }).reasonCode ?? "pi_failed",
+    });
+    if (error) return json({ kind: "rpc_error", message: error.message }, 500);
+    return json(data ?? { kind: "success" });
   }
-  return new Response(JSON.stringify(data ?? { kind: "success" }), {
-    headers: { "Content-Type": "application/json" },
-  });
+
+  if (op === "probe_recalc_complete") {
+    const { data, error } = await sb.rpc("prop_os_cmd_complete_recalculation", {
+      p_request_id: (body as { requestId?: string }).requestId ?? "probe",
+      p_request_hash: (body as { requestHash?: string }).requestHash ?? "probe",
+      p_challenge_id: (body as { challengeId?: string }).challengeId,
+      p_assignment_revision: (body as { assignmentRevision?: number }).assignmentRevision ?? 0,
+      p_snapshot_revision: (body as { snapshotRevision?: number }).snapshotRevision ?? 0,
+    });
+    if (error) return json({ kind: "rpc_error", message: error.message, note: "service_role_may_bypass_role_isolation" }, 500);
+    return json({ kind: "probe_result", data });
+  }
+
+  return json({ kind: "unknown_op" }, 400);
 });
