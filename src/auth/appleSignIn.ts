@@ -47,13 +47,19 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-function logAppleDev(event: string, details?: Record<string, unknown>) {
-  if (!__DEV__) return;
-  console.log(`[YouTrader:apple-auth] ${event}`, {
+/** Sanitized Apple auth diagnostics — never log tokens, codes, JWTs, emails, or full user ids. */
+function logAppleAuth(event: string, details?: Record<string, unknown>) {
+  const payload = {
     bundleId: resolveBundleIdentifier(),
     platform: Platform.OS,
     ...details,
-  });
+  };
+  if (__DEV__) {
+    console.log(`[YouTrader:apple-auth] ${event}`, payload);
+    return;
+  }
+  // Release-Staging / TestFlight: visible without __DEV__, still sanitized.
+  console.warn(`[YouTrader:apple-auth] ${event}`, payload);
 }
 
 export async function signInWithAppleNative(supabaseClient: SupabaseClient) {
@@ -65,14 +71,35 @@ export async function signInWithAppleNative(supabaseClient: SupabaseClient) {
   }
 
   const { rawNonce, hashedNonce } = await buildAppleNonce();
-  logAppleDev("starting native sign-in", { hasNonce: true });
+  logAppleAuth("starting native sign-in", {
+    hasRawNonce: !!rawNonce,
+    hasHashedNonce: !!hashedNonce,
+  });
 
-  const credential = await AppleAuthentication.signInAsync({
-    requestedScopes: [
-      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-      AppleAuthentication.AppleAuthenticationScope.EMAIL,
-    ],
-    nonce: hashedNonce,
+  let credential: AppleAuthentication.AppleAuthenticationCredential;
+  try {
+    credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+      nonce: hashedNonce,
+    });
+  } catch (nativeError) {
+    const err = nativeError as { code?: string; message?: string };
+    logAppleAuth("native authorization failed", {
+      appleErrorCode: err?.code || "unknown",
+      message: err?.message ? String(err.message).slice(0, 120) : undefined,
+    });
+    throw nativeError;
+  }
+
+  const hasIdentityToken = !!credential.identityToken;
+  const hasAuthorizationCode = !!credential.authorizationCode;
+  logAppleAuth("native credential received", {
+    hasIdentityToken,
+    hasAuthorizationCode,
+    realUserStatus: credential.realUserStatus,
   });
 
   if (!credential.identityToken) {
@@ -80,10 +107,11 @@ export async function signInWithAppleNative(supabaseClient: SupabaseClient) {
   }
 
   const claims = decodeJwtPayload(credential.identityToken);
-  logAppleDev("received identity token", {
-    iss: claims?.iss,
-    aud: claims?.aud,
-    sub: claims?.sub ? "[present]" : "[missing]",
+  logAppleAuth("identity token claims (sanitized)", {
+    iss: typeof claims?.iss === "string" ? claims.iss : undefined,
+    aud: typeof claims?.aud === "string" ? claims.aud : undefined,
+    hasSub: typeof claims?.sub === "string" && claims.sub.length > 0,
+    hasNonceClaim: typeof claims?.nonce === "string" && claims.nonce.length > 0,
   });
 
   const { error } = await supabaseClient.auth.signInWithIdToken({
@@ -93,20 +121,32 @@ export async function signInWithAppleNative(supabaseClient: SupabaseClient) {
   });
 
   if (error) {
-    logAppleDev("supabase signInWithIdToken failed", {
-      message: error.message,
+    const msg = String(error.message || "");
+    const lower = msg.toLowerCase();
+    logAppleAuth("supabase signInWithIdToken failed", {
       status: error.status,
+      // Prefer short codes over full messages that may echo server detail.
+      errorCode:
+        lower.includes("not enabled") || lower.includes("provider")
+          ? "provider_disabled_or_misconfigured"
+          : lower.includes("issuer") || lower.includes("audience")
+            ? "audience_or_issuer_mismatch"
+            : lower.includes("nonce")
+              ? "nonce_validation_failed"
+              : "supabase_id_token_error",
+      message: msg.slice(0, 160),
       hint:
-        String(error.message).toLowerCase().includes("issuer") ||
-        String(error.message).toLowerCase().includes("audience")
+        lower.includes("issuer") || lower.includes("audience")
           ? `Add "${resolveBundleIdentifier()}" to Supabase Apple provider Client IDs (see AUTH_SETUP.md).`
-          : String(error.message).toLowerCase().includes("oauth secret")
-            ? "Native signInWithIdToken should be used on iOS — browser OAuth requires a secret."
-            : undefined,
+          : lower.includes("not enabled")
+            ? "Enable Apple provider on this Supabase project, or hide the Apple CTA in staging."
+            : lower.includes("oauth secret")
+              ? "Native signInWithIdToken should be used on iOS — browser OAuth requires a secret."
+              : undefined,
     });
     throw error;
   }
 
-  logAppleDev("supabase session created");
+  logAppleAuth("supabase session created");
   return credential;
 }

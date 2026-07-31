@@ -153,6 +153,7 @@ import { logStartupCheckpoint, logStartupError, logStartupPerf, markAppStart } f
 import { logger } from "../lib/logger";
 import {
   enableCloudSignIn,
+  enableNativeAppleSignIn,
   enableNativeGoogleSignIn,
   isExpoGo,
   isRevenueCatConfigured,
@@ -11047,7 +11048,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       }
       trackEvent("signup_started", { provider });
       if (provider === "apple") {
-        if (Platform.OS !== "ios") {
+        if (!enableNativeAppleSignIn) {
           Alert.alert(t("signInFailed"), userFacingAuthError(provider));
           return;
         }
@@ -11507,7 +11508,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           busy={authBusy}
           copy={authScreenCopy}
           emailModalCopy={emailModalCopy}
-          showApple={Platform.OS === "ios"}
+          showApple={enableNativeAppleSignIn}
           showGoogle={enableNativeGoogleSignIn}
           onSignIn={signInWithProvider}
           onSignInWithEmailPassword={signInWithEmailPasswordHandler}

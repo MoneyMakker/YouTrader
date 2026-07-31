@@ -105,9 +105,32 @@ export const enableCloudSignIn =
 export const IOS_BUNDLE_IDENTIFIER =
   Constants.expoConfig?.ios?.bundleIdentifier || "com.youtrader.pro";
 
-/** iOS always uses native Apple sign-in (signInWithIdToken), never browser OAuth. */
-export const enableNativeAppleSignIn =
-  Platform.OS === "ios" && isSupabaseConfigured;
+function resolveAppEnvironment(): string {
+  return (
+    process.env.EXPO_PUBLIC_APP_ENV ||
+    process.env.APP_ENV ||
+    (__DEV__ ? "development" : "production")
+  )
+    .trim()
+    .toLowerCase();
+}
+
+const STAGING_LIKE_ENVS = new Set(["staging", "development", "local", "dev"]);
+
+/**
+ * Native Apple (signInWithIdToken) requires the Supabase Apple provider enabled
+ * with Client ID `com.youtrader.pro`. Staging projects often leave Apple off —
+ * hide the CTA there unless explicitly opted in after provider setup.
+ */
+export const enableNativeAppleSignIn = (() => {
+  if (Platform.OS !== "ios" || !isSupabaseConfigured) return false;
+  const appEnvironment = resolveAppEnvironment();
+  const stagingLike = STAGING_LIKE_ENVS.has(appEnvironment);
+  const stagingOptIn =
+    (process.env.EXPO_PUBLIC_ENABLE_NATIVE_APPLE_SIGN_IN || "").trim() === "true";
+  if (stagingLike && !stagingOptIn) return false;
+  return true;
+})();
 
 function resolveGoogleClientId(envKey: string): string {
   const value = (process.env[envKey] || "").trim();
@@ -199,6 +222,7 @@ export function sanitizedRuntimeConfigReport() {
     activationMode,
     revenueCatConfigured: isRevenueCatConfigured,
     googleSignInConfigured: isGoogleNativeSignInConfigured,
+    appleSignInConfigured: enableNativeAppleSignIn,
     propOsEnabledForEnvironment:
       appEnvironment === "staging" ||
       appEnvironment === "development" ||

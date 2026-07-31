@@ -21,6 +21,10 @@ import {
 } from "lucide-react-native";
 import type { AuthProvider } from "../../auth/types";
 import { userHasPasswordSet } from "../../auth/emailPasswordAuth";
+import {
+  enableNativeAppleSignIn,
+  enableNativeGoogleSignIn,
+} from "../../config/appConfig";
 import { GlassCard } from "../ui/GlassCard";
 import { AnimatedPressable, PremiumLoadingBar, ShimmerPlaceholder } from "../ui/premium";
 import { t } from "../../i18n";
@@ -362,35 +366,39 @@ export function SettingsAccountSection({
               {t("authSecureNote")}
             </Text>
             <View style={styles.authButtonStack}>
-              <Pressable
-                disabled={authBusy}
-                onPress={() => onSignIn("apple")}
-                style={({ pressed }) => [
-                  styles.authProviderBtn,
-                  styles.authAppleBtn,
-                  authBusy && styles.disabledBtn,
-                  pressed && styles.premiumBtnSecondaryPressed,
-                ]}
-              >
-                <Text style={[styles.authProviderIcon, styles.authAppleIcon]}>{"\uf8ff"}</Text>
-                <Text style={[styles.authProviderText, styles.authAppleText]} maxFontSizeMultiplier={1.2}>
-                  {t("authApple")}
-                </Text>
-              </Pressable>
-              <Pressable
-                disabled={authBusy}
-                onPress={() => onSignIn("google")}
-                style={({ pressed }) => [
-                  styles.authProviderBtn,
-                  authBusy && styles.disabledBtn,
-                  pressed && styles.premiumBtnPrimaryPressed,
-                ]}
-              >
-                <Text style={styles.authProviderIcon}>G</Text>
-                <Text style={styles.authProviderText} maxFontSizeMultiplier={1.2}>
-                  {t("authGoogle")}
-                </Text>
-              </Pressable>
+              {enableNativeAppleSignIn ? (
+                <Pressable
+                  disabled={authBusy}
+                  onPress={() => onSignIn("apple")}
+                  style={({ pressed }) => [
+                    styles.authProviderBtn,
+                    styles.authAppleBtn,
+                    authBusy && styles.disabledBtn,
+                    pressed && styles.premiumBtnSecondaryPressed,
+                  ]}
+                >
+                  <Text style={[styles.authProviderIcon, styles.authAppleIcon]}>{"\uf8ff"}</Text>
+                  <Text style={[styles.authProviderText, styles.authAppleText]} maxFontSizeMultiplier={1.2}>
+                    {t("authApple")}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {enableNativeGoogleSignIn ? (
+                <Pressable
+                  disabled={authBusy}
+                  onPress={() => onSignIn("google")}
+                  style={({ pressed }) => [
+                    styles.authProviderBtn,
+                    authBusy && styles.disabledBtn,
+                    pressed && styles.premiumBtnPrimaryPressed,
+                  ]}
+                >
+                  <Text style={styles.authProviderIcon}>G</Text>
+                  <Text style={styles.authProviderText} maxFontSizeMultiplier={1.2}>
+                    {t("authGoogle")}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         ) : (
