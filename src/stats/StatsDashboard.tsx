@@ -104,6 +104,18 @@ export function StatsDashboard({
             <YdlButton label={t("stats.logTradeCta")} onPress={onLogTrade} testID="stats-log-trade" />
           ) : null}
         </View>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-radar">
+          <YdlText role="label">Performance Radar</YdlText>
+          <YdlText role="body" color="text.secondary">
+            {radar.insufficientMessage}
+          </YdlText>
+        </View>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-heatmap">
+          <YdlText role="label">Trading Heatmap</YdlText>
+          <YdlText role="body" color="text.secondary">
+            No trades in this period for heatmap cells.
+          </YdlText>
+        </View>
       </ScrollView>
     );
   }

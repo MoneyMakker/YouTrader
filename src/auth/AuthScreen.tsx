@@ -145,7 +145,7 @@ function AuthProviderButton({
       <Animated.View style={[styles.btnGlow, { shadowColor: glowColor, shadowOpacity }]}>
         <AnimatedPressable
           testID={testID}
-          accessibilityLabel={testID || label}
+                  accessibilityLabel={label}
           accessibilityRole="button"
           accessibilityState={{ disabled: busy }}
           disabled={busy}

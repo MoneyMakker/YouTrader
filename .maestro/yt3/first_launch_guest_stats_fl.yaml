@@ -1,0 +1,44 @@
+appId: com.youtrader.pro
+---
+- launchApp
+- openLink: youtrader://qa/reset-fresh
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen-1"
+    timeout: 30000
+- tapOn:
+    id: "onboarding-skip"
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen-3"
+    timeout: 15000
+- tapOn:
+    id: "onboarding-value-continue"
+- extendedWaitUntil:
+    visible:
+      id: "acquisition-paywall"
+    timeout: 25000
+- runFlow: _dismiss_logbox.yaml
+- tapOn:
+    point: "92%,91%"
+- tapOn: "Continue with Free Journal"
+- extendedWaitUntil:
+    visible:
+      id: "auth.screen"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/06_post_paywall_account
+- tapOn:
+    id: "auth.continue-guest"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 25000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/07_guest_main
+- tapOn: "Stats"
+- extendedWaitUntil:
+    visible:
+      id: "stats-radar"
+    timeout: 15000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/08_stats_radar
+- scroll
+- scroll
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/09_stats_heatmap

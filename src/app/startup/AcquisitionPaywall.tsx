@@ -82,10 +82,19 @@ export function AcquisitionPaywall({
   const yearlyHasTrial = hasIntroTrial(yearly?.product || yearlyProduct);
 
   useEffect(() => {
-    if (selected === "weekly" && !(weekly || weeklyProduct)) setSelected("monthly");
-    if (selected === "monthly" && !(monthly || monthlyProduct)) setSelected(yearly || yearlyProduct ? "yearly" : "weekly");
-    if (selected === "yearly" && !(yearly || yearlyProduct)) setSelected(monthly || monthlyProduct ? "monthly" : "weekly");
-  }, [selected, weekly, monthly, yearly, weeklyProduct, monthlyProduct, yearlyProduct]);
+    if (offeringsUnavailable) return;
+    if (selected === "weekly" && !(weekly || weeklyProduct)) {
+      setSelected(monthly || monthlyProduct ? "monthly" : "yearly");
+      return;
+    }
+    if (selected === "monthly" && !(monthly || monthlyProduct)) {
+      setSelected(yearly || yearlyProduct ? "yearly" : "weekly");
+      return;
+    }
+    if (selected === "yearly" && !(yearly || yearlyProduct)) {
+      setSelected(monthly || monthlyProduct ? "monthly" : "weekly");
+    }
+  }, [selected, weekly, monthly, yearly, weeklyProduct, monthlyProduct, yearlyProduct, offeringsUnavailable]);
 
   const plans = useMemo(() => {
     const rows: Array<{

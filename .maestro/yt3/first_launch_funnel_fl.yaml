@@ -1,0 +1,78 @@
+appId: com.youtrader.pro
+---
+- launchApp
+- openLink: youtrader://qa/reset-fresh
+- runFlow: _dismiss_logbox.yaml
+- extendedWaitUntil:
+    visible: "The market is not your biggest risk."
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/01_screen1_pain
+- tapOn: "Revenge trading after a loss"
+- extendedWaitUntil:
+    visible: "Build your YouTrader profile"
+    timeout: 10000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/02_screen2_profile
+- tapOn: "Futures"
+- tapOn: "MES"
+- tapOn: "New York AM"
+- tapOn: "Intraday"
+- tapOn: "Not yet"
+- runFlow: _dismiss_logbox.yaml
+- tapOn:
+    point: "92%,91%"
+- tapOn:
+    id: "onboarding-profile-continue"
+- extendedWaitUntil:
+    visible: "Your trading system, built around you"
+    timeout: 12000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/03_screen3_value
+- runFlow: _dismiss_logbox.yaml
+- tapOn:
+    id: "onboarding-value-continue"
+- extendedWaitUntil:
+    visible: "Preparing your trading workspace"
+    timeout: 10000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/04_screen4_prep
+- extendedWaitUntil:
+    visible: "Your trading system is ready"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05_paywall
+- runFlow:
+    when:
+      visible: "Continue with Free Journal"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05e_paywall_unavailable
+      - tapOn: "Continue with Free Journal"
+- runFlow:
+    when:
+      visible:
+        id: "paywall-plan-weekly"
+    commands:
+      - tapOn:
+          id: "paywall-plan-weekly"
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05b_paywall_weekly
+      - tapOn:
+          id: "paywall-plan-monthly"
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05c_paywall_monthly
+      - tapOn:
+          id: "paywall-plan-yearly"
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05d_paywall_yearly
+      - tapOn:
+          id: "paywall-continue-free"
+- extendedWaitUntil:
+    visible: "Save your trading progress"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/06_post_paywall_account
+- tapOn: "Continue without an account"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 25000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/07_guest_main
+- tapOn: "Stats"
+- extendedWaitUntil:
+    visible: "Performance Radar"
+    timeout: 15000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/08_stats_radar
+- scroll
+- scroll
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/09_stats_heatmap
