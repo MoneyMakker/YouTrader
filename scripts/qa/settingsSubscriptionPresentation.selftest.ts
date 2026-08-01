@@ -5,74 +5,77 @@
 import assert from "node:assert/strict";
 import { buildSettingsSubscriptionPresentation } from "../../src/app/startup/settingsSubscriptionPresentation";
 
-const weekly = buildSettingsSubscriptionPresentation({
-  activeSubscriptions: ["youtrader_pro_weekly"],
-  entitlements: {
-    active: {
-      "YouTrader Pro": {
-        productIdentifier: "youtrader_pro_weekly",
-        expirationDate: "2026-08-15T00:00:00.000Z",
-        willRenew: true,
-        periodType: "NORMAL",
+const weekly = buildSettingsSubscriptionPresentation(
+  {
+    activeSubscriptions: ["youtrader_pro_weekly"],
+    managementURL: "https://apps.apple.com/account/subscriptions",
+    entitlements: {
+      active: {
+        "YouTrader Pro": {
+          productIdentifier: "youtrader_pro_weekly",
+          expirationDate: "2026-08-15T00:00:00.000Z",
+          willRenew: true,
+          periodType: "NORMAL",
+        },
       },
     },
   },
-});
+  "YouTrader Pro",
+  {
+    storeProducts: [{ identifier: "youtrader_pro_weekly", priceString: "$4.99" }],
+    nowMs: Date.parse("2026-08-01T12:00:00.000Z"),
+  },
+);
 assert.ok(weekly);
 assert.equal(weekly!.planKind, "weekly");
-assert.match(weekly!.statusLine, /Weekly/);
-assert.ok(weekly!.detailLines.some((l) => /\$4\.99\/week/.test(l)));
-assert.doesNotMatch(weekly!.statusLine, /\bGuest\b/i);
-assert.doesNotMatch(weekly!.statusLine, /\bFree\b/i);
+assert.equal(weekly!.planLabel, "Weekly");
+assert.equal(weekly!.priceLabel, "$4.99");
+assert.equal(weekly!.renewalKind, "renews");
+assert.match(weekly!.renewalLine, /Renews/);
+assert.equal(weekly!.managementURL, "https://apps.apple.com/account/subscriptions");
+assert.equal(weekly!.expirationLooksStale, false);
 
-const monthlyTrial = buildSettingsSubscriptionPresentation({
-  entitlements: {
-    active: {
-      "YouTrader Pro": {
-        productIdentifier: "youtrader_pro_monthly",
-        expirationDate: "2026-08-04T00:00:00.000Z",
-        willRenew: true,
-        periodType: "TRIAL",
+const expires = buildSettingsSubscriptionPresentation(
+  {
+    entitlements: {
+      active: {
+        "YouTrader Pro": {
+          productIdentifier: "youtrader_pro_monthly",
+          expirationDate: "2026-08-20T00:00:00.000Z",
+          willRenew: false,
+          periodType: "NORMAL",
+          unsubscribeDetectedAt: "2026-08-01T00:00:00.000Z",
+        },
       },
     },
   },
-});
-assert.ok(monthlyTrial);
-assert.equal(monthlyTrial!.planKind, "monthly");
-assert.ok(monthlyTrial!.detailLines.some((l) => /Trial ends/.test(l)));
-assert.ok(monthlyTrial!.detailLines.some((l) => /\$12\.99\/month/.test(l)));
+  "YouTrader Pro",
+  { nowMs: Date.parse("2026-08-01T12:00:00.000Z") },
+);
+assert.ok(expires);
+assert.equal(expires!.renewalKind, "expires");
+assert.match(expires!.renewalLine, /Expires/);
 
-const yearlyTrial = buildSettingsSubscriptionPresentation({
-  entitlements: {
-    active: {
-      "YouTrader Pro": {
-        productIdentifier: "youtrader_pro_yearly__",
-        expirationDate: "2026-08-08T00:00:00.000Z",
-        willRenew: true,
-        periodType: "INTRO",
+const stale = buildSettingsSubscriptionPresentation(
+  {
+    entitlements: {
+      active: {
+        "YouTrader Pro": {
+          productIdentifier: "youtrader_pro_yearly__",
+          expirationDate: "2026-07-01T00:00:00.000Z",
+          willRenew: true,
+          periodType: "NORMAL",
+        },
       },
     },
   },
-});
-assert.ok(yearlyTrial);
-assert.equal(yearlyTrial!.planKind, "yearly");
-assert.ok(yearlyTrial!.detailLines.some((l) => /\$99\.99\/year/.test(l)));
+  "YouTrader Pro",
+  { nowMs: Date.parse("2026-08-01T12:00:00.000Z") },
+);
+assert.ok(stale);
+assert.equal(stale!.expirationLooksStale, true);
 
-const canceled = buildSettingsSubscriptionPresentation({
-  entitlements: {
-    active: {
-      "YouTrader Pro": {
-        productIdentifier: "youtrader_pro_yearly__",
-        expirationDate: "2026-08-08T00:00:00.000Z",
-        willRenew: false,
-        periodType: "TRIAL",
-        unsubscribeDetectedAt: "2026-08-01T00:00:00.000Z",
-      },
-    },
-  },
-});
-assert.ok(canceled);
-assert.match(canceled!.planLabel, /Yearly Trial/);
-assert.ok(canceled!.detailLines.some((l) => /Canceled/.test(l)));
+const none = buildSettingsSubscriptionPresentation({ entitlements: { active: {} } });
+assert.equal(none, null);
 
 console.log("settingsSubscriptionPresentation selftest PASS");

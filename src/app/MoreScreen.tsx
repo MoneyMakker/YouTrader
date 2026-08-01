@@ -11,6 +11,7 @@ import {
   Calculator as CalculatorIcon,
   CalendarDays,
   FileText,
+  FileUp,
   Newspaper,
 } from "lucide-react-native";
 import { YdlText } from "../ydl/components/YdlText";
@@ -24,6 +25,7 @@ export type MoreDestination =
   | "restore"
   | "reports"
   | "account"
+  | "importTrades"
   | "help"
   | "privacy"
   | "terms";
@@ -31,6 +33,7 @@ export type MoreDestination =
 type Props = {
   onOpen: (dest: MoreDestination) => void;
   showRestore?: boolean;
+  isPremium?: boolean;
 };
 
 type Row = {
@@ -44,6 +47,7 @@ const TRADING: Row[] = [
   { id: "calc", labelKey: "calc", Icon: CalculatorIcon },
   { id: "news", labelKey: "news", Icon: Newspaper },
   { id: "reports", labelKey: "more.performanceReports", Icon: FileText },
+  { id: "importTrades", labelKey: "importTrades", Icon: FileUp },
 ];
 
 function Section({
@@ -51,11 +55,13 @@ function Section({
   rows,
   onOpen,
   theme,
+  isPremium,
 }: {
   title: string;
   rows: Row[];
   onOpen: (dest: MoreDestination) => void;
   theme: ReturnType<typeof useYdlTheme>;
+  isPremium?: boolean;
 }) {
   const { t } = useTranslation();
   return (
@@ -64,31 +70,46 @@ function Section({
         {title}
       </YdlText>
       <View style={styles.list}>
-        {rows.map(({ id, labelKey, Icon }) => (
-          <Pressable
-            key={id}
-            onPress={() => onOpen(id)}
-            accessibilityRole="button"
-            accessibilityLabel={t(labelKey)}
-            testID={`more.open.${id}`}
-            style={[
-              styles.row,
-              {
-                backgroundColor: theme.colors.surface.card,
-                minHeight: YDL_MIN_TOUCH_TARGET,
-              },
-            ]}
-          >
-            <Icon size={22} color={theme.colors.text.primary} strokeWidth={2} />
-            <YdlText role="bodyEmphasized">{t(labelKey)}</YdlText>
-          </Pressable>
-        ))}
+        {rows.map(({ id, labelKey, Icon }) => {
+          const lockedImport = id === "importTrades" && !isPremium;
+          const label = lockedImport ? t("importTradesCsvPro") : t(labelKey);
+          return (
+            <Pressable
+              key={id}
+              onPress={() => onOpen(id)}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              testID={`more.open.${id}`}
+              style={[
+                styles.row,
+                {
+                  backgroundColor: theme.colors.surface.card,
+                  minHeight: YDL_MIN_TOUCH_TARGET,
+                  opacity: lockedImport ? 0.72 : 1,
+                },
+              ]}
+            >
+              <Icon
+                size={22}
+                color={
+                  lockedImport
+                    ? theme.colors.text.tertiary
+                    : theme.colors.text.primary
+                }
+                strokeWidth={2}
+              />
+              <YdlText role="bodyEmphasized" color={lockedImport ? "text.secondary" : undefined}>
+                {t(labelKey)}
+              </YdlText>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
 }
 
-export function MoreScreen({ onOpen }: Props) {
+export function MoreScreen({ onOpen, isPremium }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
 
@@ -108,6 +129,7 @@ export function MoreScreen({ onOpen }: Props) {
         rows={TRADING}
         onOpen={onOpen}
         theme={theme}
+        isPremium={isPremium}
       />
 
       <View style={styles.section}>

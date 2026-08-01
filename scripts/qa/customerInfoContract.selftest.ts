@@ -80,38 +80,51 @@ assert.equal(computeYearlySavingsPercent(4.99, 99.99), 61);
 assert.equal(computeYearlyPerWeek(99.99), 1.92);
 
 // Settings matrix
-const weekly = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.weekly_active);
+const weekly = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.weekly_active, "YouTrader Pro", {
+  storeProducts: [{ identifier: "youtrader_pro_weekly", priceString: "$4.99" }],
+});
 assert.ok(weekly);
 assert.equal(weekly!.planKind, "weekly");
-assert.match(weekly!.statusLine, /Weekly/);
-assert.ok(!/\bFree\b/i.test(weekly!.statusLine));
+assert.match(weekly!.planLabel, /Weekly/);
+assert.equal(weekly!.renewalKind, "renews");
+assert.equal(weekly!.priceLabel, "$4.99");
 
 const monthlyTrial = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.monthly_trial);
 assert.equal(monthlyTrial!.planKind, "monthly");
-assert.ok(monthlyTrial!.detailLines.some((l) => /Trial ends/.test(l)));
+assert.equal(monthlyTrial!.renewalKind, "renews");
+assert.match(monthlyTrial!.renewalLine, /Renews/);
 
-const monthlyConv = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.monthly_converted);
-assert.ok(monthlyConv!.detailLines.some((l) => /\$12\.99\/month/.test(l)));
+const monthlyConv = buildSettingsSubscriptionPresentation(
+  CUSTOMER_INFO_FIXTURES.monthly_converted,
+  "YouTrader Pro",
+  { storeProducts: [{ identifier: "youtrader_pro_monthly", priceString: "$12.99" }] },
+);
+assert.equal(monthlyConv!.priceLabel, "$12.99");
 
 const annualTrial = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.annual_trial);
 assert.equal(annualTrial!.planKind, "yearly");
-assert.ok(annualTrial!.detailLines.some((l) => /Trial ends/.test(l)));
+assert.equal(annualTrial!.renewalKind, "renews");
 
-const annualConv = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.annual_converted);
-assert.ok(annualConv!.detailLines.some((l) => /\$99\.99\/year/.test(l)));
+const annualConv = buildSettingsSubscriptionPresentation(
+  CUSTOMER_INFO_FIXTURES.annual_converted,
+  "YouTrader Pro",
+  { storeProducts: [{ identifier: "youtrader_pro_yearly__", priceString: "$99.99" }] },
+);
+assert.equal(annualConv!.priceLabel, "$99.99");
 
 const canceled = buildSettingsSubscriptionPresentation(
   CUSTOMER_INFO_FIXTURES.trial_canceled_access_active,
 );
-assert.match(canceled!.planLabel, /Yearly Trial/);
-assert.ok(canceled!.detailLines.some((l) => /Canceled/.test(l)));
+assert.equal(canceled!.planKind, "yearly");
+assert.equal(canceled!.renewalKind, "expires");
+assert.match(canceled!.renewalLine, /Expires/);
 
 const expired = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.expired);
 assert.equal(expired, null);
 
 const billing = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.billing_issue);
 assert.ok(billing);
-assert.ok(billing!.detailLines.some((l) => /Canceled|Access until/.test(l)));
+assert.equal(billing!.renewalKind, "expires");
 
 const unknown = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES.unknown_product);
 assert.equal(unknown!.planKind, "unknown");

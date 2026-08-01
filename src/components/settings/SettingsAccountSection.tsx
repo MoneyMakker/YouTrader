@@ -12,45 +12,46 @@ import {
 } from "react-native";
 import type { Session } from "@supabase/supabase-js";
 import {
-  Check,
+  ChevronLeft,
+  ChevronRight,
   CircleUserRound,
-  Cloud,
   Lock,
   LogOut,
   Mail,
-  RefreshCw,
   Trash2,
 } from "lucide-react-native";
 import type { AuthProvider } from "../../auth/types";
-import { userHasPasswordSet } from "../../auth/emailPasswordAuth";
 import {
   openAppleSubscriptionManagement,
   requestAccountDeletion,
 } from "../../auth/accountDeletion";
 import {
+  resolveSessionAccountLabel,
+  resolveSessionAuthProvider,
+  sessionSupportsChangeEmail,
+  sessionSupportsPasswordControls,
+} from "../../auth/resolveSessionAuthProvider";
+import {
   enableNativeAppleSignIn,
   enableNativeGoogleSignIn,
 } from "../../config/appConfig";
 import { GlassCard } from "../ui/GlassCard";
-import { AnimatedPressable, PremiumLoadingBar, ShimmerPlaceholder } from "../ui/premium";
+import { AnimatedPressable } from "../ui/premium";
 import { t } from "../../i18n";
 import { C } from "../../theme/colors";
-
-type CloudSyncStatus = "off" | "syncing" | "synced" | "error";
 
 type Props = {
   session: Session | null;
   authBusy: boolean;
   authConfigured: boolean;
-  cloudSyncEnabled: boolean;
-  cloudSyncStatus: CloudSyncStatus;
-  cloudSyncMessage: string;
-  lastCloudSyncAt: string | null;
+  /** Compact row for main Settings list. */
+  mode?: "row" | "details";
+  onOpenDetails?: () => void;
+  onBack?: () => void;
   onSignIn: (provider: AuthProvider) => void;
   onSignOut: () => void;
   onChangePassword: () => void;
   onChangeEmail: () => void;
-  onSyncNow: () => void;
 };
 
 const LIME = "#A3FF12";
@@ -63,24 +64,10 @@ function isApplePrivateRelayEmail(email: string | undefined): boolean {
   return email.toLowerCase().endsWith("@privaterelay.appleid.com");
 }
 
-function emailFontSize(email: string, compact: boolean): number {
-  const len = email.length;
-  if (compact) {
-    if (len <= 22) return 14;
-    if (len <= 32) return 13;
-    return 12;
-  }
-  if (len <= 26) return 16;
-  if (len <= 36) return 14;
-  if (len <= 46) return 13;
-  return 12;
-}
-
-function formatLastSync(iso: string): string {
-  const d = new Date(iso);
-  const date = d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
-  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${date} • ${time}`;
+function providerLabel(provider: AuthProvider | null): string {
+  if (provider === "apple") return t("accountProviderApple");
+  if (provider === "google") return t("accountProviderGoogle");
+  return t("accountProviderEmail");
 }
 
 function PremiumButton({
@@ -90,6 +77,7 @@ function PremiumButton({
   variant,
   disabled,
   style,
+  testID,
 }: {
   label: string;
   onPress: () => void;
@@ -97,6 +85,7 @@ function PremiumButton({
   variant: "primary" | "secondary" | "danger";
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
   const contentStyle = [
     styles.premiumBtn,
@@ -113,10 +102,11 @@ function PremiumButton({
       disabled={disabled}
       haptic
       contentStyle={contentStyle}
+      testID={testID}
     >
       <Icon
         size={18}
-        color={buttonIconColor(variant, disabled, false)}
+        color={buttonIconColor(variant, disabled)}
         strokeWidth={ICON_STROKE}
       />
       <Text
@@ -139,17 +129,24 @@ function PremiumButton({
 function buttonIconColor(
   variant: "primary" | "secondary" | "danger",
   disabled?: boolean,
-  pressed?: boolean,
 ): string {
   if (disabled) return C.muted;
   if (variant === "primary") return LIME;
-  if (variant === "danger") return pressed ? C.red : C.sub;
+  if (variant === "danger") return C.sub;
   return C.purple;
 }
 
-function EmailCapsule({ email, privateRelay, compact }: { email: string; privateRelay: boolean; compact: boolean }) {
-  const fontSize = emailFontSize(email, compact);
-
+function AccountIdentityBlock({
+  label,
+  provider,
+  privateRelay,
+  compact,
+}: {
+  label: string;
+  provider: AuthProvider | null;
+  privateRelay: boolean;
+  compact: boolean;
+}) {
   return (
     <View style={styles.emailCapsule}>
       <View style={styles.emailIconWrap}>
@@ -157,14 +154,16 @@ function EmailCapsule({ email, privateRelay, compact }: { email: string; private
       </View>
       <View style={styles.emailCopy}>
         <Text
-          style={[styles.emailValue, { fontSize, lineHeight: fontSize + 6 }]}
-          numberOfLines={2}
+          style={[styles.emailValue, compact && styles.emailValueCompact]}
+          numberOfLines={1}
           ellipsizeMode="middle"
-          adjustsFontSizeToFit={Platform.OS === "ios"}
-          minimumFontScale={0.78}
           maxFontSizeMultiplier={1.2}
+          accessibilityLabel={label}
         >
-          {email}
+          {label}
+        </Text>
+        <Text style={styles.providerValue} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+          {providerLabel(provider)}
         </Text>
         {privateRelay ? (
           <View style={styles.relayRow}>
@@ -179,130 +178,25 @@ function EmailCapsule({ email, privateRelay, compact }: { email: string; private
   );
 }
 
-function PasswordStatusRow({ hasPassword }: { hasPassword: boolean }) {
-  return (
-    <View style={styles.passwordCard}>
-      <View style={styles.passwordIconWrap}>
-        <Lock size={ICON_SIZE - 2} color={hasPassword ? LIME : C.sub} strokeWidth={ICON_STROKE} />
-      </View>
-      <View style={styles.passwordCopy}>
-        <Text style={styles.fieldLabel} maxFontSizeMultiplier={1.2}>
-          {t("accountPasswordLabel")}
-        </Text>
-        <Text style={styles.fieldSubLabel} maxFontSizeMultiplier={1.15}>
-          {t("accountStatusLabel")}
-        </Text>
-        <Text
-          style={[styles.fieldValue, hasPassword ? styles.fieldValueActive : styles.fieldValueMuted]}
-          maxFontSizeMultiplier={1.2}
-        >
-          {hasPassword ? t("authPasswordMasked") : t("authPasswordNotSet")}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function CloudSyncStatusCard({
-  status,
-  message,
-  lastSyncAt,
-}: {
-  status: CloudSyncStatus;
-  message: string;
-  lastSyncAt: string | null;
-}) {
-  const isSyncing = status === "syncing";
-  const isSynced = status === "synced";
-  const isError = status === "error";
-
-  const statusLine = isSyncing
-    ? message || t("cloudSyncing")
-    : isSynced
-      ? t("accountSyncedAcross")
-      : isError
-        ? message || t("cloudSyncError")
-        : t("cloudSyncActive");
-
-  const cardStyle = isSyncing
-    ? styles.syncCardSyncing
-    : isSynced
-      ? styles.syncCardSynced
-      : isError
-        ? styles.syncCardError
-        : styles.syncCardActive;
-
-  const iconColor = isSyncing ? C.yellow : isSynced ? LIME : isError ? C.red : C.purple;
-
-  return (
-    <View style={[styles.syncCard, cardStyle]}>
-      <View style={styles.syncCardTop}>
-        <View style={[styles.syncIconWrap, { borderColor: `${iconColor}44`, backgroundColor: `${iconColor}14` }]}>
-          {isSyncing ? (
-            <View style={styles.syncMiniSkeleton}>
-              <ShimmerPlaceholder width={22} height={7} radius={999} tone="yellow" />
-              <ShimmerPlaceholder width={16} height={7} radius={999} tone="purple" />
-            </View>
-          ) : (
-            <Cloud size={ICON_SIZE + 2} color={iconColor} strokeWidth={ICON_STROKE} />
-          )}
-        </View>
-        <View style={styles.syncCopy}>
-          <Text style={styles.syncSectionTitle} maxFontSizeMultiplier={1.2}>
-            {t("accountCloudSync")}
-          </Text>
-          <View style={styles.syncStatusRow}>
-            {isSynced ? <Check size={14} color={LIME} strokeWidth={ICON_STROKE} /> : null}
-            <Text
-              style={[
-                styles.syncStatusText,
-                isSynced && styles.syncStatusSuccess,
-                isError && styles.syncStatusError,
-              ]}
-              numberOfLines={2}
-              maxFontSizeMultiplier={1.2}
-            >
-              {statusLine}
-            </Text>
-          </View>
-        </View>
-      </View>
-      {lastSyncAt ? (
-        <View style={styles.lastSyncBlock}>
-          <Text style={styles.fieldSubLabel} maxFontSizeMultiplier={1.15}>
-            {t("accountLastSyncLabel")}
-          </Text>
-          <Text style={styles.lastSyncValue} numberOfLines={2} maxFontSizeMultiplier={1.2}>
-            {formatLastSync(lastSyncAt)}
-          </Text>
-        </View>
-      ) : null}
-      {isSyncing ? <PremiumLoadingBar indeterminate height={3} tone="yellow" style={styles.syncLoadingBar} /> : null}
-    </View>
-  );
-}
-
 export function SettingsAccountSection({
   session,
   authBusy,
   authConfigured,
-  cloudSyncEnabled,
-  cloudSyncStatus,
-  cloudSyncMessage,
-  lastCloudSyncAt,
+  mode = "details",
+  onOpenDetails,
+  onBack,
   onSignIn,
   onSignOut,
   onChangePassword,
   onChangeEmail,
-  onSyncNow,
 }: Props) {
   const { width } = useWindowDimensions();
   const compact = width < 375;
-  const email = session?.user?.email || session?.user?.id || "";
+  const provider = resolveSessionAuthProvider(session);
+  const accountLabel = resolveSessionAccountLabel(session);
   const privateRelay = isApplePrivateRelayEmail(session?.user?.email);
-  const hasPassword = userHasPasswordSet(session);
-  const isSyncing = cloudSyncStatus === "syncing";
-
+  const showChangeEmail = sessionSupportsChangeEmail(session);
+  const showChangePassword = sessionSupportsPasswordControls(session);
   const cardPadding = useMemo(() => (compact ? 16 : 20), [compact]);
 
   const confirmDeleteAccount = () => {
@@ -330,17 +224,120 @@ export function SettingsAccountSection({
     ]);
   };
 
+  if (mode === "row") {
+    if (!session?.user) {
+      return (
+        <GlassCard style={[styles.card, { borderRadius: CARD_RADIUS, padding: cardPadding }]} intensity={46}>
+          <Text style={styles.sectionTitle} maxFontSizeMultiplier={1.25}>
+            {t("account")}
+          </Text>
+          {authConfigured ? (
+            <View style={styles.signedOutStack}>
+              <Text style={styles.signedOutNote} maxFontSizeMultiplier={1.25}>
+                {t("authSecureNote")}
+              </Text>
+              <View style={styles.authButtonStack}>
+                {enableNativeAppleSignIn ? (
+                  <Pressable
+                    disabled={authBusy}
+                    onPress={() => onSignIn("apple")}
+                    style={({ pressed }) => [
+                      styles.authProviderBtn,
+                      styles.authAppleBtn,
+                      authBusy && styles.disabledBtn,
+                      pressed && styles.premiumBtnSecondaryPressed,
+                    ]}
+                  >
+                    <Text style={[styles.authProviderIcon, styles.authAppleIcon]}>{"\uf8ff"}</Text>
+                    <Text style={[styles.authProviderText, styles.authAppleText]} maxFontSizeMultiplier={1.2}>
+                      {t("authApple")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {enableNativeGoogleSignIn ? (
+                  <Pressable
+                    disabled={authBusy}
+                    onPress={() => onSignIn("google")}
+                    style={({ pressed }) => [
+                      styles.authProviderBtn,
+                      authBusy && styles.disabledBtn,
+                      pressed && styles.premiumBtnPrimaryPressed,
+                    ]}
+                  >
+                    <Text style={styles.authProviderIcon}>G</Text>
+                    <Text style={styles.authProviderText} maxFontSizeMultiplier={1.2}>
+                      {t("authGoogle")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.signedOutNote} maxFontSizeMultiplier={1.25}>
+              {t("cloudSignInNotConfigured")}
+            </Text>
+          )}
+        </GlassCard>
+      );
+    }
+
+    return (
+      <Pressable
+        onPress={onOpenDetails}
+        accessibilityRole="button"
+        accessibilityLabel={`${t("account")}, ${accountLabel}, ${providerLabel(provider)}`}
+        testID="settings-account-row"
+        style={({ pressed }) => [styles.rowPressable, pressed && styles.rowPressed]}
+      >
+        <GlassCard style={[styles.card, styles.rowCard, { borderRadius: CARD_RADIUS, padding: cardPadding }]} intensity={46}>
+          <View style={styles.rowInner}>
+            <View style={styles.rowCopy}>
+              <Text style={styles.rowSectionLabel} maxFontSizeMultiplier={1.2}>
+                {t("account")}
+              </Text>
+              <Text
+                style={styles.rowEmail}
+                numberOfLines={1}
+                ellipsizeMode="middle"
+                maxFontSizeMultiplier={1.2}
+                accessibilityLabel={accountLabel}
+              >
+                {accountLabel}
+              </Text>
+              <Text style={styles.rowProvider} numberOfLines={1} maxFontSizeMultiplier={1.15}>
+                {providerLabel(provider)}
+              </Text>
+            </View>
+            <ChevronRight size={22} color={C.sub} strokeWidth={ICON_STROKE} />
+          </View>
+        </GlassCard>
+      </Pressable>
+    );
+  }
+
   return (
-    <View style={styles.glowShell}>
-      <View pointerEvents="none" style={styles.glowOrbLime} />
-      <View pointerEvents="none" style={styles.glowOrbPurple} />
+    <View style={styles.glowShell} testID="settings-account-details">
       <GlassCard
         style={[styles.card, { borderRadius: CARD_RADIUS, padding: cardPadding }]}
         intensity={46}
       >
-        <Text style={styles.sectionTitle} maxFontSizeMultiplier={1.25}>
-          {t("account").toUpperCase()}
-        </Text>
+        <View style={styles.detailsHeader}>
+          {onBack ? (
+            <Pressable
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel={t("more.back")}
+              hitSlop={12}
+              style={styles.backBtn}
+              testID="settings-account-back"
+            >
+              <ChevronLeft size={22} color={C.text} strokeWidth={ICON_STROKE} />
+            </Pressable>
+          ) : null}
+          <Text style={styles.sectionTitle} maxFontSizeMultiplier={1.25}>
+            {t("account")}
+          </Text>
+        </View>
 
         {session?.user ? (
           <View style={styles.signedInStack}>
@@ -348,40 +345,35 @@ export function SettingsAccountSection({
               <Text style={styles.groupLabel} maxFontSizeMultiplier={1.2}>
                 {t("accountCurrentAccount")}
               </Text>
-              <EmailCapsule email={email} privateRelay={privateRelay} compact={compact} />
-            </View>
-
-            <PasswordStatusRow hasPassword={hasPassword} />
-
-            <View style={styles.buttonGroup}>
-              <PremiumButton
-                label={t("authChangeEmail")}
-                icon={Mail}
-                onPress={onChangeEmail}
-                variant="secondary"
-              />
-              <PremiumButton
-                label={t("authChangePassword")}
-                icon={Lock}
-                onPress={onChangePassword}
-                variant="secondary"
+              <AccountIdentityBlock
+                label={accountLabel}
+                provider={provider}
+                privateRelay={privateRelay}
+                compact={compact}
               />
             </View>
 
-            <CloudSyncStatusCard
-              status={cloudSyncStatus}
-              message={cloudSyncMessage}
-              lastSyncAt={lastCloudSyncAt}
-            />
-
-            {cloudSyncEnabled ? (
-              <PremiumButton
-                label={t("syncNow")}
-                icon={RefreshCw}
-                onPress={onSyncNow}
-                variant="primary"
-                disabled={isSyncing}
-              />
+            {(showChangeEmail || showChangePassword) ? (
+              <View style={styles.buttonGroup}>
+                {showChangeEmail ? (
+                  <PremiumButton
+                    label={t("authChangeEmail")}
+                    icon={Mail}
+                    onPress={onChangeEmail}
+                    variant="secondary"
+                    testID="settings-change-email"
+                  />
+                ) : null}
+                {showChangePassword ? (
+                  <PremiumButton
+                    label={t("authChangePassword")}
+                    icon={Lock}
+                    onPress={onChangePassword}
+                    variant="secondary"
+                    testID="settings-change-password"
+                  />
+                ) : null}
+              </View>
             ) : null}
 
             <PremiumButton
@@ -389,54 +381,15 @@ export function SettingsAccountSection({
               icon={LogOut}
               onPress={onSignOut}
               variant="danger"
+              testID="settings-sign-out"
             />
             <PremiumButton
               label={t("deleteAccount")}
               icon={Trash2}
               onPress={confirmDeleteAccount}
               variant="danger"
+              testID="settings-delete-account"
             />
-          </View>
-        ) : authConfigured ? (
-          <View style={styles.signedOutStack}>
-            <Text style={styles.signedOutNote} maxFontSizeMultiplier={1.25}>
-              {t("authSecureNote")}
-            </Text>
-            <View style={styles.authButtonStack}>
-              {enableNativeAppleSignIn ? (
-                <Pressable
-                  disabled={authBusy}
-                  onPress={() => onSignIn("apple")}
-                  style={({ pressed }) => [
-                    styles.authProviderBtn,
-                    styles.authAppleBtn,
-                    authBusy && styles.disabledBtn,
-                    pressed && styles.premiumBtnSecondaryPressed,
-                  ]}
-                >
-                  <Text style={[styles.authProviderIcon, styles.authAppleIcon]}>{"\uf8ff"}</Text>
-                  <Text style={[styles.authProviderText, styles.authAppleText]} maxFontSizeMultiplier={1.2}>
-                    {t("authApple")}
-                  </Text>
-                </Pressable>
-              ) : null}
-              {enableNativeGoogleSignIn ? (
-                <Pressable
-                  disabled={authBusy}
-                  onPress={() => onSignIn("google")}
-                  style={({ pressed }) => [
-                    styles.authProviderBtn,
-                    authBusy && styles.disabledBtn,
-                    pressed && styles.premiumBtnPrimaryPressed,
-                  ]}
-                >
-                  <Text style={styles.authProviderIcon}>G</Text>
-                  <Text style={styles.authProviderText} maxFontSizeMultiplier={1.2}>
-                    {t("authGoogle")}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
           </View>
         ) : (
           <Text style={styles.signedOutNote} maxFontSizeMultiplier={1.25}>
@@ -454,42 +407,6 @@ const styles = StyleSheet.create({
     borderRadius: CARD_RADIUS + 4,
     marginVertical: 2,
   },
-  glowOrbLime: {
-    position: "absolute",
-    left: -8,
-    top: 18,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "rgba(163,255,18,0.07)",
-    ...Platform.select({
-      ios: {
-        shadowColor: LIME,
-        shadowOpacity: 0.35,
-        shadowRadius: 28,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      default: {},
-    }),
-  },
-  glowOrbPurple: {
-    position: "absolute",
-    right: -10,
-    bottom: 24,
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: "rgba(176,38,255,0.08)",
-    ...Platform.select({
-      ios: {
-        shadowColor: C.purple,
-        shadowOpacity: 0.28,
-        shadowRadius: 26,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      default: {},
-    }),
-  },
   card: {
     borderColor: "rgba(176,38,255,0.38)",
     backgroundColor: "rgba(8,10,14,0.72)",
@@ -503,14 +420,55 @@ const styles = StyleSheet.create({
       android: { elevation: 8 },
     }),
   },
+  rowPressable: { borderRadius: CARD_RADIUS + 4 },
+  rowPressed: { opacity: 0.92 },
+  rowCard: { marginVertical: 0 },
+  rowInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
+  },
+  rowCopy: { flex: 1, minWidth: 0, gap: 4 },
+  rowSectionLabel: {
+    color: C.sub,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  rowEmail: {
+    color: C.text,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "800",
+  },
+  rowProvider: {
+    color: C.muted,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "700",
+  },
+  detailsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 32,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -8,
+  },
   sectionTitle: {
     color: C.text,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: "900",
-    letterSpacing: 1.2,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
-  signedInStack: { gap: 18, marginTop: 16 },
+  signedInStack: { gap: 16, marginTop: 16, paddingBottom: 8 },
   signedOutStack: { gap: 6, marginTop: 14 },
   accountGroup: { gap: 10 },
   groupLabel: {
@@ -541,16 +499,28 @@ const styles = StyleSheet.create({
     borderColor: "rgba(176,38,255,0.35)",
     backgroundColor: "rgba(176,38,255,0.10)",
   },
-  emailCopy: { flex: 1, minWidth: 0 },
+  emailCopy: { flex: 1, minWidth: 0, gap: 4 },
   emailValue: {
     color: C.text,
+    fontSize: 16,
+    lineHeight: 21,
     fontWeight: "800",
+  },
+  emailValueCompact: {
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  providerValue: {
+    color: C.sub,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "700",
   },
   relayRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    marginTop: 8,
+    marginTop: 4,
     alignSelf: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -571,60 +541,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.3,
   },
-  passwordCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    backgroundColor: "rgba(255,255,255,0.025)",
-  },
-  passwordIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  passwordCopy: { flex: 1, minWidth: 0, gap: 2 },
-  fieldLabel: {
-    color: C.sub,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "700",
-  },
-  fieldSubLabel: {
-    color: C.muted,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
-  },
-  fieldValue: {
-    color: C.text,
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "800",
-    marginTop: 2,
-  },
-  fieldValueActive: { color: LIME },
-  fieldValueMuted: { color: C.muted },
-  syncMiniSkeleton: {
-    width: 24,
-    alignItems: "center",
-    gap: 3,
-  },
-  syncLoadingBar: {
-    marginTop: 12,
-    opacity: 0.72,
-  },
   buttonGroup: { gap: 10 },
   premiumBtn: {
     minHeight: 54,
@@ -634,15 +550,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.28,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
-      },
-      android: { elevation: 4 },
-    }),
   },
   premiumBtnPrimary: {
     borderWidth: 1,
@@ -667,10 +574,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.10)",
     backgroundColor: "rgba(0,0,0,0.45)",
   },
-  premiumBtnDangerPressed: {
-    borderColor: "rgba(255,59,95,0.35)",
-    backgroundColor: "rgba(255,59,95,0.06)",
-  },
   premiumBtnDisabled: { opacity: 0.5 },
   premiumBtnLabel: {
     color: C.text,
@@ -681,72 +584,6 @@ const styles = StyleSheet.create({
   },
   premiumBtnLabelPrimary: { color: LIME },
   premiumBtnLabelDanger: { color: C.sub },
-  premiumBtnLabelDangerPressed: { color: C.red },
-  syncCard: {
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 16,
-    gap: 14,
-  },
-  syncCardActive: {
-    borderColor: "rgba(176,38,255,0.40)",
-    backgroundColor: "rgba(176,38,255,0.06)",
-  },
-  syncCardSynced: {
-    borderColor: "rgba(163,255,18,0.42)",
-    backgroundColor: "rgba(163,255,18,0.06)",
-  },
-  syncCardSyncing: {
-    borderColor: "rgba(255,209,102,0.40)",
-    backgroundColor: "rgba(255,209,102,0.05)",
-  },
-  syncCardError: {
-    borderColor: "rgba(255,59,95,0.40)",
-    backgroundColor: "rgba(255,59,95,0.05)",
-  },
-  syncCardTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  syncIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  syncCopy: { flex: 1, minWidth: 0, gap: 6 },
-  syncSectionTitle: {
-    color: C.text,
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "900",
-  },
-  syncStatusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  syncStatusText: {
-    color: C.text,
-    fontSize: 14,
-    lineHeight: 19,
-    fontWeight: "700",
-    flex: 1,
-    minWidth: 0,
-  },
-  syncStatusSuccess: { color: LIME },
-  syncStatusError: { color: C.red },
-  lastSyncBlock: { gap: 4, paddingTop: 2 },
-  lastSyncValue: {
-    color: C.text,
-    fontSize: 14,
-    lineHeight: 19,
-    fontWeight: "700",
-  },
   signedOutNote: {
     color: C.sub,
     fontSize: 13,

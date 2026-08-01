@@ -25,6 +25,15 @@ export async function requestAccountDeletion(): Promise<DeleteAccountResult> {
   return { ok: true };
 }
 
+const APPLE_SUBSCRIPTIONS_FALLBACK = "https://apps.apple.com/account/subscriptions";
+
+/** Prefer RevenueCat CustomerInfo.managementURL; fall back to Apple subscriptions page. */
+export function openSubscriptionManagement(managementURL?: string | null): void {
+  const url = (managementURL || "").trim() || APPLE_SUBSCRIPTIONS_FALLBACK;
+  void Linking.openURL(url);
+}
+
+/** @deprecated Prefer openSubscriptionManagement(managementURL). */
 export function openAppleSubscriptionManagement(): void {
-  void Linking.openURL("https://apps.apple.com/account/subscriptions");
+  openSubscriptionManagement(null);
 }

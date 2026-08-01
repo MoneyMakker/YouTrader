@@ -48,7 +48,7 @@ function MasterToggleRow({
       <View style={styles.copy}>
         <View style={styles.titleRow}>
           <Text style={[styles.title, locked && styles.titleLocked]}>{t(copy.title)}</Text>
-          {copy.proOnly ? <ProBadge /> : null}
+          {copy.proOnly && !isPro ? <ProBadge /> : null}
         </View>
         <Text style={styles.sub}>{t(copy.body)}</Text>
       </View>

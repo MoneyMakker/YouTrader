@@ -18,6 +18,7 @@ import {
   userFacingAuthError,
 } from "../auth/authErrors";
 import { processAuthDeepLink } from "../auth/authDeepLinkCoordinator";
+import { openSubscriptionManagement } from "../auth/accountDeletion";
 import { ChangeEmailModal } from "../auth/ChangeEmailModal";
 import { ChangePasswordModal } from "../auth/ChangePasswordModal";
 import {
@@ -9741,20 +9742,16 @@ function SettingsScreen({
   revenueCatConfigured,
   paywallError,
   showRestorePurchases,
-  cloudSyncEnabled,
-  cloudSyncStatus,
-  cloudSyncMessage,
-  lastCloudSyncAt,
   onPurchase,
   onRestore,
-  onSyncNow,
-  onImportTradesCsv,
   onSignIn,
   onSignOut,
   onChangePassword,
   onChangeEmail,
   calendarEvents,
   onUpgrade,
+  onViewPlans,
+  onRefreshCustomerInfo,
   refreshDailyPropBuffer,
   trades,
 }: {
@@ -9771,25 +9768,23 @@ function SettingsScreen({
   revenueCatConfigured: boolean;
   paywallError: string;
   showRestorePurchases: boolean;
-  cloudSyncEnabled: boolean;
-  cloudSyncStatus: "off" | "syncing" | "synced" | "error";
-  cloudSyncMessage: string;
-  lastCloudSyncAt: string | null;
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
-  onSyncNow: () => void;
-  onImportTradesCsv: () => void;
   onSignIn: (provider: AuthProvider) => void;
   onSignOut: () => void;
   onChangePassword: (password: string) => Promise<void>;
   onChangeEmail: (email: string) => Promise<void>;
   calendarEvents: EconEvent[];
   onUpgrade: () => void;
+  onViewPlans: () => void;
+  onRefreshCustomerInfo: () => void;
   refreshDailyPropBuffer: () => Promise<void>;
   trades: Trade[];
 }) {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [changeEmailOpen, setChangeEmailOpen] = useState(false);
+  const [accountPane, setAccountPane] = useState<"root" | "account">("root");
+  const insets = useSafeAreaInsets();
   const choose = (l: Lang) => {
     void changeAppLanguage(l).then(() => setLang(l));
   };
@@ -9833,22 +9828,75 @@ You retain full ownership of your data. In compliance with data privacy regulati
 4. Children's Privacy (COPPA)
 YouTrader does not knowingly collect data from or market to individuals under the age of 18. If you are under 18, you are not authorized to use this application.`;
 
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, styles.settingsStack, { flexGrow: 1, justifyContent: "space-between", paddingBottom: 36 }]}>
-      <View style={styles.settingsStack}>
+  const subscriptionPresentation = isPremium
+    ? buildSettingsSubscriptionPresentation(customerInfo, REVENUECAT_ENTITLEMENT_ID, {
+        storeProducts,
+      })
+    : null;
+
+  useEffect(() => {
+    if (!subscriptionPresentation?.expirationLooksStale) return;
+    onRefreshCustomerInfo();
+  }, [subscriptionPresentation?.expirationIso, subscriptionPresentation?.expirationLooksStale]);
+  // onRefreshCustomerInfo is intentionally omitted — parent passes a fresh inline closure.
+
+  if (accountPane === "account") {
+    return (
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          styles.settingsStack,
+          { flexGrow: 1, paddingBottom: Math.max(48, insets.bottom + 88) },
+        ]}
+        testID="settings-account-pane"
+      >
         <SettingsAccountSection
+          mode="details"
           session={session}
           authBusy={authBusy}
           authConfigured={authConfigured}
-          cloudSyncEnabled={cloudSyncEnabled}
-          cloudSyncStatus={cloudSyncStatus}
-          cloudSyncMessage={cloudSyncMessage}
-          lastCloudSyncAt={lastCloudSyncAt}
+          onBack={() => setAccountPane("root")}
           onSignIn={onSignIn}
           onSignOut={onSignOut}
           onChangeEmail={() => setChangeEmailOpen(true)}
           onChangePassword={() => setChangePasswordOpen(true)}
-          onSyncNow={onSyncNow}
+        />
+        <ChangePasswordModal
+          visible={changePasswordOpen}
+          onClose={() => setChangePasswordOpen(false)}
+          onSubmit={onChangePassword}
+        />
+        <ChangeEmailModal
+          visible={changeEmailOpen}
+          onClose={() => setChangeEmailOpen(false)}
+          onSubmit={onChangeEmail}
+        />
+      </ScrollView>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        styles.settingsStack,
+        { flexGrow: 1, justifyContent: "space-between", paddingBottom: Math.max(48, insets.bottom + 88) },
+      ]}
+      testID="settings-root"
+    >
+      <View style={styles.settingsStack}>
+        <SettingsAccountSection
+          mode="row"
+          session={session}
+          authBusy={authBusy}
+          authConfigured={authConfigured}
+          onOpenDetails={() => setAccountPane("account")}
+          onSignIn={onSignIn}
+          onSignOut={onSignOut}
+          onChangeEmail={() => setChangeEmailOpen(true)}
+          onChangePassword={() => setChangePasswordOpen(true)}
         />
 
         <ChangePasswordModal
@@ -9862,55 +9910,90 @@ YouTrader does not knowingly collect data from or market to individuals under th
           onSubmit={onChangeEmail}
         />
 
-        <GlassCard style={[styles.proSubscriptionCard, styles.settingsQuietCard]} intensity={36}>
-          <Text style={[styles.settingsSectionTitle, styles.proSubscriptionTitle]} maxFontSizeMultiplier={1.25}>Subscription</Text>
-          <View style={[styles.proStatusBox, isPremium ? styles.proStatusActive : styles.proStatusLocked]} testID="settings-subscription-card">
+        <GlassCard style={[styles.proSubscriptionCard, styles.settingsQuietCard]} intensity={36} testID="settings-subscription-section">
+          <Text style={[styles.settingsSectionTitle, styles.proSubscriptionTitle]} maxFontSizeMultiplier={1.25}>
+            {t("more.subscription")}
+          </Text>
+          <View
+            style={[styles.proStatusBox, isPremium ? styles.proStatusActive : styles.proStatusLocked]}
+            testID="settings-subscription-card"
+          >
             <View style={[styles.proStatusIcon, isPremium ? styles.proStatusIconActive : styles.proStatusIconLocked]}>
               {isPremium ? <Unlock size={22} color={C.green} strokeWidth={2.4} /> : <Lock size={22} color={C.purple} strokeWidth={2.4} />}
             </View>
             <View style={styles.proStatusCopy}>
-              {(() => {
-                const presentation = isPremium
-                  ? buildSettingsSubscriptionPresentation(customerInfo, REVENUECAT_ENTITLEMENT_ID)
-                  : null;
-                if (presentation) {
-                  return (
-                    <>
-                      <Text style={[styles.proStatusTitle, styles.proStatusTitleActive]} maxFontSizeMultiplier={1.25}>
-                        {presentation.statusLine}
-                      </Text>
-                      {presentation.detailLines.map((line) => (
-                        <Text key={line} style={styles.proStatusText} maxFontSizeMultiplier={1.25}>
-                          {line}
-                        </Text>
-                      ))}
-                    </>
-                  );
-                }
-                return (
-                  <>
-                    <Text style={[styles.proStatusTitle, isPremium ? styles.proStatusTitleActive : styles.proStatusTitleLocked]} maxFontSizeMultiplier={1.25}>
-                      {isPremium ? t("proActiveTitle") : t("subscription.noActiveSubscription")}
-                    </Text>
+              {subscriptionPresentation ? (
+                <>
+                  <Text style={[styles.proStatusTitle, styles.proStatusTitleActive]} maxFontSizeMultiplier={1.25}>
+                    {`${t("subscription.currentPlan")}\n${subscriptionPresentation.planLabel}`}
+                  </Text>
+                  {subscriptionPresentation.priceLabel ? (
                     <Text style={styles.proStatusText} maxFontSizeMultiplier={1.25}>
-                      {isPremium ? t("proActiveBody") : t("subscription.unavailableBody")}
+                      {subscriptionPresentation.priceLabel}
                     </Text>
-                  </>
-                );
-              })()}
+                  ) : null}
+                  {subscriptionPresentation.renewalLine ? (
+                    <Text
+                      style={styles.proStatusText}
+                      maxFontSizeMultiplier={1.25}
+                      testID="settings-subscription-renewal"
+                    >
+                      {subscriptionPresentation.renewalLine}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Text
+                    style={[styles.proStatusTitle, styles.proStatusTitleLocked]}
+                    maxFontSizeMultiplier={1.25}
+                  >
+                    {t("subscription.proActive")}
+                  </Text>
+                  <Text style={styles.proStatusText} maxFontSizeMultiplier={1.25}>
+                    {t("subscription.noActiveSubscription")}
+                  </Text>
+                </>
+              )}
             </View>
           </View>
-          {(showRestorePurchases || !!paywallError) ? (
+          {isPremium ? (
             <Pressable
-              disabled={purchaseBusy}
-              onPress={onRestore}
-              style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
+              onPress={() =>
+                openSubscriptionManagement(subscriptionPresentation?.managementURL)
+              }
+              style={[styles.secondaryBig, styles.restorePurchaseBtn]}
               accessibilityRole="button"
-              accessibilityLabel={purchaseBusy ? t("checking") : t("restorePurchases")}
+              accessibilityLabel={t("manageSubscription")}
+              testID="settings-manage-subscription"
             >
-              <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
+              <Text style={styles.secondaryText}>{t("manageSubscription")}</Text>
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={{ gap: 10, marginTop: 4 }}>
+              <Pressable
+                onPress={onViewPlans}
+                style={styles.secondaryBig}
+                accessibilityRole="button"
+                accessibilityLabel={t("viewPlans")}
+                testID="settings-view-plans"
+              >
+                <Text style={styles.secondaryText}>{t("viewPlans")}</Text>
+              </Pressable>
+              {(showRestorePurchases || !!paywallError) ? (
+                <Pressable
+                  disabled={purchaseBusy}
+                  onPress={onRestore}
+                  style={[styles.secondaryBig, styles.restorePurchaseBtn, purchaseBusy && styles.disabledBtn]}
+                  accessibilityRole="button"
+                  accessibilityLabel={purchaseBusy ? t("checking") : t("restorePurchases")}
+                  testID="settings-restore-purchases"
+                >
+                  <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )}
           {!!paywallError && <StatusInlineMessage kind="error" message={paywallError} style={{ marginTop: 8 }} />}
         </GlassCard>
 
@@ -9927,27 +10010,6 @@ YouTrader does not knowingly collect data from or market to individuals under th
             onUpgrade={onUpgrade}
             refreshDailyPropBuffer={refreshDailyPropBuffer}
           />
-        </Card>
-
-        <Card style={styles.settingsQuietCard}>
-          <Text style={styles.settingsSectionTitle} maxFontSizeMultiplier={1.25}>{t("importTrades")}</Text>
-          <Text style={styles.settingsSectionSub} maxFontSizeMultiplier={1.25}>
-            {t("importTradesBody")}
-          </Text>
-          <Pressable
-            onPress={() =>
-              isPremium
-                ? onImportTradesCsv()
-                : Alert.alert(t("premiumAccess"), t("csvImportPro"))
-            }
-            style={[styles.secondaryBig, { marginTop: 12 }, !isPremium && styles.disabledBtn]}
-            accessibilityRole="button"
-            accessibilityLabel={isPremium ? t("importTradesCsv") : t("importTradesCsvPro")}
-          >
-            <Text style={styles.secondaryText}>
-              {isPremium ? t("importTradesCsv") : t("importTradesCsvPro")}
-            </Text>
-          </Pressable>
         </Card>
 
         <Card style={styles.settingsQuietCard}>
@@ -12195,6 +12257,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           ) : tab === "more" ? (
             <MoreScreen
               showRestore={showRestorePurchases}
+              isPremium={isPremium}
               onOpen={(dest) => {
                 if (dest === "subscription") {
                   setMoreDestination("subscription");
@@ -12202,6 +12265,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
                 }
                 if (dest === "restore") {
                   restorePurchases();
+                  return;
+                }
+                if (dest === "importTrades") {
+                  if (!isPremium) {
+                    Alert.alert(t("premiumAccess"), t("csvImportPro"));
+                    return;
+                  }
+                  void importTradesFromCsv();
                   return;
                 }
                 if (dest === "reports") {
@@ -12236,14 +12307,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               revenueCatConfigured={revenueCatConfigured}
               paywallError={paywallError}
               showRestorePurchases={showRestorePurchases}
-              cloudSyncEnabled={cloudSyncEnabled}
-              cloudSyncStatus={cloudSyncStatus}
-              cloudSyncMessage={cloudSyncMessage}
-              lastCloudSyncAt={lastCloudSyncAt}
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
-              onSyncNow={syncTradesWithCloud}
-              onImportTradesCsv={importTradesFromCsv}
               refreshDailyPropBuffer={refreshLockScreenBufferReminder}
               onSignIn={signInWithProvider}
               onSignOut={signOut}
@@ -12251,6 +12316,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               onChangeEmail={changeAccountEmail}
               calendarEvents={pushCalendarEvents}
               trades={trades}
+              onViewPlans={() => {
+                setTab("more");
+                setMoreDestination("subscription");
+              }}
+              onRefreshCustomerInfo={() => {
+                void refreshRevenueCat();
+              }}
               onUpgrade={() =>
                 purchasePackage(
                   packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null,

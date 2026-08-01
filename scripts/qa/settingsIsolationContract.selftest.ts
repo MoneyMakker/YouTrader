@@ -19,7 +19,7 @@ for (const id of [
 ] as const) {
   const p = buildSettingsSubscriptionPresentation(CUSTOMER_INFO_FIXTURES[id]);
   assert.ok(p, id);
-  assert.ok(!/\bFree\b|\bGuest\b/i.test(p!.statusLine + p!.detailLines.join(" ")));
+  assert.ok(!/\bFree\b|\bGuest\b/i.test(`${p!.planLabel} ${p!.renewalLine} ${p!.priceLabel}`));
 }
 
 // User-switch cache clearing contract

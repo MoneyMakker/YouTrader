@@ -1567,5 +1567,10 @@
   "stats.trendMixed": "Results shifted versus the previous comparable period.",
   "privacyPolicy": "Privacy Policy",
   "termsOfUse": "Terms of Use",
-  "subscription.noActiveSubscription": "No active subscription"
+  "subscription.noActiveSubscription": "No active subscription",
+  "accountProviderEmail": "Email",
+  "accountProviderApple": "Apple",
+  "accountProviderGoogle": "Google",
+  "manageSubscription": "Керування підпискою",
+  "viewPlans": "Переглянути плани"
 }
