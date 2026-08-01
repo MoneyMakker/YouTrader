@@ -1,6 +1,6 @@
 # PI / Edge — staging deployment handoff (non-secret)
 
-**Status:** CODE PASS · LIVE staging deploy NOT RUN  
+**Status:** CODE PASS · staging functions deployed 2026-08-01 (`prop-os-pi-processor` v6, `prop-os-recalc-processor` v5) · migration `20260731290000` already on remote · trusted live PI matrix NOT RUN (local `PROP_OS_PROCESSOR_SHARED_SECRET` missing; service-role JWT ≠ Edge exact-match)  
 **Forbidden:** production Supabase (`izzrlsgumyabdvlmwlwn`) · build 114  
 **Staging host category:** `zleojeqkzizeyerhjpur`
 
