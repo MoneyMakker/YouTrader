@@ -58,7 +58,8 @@ function run() {
         isPremium: false,
       }),
     ),
-    "paywall",
+    "main",
+    "authenticated without entitlement enters four-tab main",
   );
   assert.equal(
     resolveAcquisitionPhase(

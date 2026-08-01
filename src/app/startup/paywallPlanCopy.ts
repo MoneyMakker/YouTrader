@@ -5,6 +5,7 @@
 
 import type { PurchasesStoreProduct } from "react-native-purchases";
 import { resolveIntroTrialInfo, type IntroTrialInfo, type TrialEligibility } from "./trialEligibility";
+import { resolvePlanTrialPresentation } from "../../billing/trialEligibilityPresentation";
 
 export type PaywallPlanId = "weekly" | "monthly" | "yearly";
 
@@ -63,8 +64,21 @@ export function buildPaywallPlanPresentation(input: {
   product: PurchasesStoreProduct | null | undefined;
   weeklyPriceString?: string;
   checkFailed?: boolean;
+  /** RC introductory eligibility status string when available. */
+  eligibilityStatus?: string | null;
 }): PaywallPlanPresentation {
-  const trial = resolveIntroTrialInfo(input.product, { checkFailed: input.checkFailed });
+  const presented = resolvePlanTrialPresentation({
+    plan: input.id,
+    product: input.product,
+    eligibilityStatus: input.eligibilityStatus,
+    checkFailed: input.checkFailed,
+  });
+  const trial: IntroTrialInfo = {
+    eligibility: presented.eligibility,
+    hasFreeIntro: presented.hasFreeIntro,
+    periodLabel: presented.periodLabel,
+    introDays: presented.introDays,
+  };
   const showTrial = planAllowsTrialDisplay(input.id, trial, input.product);
   const price = input.priceString;
 

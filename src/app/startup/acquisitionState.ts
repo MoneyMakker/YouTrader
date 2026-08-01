@@ -1,11 +1,12 @@
 /**
  * Acquisition / startup phase resolver — unit-testable, no I/O.
  *
- * Paid-only funnel:
- * onboarding → paywall (purchase) → auth → main
+ * Paid funnel:
+ * onboarding → paywall (purchase/restore) → auth → main
  *
- * Main App requires BOTH active entitlement AND authenticated session.
- * There is no free plan and no guest application access.
+ * Anonymous users never enter the tab shell.
+ * Authenticated + entitled → five-tab main.
+ * Authenticated + not entitled → four-tab main (paywall reachable from Settings).
  */
 
 export type AcquisitionPhase =
@@ -15,15 +16,32 @@ export type AcquisitionPhase =
   | "auth"
   | "main";
 
+/** Explicit release gate states mapped from acquisition + billing readiness. */
+export type ReleaseGateState =
+  | "STARTUP_LOADING"
+  | "BILLING_UNAVAILABLE"
+  | "ANONYMOUS_NOT_ENTITLED"
+  | "ANONYMOUS_ENTITLED_REQUIRES_AUTH"
+  | "AUTHENTICATING"
+  | "AUTHENTICATED_ENTITLED"
+  | "AUTHENTICATED_NOT_ENTITLED"
+  | "RECOVERABLE_ERROR";
+
 export type AcquisitionInput = {
   hydrated: boolean;
   onboardingCompleted: boolean;
-  /** @deprecated Kept for migration/tests; entitlement (isPremium) gates Main App. */
+  /** @deprecated Kept for migration/tests; entitlement (isPremium) gates Main App for anonymous. */
   paywallCompleted: boolean;
   authRequired: boolean;
   hasSession: boolean;
   isPremium: boolean;
   revenueCatReady: boolean;
+  /** Optional: auth exchange in progress after purchase. */
+  authBusy?: boolean;
+  /** Optional: RevenueCat configure/catalog hard failure. */
+  billingUnavailable?: boolean;
+  /** Optional: identity sync failed after auth (retryable). */
+  identitySyncFailed?: boolean;
 };
 
 /**
@@ -31,12 +49,10 @@ export type AcquisitionInput = {
  *
  * Rules:
  * - Not hydrated → loading
- * - Onboarding incomplete → onboarding (even if session exists for fresh marketing reset;
- *   authenticated callers persist onboardingCompleted to skip)
- * - No entitlement → paywall (wait RevenueCat ready; never Main App)
- * - Entitlement active, no session → auth (mandatory post-purchase)
- * - Entitlement active + session → main
- * - Authenticated without entitlement → paywall
+ * - Onboarding incomplete (anonymous) → onboarding
+ * - Anonymous + no entitlement → paywall (wait RevenueCat ready)
+ * - Anonymous + entitlement → auth (mandatory post-purchase/restore)
+ * - Authenticated → main (tab count depends on isPremium; never permanent paywall gate)
  */
 export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPhase {
   if (!input.hydrated) return "loading";
@@ -47,18 +63,32 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
       if (!input.revenueCatReady) return "loading";
       return "paywall";
     }
-    if (input.authRequired) return "auth";
-    // Auth not configured (unusual) — still block Main App without a session.
+    // Entitled anonymous — force auth before tabs.
     return "auth";
   }
 
-  // Authenticated — never force marketing onboarding (caller marks complete).
-  if (!input.isPremium) {
-    if (!input.revenueCatReady) return "loading";
-    return "paywall";
-  }
-
+  // Authenticated — never force marketing onboarding; never trap on paywall.
   return "main";
+}
+
+export function resolveReleaseGateState(input: AcquisitionInput): ReleaseGateState {
+  if (input.billingUnavailable && !input.hasSession) return "BILLING_UNAVAILABLE";
+  if (input.identitySyncFailed && input.hasSession) return "RECOVERABLE_ERROR";
+
+  const phase = resolveAcquisitionPhase(input);
+  if (phase === "loading") return "STARTUP_LOADING";
+  if (phase === "auth") {
+    if (input.authBusy) return "AUTHENTICATING";
+    return "ANONYMOUS_ENTITLED_REQUIRES_AUTH";
+  }
+  if (phase === "paywall" || phase === "onboarding") return "ANONYMOUS_NOT_ENTITLED";
+  if (phase === "main") {
+    if (input.hasSession && input.isPremium) return "AUTHENTICATED_ENTITLED";
+    if (input.hasSession && !input.isPremium) return "AUTHENTICATED_NOT_ENTITLED";
+  }
+  if (!input.hasSession && input.isPremium) return "ANONYMOUS_ENTITLED_REQUIRES_AUTH";
+  if (!input.hasSession && !input.isPremium) return "ANONYMOUS_NOT_ENTITLED";
+  return "STARTUP_LOADING";
 }
 
 export const ACQUISITION_ONBOARDING_KEY = "yt-acquisition-onboarding-v1";

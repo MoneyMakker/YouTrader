@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PurchasesPackage, PurchasesStoreProduct } from "react-native-purchases";
+import Purchases from "react-native-purchases";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import Svg, { Circle, Path } from "react-native-svg";
@@ -169,6 +170,33 @@ export function AcquisitionPaywall({
   const offeringsUnavailable =
     !weekly && !monthly && !yearly && !weeklyProduct && !monthlyProduct && !yearlyProduct;
 
+  const [eligibilityByProductId, setEligibilityByProductId] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const ids = [weeklyProduct?.identifier, monthlyProduct?.identifier, yearlyProduct?.identifier].filter(
+      (id): id is string => !!id,
+    );
+    if (!ids.length) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(ids);
+        if (cancelled) return;
+        const next: Record<string, string> = {};
+        for (const [productId, info] of Object.entries(result || {})) {
+          const status = (info as { status?: string | number })?.status;
+          next[productId] = status == null ? "UNKNOWN" : String(status);
+        }
+        setEligibilityByProductId(next);
+      } catch {
+        if (!cancelled) setEligibilityByProductId({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [weeklyProduct?.identifier, monthlyProduct?.identifier, yearlyProduct?.identifier]);
+
   const weeklyPriceString = weekly
     ? packagePrice(weekly)
     : weeklyProduct?.priceString || PREMIUM_PRICE_WEEKLY.replace("/wk", "") || "$4.99";
@@ -189,6 +217,9 @@ export function AcquisitionPaywall({
           id: "weekly",
           priceString: weeklyPriceString,
           product: weeklyProduct,
+          eligibilityStatus: weeklyProduct?.identifier
+            ? eligibilityByProductId[weeklyProduct.identifier]
+            : undefined,
         }),
         productId: YOU_TRADER_WEEKLY_PRODUCT_ID,
         pkg: weekly,
@@ -201,6 +232,9 @@ export function AcquisitionPaywall({
           id: "monthly",
           priceString: monthlyPriceString,
           product: monthlyProduct,
+          eligibilityStatus: monthlyProduct?.identifier
+            ? eligibilityByProductId[monthlyProduct.identifier]
+            : undefined,
         }),
         productId: YOU_TRADER_MONTHLY_PRODUCT_ID,
         pkg: monthly,
@@ -214,6 +248,9 @@ export function AcquisitionPaywall({
           priceString: yearly ? packagePrice(yearly) : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY,
           product: yearlyProduct,
           weeklyPriceString,
+          eligibilityStatus: yearlyProduct?.identifier
+            ? eligibilityByProductId[yearlyProduct.identifier]
+            : undefined,
         }),
         productId: YOU_TRADER_YEARLY_PRODUCT_ID,
         pkg: yearly,
@@ -221,7 +258,18 @@ export function AcquisitionPaywall({
       });
     }
     return rows;
-  }, [weekly, monthly, yearly, weeklyProduct, monthlyProduct, yearlyProduct, weeklyPriceString, monthlyPriceString, packagePrice]);
+  }, [
+    weekly,
+    monthly,
+    yearly,
+    weeklyProduct,
+    monthlyProduct,
+    yearlyProduct,
+    weeklyPriceString,
+    monthlyPriceString,
+    packagePrice,
+    eligibilityByProductId,
+  ]);
 
   useEffect(() => {
     if (offeringsUnavailable || !plans.length) return;

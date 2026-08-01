@@ -168,7 +168,15 @@ import {
   acquisitionPaywallUserKey,
   resolveAcquisitionPhase,
 } from "./startup/acquisitionState";
-import { isPropPassEntryVisible } from "../propPass/access";
+import { RevenueCatIdentitySynchronizer } from "../billing/revenueCatIdentity";
+import {
+  decidePostLoginEntitlementReconcile,
+  isActiveEntitlement,
+} from "../billing/entitlementReconcile";
+import {
+  isPropPassEntryVisible,
+  isPropPassEnvironmentAllowed,
+} from "../propPass/access";
 import { MoreScreen, type MoreDestination } from "./MoreScreen";
 import { SubscriptionScreen } from "./SubscriptionScreen";
 import { StatsDashboard } from "../stats/StatsDashboard";
@@ -10143,6 +10151,20 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
   const serverEntitlementActiveRef = useRef(false);
+  /** In-memory only: anonymous entitlement before Purchases.logIn(session.user.id). */
+  const preAuthEntitledRef = useRef(false);
+  const postLoginRestoreAttemptedRef = useRef(false);
+  const [identitySyncFailed, setIdentitySyncFailed] = useState(false);
+  const revenueCatIdentityRef = useRef(
+    new RevenueCatIdentitySynchronizer<CustomerInfo>(
+      {
+        getAppUserID: () => Purchases.getAppUserID(),
+        getCustomerInfo: () => Purchases.getCustomerInfo(),
+        logIn: (appUserID) => Purchases.logIn(appUserID),
+      },
+      { isConfigured: () => purchasesConfigured.current },
+    ),
+  );
 
   const authConfigured = isSupabaseConfigured;
   const authRequired = isSupabaseConfigured;
@@ -10199,9 +10221,15 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [isPremium]);
 
   useEffect(() => {
-    const visible = isPropPassEntryVisible(undefined, null, session?.user?.id ?? null);
+    const stagingEnv = isPropPassEnvironmentAllowed();
+    const visible =
+      !!session?.user?.id &&
+      isPremium &&
+      (stagingEnv
+        ? isPropPassEntryVisible(undefined, null, session.user.id)
+        : true);
     if (tab === "propPass" && !visible) setTab("journal");
-  }, [session?.user?.id, tab]);
+  }, [isPremium, session?.user?.id, tab]);
 
   const completeProductOnboarding = useCallback(() => {
     setOnboardingCompleted(true);
@@ -10254,11 +10282,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   const propPassTabVisible =
     !(qaPropPassPayload?.forceHidePropPassTab) &&
-    isPropPassEntryVisible(
-    undefined,
-    null,
-    session?.user?.id ?? null,
-  );
+    !!session?.user?.id &&
+    isPremium &&
+    (isPropPassEnvironmentAllowed()
+      ? isPropPassEntryVisible(undefined, null, session.user.id)
+      : true);
   const qaTabIds = [
     "journal",
     ...(propPassTabVisible ? (["propPass"] as const) : []),
@@ -10543,6 +10571,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     if (nextAccess.isPro) {
       setPaywallError("");
       setShowRestorePurchases(false);
+      // Anonymous purchase/restore: remember entitlement until Supabase UUID logIn completes.
+      if (!sessionRef.current?.user?.id) {
+        preAuthEntitledRef.current = true;
+      }
     }
     billingDebugLog("customer info updated", {
       reason,
@@ -10644,14 +10676,74 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [applyCustomerInfo, refreshRevenueCat, revenueCatConfigured]);
 
   useEffect(() => {
-    if (!purchasesConfigured.current || !session?.user.id) return;
-    Purchases.logIn(session.user.id)
-      .then(({ customerInfo: nextCustomerInfo }) => applyCustomerInfo(nextCustomerInfo, "logIn"))
-      .then(refreshRevenueCat)
-      .catch((error) => {
-        logger.error(error, { feature: "revenuecat", action: "log_in" });
+    if (!purchasesConfigured.current || !session?.user.id || !revenueCatReady) return;
+    let cancelled = false;
+    const userId = session.user.id;
+    const preAuthEntitled = preAuthEntitledRef.current || isActiveEntitlement(customerInfoRef.current, REVENUECAT_ENTITLEMENT_ID);
+
+    void (async () => {
+      const result = await revenueCatIdentityRef.current.synchronize(userId);
+      if (cancelled) return;
+
+      if (result.status === "failed") {
+        setIdentitySyncFailed(true);
+        setShowRestorePurchases(true);
+        setPaywallError(t("restoreFailedTryAgain"));
+        logger.error(new Error("revenuecat_identity_sync_failed"), {
+          feature: "revenuecat",
+          action: "log_in",
+        });
+        return;
+      }
+
+      setIdentitySyncFailed(false);
+      const info = result.customerInfo;
+      if (info) applyCustomerInfo(info, `identity:${result.status}`);
+
+      const postLoginEntitled = isActiveEntitlement(info ?? customerInfoRef.current, REVENUECAT_ENTITLEMENT_ID);
+      const decision = decidePostLoginEntitlementReconcile({
+        preAuthEntitled,
+        postLoginEntitled,
+        restoreAlreadyAttempted: postLoginRestoreAttemptedRef.current,
       });
-  }, [applyCustomerInfo, refreshRevenueCat, session?.user.id]);
+
+      if (decision.action === "restore_once") {
+        postLoginRestoreAttemptedRef.current = true;
+        try {
+          const restored = await withTimeout(Purchases.restorePurchases());
+          if (cancelled) return;
+          applyCustomerInfo(restored, "identity:restore_fallback");
+          if (!isActiveEntitlement(restored, REVENUECAT_ENTITLEMENT_ID)) {
+            setIdentitySyncFailed(true);
+            logger.warn("RevenueCat entitlement missing after identity restore fallback", {
+              feature: "revenuecat",
+              action: "identity_restore_fallback",
+            });
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setIdentitySyncFailed(true);
+            logger.error(error, { feature: "revenuecat", action: "identity_restore_fallback" });
+          }
+        }
+        return;
+      }
+
+      if (decision.action === "fail_closed") {
+        setIdentitySyncFailed(true);
+        return;
+      }
+
+      // Clear anonymous pre-auth marker once identity is confirmed.
+      if (decision.action === "confirmed_entitled") {
+        preAuthEntitledRef.current = false;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyCustomerInfo, revenueCatReady, session?.user.id]);
 
   const refreshLockScreenBufferReminder = useCallback(async () => {
     const [enabledRaw, templateKeyRaw, modeRaw] = await Promise.all([
@@ -11515,6 +11607,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     resetAnalyticsUser();
     setMonitoringUser(null);
     serverEntitlementActiveRef.current = false;
+    preAuthEntitledRef.current = false;
+    postLoginRestoreAttemptedRef.current = false;
+    setIdentitySyncFailed(false);
+    revenueCatIdentityRef.current.reset();
     if (purchasesConfigured.current) {
       try {
         const anonymous = await Purchases.isAnonymous();
@@ -11754,6 +11850,19 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         Alert.alert(t("restorePurchases"), SECURITY_MESSAGES.rateLimited);
         return;
       }
+
+      // Path B: authenticated restore — synchronize RevenueCat UUID first.
+      if (session?.user?.id) {
+        const sync = await revenueCatIdentityRef.current.synchronize(session.user.id);
+        if (sync.status === "failed") {
+          setIdentitySyncFailed(true);
+          Alert.alert(t("restorePurchases"), t("restoreFailedTryAgain"));
+          return;
+        }
+        if (sync.customerInfo) applyCustomerInfo(sync.customerInfo, "restore:identity");
+        setIdentitySyncFailed(false);
+      }
+
       billingDebugLog("restore started", { productId: YOU_TRADER_MONTHLY_PRODUCT_ID });
       const info = await withTimeout(Purchases.restorePurchases());
       await claimRemoteIdempotency("subscription:restore", session?.user.id, {
@@ -11769,7 +11878,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         setPaywallError("");
         setShowRestorePurchases(false);
         trackEvent("pro_restored", { source: "restore_purchases" });
-        Alert.alert(t("premiumAccess"), t("proUnlocked"));
+        // Path A: anonymous restore → acquisition routes to mandatory auth (no tab shell).
+        // Path B: authenticated restore → five-tab main via isPremium.
+        if (session?.user?.id) {
+          Alert.alert(t("premiumAccess"), t("proUnlocked"));
+        }
       } else {
         logger.warn("RevenueCat restore found no active subscription", { feature: "revenuecat", action: "restore_no_active_subscription" });
         setShowRestorePurchases(true);

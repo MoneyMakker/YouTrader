@@ -65,8 +65,8 @@ assert.equal(
     paywallCompleted: true,
     isPremium: false,
   }),
-  "paywall",
-  "authenticated without entitlement stays on paywall",
+  "main",
+  "authenticated without entitlement enters four-tab main",
 );
 assert.equal(
   resolveAcquisitionPhase({

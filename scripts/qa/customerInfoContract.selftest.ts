@@ -64,6 +64,7 @@ const monthlyUi = buildPaywallPlanPresentation({
   id: "monthly",
   priceString: "$12.99",
   product: monthlyProd,
+  eligibilityStatus: "INTRO_ELIGIBILITY_STATUS_ELIGIBLE",
 });
 assert.equal(monthlyUi.cta, "Try 3 Days Free");
 
@@ -72,6 +73,7 @@ const yearlyUi = buildPaywallPlanPresentation({
   priceString: "$99.99",
   product: yearlyProd,
   weeklyPriceString: "$4.99",
+  eligibilityStatus: "INTRO_ELIGIBILITY_STATUS_ELIGIBLE",
 });
 assert.equal(yearlyUi.cta, "Start 7 Days Free");
 assert.equal(computeYearlySavingsPercent(4.99, 99.99), 61);
@@ -173,12 +175,12 @@ assert.equal(
     isPremium: false,
     revenueCatReady: true,
   }),
-  "paywall",
+  "main",
 );
 
 // No free / guest strings in acquisition + settings sources
 const acq = fs.readFileSync(path.join(root, "src/app/startup/acquisitionState.ts"), "utf8");
-assert.ok(acq.includes("no free plan") || acq.includes("no guest"));
+assert.ok(acq.includes("Anonymous users never enter the tab shell") || acq.includes("no guest") || acq.includes("four-tab"));
 assert.ok(!new RegExp("Continue without an " + "account", "i").test(acq));
 
 console.log("customerInfoContract selftest CONTRACT PASS (LIVE REVENUECAT NOT RUN)");

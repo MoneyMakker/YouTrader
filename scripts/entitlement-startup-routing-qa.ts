@@ -20,7 +20,7 @@ function run() {
       hasSession: true,
       isPremium: false,
     }),
-    "paywall",
+    "main",
   );
 
   assert.equal(
@@ -48,7 +48,7 @@ function run() {
       isPremium: false,
       revenueCatReady: false,
     }),
-    "loading",
+    "main",
   );
 
   assert.equal(

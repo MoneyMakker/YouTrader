@@ -51,6 +51,7 @@ const monthlyEligible = buildPaywallPlanPresentation({
   id: "monthly",
   priceString: "$12.99",
   product: monthly3d,
+  eligibilityStatus: "INTRO_ELIGIBILITY_STATUS_ELIGIBLE",
 });
 assert.equal(monthlyEligible.cta, "Try 3 Days Free");
 assert.equal(monthlyEligible.trialBadge, "3 Days Free");
@@ -64,11 +65,21 @@ const monthlyIneligible = buildPaywallPlanPresentation({
 assert.equal(monthlyIneligible.cta, "Start Monthly · $12.99");
 assert.equal(monthlyIneligible.trialBadge, null);
 
+// Without explicit eligibility, free intro must not advertise a trial.
+const monthlyUnknownEligibility = buildPaywallPlanPresentation({
+  id: "monthly",
+  priceString: "$12.99",
+  product: monthly3d,
+});
+assert.equal(monthlyUnknownEligibility.cta, "Start Monthly · $12.99");
+assert.equal(monthlyUnknownEligibility.trialBadge, null);
+
 // Monthly must not display 7-day trial even if product returns 7 days
 const monthly7 = buildPaywallPlanPresentation({
   id: "monthly",
   priceString: "$12.99",
   product: monthlyWrong7d,
+  eligibilityStatus: "INTRO_ELIGIBILITY_STATUS_ELIGIBLE",
 });
 assert.equal(monthly7.trialBadge, null);
 assert.equal(monthly7.cta, "Start Monthly · $12.99");
@@ -78,6 +89,7 @@ const yearlyEligible = buildPaywallPlanPresentation({
   priceString: "$99.99",
   product: yearly7d,
   weeklyPriceString: "$4.99",
+  eligibilityStatus: "INTRO_ELIGIBILITY_STATUS_ELIGIBLE",
 });
 assert.equal(yearlyEligible.cta, "Start 7 Days Free");
 assert.equal(yearlyEligible.trialBadge, "7 Days Free");
