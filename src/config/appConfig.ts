@@ -164,9 +164,21 @@ export const GOOGLE_IOS_CLIENT_ID = resolveGoogleClientId(
 export const isGoogleNativeSignInConfigured =
   !!GOOGLE_WEB_CLIENT_ID && !!GOOGLE_IOS_CLIENT_ID;
 
-/** Native Google on iOS dev/TestFlight/App Store builds (not Expo Go). */
+/** True when Web + iOS client IDs are both set and not the same WEB-type ID. */
+export const isGoogleClientIdPairDistinct =
+  isGoogleNativeSignInConfigured && GOOGLE_WEB_CLIENT_ID !== GOOGLE_IOS_CLIENT_ID;
+
+/**
+ * Native Google on iOS when Web + distinct iOS client IDs are configured.
+ * Never treat a Web client ID as the iOS client — Google rejects custom-scheme
+ * returns for WEB client type ("Custom scheme URIs are not allowed for 'WEB'").
+ * When only a Web client is present, callers fall back to browser OAuth.
+ */
 export const enableNativeGoogleSignIn =
-  Platform.OS === "ios" && !isExpoGo && isGoogleNativeSignInConfigured;
+  Platform.OS === "ios" &&
+  !isExpoGo &&
+  isGoogleNativeSignInConfigured &&
+  isGoogleClientIdPairDistinct;
 
 export function userFacingBillingError(message?: string) {
   if (!message) return "";
