@@ -269,9 +269,13 @@ export async function runStagingQaReset(options?: {
     let revenueCatLoggedOut = false;
     if (Platform.OS !== "web") {
       try {
-        const rc = await withTimeout(Purchases.logOut().then(() => true), SIGN_OUT_TIMEOUT_MS);
-        if (rc.ok) {
+        // Skip logOut when already anonymous — otherwise RC logs ERROR → LogBox covers QA UI.
+        const anonymous = await Purchases.isAnonymous();
+        if (anonymous) {
           revenueCatLoggedOut = true;
+        } else {
+          const rc = await withTimeout(Purchases.logOut().then(() => true), SIGN_OUT_TIMEOUT_MS);
+          revenueCatLoggedOut = rc.ok;
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

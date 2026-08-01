@@ -1,0 +1,98 @@
+appId: com.youtrader.pro
+---
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-fresh
+- openLink: youtrader://qa/reset-fresh
+- extendedWaitUntil:
+    visible:
+      id: "first-launch-funnel"
+    timeout: 180000
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen-1"
+    timeout: 30000
+    optional: true
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_00_boot
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-screen-1"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_01_screen1
+      - tapOn:
+          id: "onboarding-pain-revenge"
+      - extendedWaitUntil:
+          visible:
+            id: "onboarding-screen-2"
+          timeout: 30000
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_02_screen2_profile
+      - tapOn:
+          id: "onboarding-market-futures"
+      - tapOn:
+          id: "onboarding-instrument-MES"
+      - tapOn:
+          id: "onboarding-session-ny_am"
+      - tapOn:
+          id: "onboarding-style-intraday"
+      - tapOn:
+          id: "onboarding-prop-yes"
+      - scrollUntilVisible:
+          element:
+            id: "onboarding-profile-continue"
+          direction: DOWN
+          timeout: 10000
+      - tapOn:
+          id: "onboarding-profile-continue"
+      - extendedWaitUntil:
+          visible:
+            id: "onboarding-screen-3"
+          timeout: 30000
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_03_screen3_previews
+      - tapOn:
+          id: "onboarding-value-continue"
+      - extendedWaitUntil:
+          visible:
+            id: "onboarding-screen-4"
+          timeout: 30000
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_04_screen4_prep
+      - extendedWaitUntil:
+          visible:
+            id: "acquisition-paywall"
+          timeout: 90000
+- runFlow:
+    when:
+      visible:
+        id: "acquisition-paywall"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_05_paywall
+      - runFlow:
+          when:
+            visible:
+              id: "paywall-plan-weekly"
+          commands:
+            - tapOn:
+                id: "paywall-plan-weekly"
+            - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_05_weekly
+            - tapOn:
+                id: "paywall-plan-monthly"
+            - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_05_monthly
+            - tapOn:
+                id: "paywall-plan-yearly"
+            - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_05_yearly
+      - runFlow:
+          when:
+            visible:
+              id: "paywall-offerings-unavailable"
+          commands:
+            - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_05_unavailable
+      - runFlow:
+          when:
+            visible:
+              id: "paywall-plan-monthly"
+            notVisible:
+              id: "paywall-plan-weekly"
+          commands:
+            - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/vis_05_missing_weekly
