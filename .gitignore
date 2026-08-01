@@ -33,6 +33,7 @@ build/DerivedData*/
 build-*.ipa
 builds/
 bundle-check/
+artifacts/
 
 # Local agent / tooling runtime (never commit)
 .codex/

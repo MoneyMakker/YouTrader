@@ -112,6 +112,12 @@ Or paste the SQL into the Supabase SQL editor.
 - Current screenshot and voice note attachments are local URIs unless future cloud upload is added; storage policies are ready for secure cloud uploads.
 - IP-based bot protection requires a server/Edge layer because mobile apps do not have trustworthy client-side IP identity.
 
+## npm Dependency Audit Baseline (Issue #8)
+
+High/critical advisories historically reported against the Expo SDK 54 tree (`brace-expansion`, `postcss`, `shell-quote`, `tar`) are remediated with narrowly scoped `package.json` overrides. See `docs/SECURITY_CHECKLIST.md` → **npm Audit And Lockfile Overrides**.
+
+These packages sit under Expo CLI / Metro / React Native tooling paths. Keep Expo SDK 54 and React Native `0.81.5` pinned; do not use `npm audit fix --force` or permanent CI audit waivers.
+
 ## Security Advisor Function Hardening (2026-06-30)
 
 Migration: `supabase/migrations/202606300001_harden_security_function_search_paths.sql`

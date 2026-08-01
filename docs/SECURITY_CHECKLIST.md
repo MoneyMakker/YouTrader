@@ -49,10 +49,28 @@
 
 - `git status` shows no `.env`, `.ipa`, certificates, provisioning profiles, or build artifacts staged.
 - `npm run security:check` passes.
+- `npm run security:audit` passes (`npm audit --audit-level=high` with a clean package tree).
 - `npm run typecheck` passes.
 - Supabase migrations are reviewed before `supabase db push`.
 - Edge Functions are deployed with secrets set through Supabase secrets, not Expo env.
 - GitHub Actions secrets are configured in repository settings, not committed.
+
+## npm Audit And Lockfile Overrides
+
+Issue #8 baseline (brace-expansion, postcss, shell-quote, tar) is remediated with narrowly scoped `package.json` `overrides` that stay inside Expo SDK 54 / React Native 0.81.5 compatibility:
+
+- `postcss`: `^8.5.18` (patched source-map path traversal)
+- `shell-quote`: `^1.9.0` (patched parse DoS; resolves to 1.10.x)
+- `tar`: `^7.5.21` (covers current node-tar critical advisories)
+- `brace-expansion@1` / `@2` / `@5`: pin patched minors per major (`1.1.18`, `2.1.4`, `5.0.9`) — do not force a single major across all consumers
+
+Rules:
+
+- Prefer parent upgrades within the current Expo SDK range before adding overrides.
+- Never use `npm audit fix --force` or Expo SDK upgrades solely to silence audit.
+- After changing overrides, run `npm install`, then prove `npm ci`, `npm ls --all`, and `npm run security:audit` from a clean `node_modules`.
+- Keep `package.json` and `package-lock.json` consistent; historical CI `Invalid package tree` was a lock/tree metadata failure, not an advisory.
+- Do not add permanent audit waivers or `continue-on-error` on the npm audit CI step.
 
 ## Rotate A Leaked Supabase Secret Key
 
