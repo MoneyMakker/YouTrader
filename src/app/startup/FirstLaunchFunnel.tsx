@@ -3,25 +3,27 @@
  * Premium futures visual language. No AI copy. No pixel art.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   Animated,
   Dimensions,
   Easing,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
 import Svg, {
+  Circle,
   Defs,
+  G,
   LinearGradient,
+  Line,
   Path,
   Stop,
-  Line,
-  Circle,
-  G,
 } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -30,18 +32,22 @@ import { YdlText } from "../../ydl/components/YdlText";
 import { useYdlTheme } from "../../ydl/tokens";
 import { YDL_MIN_TOUCH_TARGET } from "../../ydl/accessibility";
 import {
+  applyMarketSelection,
+  buildOnboardingProfilePreview,
+  buildPersonalizedValueBullets,
+  defaultOnboardingProfile,
+  emptyOnboardingProfile,
   FUTURES_INSTRUMENTS,
   MARKET_OPTIONS,
+  normalizeOnboardingProfile,
   ONBOARDING_PROFILE_KEY,
   PAIN_OPTIONS,
   PROP_FIRM_OPTIONS,
   SESSION_OPTIONS,
   STYLE_OPTIONS,
-  buildPersonalizedValueBullets,
-  defaultOnboardingProfile,
-  emptyOnboardingProfile,
   type FuturesInstrument,
   type MarketKind,
+  type OnboardingProfilePreview,
   type OnboardingProfileV1,
   type PainPoint,
   type PropFirmPref,
@@ -58,7 +64,14 @@ type Props = {
 const LIME = "#B8F255";
 const PURPLE = "#8B7CFF";
 const RED = "#FF4D6D";
-const PREVIEW_WIDTH = Math.min(Dimensions.get("window").width - 48, 320);
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+const HERO_CHART_HEIGHT = 232;
+const PREVIEW_CARD_WIDTH = SCREEN_WIDTH - 56;
+const PREVIEW_CARD_GAP = 12;
+const PREVIEW_PEEK = 14;
+
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
   const theme = useYdlTheme("dark");
@@ -126,14 +139,30 @@ function ChoiceChip({
 
 function MarketStructureGrid() {
   const lines = [];
-  for (let x = 24; x < 320; x += 28) {
+  for (let x = 16; x < 320; x += 22) {
     lines.push(
-      <Line key={`v${x}`} x1={x} y1={12} x2={x} y2={168} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />,
+      <Line
+        key={`v${x}`}
+        x1={x}
+        y1={8}
+        x2={x}
+        y2={200}
+        stroke="rgba(255,255,255,0.05)"
+        strokeWidth={1}
+      />,
     );
   }
-  for (let y = 24; y < 170; y += 24) {
+  for (let y = 16; y < 204; y += 18) {
     lines.push(
-      <Line key={`h${y}`} x1={12} y1={y} x2={308} y2={y} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />,
+      <Line
+        key={`h${y}`}
+        x1={8}
+        y1={y}
+        x2={312}
+        y2={y}
+        stroke="rgba(255,255,255,0.04)"
+        strokeWidth={1}
+      />,
     );
   }
   return <G>{lines}</G>;
@@ -149,6 +178,7 @@ function FuturesHeroVisual({
 }) {
   const theme = useYdlTheme("dark");
   const progress = useRef(new Animated.Value(0)).current;
+  const heroHeight = Math.round(SCREEN_HEIGHT * 0.38);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -176,19 +206,24 @@ function FuturesHeroVisual({
     return () => loop.stop();
   }, [progress, reduceMotion, accentPain]);
 
-  const chaosOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0.22] });
-  const calmOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0.15, 1] });
-  const riskOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.9] });
+  const chaosOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0.18] });
+  const calmOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0.12, 1] });
+  const riskOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.92] });
 
-  const chaos = "M12 118 C36 28, 58 170, 88 78 C112 28, 138 168, 168 92 C192 42, 218 162, 248 86 C272 42, 294 148, 308 112";
-  const risk = "M12 96 C70 102, 140 108, 210 104 C260 101, 290 98, 308 96";
+  const chaos =
+    "M8 148 C28 52, 52 188, 78 88 C98 38, 124 178, 152 98 C172 48, 198 172, 228 92 C252 48, 278 158, 312 118";
+  const risk = "M8 108 C64 114, 132 118, 198 112 C252 108, 284 104, 312 100";
   const calm =
-    "M12 142 C48 136, 84 128, 118 118 C152 108, 188 92, 224 74 C256 58, 284 44, 308 36";
+    "M8 168 C44 160, 80 148, 116 132 C152 116, 188 96, 224 72 C256 52, 288 36, 312 24";
 
   return (
-    <View style={styles.heroVisual} testID="onboarding-hero-visual" accessibilityElementsHidden>
+    <View
+      style={[styles.heroVisual, { minHeight: heroHeight }]}
+      testID="onboarding-hero-visual"
+      accessibilityElementsHidden
+    >
       <View style={[styles.heroFrame, { backgroundColor: theme.colors.surface.card }]}>
-        <Svg width="100%" height={196} viewBox="0 0 320 180">
+        <Svg width="100%" height={HERO_CHART_HEIGHT} viewBox="0 0 320 210">
           <Defs>
             <LinearGradient id="chaosGrad" x1="0" y1="0" x2="1" y2="0">
               <Stop offset="0" stopColor={RED} stopOpacity="0.95" />
@@ -199,38 +234,56 @@ function FuturesHeroVisual({
               <Stop offset="1" stopColor={LIME} stopOpacity="1" />
             </LinearGradient>
             <LinearGradient id="fillCalm" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={LIME} stopOpacity="0.18" />
+              <Stop offset="0" stopColor={LIME} stopOpacity="0.2" />
               <Stop offset="1" stopColor={LIME} stopOpacity="0" />
             </LinearGradient>
           </Defs>
           <MarketStructureGrid />
-          <Path d="M12 142 C48 136, 84 128, 118 118 C152 108, 188 92, 224 74 C256 58, 284 44, 308 36 L308 168 L12 168 Z" fill="url(#fillCalm)" opacity={0.55} />
-          <AnimatedPath d={chaos} stroke="url(#chaosGrad)" strokeWidth={2.5} fill="none" strokeLinecap="round" opacity={chaosOpacity} />
+          <Path
+            d="M8 168 C44 160, 80 148, 116 132 C152 116, 188 96, 224 72 C256 52, 288 36, 312 24 L312 200 L8 200 Z"
+            fill="url(#fillCalm)"
+            opacity={0.6}
+          />
+          <AnimatedPath
+            d={chaos}
+            stroke="url(#chaosGrad)"
+            strokeWidth={2.6}
+            fill="none"
+            strokeLinecap="round"
+            opacity={chaosOpacity}
+          />
           <AnimatedPath
             d={risk}
             stroke={PURPLE}
-            strokeWidth={1.5}
+            strokeWidth={1.6}
             fill="none"
-            strokeDasharray="5 5"
+            strokeDasharray="4 4"
             opacity={riskOpacity}
           />
-          <AnimatedPath d={calm} stroke="url(#calmGrad)" strokeWidth={3.2} fill="none" strokeLinecap="round" opacity={calmOpacity} />
-          <Circle cx="88" cy="78" r="3.5" fill={RED} opacity={0.7} />
-          <Circle cx="168" cy="92" r="3.5" fill={RED} opacity={0.55} />
-          <Circle cx="224" cy="74" r="4" fill={LIME} />
-          <Circle cx="308" cy="36" r="5" fill={LIME} />
-          <Line x1="12" y1="96" x2="308" y2="96" stroke={PURPLE} strokeWidth={0.8} opacity={0.25} />
+          <AnimatedPath
+            d={calm}
+            stroke="url(#calmGrad)"
+            strokeWidth={3.4}
+            fill="none"
+            strokeLinecap="round"
+            opacity={calmOpacity}
+          />
+          <Circle cx="78" cy="88" r="4" fill={RED} opacity={0.75} />
+          <Circle cx="152" cy="98" r="3.5" fill={RED} opacity={0.6} />
+          <Circle cx="224" cy="72" r="4.5" fill={LIME} />
+          <Circle cx="312" cy="24" r="5.5" fill={LIME} />
+          <Line x1="8" y1="108" x2="312" y2="108" stroke={PURPLE} strokeWidth={0.9} opacity={0.3} />
         </Svg>
         <View style={styles.heroCards}>
-          <View style={[styles.miniCard, { backgroundColor: "rgba(8,10,14,0.72)" }]}>
+          <View style={[styles.miniCard, { backgroundColor: "rgba(8,10,14,0.78)" }]}>
             <YdlText role="caption" color="text.secondary">
-              MES · NY AM
+              Journal · NY AM
             </YdlText>
             <YdlText role="bodyEmphasized" style={{ color: theme.colors.status.positive }}>
               +$420
             </YdlText>
           </View>
-          <View style={[styles.miniCard, { backgroundColor: "rgba(8,10,14,0.72)" }]}>
+          <View style={[styles.miniCard, { backgroundColor: "rgba(8,10,14,0.78)" }]}>
             <YdlText role="caption" color="text.secondary">
               Daily Risk
             </YdlText>
@@ -244,16 +297,33 @@ function FuturesHeroVisual({
   );
 }
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-
-function MiniSpark({ color, rising }: { color: string; rising?: boolean }) {
-  const d = rising
-    ? "M2 18 C8 16, 12 12, 18 10 C24 8, 30 4, 38 3"
-    : "M2 8 C10 6, 14 14, 22 12 C28 10, 32 16, 38 14";
+function MiniSpark({ color, rising, volatile }: { color: string; rising?: boolean; volatile?: boolean }) {
+  const d = volatile
+    ? "M2 14 C6 6, 10 18, 16 8 C22 18, 28 4, 34 12 C36 16, 38 10, 38 10"
+    : rising
+      ? "M2 18 C8 16, 12 12, 18 10 C24 8, 30 4, 38 3"
+      : "M2 8 C10 6, 14 14, 22 12 C28 10, 32 16, 38 14";
   return (
     <Svg width={42} height={22} viewBox="0 0 40 22">
       <Path d={d} stroke={color} strokeWidth={2} fill="none" strokeLinecap="round" />
     </Svg>
+  );
+}
+
+function CheckmarkBadge() {
+  return (
+    <View style={styles.checkBadge}>
+      <Svg width={14} height={14} viewBox="0 0 14 14">
+        <Path
+          d="M3 7 L6 10 L11 4"
+          stroke={LIME}
+          strokeWidth={2}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </View>
   );
 }
 
@@ -271,8 +341,11 @@ function MarketCard({
   onPress: () => void;
 }) {
   const theme = useYdlTheme("dark");
-  const spark =
+  const sparkColor =
     id === "futures" ? LIME : id === "crypto" ? PURPLE : id === "forex" ? "#5CC8FF" : "#FFB86B";
+  const sparkRising = id === "futures" || id === "stocks";
+  const sparkVolatile = id === "crypto";
+
   return (
     <Pressable
       onPress={onPress}
@@ -285,61 +358,117 @@ function MarketCard({
         {
           minHeight: YDL_MIN_TOUCH_TARGET + 28,
           backgroundColor: theme.colors.surface.card,
-          borderColor: selected ? theme.colors.action.primary : "rgba(255,255,255,0.08)",
+          borderColor: selected ? LIME : "rgba(255,255,255,0.08)",
         },
       ]}
     >
       <View style={styles.marketCardTop}>
         <YdlText role="bodyEmphasized">{label}</YdlText>
-        <MiniSpark color={spark} rising={id === "futures" || id === "stocks"} />
+        <View style={styles.marketCardIcons}>
+          <MiniSpark color={sparkColor} rising={sparkRising} volatile={sparkVolatile} />
+          {selected ? <CheckmarkBadge /> : null}
+        </View>
       </View>
       <YdlText role="caption" color="text.secondary">
         {description}
       </YdlText>
-      {selected ? (
-        <YdlText role="caption" style={{ color: LIME }}>
-          Selected
-        </YdlText>
-      ) : null}
     </Pressable>
   );
 }
 
-function ProfilePreviewCard({ profile }: { profile: OnboardingProfileV1 }) {
+function ProfilePreviewCard({ preview }: { preview: OnboardingProfilePreview }) {
   const theme = useYdlTheme("dark");
-  const resolved = defaultOnboardingProfile(profile);
-  const instrument = resolved.instruments[0] || "MES";
-  const session =
-    SESSION_OPTIONS.find((s) => s.id === resolved.session)?.label || "New York AM";
-  const style = STYLE_OPTIONS.find((s) => s.id === resolved.style)?.label || "Intraday";
+  const propStatus = preview.propActive
+    ? preview.propFirmLabel
+      ? `Prop · ${preview.propFirmLabel}`
+      : "Prop Challenge Tracking enabled"
+    : "Prop Challenge Tracking off";
+
   return (
     <View
-      style={[styles.profilePreview, { backgroundColor: theme.colors.surface.card, borderColor: "rgba(184,242,85,0.35)" }]}
+      style={[
+        styles.profilePreview,
+        { backgroundColor: theme.colors.surface.card, borderColor: "rgba(184,242,85,0.4)" },
+      ]}
       testID="onboarding-profile-preview"
-      accessibilityLabel={`Your Profile. ${instrument}. ${style}. ${session}.`}
+      accessibilityLabel={`Your trading profile. ${preview.headline}. ${preview.subtitle}. ${preview.focusLine}. ${propStatus}`}
     >
-      <YdlText role="label" color="text.secondary">
-        Your Profile
+      <YdlText role="label" style={{ color: LIME, letterSpacing: 1.2 }}>
+        YOUR TRADING PROFILE
       </YdlText>
-      <YdlText role="title">
-        {instrument} · {style}
-      </YdlText>
+      <YdlText role="title">{preview.headline}</YdlText>
       <YdlText role="body" color="text.secondary">
-        {session}
+        {preview.subtitle}
       </YdlText>
-      <YdlText role="caption" style={{ color: resolved.propChallenge ? LIME : theme.colors.text.secondary }}>
-        {resolved.propChallenge ? "Prop Challenge Tracking enabled" : "Prop Challenge Tracking off"}
+      <View style={styles.profileFocusRow}>
+        <YdlText role="caption" color="text.secondary">
+          Focus
+        </YdlText>
+        <YdlText role="bodyEmphasized">{preview.focusLine}</YdlText>
+      </View>
+      <YdlText
+        role="caption"
+        style={{ color: preview.propActive ? LIME : theme.colors.text.secondary }}
+      >
+        {propStatus}
       </YdlText>
     </View>
   );
 }
 
-function ProductPreviewPager({ profile }: { profile: OnboardingProfileV1 }) {
+function PageDots({ count, activeIndex }: { count: number; activeIndex: number }) {
   const theme = useYdlTheme("dark");
-  const resolved = defaultOnboardingProfile(profile);
-  const instrument = resolved.instruments[0] || "MES";
-  const sessionLabel =
-    SESSION_OPTIONS.find((s) => s.id === resolved.session)?.label || "New York AM";
+  return (
+    <View style={styles.pageDots} accessibilityRole="tablist">
+      {Array.from({ length: count }).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.pageDot,
+            {
+              backgroundColor:
+                i === activeIndex ? theme.colors.action.primary : theme.colors.surface.interactive,
+              width: i === activeIndex ? 18 : 6,
+            },
+          ]}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: i === activeIndex }}
+        />
+      ))}
+    </View>
+  );
+}
+
+function ProductPreviewPager({
+  profile,
+  onActiveIndexChange,
+}: {
+  profile: OnboardingProfileV1;
+  onActiveIndexChange: (index: number) => void;
+}) {
+  const theme = useYdlTheme("dark");
+  const preview = buildOnboardingProfilePreview(profile);
+  const scrollRef = useRef<ScrollView>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const snapInterval = PREVIEW_CARD_WIDTH + PREVIEW_CARD_GAP;
+
+  const updateIndex = useCallback(
+    (offsetX: number) => {
+      const index = Math.round(offsetX / snapInterval);
+      const clamped = Math.max(0, Math.min(index, 3));
+      setActiveIndex(clamped);
+      onActiveIndexChange(clamped);
+    },
+    [onActiveIndexChange, snapInterval],
+  );
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    updateIndex(e.nativeEvent.contentOffset.x);
+  };
+
+  const handleMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    updateIndex(e.nativeEvent.contentOffset.x);
+  };
 
   const cards = [
     {
@@ -348,7 +477,7 @@ function ProductPreviewPager({ profile }: { profile: OnboardingProfileV1 }) {
       body: (
         <View style={styles.previewInner}>
           <View style={styles.previewRow}>
-            <YdlText role="bodyEmphasized">{instrument} LONG</YdlText>
+            <YdlText role="bodyEmphasized">{preview.primarySymbol} LONG</YdlText>
             <YdlText role="bodyEmphasized" style={{ color: theme.colors.status.positive }}>
               +$420
             </YdlText>
@@ -357,7 +486,7 @@ function ProductPreviewPager({ profile }: { profile: OnboardingProfileV1 }) {
             Emotion · Focused · Setup · ORB
           </YdlText>
           <YdlText role="caption" color="text.secondary">
-            {sessionLabel}
+            {preview.sessionLabel}
           </YdlText>
         </View>
       ),
@@ -379,9 +508,7 @@ function ProductPreviewPager({ profile }: { profile: OnboardingProfileV1 }) {
             const angle = (Math.PI * 2 * i) / 6 - Math.PI / 2;
             const x = 90 + Math.cos(angle) * 50;
             const y = 60 + Math.sin(angle) * 50;
-            return (
-              <Circle key={label} cx={x} cy={y} r={2.5} fill={PURPLE} />
-            );
+            return <Circle key={label} cx={x} cy={y} r={2.5} fill={PURPLE} />;
           })}
         </Svg>
       ),
@@ -417,12 +544,19 @@ function ProductPreviewPager({ profile }: { profile: OnboardingProfileV1 }) {
       body: (
         <View style={styles.previewInner}>
           <YdlText role="caption" color="text.secondary">
-            Challenge status · Active
+            Challenge status · {preview.propActive ? "Active" : "Ready"}
           </YdlText>
           <View style={styles.bufferBarTrack}>
-            <View style={[styles.bufferBarFill, { width: "68%", backgroundColor: LIME }]} />
+            <View
+              style={[
+                styles.bufferBarFill,
+                { width: preview.propActive ? "68%" : "32%", backgroundColor: LIME },
+              ]}
+            />
           </View>
-          <YdlText role="caption">Target progress 68%</YdlText>
+          <YdlText role="caption">
+            Target progress {preview.propActive ? "68%" : "32%"}
+          </YdlText>
           <YdlText role="caption" color="text.secondary">
             Daily buffer protected · Trailing drawdown OK
           </YdlText>
@@ -432,44 +566,62 @@ function ProductPreviewPager({ profile }: { profile: OnboardingProfileV1 }) {
   ];
 
   return (
-    <ScrollView
-      horizontal
-      pagingEnabled
-      showsHorizontalScrollIndicator={false}
-      decelerationRate="fast"
-      snapToInterval={PREVIEW_WIDTH + 12}
-      contentContainerStyle={styles.previewPager}
-      testID="onboarding-product-previews"
-      accessibilityLabel="Product previews"
-    >
-      {cards.map((card) => (
-        <View
-          key={card.id}
-          style={[
-            styles.previewCard,
-            { width: PREVIEW_WIDTH, backgroundColor: theme.colors.surface.card },
-          ]}
-          testID={`onboarding-preview-${card.id}`}
-        >
-          <YdlText role="label" color="text.secondary">
-            {card.title}
-          </YdlText>
-          {card.body}
-        </View>
-      ))}
-    </ScrollView>
+    <View>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={snapInterval}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        onScroll={handleScroll}
+        onMomentumScrollEnd={handleMomentumEnd}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.previewPager,
+          { paddingRight: PREVIEW_PEEK },
+        ]}
+        testID="onboarding-product-previews"
+        accessibilityLabel="Product previews"
+      >
+        {cards.map((card) => (
+          <View
+            key={card.id}
+            style={[
+              styles.previewCard,
+              {
+                width: PREVIEW_CARD_WIDTH,
+                marginRight: PREVIEW_CARD_GAP,
+                backgroundColor: theme.colors.surface.card,
+              },
+            ]}
+            testID={`onboarding-preview-${card.id}`}
+          >
+            <YdlText role="label" color="text.secondary">
+              {card.title}
+            </YdlText>
+            {card.body}
+          </View>
+        ))}
+      </ScrollView>
+      <PageDots count={cards.length} activeIndex={activeIndex} />
+    </View>
   );
 }
 
 function WorkspaceAssembly({
   reduceMotion,
   stage,
+  preview,
 }: {
   reduceMotion: boolean;
   stage: number;
+  preview: OnboardingProfilePreview;
 }) {
   const theme = useYdlTheme("dark");
   const opacityFor = (minStage: number) => (stage >= minStage || reduceMotion ? 1 : 0.15);
+
   return (
     <View
       style={[styles.assembly, { backgroundColor: theme.colors.surface.card }]}
@@ -480,7 +632,9 @@ function WorkspaceAssembly({
         <YdlText role="caption" color="text.secondary">
           Journal
         </YdlText>
-        <YdlText role="bodyEmphasized">MES · +$420</YdlText>
+        <YdlText role="bodyEmphasized">
+          {preview.primarySymbol} · +$420
+        </YdlText>
       </View>
       <View style={styles.assemblyRow}>
         <View style={[styles.assemblyMetric, { opacity: opacityFor(1) }]}>
@@ -518,10 +672,18 @@ function WorkspaceAssembly({
         ))}
       </View>
       <View style={[styles.bufferBarTrack, { opacity: opacityFor(4), marginTop: 8 }]}>
-        <View style={[styles.bufferBarFill, { width: "72%", backgroundColor: PURPLE }]} />
+        <View
+          style={[
+            styles.bufferBarFill,
+            {
+              width: preview.propActive ? "72%" : "40%",
+              backgroundColor: preview.propActive ? PURPLE : LIME,
+            },
+          ]}
+        />
       </View>
       <YdlText role="caption" color="text.secondary" style={{ opacity: opacityFor(4) }}>
-        Prop Pass buffer locked
+        {preview.propActive ? "Prop Pass buffer locked" : "Risk dashboard ready"}
       </YdlText>
     </View>
   );
@@ -540,6 +702,7 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
   const [step, setStep] = useState<Step>(0);
   const [profile, setProfile] = useState<OnboardingProfileV1>(emptyOnboardingProfile);
   const [prepIndex, setPrepIndex] = useState(0);
+  const [previewActiveIndex, setPreviewActiveIndex] = useState(0);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -550,25 +713,38 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
     };
   }, []);
 
-  const persist = (next: OnboardingProfileV1) => {
-    setProfile(next);
+  const persist = useCallback((next: OnboardingProfileV1) => {
+    const normalized = normalizeOnboardingProfile(next);
+    setProfile(normalized);
     if (persistTimer.current) clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(() => {
-      void AsyncStorage.setItem(ONBOARDING_PROFILE_KEY, JSON.stringify(next));
+      void AsyncStorage.setItem(ONBOARDING_PROFILE_KEY, JSON.stringify(normalized));
     }, 120);
-  };
+  }, []);
 
   useEffect(() => {
     void AsyncStorage.getItem(ONBOARDING_PROFILE_KEY).then((raw) => {
       if (!raw) return;
       try {
         const parsed = JSON.parse(raw) as OnboardingProfileV1;
-        if (parsed?.version === 1) setProfile({ ...emptyOnboardingProfile(), ...parsed });
+        if (parsed?.version === 1) {
+          persist(normalizeOnboardingProfile({ ...emptyOnboardingProfile(), ...parsed }));
+        }
       } catch {
         /* ignore corrupt */
       }
     });
-  }, []);
+  }, [persist]);
+
+  const profilePreview = useMemo(
+    () => buildOnboardingProfilePreview(profile),
+    [profile],
+  );
+
+  const valueBullets = useMemo(
+    () => buildPersonalizedValueBullets(profile),
+    [profile],
+  );
 
   const prepStatuses = useMemo(
     () => [
@@ -585,19 +761,18 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
     if (step !== 3) return;
     setPrepIndex(0);
     let i = 0;
-    const tickMs = reduceMotion ? 180 : 520;
+    const tickMs = reduceMotion ? 200 : 480;
     const id = setInterval(() => {
       i += 1;
       setPrepIndex(Math.min(i, prepStatuses.length - 1));
       if (i >= prepStatuses.length - 1) {
         clearInterval(id);
-        const finished = {
+        const finished = normalizeOnboardingProfile({
           ...defaultOnboardingProfile(profile),
-          ...profile,
           completedAt: new Date().toISOString(),
-        };
+        });
         void AsyncStorage.setItem(ONBOARDING_PROFILE_KEY, JSON.stringify(finished));
-        setTimeout(() => onComplete(finished), reduceMotion ? 200 : 600);
+        setTimeout(() => onComplete(finished), reduceMotion ? 180 : 520);
       }
     }, tickMs);
     return () => clearInterval(id);
@@ -622,10 +797,11 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
     setTimeout(() => setStep(1), reduceMotion ? 80 : 220);
   };
 
-  const valueBullets = buildPersonalizedValueBullets(defaultOnboardingProfile(profile));
-
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background.primary }]} testID="first-launch-funnel">
+    <View
+      style={[styles.root, { backgroundColor: theme.colors.background.primary }]}
+      testID="first-launch-funnel"
+    >
       <ProgressBar step={step} total={4} />
 
       {step <= 1 ? (
@@ -656,7 +832,7 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
               Trading days usually fall apart because of tilt, FOMO, inconsistent risk, and decisions
               made without a clear system.
             </YdlText>
-            <YdlText role="label" color="text.secondary" style={{ marginTop: 18 }}>
+            <YdlText role="label" color="text.secondary" style={styles.painLabel}>
               What hurts your trading most?
             </YdlText>
             <View style={styles.choiceCol}>
@@ -683,7 +859,7 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
               workflow.
             </YdlText>
 
-            <ProfilePreviewCard profile={profile} />
+            <ProfilePreviewCard preview={profilePreview} />
 
             <YdlText role="label" color="text.secondary">
               Market
@@ -692,17 +868,13 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
               {MARKET_OPTIONS.map((opt) => (
                 <MarketCard
                   key={opt.id}
-                  id={opt.id as MarketKind}
+                  id={opt.id}
                   label={opt.label}
-                  description={MARKET_DESCRIPTIONS[opt.id as MarketKind]}
+                  description={MARKET_DESCRIPTIONS[opt.id]}
                   selected={profile.market === opt.id}
                   onPress={() => {
                     hapticSelect();
-                    persist({
-                      ...profile,
-                      market: opt.id as MarketKind,
-                      instruments: opt.id === "futures" ? profile.instruments : [],
-                    });
+                    persist(applyMarketSelection(profile, opt.id));
                   }}
                 />
               ))}
@@ -725,7 +897,7 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
                           hapticSelect();
                           const instruments = selected
                             ? profile.instruments.filter((x) => x !== id)
-                            : [...profile.instruments, id as FuturesInstrument];
+                            : [...profile.instruments, id];
                           persist({ ...profile, instruments });
                         }}
                         testID={`onboarding-instrument-${id}`}
@@ -747,7 +919,7 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
                   selected={profile.session === opt.id}
                   onPress={() => {
                     hapticSelect();
-                    persist({ ...profile, session: opt.id as SessionPref });
+                    persist({ ...profile, session: opt.id });
                   }}
                   testID={`onboarding-session-${opt.id}`}
                 />
@@ -765,7 +937,7 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
                   selected={profile.style === opt.id}
                   onPress={() => {
                     hapticSelect();
-                    persist({ ...profile, style: opt.id as StylePref });
+                    persist({ ...profile, style: opt.id });
                   }}
                   testID={`onboarding-style-${opt.id}`}
                 />
@@ -813,7 +985,7 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
                           hapticSelect();
                           const propFirms = selected
                             ? profile.propFirms.filter((x) => x !== opt.id)
-                            : [...profile.propFirms, opt.id as PropFirmPref];
+                            : [...profile.propFirms, opt.id];
                           persist({ ...profile, propFirms });
                         }}
                         testID={`onboarding-firm-${opt.id}`}
@@ -827,7 +999,12 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
             <YdlButton
               label="Continue"
               onPress={() => {
-                if (!profile.market || !profile.session || !profile.style || profile.propChallenge == null) {
+                if (
+                  !profile.market ||
+                  !profile.session ||
+                  !profile.style ||
+                  profile.propChallenge == null
+                ) {
                   persist(defaultOnboardingProfile(profile));
                 }
                 setStep(2);
@@ -845,8 +1022,14 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
             <YdlText role="body" color="text.secondary" style={styles.support}>
               Swipe through the workspace that will track your trades, risk, and prop challenge limits.
             </YdlText>
-            <ProductPreviewPager profile={profile} />
-            <View style={[styles.valueCard, { backgroundColor: theme.colors.surface.card }]}>
+            <ProductPreviewPager
+              profile={profile}
+              onActiveIndexChange={setPreviewActiveIndex}
+            />
+            <View
+              style={[styles.valueCard, { backgroundColor: theme.colors.surface.card }]}
+              accessibilityLabel={`Preview ${previewActiveIndex + 1} of 4. Personalized value.`}
+            >
               {valueBullets.map((line) => (
                 <YdlText key={line} role="body">
                   {`• ${line}`}
@@ -866,7 +1049,11 @@ export function FirstLaunchFunnel({ onComplete }: Props) {
             <YdlText role="title" style={styles.headline}>
               Preparing your trading workspace
             </YdlText>
-            <WorkspaceAssembly reduceMotion={!!reduceMotion} stage={prepIndex} />
+            <WorkspaceAssembly
+              reduceMotion={!!reduceMotion}
+              stage={prepIndex}
+              preview={profilePreview}
+            />
             <View style={[styles.valueCard, { backgroundColor: theme.colors.surface.card }]}>
               {prepStatuses.map((status, index) => (
                 <YdlText
@@ -898,53 +1085,73 @@ const styles = StyleSheet.create({
   skip: {
     alignSelf: "flex-end",
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 8,
     minHeight: YDL_MIN_TOUCH_TARGET,
     justifyContent: "center",
   },
-  skipSpacer: { height: 44 },
-  body: { paddingHorizontal: 20, paddingBottom: 40, gap: 14 },
-  headline: { marginTop: 8 },
-  support: { marginTop: 8, marginBottom: 8 },
-  choiceCol: { gap: 10, marginTop: 10 },
-  choiceWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  skipSpacer: { height: 40 },
+  body: { paddingHorizontal: 20, paddingBottom: 40, gap: 10 },
+  headline: { marginTop: 4 },
+  support: { marginTop: 6, marginBottom: 4 },
+  painLabel: { marginTop: 12 },
+  choiceCol: { gap: 8, marginTop: 8 },
+  choiceWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
   chip: {
     paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 1,
     justifyContent: "center",
   },
-  heroVisual: { marginBottom: 4 },
+  heroVisual: { marginBottom: 2, justifyContent: "flex-start" },
   heroFrame: {
     borderRadius: 20,
     overflow: "hidden",
-    paddingBottom: 12,
+    paddingBottom: 8,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.06)",
   },
-  heroCards: { flexDirection: "row", gap: 10, paddingHorizontal: 12, marginTop: -4 },
-  miniCard: { flex: 1, borderRadius: 12, padding: 12, gap: 4 },
-  marketGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 },
+  heroCards: { flexDirection: "row", gap: 8, paddingHorizontal: 10, marginTop: -2 },
+  miniCard: { flex: 1, borderRadius: 12, padding: 10, gap: 2 },
+  marketGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 6 },
   marketCard: {
     width: "47.5%",
     borderRadius: 14,
     borderWidth: 1.5,
     padding: 12,
-    gap: 6,
+    gap: 4,
   },
   marketCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  marketCardIcons: { flexDirection: "row", alignItems: "center", gap: 6 },
+  checkBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(184,242,85,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   profilePreview: {
     borderRadius: 16,
     borderWidth: 1.5,
     padding: 16,
-    gap: 6,
-    marginBottom: 8,
+    gap: 4,
+    marginBottom: 6,
   },
-  valueCard: { borderRadius: 16, padding: 16, gap: 10, marginVertical: 8 },
-  previewPager: { gap: 12, paddingVertical: 4 },
-  previewCard: { borderRadius: 16, padding: 16, gap: 12 },
-  previewInner: { gap: 8 },
+  profileFocusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
+  valueCard: { borderRadius: 16, padding: 16, gap: 8, marginVertical: 6 },
+  previewPager: { paddingVertical: 2 },
+  previewCard: { borderRadius: 16, padding: 16, gap: 10 },
+  previewInner: { gap: 6 },
   previewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  pageDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  pageDot: { height: 6, borderRadius: 3 },
   heatGrid: { flexDirection: "row", flexWrap: "wrap", gap: 4, width: 168 },
   heatCell: { width: 20, height: 20, borderRadius: 4 },
   bufferBarTrack: {
@@ -954,7 +1161,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   bufferBarFill: { height: 8, borderRadius: 4 },
-  assembly: { borderRadius: 18, padding: 16, gap: 10 },
+  assembly: { borderRadius: 18, padding: 16, gap: 8 },
   assemblyCard: {
     borderRadius: 12,
     padding: 12,
@@ -969,5 +1176,5 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
     gap: 4,
   },
-  prep: { paddingTop: 12, gap: 16 },
+  prep: { paddingTop: 8, gap: 12 },
 });
