@@ -1,5 +1,5 @@
 /**
- * Acquisition paywall — three real plans, no AI copy, no CTA+unavailable trap.
+ * Acquisition paywall — three real plans, trial-aware CTA, no fake packages.
  */
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -20,6 +20,7 @@ import {
   YOU_TRADER_WEEKLY_PRODUCT_ID,
   YOU_TRADER_YEARLY_PRODUCT_ID,
 } from "../constants";
+import { resolveIntroTrialInfo, yearlySavingsLabel } from "./trialEligibility";
 
 type PlanId = "weekly" | "monthly" | "yearly";
 
@@ -39,12 +40,11 @@ type Props = {
 
 const LIME = "#B8F255";
 const PURPLE = "#8B7CFF";
+const RED_SOFT = "#FF4D6D";
 
-function hasIntroTrial(product: PurchasesStoreProduct | null | undefined): boolean {
-  const intro = (product as { introPrice?: { price?: number; periodNumberOfUnits?: number } | null } | null)
-    ?.introPrice;
-  if (!intro) return false;
-  return Number(intro.price) === 0 || Number(intro.periodNumberOfUnits) > 0;
+function parsePriceNumber(priceString: string): number {
+  const n = Number(String(priceString).replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
 }
 
 function PaywallHeroPreview() {
@@ -55,39 +55,64 @@ function PaywallHeroPreview() {
       testID="paywall-hero-preview"
       accessibilityElementsHidden
     >
-      <View style={styles.heroCol}>
-        <YdlText role="caption" color="text.secondary">
-          Journal
-        </YdlText>
-        <YdlText role="bodyEmphasized">MES · +$420</YdlText>
-        <YdlText role="caption" color="text.secondary">
-          Heatmap
-        </YdlText>
+      <View style={styles.heroTop}>
+        <View style={styles.heroCol}>
+          <YdlText role="caption" color="text.secondary">
+            Journal
+          </YdlText>
+          <YdlText role="bodyEmphasized">MES LONG · +$420</YdlText>
+          <YdlText role="caption" color="text.secondary">
+            Emotion · Focused · Setup · ORB
+          </YdlText>
+        </View>
+        <Svg width={132} height={78} viewBox="0 0 132 78">
+          <Path
+            d="M4 58 C20 52, 28 40, 42 44 C56 48, 64 28, 78 24 C92 20, 104 34, 128 18"
+            stroke={LIME}
+            strokeWidth={2.2}
+            fill="none"
+          />
+          <Path
+            d="M4 50 C24 56, 40 62, 58 48 C76 34, 96 40, 128 30"
+            stroke={RED_SOFT}
+            strokeWidth={1.4}
+            fill="none"
+            opacity={0.45}
+          />
+        </Svg>
+      </View>
+      <View style={styles.heroBottom}>
+        <Svg width={72} height={56} viewBox="0 0 72 56">
+          <Circle cx="36" cy="28" r="22" stroke="rgba(255,255,255,0.12)" strokeWidth={1} fill="none" />
+          <Path
+            d="M36 8 L56 22 L50 46 L22 46 L16 22 Z"
+            fill="rgba(184,242,85,0.16)"
+            stroke={LIME}
+            strokeWidth={1.3}
+          />
+        </Svg>
         <View style={styles.heatRow}>
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: 10 }).map((_, i) => (
             <View
               key={i}
               style={{
-                width: 12,
-                height: 12,
+                width: 14,
+                height: 14,
                 borderRadius: 3,
-                backgroundColor: i === 3 ? LIME : `rgba(139,124,255,${0.15 + (i % 4) * 0.12})`,
+                backgroundColor: i === 4 ? LIME : `rgba(139,124,255,${0.14 + (i % 4) * 0.12})`,
               }}
             />
           ))}
         </View>
+        <View style={{ flex: 1, gap: 4 }}>
+          <YdlText role="caption" color="text.secondary">
+            Prop Pass buffer
+          </YdlText>
+          <View style={styles.bufferTrack}>
+            <View style={[styles.bufferFill, { width: "70%", backgroundColor: PURPLE }]} />
+          </View>
+        </View>
       </View>
-      <Svg width={120} height={88} viewBox="0 0 120 88">
-        <Circle cx="60" cy="44" r="30" stroke="rgba(255,255,255,0.12)" strokeWidth={1} fill="none" />
-        <Path
-          d="M60 16 L88 36 L80 68 L40 68 L32 36 Z"
-          fill="rgba(184,242,85,0.16)"
-          stroke={LIME}
-          strokeWidth={1.4}
-        />
-        <Rect x="14" y="78" width="92" height="6" rx="3" fill="rgba(255,255,255,0.08)" />
-        <Rect x="14" y="78" width="64" height="6" rx="3" fill={PURPLE} />
-      </Svg>
     </View>
   );
 }
@@ -123,21 +148,28 @@ export function AcquisitionPaywall({
     null;
 
   const weeklyProduct =
-    storeProducts.find((p) => p.identifier === YOU_TRADER_WEEKLY_PRODUCT_ID) || null;
+    weekly?.product ||
+    storeProducts.find((p) => p.identifier === YOU_TRADER_WEEKLY_PRODUCT_ID) ||
+    null;
   const monthlyProduct =
-    storeProducts.find((p) => p.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null;
+    monthly?.product ||
+    storeProducts.find((p) => p.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) ||
+    null;
   const yearlyProduct =
-    storeProducts.find((p) => p.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) || null;
+    yearly?.product ||
+    storeProducts.find((p) => p.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) ||
+    null;
 
   const offeringsUnavailable =
     !weekly && !monthly && !yearly && !weeklyProduct && !monthlyProduct && !yearlyProduct;
-  const yearlyHasTrial = hasIntroTrial(yearly?.product || yearlyProduct);
+
+  const weeklyTrial = resolveIntroTrialInfo(weeklyProduct);
+  const monthlyTrial = resolveIntroTrialInfo(monthlyProduct);
+  const yearlyTrial = resolveIntroTrialInfo(yearlyProduct);
 
   useEffect(() => {
     if (offeringsUnavailable) return;
-    // Prefer yearly when available; otherwise first valid resolved package.
     if (yearly || yearlyProduct) {
-      if (selected === "yearly") return;
       if (
         (selected === "weekly" && !(weekly || weeklyProduct)) ||
         (selected === "monthly" && !(monthly || monthlyProduct))
@@ -152,7 +184,6 @@ export function AcquisitionPaywall({
     }
     if (selected === "weekly" && !(weekly || weeklyProduct)) {
       setSelected(monthly || monthlyProduct ? "monthly" : "yearly");
-      return;
     }
     if (selected === "monthly" && !(monthly || monthlyProduct)) {
       setSelected(weekly || weeklyProduct ? "weekly" : "yearly");
@@ -163,67 +194,99 @@ export function AcquisitionPaywall({
     const rows: Array<{
       id: PlanId;
       label: string;
-      period: string;
       price: string;
-      detail?: string;
-      badge?: string;
+      period: string;
       productId: string;
       pkg: PurchasesPackage | null;
+      trial: ReturnType<typeof resolveIntroTrialInfo>;
+      savings?: string | null;
+      badge?: string;
     }> = [];
+
     if (weekly || weeklyProduct) {
       rows.push({
         id: "weekly",
         label: "Weekly",
-        period: "per week",
         price: weekly ? packagePrice(weekly) : weeklyProduct?.priceString || PREMIUM_PRICE_WEEKLY,
-        detail: "Low-commitment option",
+        period: "week",
         productId: YOU_TRADER_WEEKLY_PRODUCT_ID,
         pkg: weekly,
+        trial: weeklyTrial,
       });
     }
     if (monthly || monthlyProduct) {
       rows.push({
         id: "monthly",
         label: "Monthly",
-        period: "per month",
         price: monthly ? packagePrice(monthly) : monthlyProduct?.priceString || PREMIUM_PRICE,
+        period: "month",
         productId: YOU_TRADER_MONTHLY_PRODUCT_ID,
         pkg: monthly,
+        trial: monthlyTrial,
       });
     }
     if (yearly || yearlyProduct) {
       const yearlyPriceString =
         yearly ? packagePrice(yearly) : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
+      const monthlyPriceString =
+        monthly ? packagePrice(monthly) : monthlyProduct?.priceString || PREMIUM_PRICE;
       rows.push({
         id: "yearly",
         label: "Yearly",
-        period: "per year",
         price: yearlyPriceString,
-        detail: "About $8.33 / month",
-        badge: "Recommended",
+        period: "year",
         productId: YOU_TRADER_YEARLY_PRODUCT_ID,
         pkg: yearly,
+        trial: yearlyTrial,
+        badge: "Recommended",
+        savings: yearlySavingsLabel(
+          parsePriceNumber(monthlyPriceString),
+          parsePriceNumber(yearlyPriceString),
+        ),
       });
     }
     return rows;
-  }, [weekly, monthly, yearly, weeklyProduct, monthlyProduct, yearlyProduct, packagePrice]);
+  }, [
+    weekly,
+    monthly,
+    yearly,
+    weeklyProduct,
+    monthlyProduct,
+    yearlyProduct,
+    weeklyTrial,
+    monthlyTrial,
+    yearlyTrial,
+    packagePrice,
+  ]);
 
   const active = plans.find((p) => p.id === selected) || plans[0] || null;
+  const activeTrialEligible = active?.trial.eligibility === "eligible";
 
   const cta = (() => {
     if (!active) return "Start";
+    if (activeTrialEligible) return "Start My 7-Day Free Trial";
     if (selected === "weekly") return `Start Weekly · ${active.price}`;
     if (selected === "monthly") return `Start Monthly · ${active.price}`;
-    if (yearlyHasTrial) return "Start 7-Day Free Trial";
     return `Start Yearly · ${active.price}`;
   })();
 
+  const subCta = (() => {
+    if (!active) return null;
+    if (activeTrialEligible) {
+      return `7 days free, then ${active.price}/${active.period}. Cancel anytime.`;
+    }
+    if (active.trial.eligibility === "unknown") {
+      return `${active.price} per ${active.trial ? active.period : active.period}. Cancel anytime.`;
+    }
+    return null;
+  })();
+
   const valueChips = [
-    "Futures Journal",
-    "Prop Challenge Tracking",
-    "Radar & Heatmap",
+    "Futures Trading Journal",
+    "Prop Pass",
+    "Performance Radar",
+    "Trading Heatmap",
     "Risk Protection",
-    "Performance Reports",
   ];
 
   const selectPlan = (id: PlanId) => {
@@ -231,61 +294,68 @@ export function AcquisitionPaywall({
     void Haptics.selectionAsync().catch(() => undefined);
   };
 
+  const missingWeekly = !offeringsUnavailable && !(weekly || weeklyProduct);
+
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: theme.colors.background.primary }}
-      contentContainerStyle={styles.body}
-      testID="acquisition-paywall"
-    >
-      {onClose ? (
-        <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
-          <YdlText role="body" color="text.secondary">
-            ×
-          </YdlText>
-        </Pressable>
-      ) : (
-        <View style={styles.close} />
-      )}
+    <View style={{ flex: 1, backgroundColor: theme.colors.background.primary }}>
+      <ScrollView contentContainerStyle={styles.body} testID="acquisition-paywall">
+        {onClose ? (
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
+            <YdlText role="body" color="text.secondary">
+              ×
+            </YdlText>
+          </Pressable>
+        ) : (
+          <View style={styles.close} />
+        )}
 
-      <PaywallHeroPreview />
+        <PaywallHeroPreview />
 
-      <YdlText role="title">Your trading system is ready</YdlText>
-      <YdlText role="body" color="text.secondary">
-        Track every futures trade, protect prop challenge limits, and understand exactly what improves
-        or hurts your performance.
-      </YdlText>
+        <YdlText role="title">Your trading system is ready</YdlText>
+        <YdlText role="body" color="text.secondary">
+          Track every futures trade, protect prop challenge limits, and understand exactly what improves
+          or hurts your performance.
+        </YdlText>
 
-      <View style={styles.chipRow}>
-        {valueChips.map((line) => (
-          <View key={line} style={[styles.chip, { backgroundColor: theme.colors.surface.card }]}>
-            <YdlText role="caption">{line}</YdlText>
-          </View>
-        ))}
-      </View>
-
-      {offeringsUnavailable ? (
-        <View
-          style={[styles.card, { backgroundColor: theme.colors.surface.card }]}
-          testID="paywall-offerings-unavailable"
-        >
-          <YdlText role="bodyEmphasized">{t("subscription.unavailableTitle")}</YdlText>
-          <YdlText role="body" color="text.secondary">
-            {t("subscription.unavailableBody")}
-          </YdlText>
-          <YdlButton label={t("subscription.retry")} onPress={onRetryOfferings} disabled={purchaseBusy} />
-          <YdlButton
-            label={t("restorePurchases")}
-            variant="secondary"
-            onPress={onRestore}
-            disabled={purchaseBusy}
-            testID="paywall-restore"
-          />
+        <View style={styles.chipRow}>
+          {valueChips.map((line) => (
+            <View key={line} style={[styles.chip, { backgroundColor: theme.colors.surface.card }]}>
+              <YdlText role="caption">{line}</YdlText>
+            </View>
+          ))}
         </View>
-      ) : (
-        <>
+
+        {missingWeekly ? (
+          <View style={[styles.warn, { backgroundColor: theme.colors.surface.card }]} testID="paywall-weekly-missing">
+            <YdlText role="caption" color="text.secondary">
+              Weekly plan is not available from the store yet. Retry or contact support if this persists.
+            </YdlText>
+          </View>
+        ) : null}
+
+        {offeringsUnavailable ? (
+          <View
+            style={[styles.card, { backgroundColor: theme.colors.surface.card }]}
+            testID="paywall-offerings-unavailable"
+          >
+            <YdlText role="bodyEmphasized">{t("subscription.unavailableTitle")}</YdlText>
+            <YdlText role="body" color="text.secondary">
+              {t("subscription.unavailableBody")}
+            </YdlText>
+            <YdlButton label={t("subscription.retry")} onPress={onRetryOfferings} disabled={purchaseBusy} />
+            <YdlButton
+              label={t("restorePurchases")}
+              variant="secondary"
+              onPress={onRestore}
+              disabled={purchaseBusy}
+              testID="paywall-restore"
+            />
+          </View>
+        ) : (
           <View style={styles.plans}>
             {plans.map((plan) => {
               const activePlan = plan.id === (active?.id || selected);
+              const showTrial = plan.trial.eligibility === "eligible";
               return (
                 <Pressable
                   key={plan.id}
@@ -297,7 +367,7 @@ export function AcquisitionPaywall({
                   style={[
                     styles.plan,
                     {
-                      minHeight: YDL_MIN_TOUCH_TARGET + 18,
+                      minHeight: YDL_MIN_TOUCH_TARGET + 28,
                       backgroundColor: activePlan ? "rgba(184,242,85,0.08)" : theme.colors.surface.card,
                       borderColor: activePlan ? theme.colors.action.primary : "rgba(255,255,255,0.08)",
                     },
@@ -329,17 +399,17 @@ export function AcquisitionPaywall({
                         </View>
                       ) : null}
                     </View>
-                    <YdlText role="caption" color="text.secondary">
-                      {plan.period}
-                    </YdlText>
-                    {plan.detail ? (
-                      <YdlText role="caption" color="text.secondary">
-                        {plan.detail}
+                    {showTrial ? (
+                      <YdlText role="caption" style={{ color: LIME }}>
+                        7 days free
                       </YdlText>
                     ) : null}
-                    {plan.id === "yearly" && yearlyHasTrial ? (
+                    <YdlText role="caption" color="text.secondary">
+                      {showTrial ? `Then ${plan.price}/${plan.period}` : `${plan.price} per ${plan.period}`}
+                    </YdlText>
+                    {plan.savings ? (
                       <YdlText role="caption" color="text.secondary">
-                        7-day free trial available
+                        {plan.savings}
                       </YdlText>
                     ) : null}
                   </View>
@@ -348,16 +418,61 @@ export function AcquisitionPaywall({
               );
             })}
           </View>
+        )}
 
-          {active ? (
-            <YdlButton
-              label={purchaseBusy ? t("connecting") : cta}
-              onPress={() => onPurchase(active.pkg, active.productId)}
-              disabled={purchaseBusy}
-              testID="paywall-primary-cta"
-            />
+        {paywallError && !offeringsUnavailable ? (
+          <YdlText role="caption" color="text.secondary" testID="paywall-inline-error">
+            {paywallError}
+          </YdlText>
+        ) : null}
+
+        <View style={styles.legalLinks}>
+          <Pressable
+            onPress={() => void Linking.openURL("https://youtrader.app/privacy")}
+            accessibilityRole="link"
+            accessibilityLabel="Privacy Policy"
+            style={styles.legalLink}
+          >
+            <YdlText role="caption" color="text.tertiary">
+              Privacy Policy
+            </YdlText>
+          </Pressable>
+          <YdlText role="caption" color="text.tertiary">
+            ·
+          </YdlText>
+          <Pressable
+            onPress={() => void Linking.openURL("https://youtrader.app/terms")}
+            accessibilityRole="link"
+            accessibilityLabel="Terms of Use"
+            style={styles.legalLink}
+          >
+            <YdlText role="caption" color="text.tertiary">
+              Terms of Use
+            </YdlText>
+          </Pressable>
+        </View>
+
+        <YdlText role="caption" color="text.tertiary">
+          Payment will be charged to your Apple ID. Subscriptions renew automatically unless cancelled at
+          least 24 hours before the end of the current period. Manage or cancel in App Store account
+          settings.
+        </YdlText>
+        <View style={{ height: 96 }} />
+      </ScrollView>
+
+      {!offeringsUnavailable && active ? (
+        <View style={[styles.stickyCta, { backgroundColor: theme.colors.background.primary }]}>
+          <YdlButton
+            label={purchaseBusy ? t("connecting") : cta}
+            onPress={() => onPurchase(active.pkg, active.productId)}
+            disabled={purchaseBusy}
+            testID="paywall-primary-cta"
+          />
+          {subCta ? (
+            <YdlText role="caption" color="text.secondary" style={{ textAlign: "center" }} testID="paywall-trial-subcopy">
+              {subCta}
+            </YdlText>
           ) : null}
-
           {(showRestorePurchases || !!paywallError) && (
             <YdlButton
               label={purchaseBusy ? t("checking") : t("restorePurchases")}
@@ -366,68 +481,37 @@ export function AcquisitionPaywall({
               disabled={purchaseBusy}
             />
           )}
-        </>
-      )}
-
-      {paywallError && !offeringsUnavailable ? (
-        <YdlText role="caption" color="text.secondary" testID="paywall-inline-error">
-          {paywallError}
-        </YdlText>
+        </View>
       ) : null}
-
-      <View style={styles.legalLinks}>
-        <Pressable
-          onPress={() => void Linking.openURL("https://youtrader.app/privacy")}
-          accessibilityRole="link"
-          accessibilityLabel="Privacy Policy"
-          style={styles.legalLink}
-        >
-          <YdlText role="caption" color="text.tertiary">
-            Privacy Policy
-          </YdlText>
-        </Pressable>
-        <YdlText role="caption" color="text.tertiary">
-          ·
-        </YdlText>
-        <Pressable
-          onPress={() => void Linking.openURL("https://youtrader.app/terms")}
-          accessibilityRole="link"
-          accessibilityLabel="Terms of Use"
-          style={styles.legalLink}
-        >
-          <YdlText role="caption" color="text.tertiary">
-            Terms of Use
-          </YdlText>
-        </Pressable>
-      </View>
-
-      <YdlText role="caption" color="text.tertiary">
-        Payment will be charged to your Apple ID. Subscriptions renew automatically unless cancelled at
-        least 24 hours before the end of the current period. Manage or cancel in App Store account
-        settings.
-      </YdlText>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { padding: 20, gap: 14, paddingBottom: 48 },
+  body: { padding: 20, gap: 12, paddingBottom: 24 },
   close: { alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
   hero: {
     borderRadius: 18,
     padding: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     gap: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.06)",
   },
-  heroCol: { flex: 1, gap: 6 },
-  heatRow: { flexDirection: "row", gap: 4, marginTop: 2 },
+  heroTop: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
+  heroBottom: { flexDirection: "row", alignItems: "center", gap: 10 },
+  heroCol: { flex: 1, gap: 4 },
+  heatRow: { flexDirection: "row", flexWrap: "wrap", gap: 3, width: 78 },
+  bufferTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  bufferFill: { height: 8, borderRadius: 4 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   card: { borderRadius: 16, padding: 16, gap: 10 },
+  warn: { borderRadius: 12, padding: 12 },
   plans: { gap: 10 },
   plan: {
     borderRadius: 14,
@@ -450,4 +534,12 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   legalLinks: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 },
   legalLink: { minHeight: 44, justifyContent: "center" },
+  stickyCta: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 18,
+    gap: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.08)",
+  },
 });
