@@ -91,19 +91,25 @@ export function acquisitionPaywallUserKey(userId: string): string {
  * `session.user.id` is already null does not re-trigger the hydrate effect,
  * leaving the shell stuck on "Loading your journal...".
  * Staging-only callers invoke this after gated QA reset — production never reaches it.
+ *
+ * @deprecated Prefer stagingQaResetModeUi(mode) — this helper mapped to fresh onboarding
+ * and was the root cause of Auth CTA precondition failures after qa/reset-auth.
  */
 export type StagingQaResetAcquisitionUi = {
   session: null;
-  onboardingCompleted: false;
-  paywallCompleted: false;
+  onboardingCompleted: boolean;
+  paywallCompleted: boolean;
   acquisitionHydrated: true;
 };
 
+/** @deprecated Use stagingQaResetModeUi("auth") for Auth, "fresh" for onboarding. */
 export function stagingQaResetAcquisitionUi(): StagingQaResetAcquisitionUi {
+  // Historical bug: returned onboardingCompleted=false → phase=onboarding, not auth.
+  // Keep name but default to Auth contract expected by qa/reset-auth.
   return {
     session: null,
-    onboardingCompleted: false,
-    paywallCompleted: false,
+    onboardingCompleted: true,
+    paywallCompleted: true,
     acquisitionHydrated: true,
   };
 }

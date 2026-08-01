@@ -2,6 +2,8 @@
  * Pure staging QA reset gates — no React Native imports (Node-testable).
  */
 
+import { isStagingQaResetDeepLink } from "./stagingQaResetModes";
+
 const STAGING_ENVS = new Set(["staging", "development", "local", "dev"]);
 
 export function resolveAppEnvironment(
@@ -37,13 +39,15 @@ export function shouldRunStagingQaReset(input: {
     return false;
   }
 
-  if ((input.env.EXPO_PUBLIC_QA_RESET_AUTH || "").trim() === "1") return true;
+  // EXPO_PUBLIC_QA_RESET_AUTH=1 enables the staging QA surface but does not
+  // auto-wipe on every cold start (that races returning-user email login).
+  // Actual reset requires deep link or launch argument.
 
   const argv = input.processArgs || [];
   if (argv.some((a) => a === "-YTQAResetAuth" || a === "--YTQAResetAuth")) return true;
 
   const url = (input.deepLinkUrl || "").trim().toLowerCase();
-  if (url.startsWith("youtrader://qa/reset-auth")) return true;
+  if (isStagingQaResetDeepLink(url)) return true;
 
   return false;
 }

@@ -2,10 +2,13 @@
  * Staging-only QA auth/state reset.
  * Impossible to enable in production builds (compile + runtime gates).
  *
- * Invocation (any one):
- * - Launch argument: -YTQAResetAuth
- * - Deep link: youtrader://qa/reset-auth (staging schemes only)
- * - Env: EXPO_PUBLIC_QA_RESET_AUTH=1 (staging Debug/Release-Staging only)
+ * Deep links:
+ * - youtrader://qa/reset-fresh
+ * - youtrader://qa/reset-paywall
+ * - youtrader://qa/reset-auth
+ * - youtrader://qa/reset-returning-allow
+ * - youtrader://qa/reset-returning-deny
+ * Launch argument: -YTQAResetAuth (defaults to auth mode)
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -17,6 +20,7 @@ import {
   ACQUISITION_ONBOARDING_KEY,
   ACQUISITION_PAYWALL_DEVICE_KEY,
 } from "../app/startup/acquisitionState";
+import { clearPendingOAuthClientState } from "../auth/clearPendingOAuth";
 import { getPkceCodeVerifierStorageKey, getSupabaseAuthStorageKey } from "../auth/authStorageKeys";
 import { signOutGoogleNative } from "../auth/googleSignIn";
 import { supabase } from "../config/appConfig";
@@ -25,12 +29,26 @@ import {
   resolveAppEnvironment,
   shouldRunStagingQaReset as shouldRunStagingQaResetPure,
 } from "./stagingQaResetGates";
+import {
+  parseStagingQaResetMode,
+  stagingQaResetModeUi,
+  type StagingQaResetMode,
+} from "./stagingQaResetModes";
+import {
+  STAGING_QA_RESET_STATUS_KEY,
+  createResetStatus,
+  serializeResetStatus,
+  type StagingQaResetPhase,
+  type StagingQaResetStatusSnapshot,
+} from "./stagingQaResetState";
 
 export {
   isStagingQaResetAllowed,
   resolveAppEnvironment,
   shouldRunStagingQaResetPure as shouldRunStagingQaResetGate,
 };
+export type { StagingQaResetMode };
+export { clearPendingOAuthClientState };
 
 /** Prefixes owned by YouTrader app storage — never wipe unrelated Keychain. */
 const YT_ASYNC_PREFIXES = [
@@ -44,15 +62,23 @@ const YT_ASYNC_PREFIXES = [
   "sb-",
 ] as const;
 
+const SIGN_OUT_TIMEOUT_MS = 8000;
+
 export type StagingQaResetReport = {
   attempted: boolean;
   allowed: boolean;
   reason: string;
+  mode: StagingQaResetMode | null;
   clearedAsyncKeys: number;
   clearedSecureKeys: string[];
   signedOutSupabase: boolean;
   revenueCatLoggedOut: boolean;
+  oauthStateCleared: boolean;
+  expectedPhase: string | null;
+  phase: StagingQaResetPhase;
 };
+
+export type StagingQaResetProgressListener = (snap: StagingQaResetStatusSnapshot) => void;
 
 function processEnv(): Record<string, string | undefined> {
   return typeof process !== "undefined" ? process.env : {};
@@ -98,6 +124,9 @@ async function clearOwnedAsyncStorage(): Promise<number> {
     ACQUISITION_ONBOARDING_KEY,
     ACQUISITION_PAYWALL_DEVICE_KEY,
     "yt-post-auth-paywall-seen-v1",
+    getPkceCodeVerifierStorageKey(),
+    getSupabaseAuthStorageKey(),
+    STAGING_QA_RESET_STATUS_KEY,
   ];
   const toRemove = Array.from(new Set([...owned, ...required]));
   if (toRemove.length) await AsyncStorage.multiRemove(toRemove);
@@ -121,89 +150,190 @@ async function clearOwnedSecureStore(): Promise<string[]> {
   return cleared;
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+): Promise<{ ok: true; value: T } | { ok: false }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.then((v) => ({ ok: true as const, value: v })),
+      new Promise<{ ok: false }>((resolve) => {
+        timer = setTimeout(() => resolve({ ok: false }), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function persistStatus(snap: StagingQaResetStatusSnapshot): Promise<void> {
+  await AsyncStorage.setItem(STAGING_QA_RESET_STATUS_KEY, serializeResetStatus(snap));
+}
+
 /**
  * Clears YouTrader staging session + acquisition/paywall/cache state.
+ * Emits deterministic phases for Maestro (qa.reset.* markers).
  * Does not wipe unrelated Keychain items.
  */
 export async function runStagingQaReset(options?: {
   deepLinkUrl?: string | null;
+  mode?: StagingQaResetMode;
+  onProgress?: StagingQaResetProgressListener;
 }): Promise<StagingQaResetReport> {
   const env = processEnv();
-  if (!isStagingQaResetAllowed(env, { devFallback: typeof __DEV__ !== "undefined" ? __DEV__ : false })) {
-    return {
-      attempted: true,
-      allowed: false,
-      reason: `blocked_env:${resolveAppEnvironment(env, typeof __DEV__ !== "undefined" ? __DEV__ : false)}`,
-      clearedAsyncKeys: 0,
-      clearedSecureKeys: [],
-      signedOutSupabase: false,
-      revenueCatLoggedOut: false,
-    };
-  }
-
-  if (!shouldRunStagingQaReset(options)) {
-    return {
-      attempted: false,
-      allowed: true,
-      reason: "not_requested",
-      clearedAsyncKeys: 0,
-      clearedSecureKeys: [],
-      signedOutSupabase: false,
-      revenueCatLoggedOut: false,
-    };
-  }
-
-  let signedOutSupabase = false;
-  if (supabase) {
+  const emit = async (
+    phase: StagingQaResetPhase,
+    mode: StagingQaResetMode | null,
+    error: string | null = null,
+  ) => {
+    const snap = createResetStatus(phase, mode, error);
+    options?.onProgress?.(snap);
     try {
-      await supabase.auth.signOut({ scope: "local" });
-      signedOutSupabase = true;
+      await persistStatus(snap);
     } catch {
-      signedOutSupabase = false;
+      // ignore persist errors during mid-wipe
     }
+  };
+
+  const empty = async (
+    reason: string,
+    allowed: boolean,
+    attempted: boolean,
+  ): Promise<StagingQaResetReport> => {
+    if (attempted && !allowed) {
+      await emit("reset_failed", null, reason);
+    }
+    return {
+      attempted,
+      allowed,
+      reason,
+      mode: null,
+      clearedAsyncKeys: 0,
+      clearedSecureKeys: [],
+      signedOutSupabase: false,
+      revenueCatLoggedOut: false,
+      oauthStateCleared: false,
+      expectedPhase: null,
+      phase: attempted && !allowed ? "reset_failed" : "idle",
+    };
+  };
+
+  if (!isStagingQaResetAllowed(env, { devFallback: typeof __DEV__ !== "undefined" ? __DEV__ : false })) {
+    return empty(
+      `blocked_env:${resolveAppEnvironment(env, typeof __DEV__ !== "undefined" ? __DEV__ : false)}`,
+      false,
+      true,
+    );
   }
+
+  if (!shouldRunStagingQaReset(options) && !options?.mode) {
+    return empty("not_requested", true, false);
+  }
+
+  const mode =
+    options?.mode ||
+    (options?.deepLinkUrl ? parseStagingQaResetMode(options.deepLinkUrl) : null) ||
+    "auth";
+  const ui = stagingQaResetModeUi(mode);
 
   try {
-    await signOutGoogleNative();
-  } catch {
-    // non-fatal
-  }
+    await emit("reset_requested", mode);
 
-  let revenueCatLoggedOut = false;
-  if (Platform.OS !== "web") {
-    try {
-      // Anonymous / already-logged-out SDK throws; treat as cleared for QA.
-      await Purchases.logOut();
-      revenueCatLoggedOut = true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/logOut was called|already|anonymous/i.test(message)) {
-        revenueCatLoggedOut = true;
-      } else {
-        revenueCatLoggedOut = false;
-      }
+    await emit("clearing_oauth_state", mode);
+    const oauthStateCleared = await clearPendingOAuthClientState();
+
+    await emit("clearing_app_storage", mode);
+    const clearedAsyncKeys = await clearOwnedAsyncStorage();
+    const clearedSecureKeys = await clearOwnedSecureStore();
+
+    await emit("clearing_auth_session", mode);
+    let signedOutSupabase = false;
+    if (supabase) {
+      const signOutResult = await withTimeout(
+        supabase.auth.signOut({ scope: "local" }).then(() => true),
+        SIGN_OUT_TIMEOUT_MS,
+      );
+      signedOutSupabase = signOutResult.ok;
+    } else {
+      signedOutSupabase = true;
     }
-  }
 
-  const clearedAsyncKeys = await clearOwnedAsyncStorage();
-  const clearedSecureKeys = await clearOwnedSecureStore();
+    try {
+      await signOutGoogleNative();
+    } catch {
+      // non-fatal
+    }
 
-  if (__DEV__) {
-    console.info("[YTQA] staging auth reset complete", {
+    await emit("clearing_user_cache", mode);
+    let revenueCatLoggedOut = false;
+    if (Platform.OS !== "web") {
+      try {
+        const rc = await withTimeout(Purchases.logOut().then(() => true), SIGN_OUT_TIMEOUT_MS);
+        if (rc.ok) {
+          revenueCatLoggedOut = true;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/logOut was called|already|anonymous/i.test(message)) {
+          revenueCatLoggedOut = true;
+        } else {
+          revenueCatLoggedOut = false;
+        }
+      }
+    } else {
+      revenueCatLoggedOut = true;
+    }
+
+    await emit("applying_target_mode", mode);
+    const persistPairs: [string, string][] = [];
+    if (ui.persistOnboarding) persistPairs.push([ACQUISITION_ONBOARDING_KEY, "1"]);
+    if (ui.persistPaywallDevice) persistPairs.push([ACQUISITION_PAYWALL_DEVICE_KEY, "1"]);
+    if (persistPairs.length) await AsyncStorage.multiSet(persistPairs);
+
+    await emit("persisted", mode);
+    await emit("reset_complete", mode);
+
+    if (__DEV__) {
+      console.info("[YTQA] staging auth reset complete", {
+        mode,
+        expectedPhase: ui.expectedPhase,
+        clearedAsyncKeys,
+        clearedSecureKeyCount: clearedSecureKeys.length,
+        signedOutSupabase,
+        revenueCatLoggedOut,
+        oauthStateCleared,
+      });
+    }
+
+    return {
+      attempted: true,
+      allowed: true,
+      reason: "reset_ok",
+      mode,
       clearedAsyncKeys,
-      clearedSecureKeyCount: clearedSecureKeys.length,
+      clearedSecureKeys,
       signedOutSupabase,
       revenueCatLoggedOut,
-    });
+      oauthStateCleared,
+      expectedPhase: ui.expectedPhase,
+      phase: "reset_complete",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await emit("reset_failed", mode, message.slice(0, 120));
+    return {
+      attempted: true,
+      allowed: true,
+      reason: `reset_failed:${message.slice(0, 80)}`,
+      mode,
+      clearedAsyncKeys: 0,
+      clearedSecureKeys: [],
+      signedOutSupabase: false,
+      revenueCatLoggedOut: false,
+      oauthStateCleared: false,
+      expectedPhase: ui.expectedPhase,
+      phase: "reset_failed",
+    };
   }
-
-  return {
-    attempted: true,
-    allowed: true,
-    reason: "reset_ok",
-    clearedAsyncKeys,
-    clearedSecureKeys,
-    signedOutSupabase,
-    revenueCatLoggedOut,
-  };
 }
