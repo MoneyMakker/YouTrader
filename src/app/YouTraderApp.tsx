@@ -157,15 +157,20 @@ import { getPosthogClient } from "../lib/posthog";
 import { logStartupCheckpoint, logStartupError, logStartupPerf, markAppStart } from "../lib/startupPerf";
 import { logger } from "../lib/logger";
 import { computeCalculatorResults, formatCalcUsd } from "../calc/riskCalculator";
+import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
+import { FirstLaunchFunnel } from "./startup/FirstLaunchFunnel";
+import { AcquisitionPaywall } from "./startup/AcquisitionPaywall";
 import {
+  ACQUISITION_GUEST_KEY,
   ACQUISITION_ONBOARDING_KEY,
   ACQUISITION_PAYWALL_DEVICE_KEY,
   acquisitionPaywallUserKey,
   resolveAcquisitionPhase,
 } from "./startup/acquisitionState";
-import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { isPropPassEntryVisible } from "../propPass/access";
-import { MoreScreen } from "./MoreScreen";
+import { MoreScreen, type MoreDestination } from "./MoreScreen";
+import { SubscriptionScreen } from "./SubscriptionScreen";
+import { StatsDashboard } from "../stats/StatsDashboard";
 import {
   isDeviceQaCaptureEnabled,
   useDeviceQaCaptureWalk,
@@ -360,6 +365,7 @@ import {
   PREMIUM_PRICE,
   PREMIUM_PRICE_YEARLY,
   YOU_TRADER_MONTHLY_PRODUCT_ID,
+  YOU_TRADER_WEEKLY_PRODUCT_ID,
   YOU_TRADER_YEARLY_PRODUCT_ID,
   YOU_TRADER_PRO_PRODUCT_IDS,
   BILLING_DEBUG_LOGS,
@@ -948,6 +954,7 @@ function packagePrice(pkg?: PurchasesPackage | null) {
 
 function packageTitle(pkg: PurchasesPackage) {
   const id = `${pkg.identifier} ${pkg.product.identifier}`.toLowerCase();
+  if (id.includes("week") || pkg.packageType === "WEEKLY") return "WEEKLY";
   if (id.includes("year") || id.includes("annual") || pkg.packageType === "ANNUAL") return "YEARLY";
   if (id.includes("month") || pkg.packageType === "MONTHLY") return "MONTHLY";
   return pkg.packageType || "PRO";
@@ -2872,7 +2879,7 @@ function PaywallPreview({
   }, []);
   return (
     <GlassCard style={styles.paywallPreview} intensity={42}>
-      <Text style={styles.paywallTitle}>{t("unlockFullEdgeAnalysis")}</Text>
+      <Text style={styles.paywallTitle}>{t("paywallHeroTitle")}</Text>
       <Text style={styles.paywallSub}>
         {t("paywallPreviewSub")}
       </Text>
@@ -4057,18 +4064,6 @@ function Stats({
         journalTradesSignature={journalTradesSignature}
       />
 
-      {!isPremium && (
-        <PaywallPreview
-          lang={lang}
-          packages={packages}
-          storeProducts={storeProducts}
-          purchaseBusy={purchaseBusy}
-          paywallError={paywallError}
-          onPurchase={onPurchase}
-          onRestore={onRestore}
-          showRestorePurchases={showRestorePurchases}
-        />
-      )}
     </View>
   );
 }
@@ -4076,7 +4071,6 @@ function Stats({
 function StatsScreen({
   trades,
   lang,
-  propTemplates,
   isPremium,
   packages,
   storeProducts,
@@ -4085,11 +4079,12 @@ function StatsScreen({
   showRestorePurchases,
   onPurchase,
   onRestore,
-  session,
+  onLogTrade,
+  onOpenReports,
 }: {
   trades: Trade[];
   lang: Lang;
-  propTemplates: RiskTemplate[];
+  propTemplates?: RiskTemplate[];
   isPremium: boolean;
   packages: PurchasesPackage[];
   storeProducts: PurchasesStoreProduct[];
@@ -4098,412 +4093,37 @@ function StatsScreen({
   showRestorePurchases: boolean;
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
-  session: Session | null;
+  session?: Session | null;
+  onLogTrade?: () => void;
+  onOpenReports?: () => void;
 }) {
-  const { range, setRange, anchorDate } = useStatsTimeRange();
-  const [revealSuppressToken, setRevealSuppressToken] = useState(0);
+  const { range, setRange } = useStatsTimeRange();
   const handleStatsRangeSelect = useCallback((next: StatsTimeRange) => {
-    setRevealSuppressToken((token) => token + 1);
     setRange(next);
   }, [setRange]);
-  const [selectedDate] = useState(anchorDate);
-  const [exportBusy, setExportBusy] = useState(false);
-  const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "usage_limit", title: "YouTrader Pro", message: t("unlockPremiumExports") });
-  const [tradeAnalysisBusy, setTradeAnalysisBusy] = useState(false);
-  const [tradeAnalysis, setTradeAnalysis] = useState<TradeAnalysisResult | null>(null);
-  const [tradeAnalysisError, setTradeAnalysisError] = useState("");
+  const [valueModal, setValueModal] = useState<ProValueModalContent>({
+    visible: false,
+    reason: "usage_limit",
+    title: "YouTrader Pro",
+    message: t("unlockPremiumExports"),
+  });
   useEffect(() => {
     if (isPremium && valueModal.visible) {
       setValueModal((prev) => ({ ...prev, visible: false }));
     }
   }, [isPremium, valueModal.visible]);
   const periodTrades = useFilteredTrades(trades);
-  const periodStats = useMemo(() => calcStats(periodTrades), [periodTrades]);
-  const safePropTemplates = propTemplates;
-  const [propTemplateKey, setPropTemplateKey] = useState("");
-  const [propMode, setPropMode] = useState<FirmMode>("evaluation");
-  useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem("prop-risk-template-v1"),
-      AsyncStorage.getItem("prop-risk-mode-v1"),
-    ]).then(([savedTemplate, savedMode]) => {
-      const nextKey = resolvePropTemplateKey(savedTemplate || "", safePropTemplates);
-      if (nextKey) setPropTemplateKey(nextKey);
-      if (savedMode === "evaluation" || savedMode === "funded") setPropMode(savedMode);
-    });
-  }, [safePropTemplates]);
-  const propSnapshot = useMemo(
-    () =>
-      tryComputePropRiskSnapshot({
-        trades,
-        selectedDate,
-        templateKey: propTemplateKey,
-        mode: propMode,
-        templates: safePropTemplates,
-      }),
-    [trades, selectedDate, propTemplateKey, propMode, safePropTemplates],
-  );
-  const activePropTemplate = propTemplateKey
-    ? safePropTemplates.find((template) => template.key === propTemplateKey) || null
-    : null;
-  const passProbability = useMemo(
-    () =>
-      activePropTemplate
-        ? calculatePassProbability({ trades, selectedDate, template: activePropTemplate })
-        : { probability: 0, status: "DANGER" as const, explanation: "", confidence: "low" as const },
-    [trades, selectedDate, activePropTemplate],
-  );
-  const tradingScore = useMemo(() => tradingScoreForTrades(periodTrades), [periodTrades]);
-  const lifetimeStats = useMemo(() => calcStats(trades), [trades]);
-  const lifetimeTradingScore = useMemo(() => tradingScoreForTrades(trades), [trades]);
-  const journalTradesSignature = useMemo(() => trades.map((trade) => trade.id).join("|"), [trades]);
-  const achievementList = useMemo(
-    () =>
-      calculateAchievements({
-        trades,
-        selectedDate,
-        tradingScore: lifetimeTradingScore.score,
-        winRate: lifetimeStats.wr,
-        profitFactor: lifetimeStats.pf,
-        riskControl: lifetimeStats.drawdownControl,
-        propSurvivalScore: passProbability.probability,
-        propTargetRemainingPct:
-          propSnapshot && propSnapshot.template.evaluationTarget > 0
-            ? (propSnapshot.remainingToPass / propSnapshot.template.evaluationTarget) * 100
-            : 100,
-        monthlyPnl: lifetimeStats.pnl,
-        bestMonthPnl: Math.max(0, lifetimeStats.pnl),
-        dailyLossLimit: propSnapshot?.template.dailyLossLimit ?? 0,
-      }),
-    [lifetimeStats, lifetimeTradingScore.score, passProbability.probability, propSnapshot, selectedDate, trades],
-  );
-  const traderLevel = useMemo(() => traderLevelFromScore(tradingScore.score, selectedDate), [selectedDate, tradingScore.score]);
-  const achievementShareStats = useMemo(() => buildAchievementShareStats(periodTrades, selectedDate), [periodTrades, selectedDate]);
-
-  const shareCardData = useMemo(
-    () => {
-      const propMeta = propSnapshotShareMeta(propSnapshot);
-      const ordered = [...periodTrades].sort((a, b) => getTradeTime(a).getTime() - getTradeTime(b).getTime());
-      const streaks = currentTradeStreaks(ordered);
-      const bestTrade = periodTrades.length ? Math.max(0, ...periodTrades.map((trade) => trade.pnl)) : 0;
-      const greenDays = buildDailySeries(periodTrades).filter((day) => day.value > 0).length;
-      return {
-      periodLabel: `${range} • ${selectedDate}`,
-      netPnl: periodStats.pnl,
-      winRate: periodStats.wr,
-      profitFactor: periodStats.pf,
-      avgWinLoss: periodStats.avgWinLoss,
-      avgWin: periodStats.avgWin,
-      avgLoss: periodStats.avgLoss,
-      expectancy: periodStats.exp,
-      consistency: periodStats.consistency,
-      maxDrawdown: periodStats.maxDd,
-      riskControl: periodStats.drawdownControl,
-      tradingScore: tradingScore.score,
-      dateLabel: achievementShareDateLabel(selectedDate),
-      weekPnl: periodStats.pnl,
-      monthPnl: periodStats.pnl,
-      trades: periodStats.count,
-      bestSession: periodStats.session[0]?.label || "N/A",
-      dailyBuffer: propMeta.dailyBuffer,
-      propStatus: propMeta.propStatus,
-      bestTrade,
-      currentWinStreak: streaks.currentWinStreak,
-      greenDays,
-    };
-    },
-    [range, selectedDate, periodStats, periodTrades, propSnapshot, tradingScore.score],
-  );
-
-  const openRadarUpgrade = () => {
-    setValueModal({
-      visible: true,
-      reason: "pro_feature",
-      title: t("unlockFullTradingProfile"),
-      message: t("radarUnlockMessage"),
-      bullets: [t("radarUnlockBullet1"), t("radarUnlockBullet2"), t("radarUnlockBullet3")],
-    });
-  };
-
-  const runExport = async (action: "share" | "save" | "pdf") => {
-    logger.info("[YouTrader:export-action] pressed", { action });
-    if (!isPremium) {
-      setValueModal({
-        visible: true,
-        reason: "pro_feature",
-        title: t("premiumExports"),
-        message: FEATURE_LIMIT_MESSAGES.exportProPaywall,
-        bullets: [t("premiumExportsBullet1"), t("premiumExportsBullet2"), t("premiumExportsBullet3")],
-        primaryTrial: true,
-      });
-      return;
-    }
-    try {
-      const limit = await peekClientRateLimit("export:generate", "stats-local", "export_attempt");
-      logExportRateLimitDebug(limit, `runExport:${action}:precheck`);
-      if (!limit.allowed) {
-        logger.warn("[YouTrader:export-rate-limit] blocked", {
-          action,
-          retryAfterSeconds: limit.retryAfterSeconds,
-          count: limit.count,
-          limit: limit.limit,
-        });
-        Alert.alert(t("exportTitle"), SECURITY_MESSAGES.rateLimited);
-        return;
-      }
-      if ((action === "share" || action === "save") && !(await ensureShareCardExportAllowed(isPremium, session?.user.id || null, (message) => {
-        setValueModal({
-          visible: true,
-          reason: "usage_limit",
-          title: t("shareCardLimitReached"),
-          message,
-          bullets: [t("moreShareCardsBenefit"), t("fullImageExportsBenefit"), t("monthlyReportsBenefit")],
-        });
-      }))) {
-        logExportRateLimitDebug(limit, `runExport:${action}:blocked_monthly_share_quota`);
-        return;
-      }
-      if (!isPremium && action === "pdf" && (await getMonthlyUsageCount("pdf-previews", session?.user.id || null)) >= FREE_MONTHLY_PDF_PREVIEW_LIMIT) {
-        logExportRateLimitDebug(limit, `runExport:${action}:blocked_monthly_pdf_quota`);
-        setValueModal({
-          visible: true,
-          reason: "usage_limit",
-          title: t("monthlyPdfPreviewUsed"),
-          message: t("monthlyPdfPreviewMessage"),
-          bullets: [t("unlimitedPdfBenefit"), t("noWatermarkBenefit"), t("aiSummaryReportBenefit")],
-        });
-        return;
-      }
-      setExportBusy(true);
-      const { shareCapturedView, saveCapturedViewToPhotos, shareMonthlyPdfReport } = await import(
-        "../components/insights/shareExport"
-      );
-      const cardMeta = {
-        userId: session?.user.id || null,
-        action: action as "share" | "save",
-        period: range,
-      };
-      const cardExport = { card: shareCardData, meta: cardMeta };
-      if (action === "share") {
-        logger.info("[YouTrader:export-action] running share flow");
-        const result = await shareCapturedView(null, "Share YouTrader card", { data: cardExport });
-        if (result.shared) {
-          const consumed = await consumeClientRateLimit("export:generate", "stats-local");
-          logExportRateLimitDebug(consumed, "runExport:share:success");
-          await recordShareCardExportSuccess(session?.user.id || null, isPremium);
-          successHaptic();
-        } else {
-          logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "share_sheet_unavailable"), "runExport:share:skipped");
-        }
-        trackEvent("share_card_exported", { action: "share", period: range, trade_count: periodTrades.length, is_pro: isPremium, shared: result.shared });
-        return;
-      }
-      if (action === "save") {
-        logger.info("[YouTrader:export-action] running save flow");
-        await saveCapturedViewToPhotos(null, { data: cardExport });
-        const consumed = await consumeClientRateLimit("export:generate", "stats-local");
-        logExportRateLimitDebug(consumed, "runExport:save:success");
-        trackEvent("share_card_exported", { action: "save", period: range, trade_count: periodTrades.length, is_pro: isPremium });
-        Alert.alert(t("savedTitle"), t("pnlCardSaved"));
-        await recordShareCardExportSuccess(session?.user.id || null, isPremium);
-        successHaptic();
-        return;
-      }
-      const exportKey = { action, period: range, selectedDate, count: periodTrades.length, pnl: periodStats.pnl, ts: Date.now() };
-      const reportTrades = periodTrades;
-      const reportStats = periodStats;
-      const reportWins = reportTrades.filter((trade) => trade.pnl > 0).length;
-      const reportLosses = reportTrades.filter((trade) => trade.pnl < 0).length;
-      const best = reportStats.weekday[0];
-      const worst = [...reportStats.weekday].sort((a, b) => a.pnl - b.pnl)[0];
-      const bestSession = reportStats.session[0];
-      const worstSession = [...reportStats.session].sort((a, b) => a.pnl - b.pnl)[0];
-      const formatDayLabel = (row?: { label: string; pnl: number }) =>
-        row && row.pnl !== 0 ? `${fullWeekdayName(row.label)} · ${moneyCompact(row.pnl)}` : row ? fullWeekdayName(row.label) : "N/A";
-      const formatSessionLabel = (row?: { label: string; pnl: number }) =>
-        row && row.pnl !== 0 ? `${row.label} · ${moneyCompact(row.pnl)}` : row?.label || "N/A";
-      const reportScore = tradingScoreForTrades(reportTrades);
-      const rangeStart = resolveTimeRangeStart(range, selectedDate);
-      const start = rangeStart ? safeDateFromISO(rangeStart) : reportTrades.length ? safeDateFromISO(reportTrades[0].date) : safeDateFromISO(selectedDate);
-      const end = safeDateFromISO(selectedDate);
-      const result = await runIdempotentLocal("export:generate", "stats-local", exportKey, () => shareMonthlyPdfReport({
-        lang,
-        title: t("monthlyPerformanceReport"),
-        rangeLabel: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
-        netPnl: reportStats.pnl,
-        winRate: reportStats.wr,
-        profitFactor: reportStats.pf,
-        trades: reportStats.count,
-        wins: reportWins,
-        losses: reportLosses,
-        expectancy: reportStats.exp,
-        avgWin: reportStats.avgWin,
-        avgLoss: reportStats.avgLoss,
-        avgWinLoss: reportStats.avgWinLoss,
-        equityCurve: reportStats.curve,
-        drawdown: reportStats.maxDd,
-        consistency: reportStats.consistency,
-        recoveryFactor: reportStats.recoveryFactor,
-        riskControl: reportStats.drawdownControl,
-        bestDay: formatDayLabel(best),
-        worstDay: formatDayLabel(worst),
-        tradingScore: reportScore.score,
-        grade: reportScore.grade,
-        bestSession: formatSessionLabel(bestSession),
-        worstSession: formatSessionLabel(worstSession),
-        watermarked: !isPremium,
-      }));
-      if (!result.duplicate) {
-        const consumed = await consumeClientRateLimit("export:generate", "stats-local");
-        logExportRateLimitDebug(consumed, "runExport:pdf:success");
-      } else {
-        logExportRateLimitDebug(await peekClientRateLimit("export:generate", "stats-local", "duplicate_pdf_skipped"), "runExport:pdf:duplicate");
-      }
-      trackEvent("pdf_exported", { period: range, trade_count: reportTrades.length, is_pro: isPremium, watermarked: !isPremium });
-      trackEvent("weekly_report_opened", { period: range, trade_count: reportTrades.length, is_pro: isPremium });
-      successHaptic();
-      if (!isPremium) await incrementMonthlyUsageCount("pdf-previews", session?.user.id || null);
-    } catch (error) {
-      const failed = await peekClientRateLimit("export:generate", "stats-local", "export_failed");
-      logExportRateLimitDebug(failed, "runExport:error");
-      logger.warn("[YouTrader:export-rate-limit] Export failed without consuming quota", { error });
-      alertExportError(t("exportFailed"), error);
-    } finally {
-      setExportBusy(false);
-    }
-  };
-
-  const runTradeAnalysis = async () => {
-    if (!isPremium) {
-      Alert.alert(t("premiumAccess"), t("aiTradeAnalysisPro"), [
-        { text: t("ok") },
-        { text: t("unlockPro"), onPress: () => onPurchase(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID) },
-      ]);
-      return;
-    }
-    if (!periodTrades.length) {
-      Alert.alert(t("aiTradeAnalysis"), t("addTradesFirstAnalysis"));
-      return;
-    }
-    try {
-      setTradeAnalysisBusy(true);
-      setTradeAnalysisError("");
-      trackEvent("ai_trade_analysis_opened", { period: range, trade_count: periodTrades.length });
-      trackEvent("ai_analysis_opened", { period: range, trade_count: periodTrades.length });
-      const payload = buildTradeAnalysisPayload(periodTrades, periodStats, range, { propSnapshot });
-      const result = await analyzeTrades(payload);
-      setTradeAnalysis(result);
-      successHaptic();
-      trackEvent("ai_trade_analysis_generated", { period: range, source: "edge_function", trade_count: periodTrades.length });
-      trackEvent("ai_pattern_detective_generated", {
-        period: range,
-        trade_count: periodTrades.length,
-        detective_score: result.detectiveScore,
-      });
-      recordMetric("ai_trade_analysis_completed", 1, { source: "edge_function" });
-    } catch (error) {
-      trackEvent("ai_trade_analysis_failed", { period: range, trade_count: periodTrades.length });
-      trackEvent("ai_pattern_detective_failed", { period: range, trade_count: periodTrades.length });
-      logger.error(error, { feature: "ai_trade_analysis", action: "generate_failed", period: range });
-      const fallback = buildLocalTradeAnalysisResult(periodStats, buildMistakePatterns(periodStats));
-      setTradeAnalysis(fallback);
-      setTradeAnalysisError(t("aiUnavailableLocal"));
-    } finally {
-      setTradeAnalysisBusy(false);
-    }
-  };
-
-  const aiAnalysisBlock = (
-    <>
-      <Card>
-        <Text style={styles.h2}>{t("aiTradeAnalysis")}</Text>
-        <Text style={styles.sub}>{t("aiTradeAnalysisSub")}</Text>
-        <Text style={styles.workflowNextLabel} maxFontSizeMultiplier={1.2}>
-          {tradeAnalysis ? t("analysisReady") : t("analyzeMyTrades")}
-        </Text>
-        <AnimatedPressable
-          press={tradeAnalysis ? "buttonSecondary" : "buttonPrimary"}
-          haptic
-          disabled={tradeAnalysisBusy || !isPremium}
-          onPress={runTradeAnalysis}
-          style={styles.workflowPrimaryInStack}
-          contentStyle={[
-            tradeAnalysis ? styles.secondaryBig : styles.primaryBig,
-            tradeAnalysis && styles.purpleAction,
-            styles.workflowPrimaryInStack,
-            (tradeAnalysisBusy || !isPremium) && styles.disabledBtn,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={tradeAnalysisBusy ? t("analyzing") : t("analyzeMyTrades")}
-        >
-          <Text style={tradeAnalysis ? styles.secondaryText : styles.primaryText} maxFontSizeMultiplier={1.25}>
-            {tradeAnalysisBusy ? t("analyzing") : t("analyzeMyTrades")}
-          </Text>
-        </AnimatedPressable>
-        {tradeAnalysisBusy ? <AiAnalysisLoading style={styles.aiInlineSkeleton} /> : null}
-        {tradeAnalysisError ? (
-          <StatusInlineMessage kind="warning" message={tradeAnalysisError} style={{ marginTop: 10 }} />
-        ) : null}
-        {tradeAnalysis ? (
-          <Text style={[styles.sub, { color: C.green, marginTop: 10 }]} maxFontSizeMultiplier={1.25}>{t("analysisReady")}</Text>
-        ) : null}
-      </Card>
-      {tradeAnalysis ? <TradeAnalysisCard result={tradeAnalysis} /> : null}
-    </>
-  );
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: 8, paddingBottom: 46 }]}>
-      <View style={styles.statsHeaderControls} pointerEvents="box-none">
-        <View style={[styles.segment, { marginTop: 0 }]}>
-          {STATS_TIME_RANGES.map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => handleStatsRangeSelect(item)}
-              style={[styles.segBtn, range === item && styles.segActive]}
-            >
-              <Text style={[styles.segText, range === item && styles.segTextActive]}>
-                {item}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.statsActionsRow}>
-          <Pressable
-            disabled={exportBusy}
-            onPress={() => {
-              void runExport("share");
-            }}
-            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-              {t("sharePnlCard")}
-            </Text>
-          </Pressable>
-          <Pressable
-            disabled={exportBusy}
-            onPress={() => {
-              void runExport("save");
-            }}
-            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-              {t("saveImage")}
-            </Text>
-          </Pressable>
-          <Pressable
-            disabled={exportBusy}
-            onPress={() => {
-              void runExport("pdf");
-            }}
-            style={[styles.statsActionBtn, exportBusy && styles.disabledBtn]}
-          >
-            <Text style={styles.statsActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-              {t("monthlyPdf")}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
+    <>
+      <StatsDashboard
+        trades={periodTrades}
+        period={range}
+        onPeriodChange={handleStatsRangeSelect}
+        onLogTrade={onLogTrade}
+        onOpenReports={onOpenReports}
+        isPremium={isPremium}
+      />
       <ProValueModal
         lang={lang}
         content={valueModal}
@@ -4516,30 +4136,10 @@ function StatsScreen({
         onRestore={onRestore}
         onClose={() => setValueModal((prev) => ({ ...prev, visible: false }))}
       />
-      {exportBusy ? <SkeletonCard rows={2} tone="lime" style={styles.statsLoadingSkeleton} /> : null}
-      <Stats
-        trades={periodTrades}
-        lang={lang}
-        selectedDate={selectedDate}
-        isPremium={isPremium}
-        packages={packages}
-        storeProducts={storeProducts}
-        purchaseBusy={purchaseBusy}
-        paywallError={paywallError}
-        showRestorePurchases={showRestorePurchases}
-        onPurchase={onPurchase}
-        onRestore={onRestore}
-        onRadarUpgrade={openRadarUpgrade}
-        session={session}
-        achievements={achievementList}
-        traderLevel={traderLevel}
-        shareStats={achievementShareStats}
-        revealSuppressToken={revealSuppressToken}
-        journalTradesSignature={journalTradesSignature}
-      />
-    </ScrollView>
+    </>
   );
 }
+
 
 function buildAiCommandCenter({
   trades,
@@ -5018,7 +4618,7 @@ function AIWeeklyReportCard({ report }: { report: AiWeeklyReport }) {
           <Text style={styles.monthlyTimelineValue}>{report.mainRiskWarning}</Text>
         </View>
       </View>
-      <Text style={[styles.terminalSmallLabel, { marginTop: 14 }]}>3 AI Takeaways</Text>
+      <Text style={[styles.terminalSmallLabel, { marginTop: 14 }]}>3 Key Takeaways</Text>
       <BulletList items={report.takeaways.slice(0, 3)} />
       <View style={styles.propCoachAdviceCard}>
         <Text style={styles.propCoachHeadline}>{t("nextWeekFocus")}</Text>
@@ -5195,7 +4795,7 @@ function AiOperatingSystemTodaySection({ operatingSystem }: { operatingSystem: A
           <Text style={styles.terminalSectionTitle}>What should I do today?</Text>
           <Text style={styles.terminalSub}>
             {lowConfidence
-              ? today.emptyState?.message || "AI Trading OS needs more journal evidence before it can give a strong plan."
+              ? today.emptyState?.message || "YouTrader needs more journal evidence before it can give a strong plan."
               : today.recommendation?.action || today.mission?.reason || "Follow the mission built from your current journal sample."}
           </Text>
         </View>
@@ -5282,7 +4882,7 @@ function AiOperatingSystemCoachSection({ operatingSystem }: { operatingSystem: A
   });
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSmallLabel}>AI COACH</Text>
+      <Text style={styles.terminalSmallLabel}>SESSION REVIEW</Text>
       <Text style={styles.terminalSectionTitle}>What should I improve on the next trade?</Text>
       <Text style={styles.terminalSub}>
         {lowConfidence
@@ -5736,7 +5336,7 @@ function AiOperatingSystemEvidenceSection({ operatingSystem }: { operatingSystem
   return (
     <TerminalGlassCard>
       <Text style={styles.terminalSmallLabel}>EVIDENCE</Text>
-      <Text style={styles.terminalSectionTitle}>Why does AI say this?</Text>
+      <Text style={styles.terminalSectionTitle}>Why does this say this?</Text>
       <Text style={styles.terminalSub}>
         {lowConfidence
           ? evidence.emptyState?.message || "Evidence is limited until more saved trades are available."
@@ -6082,10 +5682,10 @@ function AiOperatingSystemMarketAssistantSection({
 
   return (
     <TerminalGlassCard>
-      <Text style={styles.terminalSmallLabel}>AI MARKET ASSISTANT</Text>
+      <Text style={styles.terminalSmallLabel}>MARKET PULSE</Text>
       <Text style={styles.terminalSectionTitle}>What market help do I need right now?</Text>
       <Text style={styles.terminalSub}>
-        One action hub for market and journal-assisted workflows. Existing AI actions keep their current payloads.
+        One action hub for market and journal-assisted workflows. Existing review actions keep their current payloads.
       </Text>
       {lowConfidence ? (
         <WarningCard
@@ -7367,7 +6967,7 @@ function JournalScreen({
       reason: "trade_limit",
       title: TRADE_LIMIT_PAYWALL.title,
       message: TRADE_LIMIT_PAYWALL.subtitle,
-      bullets: ["Unlimited monthly trades", "Advanced AI and market intelligence", "Premium exports and analytics"],
+      bullets: ["Unlimited monthly trades", "Performance Analytics and Market Pulse", "Premium exports and analytics"],
       primaryTrial: true,
     });
   }, []);
@@ -10007,6 +9607,26 @@ function PremiumScreen({
 
           <NeonDivider tone="purple" style={styles.paywallDivider} />
 
+          {!monthly && !yearly && !monthlyProduct && !yearlyProduct ? (
+            <PremiumCard tone="purple" compact style={styles.paywallBusyCard} contentStyle={styles.paywallBusyContent}>
+              <Text style={styles.paywallBusyTitle}>{t("subscription.unavailableTitle")}</Text>
+              <Text style={styles.paywallBusyText}>{t("subscription.unavailableBody")}</Text>
+              {(showRestorePurchases || !!paywallError) ? (
+                <AnimatedPressable
+                  disabled={purchaseBusy}
+                  onPress={onRestore}
+                  style={styles.paywallRestorePressable}
+                  contentStyle={[styles.secondaryBig, styles.restorePurchaseBtn, styles.paywallRestoreBtn, purchaseBusy && styles.disabledBtn]}
+                >
+                  <Text style={styles.secondaryText}>{purchaseBusy ? t("checking") : t("restorePurchases")}</Text>
+                </AnimatedPressable>
+              ) : null}
+              {paywallError ? (
+                <StatusInlineMessage kind="error" title={t("purchaseIssue")} message={paywallError} />
+              ) : null}
+            </PremiumCard>
+          ) : (
+            <>
           <View style={styles.planRow}>
             <AnimatedPressable
               disabled={purchaseBusy}
@@ -10069,6 +9689,8 @@ function PremiumScreen({
               <Text style={styles.paywallFeedbackTitle}>{t("paywallSecureTitle")}</Text>
               <Text style={styles.paywallFeedbackText}>{t("paywallSecureBody")}</Text>
             </View>
+          )}
+            </>
           )}
 
           <SubscriptionLegalDisclosure
@@ -10463,6 +10085,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   );
   const [qaNewsFaultEpoch, setQaNewsFaultEpoch] = useState(0);
   const [qaPropPassEpoch, setQaPropPassEpoch] = useState(0);
+  const [moreDestination, setMoreDestination] = useState<MoreDestination | "hub">("hub");
   const [qaPropPassPayload, setQaPropPassPayload] = useState<
     import("../qa/stagingQaPropPassState").StagingPropPassQaPayload | null
   >(null);
@@ -10492,6 +10115,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [acquisitionHydrated, setAcquisitionHydrated] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [paywallCompleted, setPaywallCompleted] = useState(false);
+  const [guestContinued, setGuestContinued] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<"off" | "syncing" | "synced" | "error">("off");
   const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in and upgrade to Pro to sync your journal.");
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
@@ -10523,10 +10147,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     let cancelled = false;
     void (async () => {
       try {
-        const [onboarding, devicePaywall, legacyPaywall] = await Promise.all([
+        const [onboarding, devicePaywall, legacyPaywall, guestFlag] = await Promise.all([
           AsyncStorage.getItem(ACQUISITION_ONBOARDING_KEY),
           AsyncStorage.getItem(ACQUISITION_PAYWALL_DEVICE_KEY),
           AsyncStorage.getItem(POST_AUTH_PAYWALL_SEEN_KEY),
+          AsyncStorage.getItem(ACQUISITION_GUEST_KEY),
         ]);
         let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
         let onboardingDone = onboarding === "1";
@@ -10543,11 +10168,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (cancelled) return;
         setOnboardingCompleted(onboardingDone);
         setPaywallCompleted(paywallDone);
+        setGuestContinued(guestFlag === "1");
         setAcquisitionHydrated(true);
       } catch {
         if (!cancelled) {
           setOnboardingCompleted(false);
           setPaywallCompleted(isPremium);
+          setGuestContinued(false);
           setAcquisitionHydrated(true);
         }
       }
@@ -10571,6 +10198,17 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     void AsyncStorage.setItem(ACQUISITION_ONBOARDING_KEY, "1");
   }, []);
 
+  const continueAsGuest = useCallback(() => {
+    setGuestContinued(true);
+    setPaywallCompleted(true);
+    void AsyncStorage.multiSet([
+      [ACQUISITION_GUEST_KEY, "1"],
+      [ACQUISITION_PAYWALL_DEVICE_KEY, "1"],
+      [POST_AUTH_PAYWALL_SEEN_KEY, "1"],
+      [ACQUISITION_ONBOARDING_KEY, "1"],
+    ]);
+  }, []);
+
   const dismissAcquisitionPaywall = useCallback(() => {
     setPaywallCompleted(true);
     void AsyncStorage.setItem(ACQUISITION_PAYWALL_DEVICE_KEY, "1");
@@ -10587,6 +10225,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     hydrated: appReady && acquisitionHydrated,
     onboardingCompleted,
     paywallCompleted,
+    guestContinued,
     authRequired,
     hasSession: !!session?.user,
     isPremium,
@@ -10626,7 +10265,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     "journal",
     ...(propPassTabVisible ? (["propPass"] as const) : []),
     "stats",
-    "calendar",
     "more",
   ];
   useDeviceQaCaptureWalk({
@@ -12223,24 +11861,17 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
         <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
         {stagingQaResetOverlay}
-        <ProductOnboardingScreen
-          title={t("productOnboardingTitle")}
-          body={t("productOnboardingBody")}
-          cta={t("productOnboardingCta")}
-          onContinue={completeProductOnboarding}
-        />
+        <FirstLaunchFunnel onComplete={() => completeProductOnboarding()} />
       </SafeAreaView>
     );
   }
 
   if (acquisitionPhase === "paywall") {
     return (
-      <SafeAreaView style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
+      <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
+        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
         {stagingQaResetOverlay}
-        <PremiumScreen
-          lang={lang}
-          onClose={dismissAcquisitionPaywall}
+        <AcquisitionPaywall
           packages={packages}
           storeProducts={storeProducts}
           purchaseBusy={purchaseBusy}
@@ -12248,6 +11879,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           showRestorePurchases={showRestorePurchases}
           onPurchase={purchasePackage}
           onRestore={restorePurchases}
+          onRetryOfferings={() => {
+            void refreshRevenueCat();
+          }}
+          onContinueFree={dismissAcquisitionPaywall}
+          onClose={dismissAcquisitionPaywall}
+          packageTitle={packageTitle}
+          packagePrice={packagePrice}
         />
       </SafeAreaView>
     );
@@ -12286,17 +11924,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           emailModalCopy={emailModalCopy}
           showApple={enableNativeAppleSignIn}
           showGoogle
-          appleConfigWarning={
-            sanitizedRuntimeConfigReport().appEnvironment === "staging" && enableNativeAppleSignIn
-              ? "Staging Apple: native expo-apple-authentication → signInWithIdToken (no web OAuth secret). Requires Sign in with Apple on device/sim Apple ID and Client IDs including com.youtrader.pro. CTA stays visible."
-              : null
-          }
-          googleConfigWarning={
-            sanitizedRuntimeConfigReport().appEnvironment === "staging" &&
-            !isGoogleClientIdPairDistinct
-              ? "Staging Google PATH A (ASWebAuth): Supabase browser OAuth. Distinct iOS client optional for native PATH B."
-              : null
-          }
+          hideQaConfigBanners
+          onContinueWithoutAccount={continueAsGuest}
+          appleConfigWarning={null}
+          googleConfigWarning={null}
           onSignIn={signInWithProvider}
           onSignInWithEmailPassword={signInWithEmailPasswordHandler}
           onSignUpWithEmailPassword={signUpWithEmailPasswordHandler}
@@ -12310,7 +11941,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     { id: "journal", label: t("journal") },
     ...(propPassTabVisible ? [{ id: "propPass" as const, label: t("propPass.tab") }] : []),
     { id: "stats", label: t("stats") },
-    { id: "calendar", label: t("calendar") },
     { id: "more", label: t("more.title") },
   ];
   const premiumTabs: Tab[] = [];
@@ -12373,6 +12003,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               onPurchase={purchasePackage}
               onRestore={restorePurchases}
               session={session}
+              onLogTrade={() => setTab("journal")}
+              onOpenReports={() => {
+                /* Performance reports remain on Stats scroll; keep tab */
+              }}
             />
           ) : tab === "propPass" ? (
             <React.Suspense fallback={null}>
@@ -12399,8 +12033,80 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             <CalendarScreen lang={lang} trades={trades} isPremium={isPremium} onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)} />
           ) : tab === "calc" ? (
             <CalcScreen lang={lang} />
+          ) : tab === "more" && moreDestination === "subscription" ? (
+            <SubscriptionScreen
+              isPremium={isPremium}
+              packages={packages}
+              storeProducts={storeProducts}
+              purchaseBusy={purchaseBusy}
+              paywallError={paywallError}
+              showRestorePurchases={showRestorePurchases}
+              offeringsUnavailable={!packages.length && !storeProducts.length}
+              monthlyLabel={t("monthlyPlan")}
+              yearlyLabel={t("yearlyPlan")}
+              monthlyPrice={(() => {
+                const monthly = packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null;
+                if (monthly) return packagePrice(monthly);
+                return (
+                  storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID)?.priceString ||
+                  PREMIUM_PRICE
+                );
+              })()}
+              yearlyPrice={(() => {
+                const yearly = packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null;
+                if (yearly) return packagePrice(yearly);
+                return (
+                  storeProducts.find((product) => product.identifier === YOU_TRADER_YEARLY_PRODUCT_ID)?.priceString ||
+                  PREMIUM_PRICE_YEARLY
+                );
+              })()}
+              onPurchaseMonthly={() =>
+                purchasePackage(
+                  packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null,
+                  YOU_TRADER_MONTHLY_PRODUCT_ID,
+                )
+              }
+              onPurchaseYearly={() =>
+                purchasePackage(
+                  packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null,
+                  YOU_TRADER_YEARLY_PRODUCT_ID,
+                )
+              }
+              onRestore={restorePurchases}
+              onRetryOfferings={() => {
+                void refreshRevenueCat();
+              }}
+              onBack={() => setMoreDestination("hub")}
+            />
           ) : tab === "more" ? (
-            <MoreScreen onOpen={setTab} />
+            <MoreScreen
+              showRestore={showRestorePurchases}
+              onOpen={(dest) => {
+                if (dest === "subscription") {
+                  setMoreDestination("subscription");
+                  return;
+                }
+                if (dest === "restore") {
+                  restorePurchases();
+                  return;
+                }
+                if (dest === "reports") {
+                  setMoreDestination("hub");
+                  setTab("stats");
+                  return;
+                }
+                if (dest === "account") {
+                  setMoreDestination("hub");
+                  setTab("settings");
+                  return;
+                }
+                if (dest === "help" || dest === "privacy" || dest === "terms") {
+                  return;
+                }
+                setMoreDestination("hub");
+                setTab(dest as Tab);
+              }}
+            />
           ) : (
             <SettingsScreen
               lang={lang}
@@ -12478,22 +12184,43 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               <TabGlyph
                 id={x.id}
                 active={
-                  (tab === "calc" || tab === "news" || tab === "settings" ? "more" : tab) === x.id
+                  (
+                    tab === "calc" ||
+                    tab === "news" ||
+                    tab === "settings" ||
+                    tab === "calendar" ||
+                    moreDestination === "subscription"
+                      ? "more"
+                      : tab
+                  ) === x.id
                 }
               />
             ),
           }))}
           activeId={
-            tab === "calc" || tab === "news" || tab === "settings" ? "more" : tab
+            tab === "calc" ||
+            tab === "news" ||
+            tab === "settings" ||
+            tab === "calendar" ||
+            moreDestination === "subscription"
+              ? "more"
+              : tab
           }
           onSelect={(id) => {
             if (
               id === "more" &&
-              (tab === "calc" || tab === "news" || tab === "settings" || tab === "more")
+              (tab === "calc" ||
+                tab === "news" ||
+                tab === "settings" ||
+                tab === "calendar" ||
+                tab === "more" ||
+                moreDestination === "subscription")
             ) {
+              setMoreDestination("hub");
               setTab("more");
               return;
             }
+            setMoreDestination("hub");
             setTab(id);
           }}
         />
