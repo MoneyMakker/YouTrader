@@ -16,7 +16,7 @@ export type GrowthConfig = {
 };
 
 export const DEFAULT_GROWTH_CONFIG: GrowthConfig = {
-  paywallHeadline: "Unlock Full Edge Analysis",
+  paywallHeadline: "Trade With Clarity. Protect Your Progress.",
   paywallCtaText: "Upgrade to Pro",
   upgradeButtonText: "Upgrade",
   showTrialOffer: true,
