@@ -108,6 +108,7 @@ function AuthProviderButton({
   busy,
   onPress,
   delay,
+  testID,
 }: {
   label: string;
   borderColor: string;
@@ -115,6 +116,7 @@ function AuthProviderButton({
   busy: boolean;
   onPress: () => void;
   delay: number;
+  testID?: string;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(14)).current;
@@ -139,7 +141,10 @@ function AuthProviderButton({
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       <Animated.View style={[styles.btnGlow, { shadowColor: glowColor, shadowOpacity }]}>
         <AnimatedPressable
+          testID={testID}
+          accessibilityLabel={testID || label}
           accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
           disabled={busy}
           onPress={onPress}
           onPressIn={pressIn}
@@ -225,12 +230,32 @@ export function AuthScreen({
 
   const buttonBaseDelay = showApple ? 640 : 560;
 
+  const authReady = !busy && showGoogle && !!copy.google && !!copy.email;
+
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} testID="auth.screen" accessibilityLabel="auth.screen">
       <AuthScreenBackground />
       <View style={styles.terminalLayer} pointerEvents="none">
         <LiveTerminalStatus />
       </View>
+      {busy ? (
+        <View
+          testID="auth.loading"
+          accessibilityLabel="auth.loading"
+          pointerEvents="none"
+          style={StyleSheet.absoluteFillObject}
+        />
+      ) : null}
+      {authReady ? (
+        <View
+          testID="auth.ready"
+          accessibilityLabel="auth.ready"
+          accessible
+          importantForAccessibility="yes"
+          pointerEvents="none"
+          style={styles.authReadyMarker}
+        />
+      ) : null}
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <View style={styles.flex}>
           <ScrollView
@@ -263,7 +288,12 @@ export function AuthScreen({
 
             <Animated.View style={[styles.actions, { opacity: actionsOpacity, transform: [{ translateY: actionsY }] }]}>
               {appleConfigWarning || googleConfigWarning ? (
-                <View style={styles.qaConfigBanner} accessibilityRole="alert">
+                <View
+                  style={styles.qaConfigBanner}
+                  accessibilityRole="alert"
+                  testID="auth.configuration-banner"
+                  accessibilityLabel="auth.configuration-banner"
+                >
                   <Text style={styles.qaConfigTitle}>QA configuration failure</Text>
                   {appleConfigWarning ? (
                     <Text style={styles.qaConfigBody}>{appleConfigWarning}</Text>
@@ -274,7 +304,11 @@ export function AuthScreen({
                 </View>
               ) : null}
               {showApple ? (
-                <Animated.View style={{ opacity: appleOpacity, transform: [{ translateY: appleY }] }}>
+                <Animated.View
+                  style={{ opacity: appleOpacity, transform: [{ translateY: appleY }] }}
+                  testID="auth.apple"
+                  accessibilityLabel="auth.apple"
+                >
                   <AppleAuthentication.AppleAuthenticationButton
                     buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
                     buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
@@ -287,6 +321,7 @@ export function AuthScreen({
 
               {showGoogle ? (
                 <AuthProviderButton
+                  testID="auth.google"
                   label={copy.google}
                   borderColor="rgba(163,255,18,0.55)"
                   glowColor={C.green}
@@ -296,11 +331,12 @@ export function AuthScreen({
                 />
               ) : null}
               <AuthProviderButton
+                testID="auth.email"
                 label={copy.email}
-                borderColor="rgba(176,38,255,0.5)"
+                borderColor="rgba(176,38,255,0.55)"
                 glowColor={C.purple}
                 busy={busy}
-                delay={buttonBaseDelay + (showGoogle ? 70 : 0)}
+                delay={buttonBaseDelay + 80}
                 onPress={() => setEmailOpen(true)}
               />
             </Animated.View>
@@ -339,6 +375,14 @@ export function AuthScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  authReadyMarker: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 8,
+    height: 8,
+    opacity: 0.01,
+  },
   terminalLayer: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
   flex: { flex: 1, zIndex: 2 },
   scroll: {

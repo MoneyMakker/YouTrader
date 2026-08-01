@@ -29,6 +29,29 @@ function logGoogleDev(event: string, value?: unknown) {
   }
 }
 
+/** Non-sensitive callback diagnostics — never log codes, tokens, email, or secrets. */
+function logGoogleCallbackSafe(url: string) {
+  try {
+    const parsed = new URL(url);
+    const params = new URLSearchParams(parsed.search);
+    const hashParams = new URLSearchParams((parsed.hash || "").replace(/^#/, ""));
+    const hasCode = !!(params.get("code") || hashParams.get("code"));
+    const hasState = !!(params.get("state") || hashParams.get("state"));
+    const hasError = !!(params.get("error") || hashParams.get("error") || params.get("error_description"));
+    logGoogleDev("callback_meta", {
+      scheme: parsed.protocol.replace(":", ""),
+      host: parsed.host || parsed.hostname || "",
+      path: parsed.pathname || "",
+      hasCode,
+      hasState,
+      hasError,
+      errorCode: params.get("error") || hashParams.get("error") || null,
+    });
+  } catch {
+    logGoogleDev("callback_meta", { parseFailed: true });
+  }
+}
+
 async function loadGoogleSignInModule() {
   return import("@react-native-google-signin/google-signin");
 }
@@ -111,12 +134,19 @@ async function signInWithGoogleOAuthBrowser(supabaseClient: SupabaseClient): Pro
 
   const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
   if (result.type === "success") {
-    logGoogleDev("callbackUrl", result.url);
+    logGoogleCallbackSafe(result.url);
 
     if (isLocalhostAuthUrl(result.url)) {
       logAuthRedirectBug("BUG: Supabase returned localhost. Check Site URL / redirectTo.", {
         redirectTo,
-        callbackUrl: result.url,
+        callbackHostOnly: (() => {
+          try {
+            const u = new URL(result.url);
+            return `${u.protocol}//${u.host}`;
+          } catch {
+            return "unparseable";
+          }
+        })(),
         hint: supabaseSiteUrlHint(),
       });
       throw new Error("Google sign-in could not return to the app. Check Supabase Redirect URLs.");
@@ -124,7 +154,11 @@ async function signInWithGoogleOAuthBrowser(supabaseClient: SupabaseClient): Pro
 
     const session = await completeOAuthSessionFromUrl(result.url);
     if (!session) throw new Error("Google sign-in did not return a session.");
-    logGoogleDev("session_created", { userId: session.user.id, flow: "oauth" });
+    logGoogleDev("session_created", {
+      userPrefix: (session.user.id || "").slice(0, 8),
+      flow: "oauth",
+      sessionEstablished: true,
+    });
     return session;
   }
 
@@ -137,13 +171,27 @@ async function signInWithGoogleOAuthBrowser(supabaseClient: SupabaseClient): Pro
   throw new Error("Google sign-in was not completed.");
 }
 
-/** Native Google on iOS when configured; browser OAuth for Expo Go. */
+/**
+ * Canonical Google architecture (YouTrader 3.0 / staging recovery):
+ * PATH A — Supabase browser OAuth via ASWebAuthenticationSession.
+ *
+ * Native Google (PATH B / signInWithIdToken) stays behind enableNativeGoogleSignIn
+ * and requires a *distinct* iOS OAuth client. WEB client must never be used as
+ * iosClientId. Until that exists, always use browser OAuth.
+ */
 export async function signInWithGoogle(supabaseClient: SupabaseClient): Promise<Session> {
+  // Prefer PATH A unless a validated distinct iOS client unlocks native.
   if (enableNativeGoogleSignIn) {
+    if (__DEV__) {
+      logGoogleDev("native_path_selected", { reason: "distinct_ios_client" });
+    }
     return signInWithGoogleNative(supabaseClient);
   }
-  if (__DEV__ && isExpoGo) {
-    logGoogleDev("expo_go_oauth_unstable", getAuthRedirectUri());
+  if (__DEV__) {
+    logGoogleDev("canonical_browser_oauth", {
+      reason: isExpoGo ? "expo_go" : "path_a_supabase_aswebauth",
+      redirectTo: getAuthRedirectUri(),
+    });
   }
   return signInWithGoogleOAuthBrowser(supabaseClient);
 }

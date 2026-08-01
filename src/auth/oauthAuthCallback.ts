@@ -19,7 +19,7 @@ function mergedParams(url: string): URLSearchParams {
   return params;
 }
 
-/** Google OAuth browser callback (Expo Go / dev only — not TestFlight native Google). */
+/** Google OAuth browser callback (Expo Go / staging browser fallback — not TestFlight native Google). */
 export async function completeOAuthSessionFromUrl(url: string): Promise<Session> {
   const parsed = parseAuthCallbackUrl(url);
   const params = mergedParams(url);
@@ -35,6 +35,12 @@ export async function completeOAuthSessionFromUrl(url: string): Promise<Session>
 
   const errorDescription = params.get("error_description") || params.get("error");
   if (errorDescription) {
+    logEmailAuth("oauth_callback_error", {
+      hasError: true,
+      errorCode: params.get("error") || null,
+      // description may contain PII — log length only
+      errorDescriptionLen: String(errorDescription).length,
+    });
     throw new Error(errorDescription);
   }
 
@@ -43,6 +49,11 @@ export async function completeOAuthSessionFromUrl(url: string): Promise<Session>
   if (access_token && refresh_token) {
     logAuthFlowSelected("setSession", parsed, url);
     const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+    logEmailAuth("oauth_session_result", {
+      flow: "setSession",
+      sessionEstablished: !error && !!data.session,
+      supabaseErrorCode: error?.code || null,
+    });
     if (error) throw error;
     if (!data.session) throw new Error("OAuth sign-in did not return a session.");
     return data.session;
@@ -50,19 +61,43 @@ export async function completeOAuthSessionFromUrl(url: string): Promise<Session>
 
   const code = params.get("code");
   if (!code) {
+    logEmailAuth("oauth_callback_missing_code", {
+      hasCode: false,
+      hasAccessToken: parsed.hasAccessToken,
+      hasRefreshToken: parsed.hasRefreshToken,
+    });
     throw new Error("OAuth callback URL has no code or session tokens.");
   }
 
   const hasVerifier = await waitForPkceCodeVerifier();
-  logEmailAuth("oauth_pkce_gate", { hasVerifier, redirectUri: getAuthRedirectUri() });
+  logEmailAuth("oauth_pkce_gate", {
+    hasVerifier,
+    hasCode: true,
+    hasState: !!(params.get("state") || parsed.merged.state),
+    redirectUri: getAuthRedirectUri(),
+  });
   if (!hasVerifier) {
     throw new Error("OAuth PKCE verifier missing. Start sign-in again on this device.");
   }
 
   logAuthFlowSelected("exchangeCodeForSession", parsed, url);
   try {
-    return await exchangePkceCodeForSession(code, "oauthAuthCallback.ts:exchangeCodeForSession");
+    const session = await exchangePkceCodeForSession(code, "oauthAuthCallback.ts:exchangeCodeForSession");
+    logEmailAuth("oauth_session_result", {
+      flow: "exchangeCodeForSession",
+      sessionEstablished: !!session,
+      userPrefix: (session.user.id || "").slice(0, 8),
+    });
+    return session;
   } catch (error) {
+    logEmailAuth("oauth_session_result", {
+      flow: "exchangeCodeForSession",
+      sessionEstablished: false,
+      supabaseErrorCode:
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code || "")
+          : null,
+    });
     if (isAccountLinkingConflict(error)) throw error;
     throw error;
   }
