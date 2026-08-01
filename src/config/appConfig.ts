@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import { createClient } from "@supabase/supabase-js";
 import { t } from "../i18n";
 import { secureSessionStorage } from "../auth/secureSessionStorage";
+import { GENERATED_APP_ENV } from "./buildFingerprint.generated";
 
 const PLACEHOLDER_SNIPPETS = [
   "your_project",
@@ -29,6 +30,7 @@ function resolveAppEnvironment() {
   return (
     process.env.EXPO_PUBLIC_APP_ENV ||
     process.env.APP_ENV ||
+    (GENERATED_APP_ENV || "").trim() ||
     ""
   )
     .trim()
@@ -229,6 +231,7 @@ export function sanitizedRuntimeConfigReport() {
   const appEnvironment = (
     process.env.EXPO_PUBLIC_APP_ENV ||
     process.env.APP_ENV ||
+    (GENERATED_APP_ENV || "").trim() ||
     (__DEV__ ? "development" : "production")
   )
     .trim()

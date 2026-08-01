@@ -221,6 +221,18 @@ esac
 
 # --- Gate: physical_verify113 ---
 set +e
+bash "$ROOT/scripts/qa/preflight-physical-build-fingerprint.sh" >"/tmp/yt-pdev-fp-$STAMP.txt" 2>&1
+pdev_fp_rc=$?
+set -e
+if [[ $pdev_fp_rc -eq 0 ]]; then
+  gate_pass physical_build_fingerprint "HEAD fingerprint matches DerivedData-yt3-qa-head"
+else
+  record_gate physical_build_fingerprint FAIL "fingerprint preflight exit=$pdev_fp_rc — refuse Phase 4F on stale RS 113"
+  echo "STOP: stale or missing HEAD Release-Staging fingerprint. Rebuild with scripts/qa/build-release-staging-113-device.sh" | tee -a "$REPORT"
+  exit 26
+fi
+
+set +e
 bash "$PHYSICAL_TOOL" verify113 >"/tmp/yt-pdev-v113-$STAMP.txt" 2>&1
 pdev_v113_rc=$?
 set -e

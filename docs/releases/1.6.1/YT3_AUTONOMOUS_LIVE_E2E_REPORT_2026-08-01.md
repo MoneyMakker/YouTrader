@@ -194,3 +194,64 @@ Still required for PASS: live purchase CustomerInfo for all three plans, auth E2
 **Physical iPhone unlock** (passcode / Face ID) so `devicectl` can launch `com.youtrader.pro` after 113 install.
 
 Optional ASC: change Monthly intro from 1 week → 3 days in App Store Connect UI (API rejected replacement on approved subscription).
+
+---
+
+## Resume after unlock (2026-08-01 ~19:56–20:01 UTC) — required 20-field status
+
+Evidence roots:
+
+- `docs/releases/1.6.1/evidence/phase4f-unlock-poll-20260801-154912/`
+- `docs/releases/1.6.1/evidence/phase4f-physical-resume-20260801-155834/`
+- `docs/releases/1.6.1/evidence/phase4f-status-20260801-160103/`
+- `docs/releases/1.6.1/evidence/phase4f-rc-inventory-20260801-1553/`
+- `docs/releases/1.6.1/evidence/phase4f-sim-maestro-20260801-155127/`
+
+| # | Gate | Result |
+|---|------|--------|
+| 1 | Physical unlock detection | **LIVE PASS** — CoreDevice poll attempt 28 @ 19:56:25Z `STATUS=UNLOCKED`; Preferences launch succeeded; subsequent YouTrader launch succeeded |
+| 2 | Build 113 verification | **LIVE PASS** — installed `YouTrader` `1.6.1` / `113`; harness `physical_verify_ok`; Metro OFF; embedded `main.jsbundle` on local RS candidate; staging host in jsbundle |
+| 3 | Live RevenueCat offering inventory | **CONTRACT PASS** (Management API) — offering `default` / `ofrngbb124c8022`, **3 packages**: `$rc_weekly`→`youtrader_pro_weekly`, `$rc_monthly`→`youtrader_pro_monthly`, `$rc_annual`→`youtrader_pro_yearly__`; entitlement `YouTrader Pro` has all three. ASC: Weekly **READY_TO_SUBMIT / needs_action** (US $4.99, no trial); Monthly **APPROVED** (US $12.99, trial ONE_WEEK); Annual **APPROVED** (US $99.99, trial ONE_WEEK from 2026-08-01). Lifetime not on `default`. |
+| 4 | Weekly purchase → CustomerInfo | **NOT RUN** — physical UI black + Airplane Mode; sim paywall shows plans unavailable without attached StoreKit session; Weekly ASC not Approved |
+| 5 | Monthly purchase/trial → CustomerInfo | **NOT RUN** (same blockers). ASC trial remains ONE_WEEK (not P3D) |
+| 6 | Annual purchase/trial → CustomerInfo | **NOT RUN** (same blockers) |
+| 7 | Email authentication | **NOT RUN** |
+| 8 | Apple authentication | **NOT RUN** |
+| 9 | Google authentication | **NOT RUN** |
+| 10 | RevenueCat identity linking | **NOT RUN** |
+| 11 | User isolation | **NOT RUN** |
+| 12 | Physical navigation | **NOT RUN** — YouTrader foreground screenshots are solid black (Safari/SpringBoard screenshots OK) |
+| 13 | Journal lifecycle | **NOT RUN** |
+| 14 | Stats / Radar / Heatmap | **NOT RUN** |
+| 15 | Prop Pass | **NOT RUN** |
+| 16 | News | **NOT RUN** |
+| 17 | Settings | **NOT RUN** |
+| 18 | PI (physical UI) | **NOT RUN** — staging PI trusted path previously LIVE PASS separately |
+| 19 | Reproduced-defect commits | **None this resume** — no product code change; reinstall of 113 deferred (binary identity still verifies 113; black UI under investigation / env) |
+| 20 | Final Phase 4F status | **FAILED / OPEN / NO-GO** |
+
+### Active blockers (physical)
+
+1. **ENVIRONMENT BLOCKER — Airplane Mode ON** (status bar airplane + Wi‑Fi on SpringBoard and YouTrader screenshots). Cannot toggle Airplane Mode via CoreDevice/DVT without owner Control Center / Settings. Wi‑Fi appears connected but cellular is off.
+2. **LIVE FAIL / evidence gap — YouTrader UI black in DVT screenshots** after unlock + relaunch (process PID present; Safari/SpringBoard capture non-black). Blocks clean physical gate evidence and Maestro-less UI matrix.
+3. **EXTERNAL ACCESS BLOCKER — Weekly ASC `READY_TO_SUBMIT`** — physical StoreKit Weekly may not resolve until Apple clears Weekly for sale.
+4. **Sim StoreKit attach** — Maestro RS funnel reaches paywall but shows **“Plans are temporarily unavailable”** when app is installed via `simctl` without Xcode LaunchAction StoreKitConfiguration. Local `YTStoreKitQA` StoreKit tests: **4/4 PASS**.
+
+### Parallel progress while blocked
+
+- Unlock poll autonomous resume: **PASS**
+- Release-Staging sim build (YouTrader-Staging scheme) **113 + embedded**: **PASS**
+- Maestro onboarding path to paywall: **PARTIAL** (onboarding copy OK; paywall offerings fail without StoreKit attach)
+- RC/ASC inventory refreshed via MCP: **PASS** (3 packages; Weekly needs ASC action)
+
+### Owner system action still required (not in-app navigation)
+
+1. Disable **Airplane Mode** on the paired iPhone (Control Center). Keep device unlocked.
+2. Later, only for StoreKit/Apple ID sheets: Face ID / passcode / Apple ID / 2FA as prompted.
+
+Agent continues polling unlock/Airplane-clear signals and will resume the subscription matrix without asking for in-app navigation. Build **114** not prepared. Production Supabase untouched.
+
+### Poll false-positive note (2026-08-01 20:04Z)
+
+`phase4f-airplane-poll` reported `STATUS=UI_VISIBLE` (yt_mean=5.55) but the captured frame was **iOS Settings → Display & Brightness**, not YouTrader. Airplane Mode is now **OFF** (cellular bars visible). Clean YouTrader relaunch still yields **solid-black DVT screenshots** with process alive (PID present) through 15s — physical UI matrix remains blocked. Auto-Lock observed as **Never**.
+

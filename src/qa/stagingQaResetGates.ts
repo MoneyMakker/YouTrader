@@ -2,6 +2,7 @@
  * Pure staging QA reset gates — no React Native imports (Node-testable).
  */
 
+import { GENERATED_APP_ENV } from "../config/buildFingerprint.generated";
 import { isStagingQaResetDeepLink } from "./stagingQaResetModes";
 
 const STAGING_ENVS = new Set(["staging", "development", "local", "dev"]);
@@ -13,6 +14,7 @@ export function resolveAppEnvironment(
   return (
     env.EXPO_PUBLIC_APP_ENV ||
     env.APP_ENV ||
+    (GENERATED_APP_ENV || "").trim() ||
     (devFallback ? "development" : "production")
   )
     .trim()

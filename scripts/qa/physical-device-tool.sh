@@ -146,12 +146,21 @@ cmd_wait_unlock() {
 
 find_app() {
   local c
+  # Prefer HEAD-built Release-Staging only. Never prefer Jul-30 archive or pre-NAV DerivedData.
   for c in \
-    "$ROOT/build/YouTrader-1.6.1-113-staging.xcarchive/Products/Applications/YouTrader.app" \
-    "$ROOT/build/DerivedData-yt3-qa/Build/Products/Release-Staging-iphoneos/YouTrader.app" \
-    "$ROOT/build/DerivedData-ReleaseStaging/Build/Products/Release-Staging-iphoneos/YouTrader.app"
+    "${YT_RS113_APP:-}" \
+    "$ROOT/build/DerivedData-yt3-qa-head/Build/Products/Release-Staging-iphoneos/YouTrader.app"
   do
-    [[ -d "$c" ]] && { echo "$c"; return 0; }
+    [[ -n "$c" && -d "$c" ]] || continue
+    if [[ -f "$c/main.jsbundle" ]] && rg -q 'YT_BUILD_FP_v1:' "$c/main.jsbundle" 2>/dev/null; then
+      echo "$c"
+      return 0
+    fi
+    # Hermes bytecode may not match rg textually for all strings — allow sidecar
+    if [[ -f "$(dirname "$c")/YouTrader.build-fingerprint.json" ]]; then
+      echo "$c"
+      return 0
+    fi
   done
   return 1
 }
@@ -227,8 +236,11 @@ cmd_relaunch() {
 
 cmd_install() {
   require_devicectl
+  if ! bash "$ROOT/scripts/qa/preflight-physical-build-fingerprint.sh"; then
+    die 24 "fingerprint preflight failed — refusing to install stale RS 113"
+  fi
   local app
-  app="$(find_app)" || die 24 "no Release-Staging 113 .app candidate to install"
+  app="$(find_app)" || die 24 "no HEAD Release-Staging 113 .app (build DerivedData-yt3-qa-head first)"
   cmd_verify113 || true
   local ver
   ver="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")"

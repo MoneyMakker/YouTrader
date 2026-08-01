@@ -194,6 +194,10 @@ import {
   appVersionDisplayLabel,
 } from "../config/appConfig";
 import {
+  buildFingerprintDiagnosticLines,
+  isStagingBuildFingerprintVisible,
+} from "../config/buildFingerprint";
+import {
   FEATURE_LIMIT_MESSAGES,
   FREE_LIMITS,
   PRO_LIMITS,
@@ -9958,6 +9962,32 @@ YouTrader does not knowingly collect data from or market to individuals under th
             })}
           </View>
         </Card>
+
+        {isStagingBuildFingerprintVisible() ? (
+          <Card style={styles.settingsQuietCard} testID="settings-developer-diagnostics">
+            <Text
+              style={styles.settingsSectionTitle}
+              maxFontSizeMultiplier={1.25}
+              accessibilityLabel="Developer Diagnostics"
+            >
+              Developer Diagnostics
+            </Text>
+            <Text style={styles.settingsSectionSub} maxFontSizeMultiplier={1.25}>
+              Staging-only build fingerprint for QA. Not shown in production.
+            </Text>
+            {buildFingerprintDiagnosticLines().map((line) => (
+              <Text
+                key={line}
+                style={[styles.settingsSectionSub, { marginTop: 4 }]}
+                maxFontSizeMultiplier={1.2}
+                selectable
+                testID="settings-build-fingerprint-line"
+              >
+                {line}
+              </Text>
+            ))}
+          </Card>
+        ) : null}
 
         <Card style={styles.settingsQuietCard}>
           <Text style={styles.settingsSectionTitle} maxFontSizeMultiplier={1.25}>Legal</Text>
