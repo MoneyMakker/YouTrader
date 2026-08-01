@@ -1,0 +1,9 @@
+appId: com.youtrader.pro
+---
+- openLink: "youtrader://qa/tab?id=stats"
+- extendedWaitUntil:
+    visible: "Your Performance Starts Here"
+    timeout: 15000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/08_stats_radar
+- scroll
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/09_stats_heatmap
