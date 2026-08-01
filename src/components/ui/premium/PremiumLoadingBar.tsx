@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   glow: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.38,
   },
 });

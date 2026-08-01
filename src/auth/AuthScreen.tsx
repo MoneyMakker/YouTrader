@@ -312,7 +312,7 @@ export function AuthScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  terminalLayer: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
+  terminalLayer: { ...StyleSheet.absoluteFill, zIndex: 1 },
   flex: { flex: 1, zIndex: 2 },
   scroll: {
     flexGrow: 1,
