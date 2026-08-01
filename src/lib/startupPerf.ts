@@ -54,11 +54,12 @@ function persistStartupLine(line: string) {
 export function logStartupPerf(event: string) {
   // warn (not info): Release builds silence logger.info, but TestFlight
   // startup diagnosis needs these checkpoints in device logs.
-  // Also emit console.error — Release syslog captures it more reliably than warn.
+  // Prefer console.warn over console.error so LogBox does not block QA UI.
+  // Release syslog still captures warn; true startup failures use logStartupError.
   const line = `[YouTrader:startup] ${event} +${Date.now() - START_MS}ms`;
   logger.warn(line);
   // eslint-disable-next-line no-console
-  console.error(line);
+  console.warn(line);
   persistStartupLine(line);
 }
 

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Easing,
@@ -28,7 +27,7 @@ import { logger } from "../../lib/logger";
 import { C } from "../../theme/colors";
 import { GlassCard } from "../ui/GlassCard";
 import { lightHaptic, successHaptic } from "../ui/haptics";
-import { AnimatedPressable, EmptyStateCard, PremiumLoadingBar } from "../ui/premium";
+import { AnimatedPressable, EmptyStateCard, PremiumLoadingBar, StatusSpinner } from "../ui/premium";
 import {
   CAREER_TIERS,
   careerTierIndex,
@@ -522,7 +521,7 @@ export function TraderStatusDashboard({
         )}
       </GlassCard>
 
-      {shareBusy ? <ActivityIndicator color={C.green} style={{ marginVertical: 10 }} /> : null}
+      {shareBusy ? <StatusSpinner accessibilityLabel="Sharing" /> : null}
     </Animated.View>
   );
 }
