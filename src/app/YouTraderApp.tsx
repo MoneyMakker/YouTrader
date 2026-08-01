@@ -10564,7 +10564,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     let listener: ((info: CustomerInfo) => void) | null = null;
     const task = InteractionManager.runAfterInteractions(() => {
       try {
-        Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.WARN);
+        Purchases.setLogLevel(LOG_LEVEL.ERROR);
         Purchases.configure({ apiKey: REVENUECAT_API_KEY });
         purchasesConfigured.current = true;
         setRevenueCatReady(true);
