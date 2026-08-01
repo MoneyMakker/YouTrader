@@ -2,6 +2,8 @@
 
 This is the project-level visual source of truth for YouTrader UI work. It preserves the existing app direction and prevents future UI changes from drifting into generic dashboards, cheap crypto styling, or clutter.
 
+**Design tokens / motion / haptics foundation:** YouTrader Design Language (YDL) lives in [`src/ydl/`](../src/ydl/) with agent guide [`.codex/design/YDL.md`](../.codex/design/YDL.md). New UI must prefer YDL semantic tokens over raw values. This file remains the taste and product-UI law.
+
 ## Visual Direction
 
 - Premium iOS 26 / Liquid Glass inspired trading journal.

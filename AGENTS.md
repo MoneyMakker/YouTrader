@@ -21,13 +21,21 @@ Every feature, fix, and design decision must strengthen this loop. YouTrader is 
 
 ## Source of Truth
 
-[`docs/BACKLOG.md`](./docs/BACKLOG.md) is the canonical implementation backlog.
+Document hierarchy (beliefs → decisions → engineering → experience → structure → code → ideas):
+
+[`DOCUMENT_HIERARCHY.md`](./.codex/DOCUMENT_HIERARCHY.md)
+
+- Constitution is the highest authority for AI assistants.
+- Code must respect Architecture. UI must respect YDL. Product decisions must respect the Product Manifesto.
+- If implementation conflicts with a higher document, **stop and report** — do not assume.
+
+[`docs/BACKLOG.md`](./docs/BACKLOG.md) is the canonical implementation backlog (Layer 6 — ideas / sequenced work).
 Task IDs, order, scope, dependencies, and backlog readiness are defined by its
 current contents.
 
 - Do not invent, remove, reprioritize, or combine backlog work.
 - Do not add features without explicit Product Owner approval.
-- Stop for approval if an approved task is technically impossible, weakens security, risks data loss, or conflicts with another approved task.
+- Stop for approval if an approved task is technically impossible, weakens security, risks data loss, or conflicts with another approved task or a higher hierarchy document.
 
 ## Status Vocabulary
 
