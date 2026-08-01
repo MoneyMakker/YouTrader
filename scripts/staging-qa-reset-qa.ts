@@ -27,8 +27,8 @@ function run() {
     shouldRunStagingQaReset({
       env: { EXPO_PUBLIC_APP_ENV: "staging", EXPO_PUBLIC_QA_RESET_AUTH: "1" },
     }),
-    true,
-    "env flag triggers reset in staging",
+    false,
+    "env flag alone must not auto-reset (returning-user race)",
   );
   assert.equal(
     shouldRunStagingQaReset({
