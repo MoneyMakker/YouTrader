@@ -31,8 +31,13 @@ assert.match(
 );
 assert.match(
   appSource,
-  /setQaApplyEditRequest\(\{ url, nonce:/,
-  "YouTraderApp must create apply-edit requests via setQaApplyEditRequest({ url, nonce })",
+  /setQaApplyEditRequest\((request|\{ url, nonce:)/,
+  "YouTraderApp must create apply-edit requests via setQaApplyEditRequest(request|{ url, nonce })",
+);
+assert.match(
+  appSource,
+  /createStagingQaApplyEditRequest\(url\)/,
+  "YouTraderApp deep link must use createStagingQaApplyEditRequest helper",
 );
 assert.match(
   appSource,
