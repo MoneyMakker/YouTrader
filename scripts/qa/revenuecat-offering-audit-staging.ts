@@ -25,6 +25,8 @@ async function main() {
   const url = (staging.EXPO_PUBLIC_SUPABASE_URL || "").trim();
   const rcKey = (staging.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY || "").trim();
   const entitlement = (staging.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || "YouTrader Pro").trim();
+  const weekly =
+    (staging.EXPO_PUBLIC_REVENUECAT_IOS_WEEKLY_PRODUCT_ID || "youtrader_pro_weekly").trim();
   const monthly = (staging.EXPO_PUBLIC_REVENUECAT_IOS_PRODUCT_ID || "").trim();
   const yearly = (staging.EXPO_PUBLIC_REVENUECAT_IOS_YEARLY_PRODUCT_ID || "").trim();
   if (!url.includes("zleojeqkzizeyerhjpur")) throw new Error("refuse non-staging");
@@ -70,8 +72,13 @@ async function main() {
     http_offerings: offRes.status,
     offering: currentOffering?.identifier || current,
     entitlement,
+    weekly_package:
+      packages.find((p: any) => p.identifier === "$rc_weekly") ||
+      packages.find((p: any) => p.platform_product_identifier === weekly) ||
+      null,
     monthly_package: packages.find((p: any) => p.identifier === "$rc_monthly") || null,
     annual_package: packages.find((p: any) => p.identifier === "$rc_annual") || null,
+    weekly_app_store_product: weekly,
     monthly_app_store_product: monthly,
     annual_app_store_product: yearly,
     packages,
@@ -81,19 +88,30 @@ async function main() {
   });
 
   const productIds = new Set(packages.map((p: any) => p.platform_product_identifier).filter(Boolean));
+  const weeklyOk = productIds.has(weekly);
   const monthlyOk = productIds.has(monthly);
   const yearlyOk = productIds.has(yearly);
+  const hasWeeklyPkg =
+    packages.some((p: any) => p.identifier === "$rc_weekly") ||
+    packages.some((p: any) => p.platform_product_identifier === weekly);
   const hasMonthlyPkg = packages.some((p: any) => p.identifier === "$rc_monthly");
   const hasAnnualPkg = packages.some((p: any) => p.identifier === "$rc_annual");
   console.info("[YTQA:rc] mapping", {
+    weekly_in_offering: weeklyOk,
     monthly_in_offering: monthlyOk,
     yearly_in_offering: yearlyOk,
+    has_rc_weekly_package: hasWeeklyPkg,
     has_rc_monthly_package: hasMonthlyPkg,
     has_rc_annual_package: hasAnnualPkg,
     package_count: packages.length,
     entitlement_id_quoted_ok: entitlement === "YouTrader Pro",
   });
-  if (!monthlyOk || !yearlyOk || !hasMonthlyPkg || !hasAnnualPkg) process.exitCode = 3;
+  if (!weeklyOk || !monthlyOk || !yearlyOk || !hasWeeklyPkg || !hasMonthlyPkg || !hasAnnualPkg) {
+    console.error("[YTQA:rc] FAIL three-plan offering incomplete — Weekly/Monthly/Annual required");
+    process.exitCode = 3;
+  } else {
+    console.info("[YTQA:rc] PASS three-plan offering");
+  }
 }
 
 main().catch((e) => {
