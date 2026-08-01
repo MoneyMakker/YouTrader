@@ -277,6 +277,15 @@ export function AuthScreen({
                 {copy.headline}
               </Animated.Text>
               <Animated.Text style={[styles.subtitle, { opacity: subtitleOpacity }]}>{copy.subtitle}</Animated.Text>
+              {copy.entitlementActiveNote ? (
+                <Animated.Text
+                  style={[styles.entitlementNote, { opacity: subtitleOpacity }]}
+                  testID="auth.entitlement-active-note"
+                  accessibilityRole="text"
+                >
+                  {copy.entitlementActiveNote}
+                </Animated.Text>
+              ) : null}
               {busy ? (
                 <Animated.View pointerEvents="none" style={[styles.initSkeleton, { opacity: subtitleOpacity }]}>
                   <PremiumLoadingBar indeterminate height={3} tone="lime" style={styles.initBar} />
@@ -414,6 +423,16 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     textAlign: "center",
     maxWidth: 320,
+    marginBottom: 4,
+    paddingHorizontal: 8,
+  },
+  entitlementNote: {
+    color: C.green,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    maxWidth: 320,
+    marginTop: 8,
     marginBottom: 4,
     paddingHorizontal: 8,
   },

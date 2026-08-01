@@ -7,6 +7,8 @@ export type AuthScreenCopy = {
   google: string;
   email: string;
   secureNote: string;
+  /** Shown when entitlement is already active but auth is still required. */
+  entitlementActiveNote?: string;
   termsPrefix: string;
   termsLabel: string;
   termsAnd: string;

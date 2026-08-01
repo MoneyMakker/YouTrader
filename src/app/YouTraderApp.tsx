@@ -11748,6 +11748,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     google: t("authGoogle"),
     email: t("authEmail"),
     secureNote: t("authSecureNote"),
+    entitlementActiveNote: t("authEntitlementActiveNote"),
     termsPrefix: t("authTermsPrefix"),
     termsLabel: t("authTermsLabel"),
     termsAnd: t("authTermsAnd"),
