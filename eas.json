@@ -12,11 +12,16 @@
       "ios": { "simulator": false }
     },
     "production": {
-      "autoIncrement": true,
-      "channel": "production"
+      "autoIncrement": false,
+      "channel": "production",
+      "environment": "production"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6774799403"
+      }
+    }
   }
 }
