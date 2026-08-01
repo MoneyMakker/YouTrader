@@ -4,6 +4,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PurchasesPackage, PurchasesStoreProduct } from "react-native-purchases";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
@@ -137,8 +138,13 @@ export function AcquisitionPaywall({
 }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
+  const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<PaywallPlanId>("yearly");
   const purchaseLock = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+  // Sticky CTA (primary + supporting ± restore) must not cover plan cards.
+  const stickyReserve =
+    132 + (showRestorePurchases || !!paywallError ? 56 : 0) + Math.max(insets.bottom, 10);
 
   const weekly =
     packages.find((pkg) => packageTitle(pkg) === "WEEKLY") ||
@@ -226,6 +232,18 @@ export function AcquisitionPaywall({
     }
   }, [plans, selected, offeringsUnavailable]);
 
+  useEffect(() => {
+    if (offeringsUnavailable || !plans.length) return;
+    const timer = setTimeout(() => {
+      if (selected === "yearly") {
+        scrollRef.current?.scrollToEnd({ animated: false });
+      } else if (selected === "weekly") {
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [selected, plans.length, offeringsUnavailable]);
+
   const active = plans.find((p) => p.presentation.id === selected) || plans[0] || null;
   const canPurchase = !!active?.pkg && !purchaseBusy;
 
@@ -248,7 +266,13 @@ export function AcquisitionPaywall({
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background.primary }} testID="acquisition-paywall">
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.body, { paddingBottom: stickyReserve }]}
+        keyboardShouldPersistTaps="handled"
+        testID="paywall-scroll"
+      >
         {onClose ? (
           <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
             <YdlText role="body" color="text.secondary">
@@ -428,11 +452,19 @@ export function AcquisitionPaywall({
         <YdlText role="caption" color="text.tertiary" testID="paywall-legal-disclosure">
           {LEGAL}
         </YdlText>
-        <View style={{ height: 110 }} />
       </ScrollView>
 
       {!offeringsUnavailable && active ? (
-        <View style={[styles.stickyCta, { backgroundColor: theme.colors.background.primary }]}>
+        <View
+          style={[
+            styles.stickyCta,
+            {
+              backgroundColor: theme.colors.background.primary,
+              paddingBottom: Math.max(insets.bottom, 12),
+            },
+          ]}
+          testID="paywall-sticky-cta"
+        >
           <YdlButton
             label={purchaseBusy ? t("connecting") : active.presentation.cta}
             onPress={handlePurchase}
@@ -513,7 +545,6 @@ const styles = StyleSheet.create({
   stickyCta: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 18,
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(255,255,255,0.08)",
