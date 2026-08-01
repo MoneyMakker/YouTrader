@@ -1,112 +1,135 @@
 # YT3 Scope-Freeze Status — 2026-08-01 (updated)
 
-Phase 4F status: **FAILED / OPEN / NO-GO**
+Phase 4F status: **OPEN / NO-GO** (implementation advanced; physical build 115 + Restore Behavior confirmation still required)
 
 ## Freeze compliance
 
 - No App Store screenshots deleted/replaced/uploaded
 - No build uploaded to ASC/TestFlight
 - No Add for Review / Submit for Review
-- Build 115 not created
+- Build 115 not created yet (CURRENT_PROJECT_VERSION remains **113** until gates pass)
+- Build 113 / 114 not modified as release artifacts
 - No public listing AI metadata cleanup executed
-- Production Supabase untouched
+- Production Supabase schema untouched (delete-account function added in repo; **not deployed** this run)
 - Deferred backlog: `docs/releases/1.6.1/BACKLOG_ASC_METADATA_CLEANUP.md`
 
 ---
 
-## 1. Weekly configuration — PASS (ASC + RC)
+## Integration checkpoint (this run)
+
+| Item | Value |
+|------|-------|
+| Starting worktree | `/Users/valentynborovyk/Projects/youtrader-final` |
+| Starting branch / commit | `fix/yt3-autonomous-recovery` @ `ea084ca` (preserved) |
+| Checkpoint branch | `checkpoint/yt3-phase4f-wip-20260801-ea084ca` @ `96fc790` |
+| Release branch | `release/1.6.1-build-115` |
+| Security Issue #8 | Cherry-picked as `c90838c` (content of `252a7ae`; high/critical audit = 0) |
+| Billing commit | `253ab41` fix(billing): complete purchase-to-auth entitlement lifecycle |
+| Account commit | `e91268e` fix(account): add secure account deletion lifecycle |
+
+Dirty WIP preserved via checkpoint + `artifacts/checkpoints/20260801-yt3-115/` (local).
+
+---
+
+## Identifiers (unchanged)
+
+| Item | Value |
+|------|-------|
+| Entitlement | `YouTrader Pro` (`EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID` / `REVENUECAT_ENTITLEMENT_ID`) |
+| Offering | `default` (`ofrngbb124c8022`) |
+| Weekly | `$rc_weekly` → `youtrader_pro_weekly` |
+| Monthly | `$rc_monthly` → `youtrader_pro_monthly` |
+| Yearly | `$rc_annual` → `youtrader_pro_yearly__` |
+| react-native-purchases | lock `9.15.2` |
+| SDK key source | `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` (`appl_` present) |
+| App scheme | `youtrader` |
+
+## RevenueCat Restore Behavior
+
+**BLOCKED — dashboard confirmation required**
+
+MCP App Store app metadata does not expose Project Settings → Restore Behavior.
+Required for purchase-before-login when an identified App User ID already exists:
+
+1. Open RevenueCat → Project **YouTrader** → **Project settings → General**
+2. Confirm Restore Behavior is **Transfer to new App User ID** (not Block Restore)
+3. Reply with the exact selected value
+
+Until confirmed, final GO for build 115 is withheld.
+
+Note: anonymous → `Purchases.logIn(uuid)` aliases anonymous customers per RC docs; the app also runs **one** post-login `restorePurchases` fallback when pre-auth entitlement is lost after login.
+
+---
+
+## Implemented this run (code)
+
+### Purchase → auth → identity → tabs
+
+1. `RevenueCatIdentitySynchronizer` ported to `src/billing/` and wired in `YouTraderApp`
+2. `Purchases.logIn` only via synchronizer with Supabase UUID (rejects email)
+3. Waits for `revenueCatReady` before identity sync (fixes configure race)
+4. In-memory `preAuthEntitledRef` + `decidePostLoginEntitlementReconcile` → one restore fallback
+5. Anonymous restore (Path A) → entitlement → mandatory auth (no premature “Pro unlocked” alert)
+6. Authenticated restore (Path B) → identity sync first → restore
+7. Acquisition routing: authenticated without entitlement → **main** (4 tabs); Prop Pass only when `isPremium`
+8. Trial copy gated by `checkTrialOrIntroductoryPriceEligibility` (unknown → no trial claim; weekly never)
+
+### Account deletion
+
+- Settings → Delete Account confirmation
+- `supabase/functions/delete-account` (service-role server delete)
+- Apple Subscriptions deep link
+- **Deploy of Edge Function still required** before live deletion works
+
+---
+
+## Static verification
 
 | Check | Result |
 |-------|--------|
-| Product ID | `youtrader_pro_weekly` |
-| USD | $4.99 / week |
-| ASC intro | **none** (empty “Set up Introductory Offer”) |
-| RC `trial_offer` | `null` |
-| ASC status | Waiting for Review (not submitted this phase) |
-| Evidence | `evidence/phase4f-scopefreeze-20260801T213922Z/asc_weekly_no_trial.png` |
+| `tsc --noEmit` | PASS |
+| `security:audit` (high+) | PASS (0 high/critical; 3 moderate Storybook valibot only) |
+| `security:check` | PASS |
+| `translations:check` | PASS |
+| `test:email-password` | PASS |
+| `test:revenuecat-mobile-identity` | PASS (13 scenarios) |
+| acquisition / reconcile / paywallPlanCopy / routing selftests | PASS |
+| `test:revenuecat-entitlement` | FAIL env (`Deno is not defined` in shared helper under Node) — pre-existing runner limitation on this tree |
+| Expo Doctor | pre-existing app.json / CNG / expo patch findings only (not re-run as blocking) |
 
-## 2. Monthly 3-day trial — ASC PASS / runtime PENDING
+---
 
-| Step | Result |
+## Physical QA / Build 115
+
+| Item | Status |
 |------|--------|
-| Deleted prior 1-week intro | DONE |
-| Created Free · **3 Days** · No End Date | DONE |
-| ASC readback | **Free for the first 3 days** · Aug 2, 2026 → No End Date · 175 countries |
-| Evidence | `asc_monthly_3day_saved.png`, `asc_monthly_confirm_3day.png` |
-| RC catalog `trial_duration` | still `P1W` (stale until store sync) |
-| RC store-state `trial_offer` | still `ONE_WEEK` start `2026-07-30` (stale / current-window lag) |
-| Effective window | **Upcoming Aug 2** — no active Monthly intro on Aug 1 (gap after delete) |
-| Physical CTA eligibility today | **Cannot prove real 3-day** until Aug 2 + StoreKit/RC refresh |
+| Build number bump to 115 | **NOT DONE** (gates incomplete) |
+| Physical install of 115 | **NOT DONE** |
+| Weekly / Monthly / Yearly live purchase matrix | **NOT DONE** |
+| Email / Apple / Google post-purchase auth | **NOT DONE** |
+| Cold launch without Metro on device | **NOT DONE** |
 
-## 3. Yearly 7-day trial — PASS
+---
 
-| Check | Result |
-|-------|--------|
-| Product ID | `youtrader_pro_yearly__` |
-| ASC | **Free for the first week** · Aug 1, 2026 → No End Date (Current) |
-| RC store-state | `ONE_WEEK` start `2026-08-01` |
-| Physical CTA | `Start 7 Days Free` + `7 days free, then $99.99/year…` |
-| Evidence | `asc_yearly_7day_verify.png`, paywall screenshots |
+## Remaining blockers (ordered)
 
-## 4. RevenueCat inventory — PASS
+1. **Confirm RevenueCat Restore Behavior** in dashboard (exact value).
+2. Deploy `delete-account` Edge Function to the production Supabase project (human/CI deploy).
+3. After (1): set version/build to **1.6.1 (115)**, build Release (production scheme, not Release-Staging), install on physical iPhone.
+4. Run purchase matrix A/B/C with fresh sandbox testers + auth providers + navigation screenshots.
+5. Monthly 3-day ASC window starts **2026-08-02** — re-verify Apple payment sheet says 3 days (not 1 week).
 
-| Item | Result |
-|------|--------|
-| App | YouTrader App Store `appfa18518d16` |
-| Entitlement | YouTrader Pro `entl5e95747df4` — Weekly + Monthly + Yearly attached |
-| Offering `default` `ofrngbb124c8022` `is_current: true` | **3 packages** |
-| Packages | `$rc_weekly` → weekly · `$rc_monthly` → monthly · `$rc_annual` → yearly__ |
-| Duplicates created | None |
-| API keys changed | No |
+---
 
-## 5–7. Physical paywall
+## Confirmations
 
-### Before sticky fix (`6d6bba2`)
+- Public version target remains **1.6.1**
+- Final local build number **115** not created yet
+- Build **113** not modified as the release artifact
+- Build **114** not reused
+- Build **116** not created
+- No TestFlight / ASC upload
+- No App Store screenshots / listing changes
+- Nothing added for review / submitted / published
 
-Sticky overlapped Monthly; Yearly off-screen; empty radios while Yearly CTA active.
-
-### After sticky fix (`ea084ca` / `YT_BUILD_FP_v1:ea084ca:113:Release-Staging`)
-
-| Plan | Visible | Price | Trial UI | CTA match | Notes |
-|------|---------|-------|----------|-----------|-------|
-| Weekly | prior shot YES $4.99 | $4.99/week | none | selection tap blocked (Maestro needs Apple Team ID) | off-screen after auto-scroll to Yearly |
-| Monthly | YES | $12.99/month | **3 Days Free** badge | — | StoreKit eligibility shows 3-day; ASC start Aug 2 Upcoming |
-| Yearly | YES selected ✓ | $99.99/year | **7 Days Free** + BEST VALUE + SAVE 61% + Only $1.92/week | sticky CTA `Start 7 Days Free` + renewal copy | sticky no longer covers Yearly |
-
-Evidence after fix: `20260801T220757Z_paywall_sticky_fix_113.png`
-
-Commit: `ea084ca` — *YT3 Phase4F: keep paywall plans clear of sticky CTA*
-
-## 8–14. Purchase / CustomerInfo / Auth / logIn
-
-**NOT RUN** — blocked by: Monthly 3-day not live until Aug 2; physical tap automation limited; live chain not executed.
-
-## 15–16. Navigation 5-tab / 4-tab
-
-**NOT PASS** — not captured this turn.
-
-## 17–20. Journal / Prop Pass / Stats / Settings-More
-
-**NOT RUN**
-
-## 21. Live-defect work
-
-- Reproduced: sticky CTA covers Monthly / Yearly not visible / selected radio off-screen
-- Minimal fix in `src/app/startup/AcquisitionPaywall.tsx`: ScrollView `flex:1`, dynamic `stickyReserve` + safe-area, scroll-to-end for default Yearly
-- Rebuild RS 113 in progress for physical retest
-- Commit pending after rebuild verification + typecheck
-
-## 22. Remaining blockers
-
-1. Wait until **2026-08-02** (or Apple advances start) for Monthly 3-day to become Current; re-read RC store-state → expect THREE_DAYS / P3D
-2. Physical live StoreKit purchases W/M/Y + CustomerInfo
-3. Email → Apple → Google + Purchases.logIn + entitlement isolation
-4. Eligible 5-tab + deny 4-tab screenshots
-5. Product matrix on main screens
-6. Physical retest of sticky CTA fix after RS rebuild install
-
-## 23–24. Confirmations
-
-- Screenshots: **untouched**
-- Upload/submit: **none**
-- Build 115: **not created**
+**Decision: NO-GO for build 115 until Restore Behavior is confirmed and physical purchase→auth→logIn matrix passes.**
