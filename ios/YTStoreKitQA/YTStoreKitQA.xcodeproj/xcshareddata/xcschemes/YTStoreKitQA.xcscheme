@@ -77,7 +77,7 @@
       <CommandLineArguments>
       </CommandLineArguments>
       <StoreKitConfigurationFileReference
-         identifier = "../../../YouTraderStaging.storekit">
+         identifier = "../YouTraderStaging.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
