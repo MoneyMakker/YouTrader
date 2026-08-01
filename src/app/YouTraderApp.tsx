@@ -1618,7 +1618,31 @@ function makeOfflineCalendarEvents(): EconEvent[] {
     },
   ];
 }
-async function loadNews(): Promise<MarketNews[]> {
+async function loadNews(opts?: {
+  fault?: import("../qa/stagingQaNewsFault").StagingNewsFaultMode;
+}): Promise<{ items: MarketNews[]; errorCode: string | null }> {
+  const fault = opts?.fault || "none";
+  const { resolveNewsLoadPlan } = await import("../qa/stagingQaNewsFault");
+  const plan = resolveNewsLoadPlan(fault);
+  if (plan.forceTimeout) {
+    await new Promise((r) => setTimeout(r, 50));
+    return { items: [], errorCode: "timeout" };
+  }
+  if (plan.forceEmpty) {
+    return { items: [], errorCode: null };
+  }
+  if (plan.forceMalformed) {
+    return { items: [], errorCode: "malformed" };
+  }
+  if (!plan.useNetwork) {
+    const cacheRaw = await AsyncStorage.getItem("news-cache-v6");
+    const cached = cacheRaw ? JSON.parse(cacheRaw) : null;
+    return {
+      items: Array.isArray(cached?.items) ? cached.items : [],
+      errorCode: plan.errorCode,
+    };
+  }
+
   const cacheRaw = await AsyncStorage.getItem("news-cache-v6");
   const cached = cacheRaw ? JSON.parse(cacheRaw) : null;
   const persist = async (items: MarketNews[]) => {
@@ -1632,7 +1656,9 @@ async function loadNews(): Promise<MarketNews[]> {
   };
 
   const marketIntelItems = await loadCachedMarketNews();
-  if (marketIntelItems.length) return persist(marketIntelItems);
+  if (marketIntelItems.length) {
+    return { items: await persist(marketIntelItems), errorCode: null };
+  }
 
   if (FINNHUB) {
     const controller = new AbortController();
@@ -1644,9 +1670,10 @@ async function loadNews(): Promise<MarketNews[]> {
       );
       clearTimeout(timer);
       const data = await res.json();
-      const items: MarketNews[] = (
-        Array.isArray(data) ? data.slice(0, 80) : []
-      ).map((n: any) => {
+      if (!Array.isArray(data)) {
+        return { items: cached?.items || [], errorCode: "malformed" };
+      }
+      const items: MarketNews[] = data.slice(0, 80).map((n: any) => {
         const text = `${n.headline || ""} ${n.summary || ""}`;
         return {
           id: String(n.id || uid()),
@@ -1659,20 +1686,24 @@ async function loadNews(): Promise<MarketNews[]> {
           impact: impactFromText(text),
         };
       });
-      if (items.length) return persist(items);
-    } catch {
+      if (items.length) return { items: await persist(items), errorCode: null };
+    } catch (error: any) {
       clearTimeout(timer);
+      if (error?.name === "AbortError") {
+        return { items: cached?.items || [], errorCode: "timeout" };
+      }
     }
   }
 
   try {
     const items = await fetchYahooFinanceNews();
-    if (items.length) return persist(items);
+    if (items.length) return { items: await persist(items), errorCode: null };
   } catch {
     // Fall back to the latest cached feed before showing offline placeholders.
   }
 
-  return cached?.items || demoNews;
+  const fallback = cached?.items || demoNews;
+  return { items: fallback, errorCode: fallback === demoNews ? null : null };
 }
 function normalizeEvent(e: any, index: number): EconEvent {
   const text = `${e.name || e.event || e.title || ""} ${e.currency || e.country || ""}`;
@@ -1744,7 +1775,10 @@ function normalizeImpact(value: unknown, fallbackText = ""): Impact {
 
 async function loadMarketIntelligence(): Promise<MarketIntelData> {
   const empty: MarketIntelData = { brief: null, watchlist: [], summary: null, events: [], propUpdates: [], headlines: [] };
-  if (!supabase) return { ...empty, headlines: await loadNews(), events: await loadCalendarEvents() };
+  if (!supabase) {
+    const news = await loadNews();
+    return { ...empty, headlines: news.items, events: await loadCalendarEvents() };
+  }
   try {
     const today = todayISO();
     const [briefRes, watchlistRes, summaryRes, eventRes, propRes, newsRes] = await Promise.all([
@@ -1832,7 +1866,8 @@ async function loadMarketIntelligence(): Promise<MarketIntelData> {
       headlines,
     };
   } catch {
-    return { ...empty, headlines: await loadNews(), events: await loadCalendarEvents() };
+    const news = await loadNews();
+    return { ...empty, headlines: news.items, events: await loadCalendarEvents() };
   }
 }
 
@@ -9158,8 +9193,9 @@ function NewsListItem({ item }: { item: MarketNews }) {
 
   return (
     <AnimatedPressable
+      testID="news.article"
+      accessibilityLabel={`news.article.${item.title}. Impact ${item.impact}. ${accessibilityAssets}. ${item.source}, ${item.time}`}
       accessibilityRole="link"
-      accessibilityLabel={`${item.title}. Impact ${item.impact}. ${accessibilityAssets}. ${item.source}, ${item.time}`}
       onPress={() => {
         trackEvent("news_opened", { source: item.source, impact: item.impact, has_url: !!item.url });
         return item.url ? Linking.openURL(item.url) : undefined;
@@ -9226,22 +9262,46 @@ function NewsScreen({
 }) {
   const [items, setItems] = useState<MarketNews[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [faultMode, setFaultMode] = useState<import("../qa/stagingQaNewsFault").StagingNewsFaultMode>("none");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { isStagingNewsFaultAllowed, STAGING_NEWS_FAULT_STORAGE_KEY } = await import(
+        "../qa/stagingQaNewsFault"
+      );
+      if (!isStagingNewsFaultAllowed()) return;
+      const raw = await AsyncStorage.getItem(STAGING_NEWS_FAULT_STORAGE_KEY);
+      if (!cancelled && raw) {
+        setFaultMode(raw as import("../qa/stagingQaNewsFault").StagingNewsFaultMode);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const news = await loadNews();
-      setItems(news);
+      const news = await loadNews({ fault: faultMode });
+      setItems(news.items);
+      setErrorCode(news.errorCode);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [faultMode]);
   useEffect(() => {
     let alive = true;
     const load = async () => {
       if (alive) setLoading(true);
       try {
-        const news = await loadNews();
-        if (alive) setItems(news);
+        const news = await loadNews({ fault: faultMode });
+        if (alive) {
+          setItems(news.items);
+          setErrorCode(news.errorCode);
+        }
       } finally {
         if (alive) setLoading(false);
       }
@@ -9250,7 +9310,7 @@ function NewsScreen({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [faultMode]);
 
   const renderNewsItem = useCallback(({ item }: { item: MarketNews }) => (
     <MemoNewsListItem item={item} />
@@ -9258,38 +9318,69 @@ function NewsScreen({
   const newsKeyExtractor = useCallback((item: MarketNews) => item.id, []);
   const newsListHeader = useMemo(
     () => (
-      <AiNewsSentimentCard
-        isPremium={isPremium}
-        onUpgrade={onUpgrade}
-        userId={userId}
-        headlines={items.slice(0, 8).map((item) => ({
-          title: item.title,
-          summary: item.summary,
-          source: item.source,
-          time: item.time,
-          impact: item.impact,
-          symbols: ASSETS.filter((asset) => item.bias[asset] && item.bias[asset] !== "NEUTRAL"),
-        }))}
-      />
+      <View>
+        <AiNewsSentimentCard
+          isPremium={isPremium}
+          onUpgrade={onUpgrade}
+          userId={userId}
+          headlines={items.slice(0, 8).map((item) => ({
+            title: item.title,
+            summary: item.summary,
+            source: item.source,
+            time: item.time,
+            impact: item.impact,
+            symbols: ASSETS.filter((asset) => item.bias[asset] && item.bias[asset] !== "NEUTRAL"),
+          }))}
+        />
+        {errorCode ? (
+          <View
+            testID="news.error"
+            accessibilityLabel={`news.error.${errorCode}`}
+            style={{ marginHorizontal: 16, marginBottom: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#f59e0b55" }}
+          >
+            <Text style={{ color: "#f59e0b", marginBottom: 8 }} maxFontSizeMultiplier={1.25}>
+              {errorCode === "offline"
+                ? t("newsEmptyMessage")
+                : errorCode === "timeout"
+                  ? t("newsEmptyMessage")
+                  : t("newsEmptyMessage")}
+            </Text>
+            <Pressable
+              testID="news.retry"
+              accessibilityLabel="news.retry"
+              onPress={() => {
+                void refresh();
+              }}
+              style={{ alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "#7c3aed55" }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "600" }} maxFontSizeMultiplier={1.2}>
+                Retry
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
     ),
-    [isPremium, items, onUpgrade, userId],
+    [errorCode, isPremium, items, onUpgrade, refresh, userId],
   );
   const newsListEmpty = useMemo(
     () => (
-      <EmptyStateCard
-        tone="purple"
-        title={t("newsEmptyTitle")}
-        message={t("newsEmptyMessage")}
-        icon={<Newspaper size={24} color={C.purple} strokeWidth={2.4} />}
-      />
+      <View testID="news.empty" accessibilityLabel="news.empty">
+        <EmptyStateCard
+          tone="purple"
+          title={t("newsEmptyTitle")}
+          message={t("newsEmptyMessage")}
+          icon={<Newspaper size={24} color={C.purple} strokeWidth={2.4} />}
+        />
+      </View>
     ),
     [],
   );
 
   if (loading && !items.length) {
     return (
-      <View style={styles.screen}>
-        <View style={styles.newsList}>
+      <View style={styles.screen} testID="news.screen" accessibilityLabel="news.screen">
+        <View style={styles.newsList} testID="news.loading" accessibilityLabel="news.loading">
           <SkeletonStack count={4} tone="lime" />
         </View>
       </View>
@@ -9297,22 +9388,35 @@ function NewsScreen({
   }
 
   return (
-    <FlatList
-      style={styles.screen}
-      contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}
-      data={items}
-      keyExtractor={newsKeyExtractor}
-      renderItem={renderNewsItem}
-      ItemSeparatorComponent={() => <View style={styles.newsItemGap} />}
-      refreshing={loading}
-      onRefresh={refresh}
-      removeClippedSubviews
-      initialNumToRender={8}
-      maxToRenderPerBatch={6}
-      windowSize={7}
-      ListHeaderComponent={newsListHeader}
-      ListEmptyComponent={newsListEmpty}
-    />
+    <View style={{ flex: 1 }} testID="news.screen" accessibilityLabel="news.screen">
+      <FlatList
+        testID="news.list"
+        accessibilityLabel="news.list"
+        style={styles.screen}
+        contentContainerStyle={[styles.newsList, styles.newsListNoTitle]}
+        data={items}
+        keyExtractor={newsKeyExtractor}
+        renderItem={renderNewsItem}
+        ItemSeparatorComponent={() => <View style={styles.newsItemGap} />}
+        refreshing={loading}
+        onRefresh={refresh}
+        removeClippedSubviews
+        initialNumToRender={8}
+        maxToRenderPerBatch={6}
+        windowSize={7}
+        ListHeaderComponent={newsListHeader}
+        ListEmptyComponent={newsListEmpty}
+        ListHeaderComponentStyle={{ width: "100%" }}
+      />
+      <Pressable
+        testID="news.refresh"
+        accessibilityLabel="news.refresh"
+        onPress={() => {
+          void refresh();
+        }}
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0.01 }}
+      />
+    </View>
   );
 }
 
@@ -10354,6 +10458,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [qaApplyEditRequest, setQaApplyEditRequest] = useState<{ url: string; nonce: number } | null>(
     null,
   );
+  const [qaNewsFaultEpoch, setQaNewsFaultEpoch] = useState(0);
   const onQaApplyEditConsumed = useCallback(() => {
     setQaApplyEditRequest(null);
   }, []);
@@ -11344,6 +11449,27 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           console.info("[YTQA] tab forced", { tabId });
           return;
         }
+        if (url.toLowerCase().startsWith("youtrader://qa/news-fault")) {
+          const {
+            isStagingNewsFaultAllowed,
+            parseStagingNewsFaultUrl,
+            STAGING_NEWS_FAULT_STORAGE_KEY,
+          } = await import("../qa/stagingQaNewsFault");
+          if (!isStagingNewsFaultAllowed()) {
+            Alert.alert("QA news-fault blocked", "staging_only");
+            return;
+          }
+          const mode = parseStagingNewsFaultUrl(url);
+          if (!mode) {
+            Alert.alert("QA news-fault", "Use mode=none|offline|timeout|empty|malformed|unavailable");
+            return;
+          }
+          await AsyncStorage.setItem(STAGING_NEWS_FAULT_STORAGE_KEY, mode);
+          setQaNewsFaultEpoch((n) => n + 1);
+          setTab("news");
+          console.info("[YTQA] news fault set", { mode });
+          return;
+        }
         const result = await processAuthDeepLink(url);
         if (result.kind === "email_confirmed") {
           Alert.alert(
@@ -12221,6 +12347,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             </React.Suspense>
           ) : tab === "news" ? (
             <NewsScreen
+              key={`news-${qaNewsFaultEpoch}`}
               lang={lang}
               isPremium={isPremium}
               userId={session?.user.id || null}

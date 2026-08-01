@@ -112,8 +112,8 @@ cmd_install() {
 
 cmd_launch() {
   require_device
-  xcrun devicectl device process launch --device "$DEVICE_ID" --start-stopped=false "$BUNDLE_ID" 2>&1 | tee -a "$LOG" \
-    || xcrun devicectl device process launch --device "$DEVICE_ID" "$BUNDLE_ID" 2>&1 | tee -a "$LOG"
+  # Newer devicectl: --start-stopped is a flag without value.
+  xcrun devicectl device process launch --device "$DEVICE_ID" "$BUNDLE_ID" 2>&1 | tee -a "$LOG"
 }
 
 cmd_terminate() {

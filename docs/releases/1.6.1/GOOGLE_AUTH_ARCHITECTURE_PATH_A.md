@@ -55,10 +55,17 @@ Prefer PATH A as the smallest safe repair for the already-working ASWebAuth shee
 
 ### Remaining Google blocker
 
-**EXTERNAL BLOCKER — GOOGLE CLOUD REDIRECT URI**
+**EXTERNAL BLOCKER — MISSING GOOGLE CLOUD PROJECT PERMISSION**
 
-Authorize on the Web OAuth client:
+Runtime authorize hop (Session 12) proves Google receives exactly:
 
-`https://zleojeqkzizeyerhjpur.supabase.co/auth/v1/callback`
+`redirect_uri=https://zleojeqkzizeyerhjpur.supabase.co/auth/v1/callback`
 
-Then re-run Lane B Google E2E.
+Staging Supabase Auth already has:
+
+- Google enabled + client ID + secret present
+- `youtrader://auth` in `uri_allow_list`
+- staging Site URL
+
+No `gcloud` / Firebase CLI; Playwright Google Cloud Console requires interactive sign-in.
+Cannot mutate the Web OAuth client's authorized redirect URIs from this environment.
