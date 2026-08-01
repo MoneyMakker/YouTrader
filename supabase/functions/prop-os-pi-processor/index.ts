@@ -6,18 +6,10 @@ function bearer(req: Request): string {
   return h.replace(/^Bearer\s+/i, "").trim();
 }
 
-function jwtRole(token: string): string | null {
-  try {
-    const part = token.split(".")[1];
-    if (!part) return null;
-    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
-    const payload = JSON.parse(json);
-    return typeof payload.role === "string" ? payload.role : null;
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * Trust only shared secret header or exact service-role key match.
+ * Do not decode JWT payloads without signature verification.
+ */
 function assertTrustedProcessor(req: Request): boolean {
   const token = bearer(req);
   const shared = Deno.env.get("PROP_OS_PROCESSOR_SHARED_SECRET") ?? "";
@@ -25,7 +17,6 @@ function assertTrustedProcessor(req: Request): boolean {
   if (shared && headerSecret && headerSecret === shared) return true;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   if (serviceKey && token && token === serviceKey) return true;
-  if (token && jwtRole(token) === "service_role") return true;
   return false;
 }
 
@@ -70,6 +61,22 @@ Deno.serve(async (req) => {
       p_assignment_revision: (body as { assignmentRevision?: number }).assignmentRevision,
       p_reason_code: (body as { reasonCode?: string }).reasonCode ?? "pi_failed",
     });
+    if (error) return json({ kind: "rpc_error", message: error.message }, 500);
+    return json(data ?? { kind: "success" });
+  }
+
+  if (op === "claim") {
+    const { data, error } = await sb.rpc("prop_os_cmd_claim_performance_intelligence", {
+      p_user_id: (body as { userId?: string }).userId,
+      p_scope_key: (body as { scopeKey?: string }).scopeKey,
+      p_assignment_revision: (body as { assignmentRevision?: number }).assignmentRevision,
+    });
+    if (error) return json({ kind: "rpc_error", message: error.message }, 500);
+    return json(data ?? { kind: "success" });
+  }
+
+  if (op === "reap") {
+    const { data, error } = await sb.rpc("prop_os_cmd_reap_stalled_performance_intelligence");
     if (error) return json({ kind: "rpc_error", message: error.message }, 500);
     return json(data ?? { kind: "success" });
   }
