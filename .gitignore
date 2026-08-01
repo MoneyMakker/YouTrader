@@ -28,6 +28,7 @@ DerivedData/
 build-*.ipa
 builds/
 bundle-check/
+artifacts/
 
 # Backups and temporary generated files
 *.before-*
