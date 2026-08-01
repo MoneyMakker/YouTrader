@@ -14,11 +14,13 @@ scripts/market-intel-worker/.env
 .expo/
 .expo-shared/
 dist/
+build/
 ios/build/
 android/build/
 android/app/build/
 DerivedData/
-
+DerivedData-*/
+build/DerivedData*/
 
 # Certificates and signing secrets
 *.pem
@@ -31,6 +33,19 @@ DerivedData/
 build-*.ipa
 builds/
 bundle-check/
+
+# Local agent / tooling runtime (never commit)
+.codex/
+.cursor/plans/
+*.bak
+scripts/*.bak
+
+# Transient QA screenshot dumps (approved reports stay as .md)
+docs/releases/**/phase4f-screenshots/
+docs/releases/**/first-launch-evidence/
+docs/releases/**/simulator-recovery/
+docs/releases/**/stats-redesign-evidence/
+docs/releases/**/qa-logs/
 
 # Backups and temporary generated files
 *.before-*
