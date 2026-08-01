@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { getYdlProgressMotionConfig } from "../../../ydl/motion/progress";
+import { ydlStatusLoadingBar } from "../../../ydl/status";
 import { premiumRadii, premiumTone, type PremiumTone } from "./tokens";
 
 export type PremiumLoadingBarProps = {
@@ -8,27 +10,30 @@ export type PremiumLoadingBarProps = {
   height?: number;
   tone?: PremiumTone;
   style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
 };
 
 export function PremiumLoadingBar({
   progress = 0,
   indeterminate = progress <= 0,
-  height = 6,
+  height = ydlStatusLoadingBar.height,
   tone = "lime",
   style,
+  accessibilityLabel = "Loading",
 }: PremiumLoadingBarProps) {
   const fill = useRef(new Animated.Value(Math.max(0, Math.min(1, progress)))).current;
   const sweep = useRef(new Animated.Value(0)).current;
   const toneConfig = premiumTone[tone];
+  const progressMotion = getYdlProgressMotionConfig("linear");
 
   useEffect(() => {
     Animated.timing(fill, {
       toValue: Math.max(0, Math.min(1, progress)),
-      duration: 320,
+      duration: progressMotion.durationMs,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
-  }, [fill, progress]);
+  }, [fill, progress, progressMotion.durationMs]);
 
   useEffect(() => {
     if (!indeterminate) return;
@@ -48,7 +53,16 @@ export function PremiumLoadingBar({
   const translateX = sweep.interpolate({ inputRange: [0, 1], outputRange: [-120, 240] });
 
   return (
-    <View style={[styles.track, { height, borderRadius: height || premiumRadii.sm }, style]}>
+    <View
+      style={[styles.track, { height, borderRadius: height || premiumRadii.sm }, style]}
+      accessibilityRole="progressbar"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityValue={
+        indeterminate
+          ? undefined
+          : { min: 0, max: 100, now: Math.round(Math.max(0, Math.min(1, progress)) * 100) }
+      }
+    >
       {indeterminate ? (
         <Animated.View
           style={[
@@ -63,7 +77,6 @@ export function PremiumLoadingBar({
       ) : (
         <Animated.View style={[styles.fill, { width, backgroundColor: toneConfig.accent, borderRadius: height }]} />
       )}
-      <View pointerEvents="none" style={[styles.glow, { backgroundColor: toneConfig.soft }]} />
     </View>
   );
 }
@@ -72,7 +85,7 @@ const styles = StyleSheet.create({
   track: {
     width: "100%",
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.075)",
+    backgroundColor: ydlStatusLoadingBar.track,
   },
   fill: {
     height: "100%",
@@ -81,9 +94,5 @@ const styles = StyleSheet.create({
     width: 120,
     height: "100%",
     opacity: 0.88,
-  },
-  glow: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.38,
   },
 });

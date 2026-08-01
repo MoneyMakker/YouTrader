@@ -8,13 +8,24 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { lightHaptic } from "../haptics";
+import {
+  getYdlReduceMotionCached,
+  runYdlHaptic,
+  ydlControlState,
+  ydlPress,
+  ydlTouchTarget,
+  type YdlPressToken,
+} from "../../../ydl";
 
 export type AnimatedPressableProps = Omit<PressableProps, "style"> & {
   children?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
+  /** Motion Foundation press token. Defaults to buttonPrimary. */
+  press?: YdlPressToken;
+  /** Overrides press token scale when provided. */
   scaleTo?: number;
+  /** When true, fires the press token haptic (or Selection). Default false for back-compat. */
   haptic?: boolean;
   disabledOpacity?: number;
 };
@@ -23,9 +34,10 @@ export function AnimatedPressable({
   children,
   style,
   contentStyle,
-  scaleTo = 0.975,
+  press = "buttonPrimary",
+  scaleTo,
   haptic = false,
-  disabledOpacity = 0.48,
+  disabledOpacity = ydlControlState.disabledOpacity,
   disabled,
   onPress,
   onPressIn,
@@ -33,18 +45,31 @@ export function AnimatedPressable({
   ...rest
 }: AnimatedPressableProps) {
   const scale = useRef(new Animated.Value(1)).current;
+  const interaction = ydlPress[press];
+  const resolvedScale = scaleTo ?? interaction.scaleTo;
 
   const animateTo = (value: number) => {
+    if (getYdlReduceMotionCached()) {
+      scale.setValue(value);
+      return;
+    }
     Animated.spring(scale, {
       toValue: value,
-      speed: 28,
-      bounciness: 4,
-      useNativeDriver: true,
+      stiffness: interaction.spring.stiffness,
+      damping: interaction.spring.damping,
+      mass: interaction.spring.mass,
+      useNativeDriver: interaction.useNativeDriver,
+      overshootClamping: true,
     }).start();
   };
 
   const handlePress = (event: GestureResponderEvent) => {
-    if (!disabled && haptic) lightHaptic();
+    if (!disabled && haptic) {
+      const preset = "haptic" in interaction && interaction.haptic
+        ? interaction.haptic
+        : "Selection";
+      runYdlHaptic(preset);
+    }
     onPress?.(event);
   };
 
@@ -53,8 +78,9 @@ export function AnimatedPressable({
       {...rest}
       disabled={disabled}
       onPress={handlePress}
+      hitSlop={rest.hitSlop ?? ydlTouchTarget.hitSlopSm}
       onPressIn={(event) => {
-        if (!disabled) animateTo(scaleTo);
+        if (!disabled) animateTo(resolvedScale);
         onPressIn?.(event);
       }}
       onPressOut={(event) => {
@@ -79,7 +105,7 @@ export function AnimatedPressable({
 
 const styles = StyleSheet.create({
   content: {
-    minHeight: 44,
-    minWidth: 44,
+    minHeight: ydlTouchTarget.min,
+    minWidth: ydlTouchTarget.min,
   },
 });

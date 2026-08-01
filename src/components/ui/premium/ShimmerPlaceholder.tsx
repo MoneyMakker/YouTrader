@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import { C } from "../../../theme/colors";
+import { ydlStatusSkeleton } from "../../../ydl/status";
 import { premiumRadii, premiumTone, type PremiumTone } from "./tokens";
 
 export type ShimmerPlaceholderProps = {
@@ -40,7 +40,10 @@ export function ShimmerPlaceholder({
   const translateX = travel.interpolate({ inputRange: [0, 1], outputRange: [-120, 220] });
 
   return (
-    <View style={[styles.root, { width, height, borderRadius: radius }, style]}>
+    <View
+      style={[styles.root, { width, height, borderRadius: radius }, style]}
+      importantForAccessibility="no"
+    >
       <View style={[styles.baseTint, { backgroundColor: toneConfig.soft }]} />
       <Animated.View
         pointerEvents="none"
@@ -59,7 +62,7 @@ export function ShimmerPlaceholder({
 const styles = StyleSheet.create({
   root: {
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    backgroundColor: ydlStatusSkeleton.baseFill,
   },
   baseTint: {
     ...StyleSheet.absoluteFillObject,
