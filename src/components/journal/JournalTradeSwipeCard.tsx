@@ -11,10 +11,12 @@ import { Trash2 } from "lucide-react-native";
 import { t } from "../../i18n";
 import { C } from "../../theme/colors";
 import { AnimatedPressable } from "../ui/premium/AnimatedPressable";
+import { getYdlCardInteraction, runYdlMotionHaptic, ydlSpace, ydlTouchTarget } from "../../ydl";
 
 const SWIPE_WIDTH = 84;
 const OPEN_THRESHOLD = 46;
 const HORIZONTAL_ACTIVATION = 12;
+const CARD_PRESS = getYdlCardInteraction("press");
 
 type JournalTradeSwipeCardProps = {
   children: React.ReactNode;
@@ -22,6 +24,9 @@ type JournalTradeSwipeCardProps = {
   onLongPress: () => void;
   onDeletePress: () => void;
   onSwipeReveal?: () => void;
+  testID?: string;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
 export function JournalTradeSwipeCard({
@@ -30,6 +35,9 @@ export function JournalTradeSwipeCard({
   onLongPress,
   onDeletePress,
   onSwipeReveal,
+  testID,
+  accessibilityLabel,
+  accessibilityHint,
 }: JournalTradeSwipeCardProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const dragStartX = useRef(0);
@@ -118,6 +126,7 @@ export function JournalTradeSwipeCard({
       closeSwipe();
       return;
     }
+    runYdlMotionHaptic("CardPress");
     onPress();
   };
 
@@ -126,6 +135,7 @@ export function JournalTradeSwipeCard({
       closeSwipe();
       return;
     }
+    runYdlMotionHaptic("Selection");
     onLongPress();
   };
 
@@ -143,6 +153,7 @@ export function JournalTradeSwipeCard({
         <Pressable
           style={styles.deleteAction}
           onPress={handleDeletePress}
+          testID="journal.trade.delete.swipe"
           accessibilityRole="button"
           accessibilityLabel={t("deleteTrade")}
         >
@@ -158,6 +169,13 @@ export function JournalTradeSwipeCard({
           onPress={handlePress}
           onLongPress={handleLongPress}
           delayLongPress={420}
+          press="card"
+          scaleTo={CARD_PRESS.scale}
+          testID={testID}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityHint={accessibilityHint}
+          hitSlop={ydlTouchTarget.hitSlopSm}
         >
           {children}
         </AnimatedPressable>
@@ -168,7 +186,7 @@ export function JournalTradeSwipeCard({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 12,
+    marginBottom: ydlSpace.sm,
     overflow: "hidden",
     borderRadius: 24,
   },
@@ -189,7 +207,7 @@ const styles = StyleSheet.create({
   deleteLabel: {
     color: C.white,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
     textAlign: "center",
   },
   cardTrack: {

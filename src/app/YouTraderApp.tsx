@@ -79,6 +79,7 @@ import {
   Lock,
   Mic,
   Newspaper,
+  Plus,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -103,6 +104,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { AuthScreen } from "../auth/AuthScreen";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "../auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "../auth/userCache";
+import { StagingQaResetMarkers } from "../qa/StagingQaResetMarkers";
 import { hashLocalAiInput, localAiCacheKey, readLocalAiResponse, writeLocalAiResponse } from "../utils/localAiResponseCache";
 import { clearOfflineJobsForUser, enqueueOfflineJob } from "../sync/offlineQueue";
 import { useNetworkReconnect } from "../sync/networkReconnect";
@@ -153,12 +155,12 @@ import { recordMetric } from "../observability/metrics";
 import { getPosthogClient } from "../lib/posthog";
 import { logStartupCheckpoint, logStartupError, logStartupPerf, markAppStart } from "../lib/startupPerf";
 import { logger } from "../lib/logger";
+import { computeCalculatorResults, formatCalcUsd } from "../calc/riskCalculator";
 import {
   ACQUISITION_ONBOARDING_KEY,
   ACQUISITION_PAYWALL_DEVICE_KEY,
   acquisitionPaywallUserKey,
   resolveAcquisitionPhase,
-  stagingQaResetAcquisitionUi,
 } from "./startup/acquisitionState";
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { isPropPassEntryVisible } from "../propPass/access";
@@ -170,6 +172,7 @@ import {
   enableCloudSignIn,
   enableNativeAppleSignIn,
   enableNativeGoogleSignIn,
+  isGoogleClientIdPairDistinct,
   isExpoGo,
   isRevenueCatConfigured,
   isSupabaseConfigured,
@@ -2051,17 +2054,22 @@ function Pill({
   );
 }
 function Input(props: any) {
+  const { testID, accessibilityLabel, label, style, multiline, ...rest } = props;
+  const a11y = accessibilityLabel || (typeof label === "string" ? label : undefined);
   return (
     <View style={{ marginBottom: 12 }}>
-      <Text style={styles.label}>{props.label}</Text>
+      <Text style={styles.label}>{label}</Text>
       <TextInput
-        {...props}
+        {...rest}
+        testID={testID}
+        accessibilityLabel={a11y}
         placeholderTextColor={C.muted}
         style={[
           styles.input,
-          props.multiline && { height: 96, textAlignVertical: "top" },
-          props.style,
+          multiline && { height: 96, textAlignVertical: "top" },
+          style,
         ]}
+        multiline={multiline}
       />
     </View>
   );
@@ -7076,19 +7084,23 @@ function InstrumentButton({
   symbol,
   active,
   onPress,
+  testIDPrefix,
 }: {
   symbol: string;
   active: boolean;
   onPress: () => void;
+  testIDPrefix?: string;
 }) {
+  const a11yId = testIDPrefix ? `${testIDPrefix}.${symbol}` : undefined;
   return (
     <AnimatedPressable
       press="listItem"
       haptic
       onPress={onPress}
+      testID={a11yId}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={symbol}
+      accessibilityLabel={a11yId || symbol}
       style={[styles.instrumentBtn, active && styles.instrumentBtnActive]}
       contentStyle={{ minHeight: 0, minWidth: 0, justifyContent: "center" }}
     >
@@ -7158,6 +7170,8 @@ function JournalScreen({
   onContinueToReview,
   cloudSyncEnabled,
   cloudSyncStatus,
+  qaApplyEditRequest,
+  onQaApplyEditConsumed,
 }: {
   lang: Lang;
   trades: Trade[];
@@ -7177,6 +7191,8 @@ function JournalScreen({
   onContinueToReview?: () => void;
   cloudSyncEnabled?: boolean;
   cloudSyncStatus?: "off" | "syncing" | "synced" | "error";
+  qaApplyEditRequest?: { url: string; nonce: number } | null;
+  onQaApplyEditConsumed?: () => void;
 }) {
   const { width } = useWindowDimensions();
   const isTabletLayout = width >= 768;
@@ -7196,6 +7212,8 @@ function JournalScreen({
   const [lockedInsightDismissed, setLockedInsightDismissed] = useState(false);
   const [deleteDayDate, setDeleteDayDate] = useState<string | null>(null);
   const [deleteDayBusy, setDeleteDayBusy] = useState(false);
+  const [deleteTradeConfirmId, setDeleteTradeConfirmId] = useState<string | null>(null);
+  const [deleteTradeBusy, setDeleteTradeBusy] = useState(false);
   const [tradeActionTarget, setTradeActionTarget] = useState<Trade | null>(null);
   const [deleteToastKey, setDeleteToastKey] = useState<string | null>(null);
   const [postSavePrompt, setPostSavePrompt] = useState(false);
@@ -7204,6 +7222,8 @@ function JournalScreen({
   const lastSaveAtRef = useRef(0);
   const firstInsightSeenRef = useRef(false);
   const lockedInsightSeenRef = useRef(false);
+  const tradesRef = useRef(trades);
+  tradesRef.current = trades;
   const emptyForm = {
     symbol: "MES",
     direction: "LONG" as Direction,
@@ -7412,6 +7432,77 @@ function JournalScreen({
     });
     setModal(true);
   };
+  // Staging QA: parent deep-link sets qaApplyEditRequest; form patches + real save() via Save button.
+  useEffect(() => {
+    if (!qaApplyEditRequest?.url) return;
+    const requestUrl = qaApplyEditRequest.url;
+    const requestNonce = qaApplyEditRequest.nonce;
+    const tradesNow = tradesRef.current;
+    let cancelled = false;
+    (async () => {
+      const {
+        isStagingQaJournalSeedAllowed,
+        parseStagingQaApplyTradeEditUrl,
+        parseStagingQaTradeOverrides,
+      } = await import("../qa/stagingQaJournalSeed");
+      if (cancelled) return;
+      if (!isStagingQaJournalSeedAllowed() || !parseStagingQaApplyTradeEditUrl(requestUrl)) {
+        onQaApplyEditConsumed?.();
+        return;
+      }
+      const overrides = parseStagingQaTradeOverrides(requestUrl);
+      const marker = overrides.marker || "";
+      const notesHint = overrides.notes || "";
+      const target =
+        tradesNow.find((tr) => marker && (tr.notes || "").includes(marker)) ||
+        tradesNow.find((tr) => notesHint && (tr.notes || "").includes(notesHint.replace(/-EDITED$/, ""))) ||
+        tradesNow.find((tr) => notesHint && (tr.notes || "") === notesHint) ||
+        tradesNow.find((tr) => String(tr.id || "").startsWith("qa-seed-")) ||
+        null;
+      if (!target) {
+        console.info("[YTQA] apply-trade-edit miss", {
+          hasMarker: !!marker,
+          tradeCount: tradesNow.length,
+          nonce: requestNonce,
+        });
+        onQaApplyEditConsumed?.();
+        return;
+      }
+      const nextPnl = overrides.pnl != null ? overrides.pnl : target.pnl;
+      setEditId(target.id);
+      setPnlSide(nextPnl < 0 ? "minus" : "plus");
+      setForm({
+        symbol: target.symbol,
+        direction: target.direction,
+        entryTime: target.entryTime || "",
+        exitTime: target.exitTime || "",
+        entry: String(overrides.entry ?? (target.entry != null ? target.entry : "")),
+        exit: String(overrides.exit ?? (target.exit != null ? target.exit : "")),
+        contracts: String(overrides.contracts ?? target.contracts ?? 1),
+        stopLoss: target.stopLoss != null ? String(target.stopLoss) : "",
+        takeProfit: target.takeProfit != null ? String(target.takeProfit) : "",
+        pnl: String(Math.abs(nextPnl)),
+        mood: target.mood,
+        notes: overrides.notes ?? target.notes ?? "",
+        tags: tagsToInput(target.tags),
+        photoUri: target.photoUri || "",
+        voiceUri: target.voiceUri || "",
+        voiceName: target.voiceName || "",
+      });
+      setModal(true);
+      console.info("[YTQA] apply-trade-edit ok", {
+        idPrefix: String(target.id).slice(0, 20),
+        hasNotesOverride: overrides.notes != null,
+        hasPnlOverride: overrides.pnl != null,
+        hasExitOverride: overrides.exit != null,
+        nonce: requestNonce,
+      });
+      onQaApplyEditConsumed?.();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [qaApplyEditRequest?.nonce, onQaApplyEditConsumed]);
   const executeTradeDelete = useCallback(
     async (tradeId: string, opts?: { suppressFeedback?: boolean }): Promise<boolean> => {
       const limit = await checkClientRateLimit("trade:delete", "journal-local");
@@ -7435,22 +7526,27 @@ function JournalScreen({
     },
     [editId, onTradeDeleted, setTrades, showDeleteToast],
   );
-  const confirmDeleteTrade = useCallback(
-    (tradeId: string) => {
-      Alert.alert(t("deleteQuestion"), t("journalDeleteTradeBody"), [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("deleteTrade"),
-          style: "destructive",
-          onPress: () => {
-            warningHaptic();
-            void executeTradeDelete(tradeId);
-          },
-        },
-      ]);
-    },
-    [executeTradeDelete],
-  );
+  const confirmDeleteTrade = useCallback((tradeId: string) => {
+    // App-owned YDL confirmation — native Alert.alert is not reliably automatable on iOS.
+    // Dismiss the edit modal first so the confirmation Modal is not buried under it.
+    setModal(false);
+    setDeleteTradeConfirmId(tradeId);
+  }, []);
+  const cancelDeleteTradeConfirm = useCallback(() => {
+    if (deleteTradeBusy) return;
+    setDeleteTradeConfirmId(null);
+  }, [deleteTradeBusy]);
+  const performDeleteTradeConfirm = useCallback(async () => {
+    if (!deleteTradeConfirmId || deleteTradeBusy) return;
+    setDeleteTradeBusy(true);
+    warningHaptic();
+    try {
+      const ok = await executeTradeDelete(deleteTradeConfirmId);
+      if (ok) setDeleteTradeConfirmId(null);
+    } finally {
+      setDeleteTradeBusy(false);
+    }
+  }, [deleteTradeBusy, deleteTradeConfirmId, executeTradeDelete]);
   const confirmDeleteDay = useCallback(async () => {
     if (!deleteDayDate || deleteDayBusy) return;
     const dayTrades = trades.filter((trade) => trade.date === deleteDayDate);
@@ -7520,8 +7616,8 @@ function JournalScreen({
         return;
       }
       const now = Date.now();
+      // Double-tap guard only — failed validations must remain retryable (see lastSaveAt below).
       if (now - lastSaveAtRef.current < TRADE_SAVE_DEBOUNCE_MS) return;
-      lastSaveAtRef.current = now;
       const validated = validateTradeForm(form, pnlSide, lang);
       if ("error" in validated) {
         Alert.alert(t("couldNotSaveTrade"), validated.error || t("checkTradeDetails"));
@@ -7550,6 +7646,8 @@ function JournalScreen({
         Alert.alert("YouTrader", SECURITY_MESSAGES.invalidTrade);
         return;
       }
+      // Only debounce successful validations so failed saves remain retryable.
+      lastSaveAtRef.current = now;
       const previousTrade = editId ? trades.find((x) => x.id === editId) : null;
       const item: Trade = {
       id: editId || uid(),
@@ -7761,38 +7859,60 @@ function JournalScreen({
         >
           {t("journal")}
         </Text>
-        <View
-          style={styles.journalSyncChip}
-          accessible
-          accessibilityRole="text"
-          accessibilityLabel={
-            !cloudSyncEnabled || cloudSyncStatus === "off"
-              ? t("syncStatusLocal")
-              : cloudSyncStatus === "syncing"
-                ? t("syncStatusSyncing")
-                : cloudSyncStatus === "error"
-                  ? t("syncStatusError")
-                  : t("syncStatusSynced")
-          }
-        >
+        <View style={styles.journalHeaderActions}>
+          <Pressable
+            testID="journal-add-trade"
+            accessibilityRole="button"
+            accessibilityLabel={t("addTrade")}
+            hitSlop={8}
+            onPress={() => {
+              runYdlMotionHaptic("Selection");
+              openNew();
+            }}
+            style={styles.journalAddTradeBtn}
+          >
+            <Plus
+              size={ydlIconRules.sizes.sm}
+              color={C.green}
+              strokeWidth={UI_ICON_STROKE}
+            />
+            <Text style={styles.journalAddTradeLabel} maxFontSizeMultiplier={1.2}>
+              {t("addTrade")}
+            </Text>
+          </Pressable>
           <View
-            style={[
-              styles.journalSyncDot,
-              (!cloudSyncEnabled || cloudSyncStatus === "off") && styles.journalSyncDotLocal,
-              cloudSyncStatus === "syncing" && styles.journalSyncDotSyncing,
-              cloudSyncStatus === "synced" && styles.journalSyncDotSynced,
-              cloudSyncStatus === "error" && styles.journalSyncDotError,
-            ]}
-          />
-          <Text style={styles.journalSyncText} maxFontSizeMultiplier={1.2}>
-            {!cloudSyncEnabled || cloudSyncStatus === "off"
-              ? t("syncStatusLocal")
-              : cloudSyncStatus === "syncing"
-                ? t("syncStatusSyncing")
-                : cloudSyncStatus === "error"
-                  ? t("syncStatusError")
-                  : t("syncStatusSynced")}
-          </Text>
+            style={styles.journalSyncChip}
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={
+              !cloudSyncEnabled || cloudSyncStatus === "off"
+                ? t("syncStatusLocal")
+                : cloudSyncStatus === "syncing"
+                  ? t("syncStatusSyncing")
+                  : cloudSyncStatus === "error"
+                    ? t("syncStatusError")
+                    : t("syncStatusSynced")
+            }
+          >
+            <View
+              style={[
+                styles.journalSyncDot,
+                (!cloudSyncEnabled || cloudSyncStatus === "off") && styles.journalSyncDotLocal,
+                cloudSyncStatus === "syncing" && styles.journalSyncDotSyncing,
+                cloudSyncStatus === "synced" && styles.journalSyncDotSynced,
+                cloudSyncStatus === "error" && styles.journalSyncDotError,
+              ]}
+            />
+            <Text style={styles.journalSyncText} maxFontSizeMultiplier={1.2}>
+              {!cloudSyncEnabled || cloudSyncStatus === "off"
+                ? t("syncStatusLocal")
+                : cloudSyncStatus === "syncing"
+                  ? t("syncStatusSyncing")
+                  : cloudSyncStatus === "error"
+                    ? t("syncStatusError")
+                    : t("syncStatusSynced")}
+            </Text>
+          </View>
         </View>
       </View>
       {trades.length === 0 ? (
@@ -8117,6 +8237,7 @@ function JournalScreen({
           pnlLabel,
           sessionLabel || null,
           `${t("mood")}: ${moodLabel(tr.mood, lang)}`,
+          tr.notes ? `notes:${tr.notes}` : null,
         ]
           .filter(Boolean)
           .join(", ");
@@ -8124,6 +8245,7 @@ function JournalScreen({
         return (
         <JournalTradeSwipeCard
           key={tr.id}
+          testID={`journal.trade.card.${tr.id}`}
           accessibilityLabel={cardA11yLabel}
           accessibilityHint={t("tapToViewEdit")}
           onPress={() => openEdit(tr)}
@@ -8291,6 +8413,7 @@ function JournalScreen({
             setTradeActionTarget(null);
             if (target) openEdit(target);
           }}
+          testID="journal.trade.actions.edit"
           accessibilityRole="button"
           accessibilityLabel={t("journalGestureEditTrade")}
         >
@@ -8305,6 +8428,7 @@ function JournalScreen({
             setTradeActionTarget(null);
             if (target) confirmDeleteTrade(target.id);
           }}
+          testID="journal.trade.actions.delete"
           accessibilityRole="button"
           accessibilityLabel={t("deleteTrade")}
         >
@@ -8321,6 +8445,60 @@ function JournalScreen({
           <Text style={styles.tradeSheetCancelText} maxFontSizeMultiplier={1.25}>{t("cancel")}</Text>
         </Pressable>
       </BottomSheetPanel>
+      <Modal
+        visible={!!deleteTradeConfirmId}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDeleteTradeConfirm}
+      >
+        <View
+          style={styles.deleteDayBackdrop}
+          testID="journal.trade.delete.confirmation"
+          accessibilityLabel={t("deleteQuestion")}
+        >
+          <View style={styles.deleteDayCard}>
+            <Text style={styles.deleteDayEyebrow}>{t("journalSafety")}</Text>
+            <Text style={styles.deleteDayTitle} maxFontSizeMultiplier={1.35}>
+              {t("deleteQuestion")}
+            </Text>
+            <Text style={styles.deleteDayBody} maxFontSizeMultiplier={1.3}>
+              {t("journalDeleteTradeBody")}
+              {deleteTradeConfirmId
+                ? `\n${trades.find((x) => x.id === deleteTradeConfirmId)?.symbol || ""} ${
+                    trades.find((x) => x.id === deleteTradeConfirmId)?.direction || ""
+                  }`.trim()
+                : ""}
+            </Text>
+            <View style={styles.deleteDayActions}>
+              <Pressable
+                disabled={deleteTradeBusy}
+                onPress={cancelDeleteTradeConfirm}
+                style={styles.deleteDayCancel}
+                testID="journal.trade.delete.cancel"
+                accessibilityRole="button"
+                accessibilityLabel={t("cancel")}
+              >
+                <Text style={styles.deleteDayCancelText}>{t("cancel")}</Text>
+              </Pressable>
+              <Pressable
+                disabled={deleteTradeBusy}
+                onPress={() => {
+                  void performDeleteTradeConfirm();
+                }}
+                style={[styles.deleteDayConfirm, deleteTradeBusy && styles.disabledBtn]}
+                testID="journal.trade.delete.confirm"
+                accessibilityRole="button"
+                accessibilityLabel={t("deleteTrade")}
+                accessibilityState={{ disabled: deleteTradeBusy }}
+              >
+                <Text style={styles.deleteDayConfirmText}>
+                  {deleteTradeBusy ? t("deleting") : t("deleteTrade")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={!!deleteDayDate} transparent animationType="fade">
         <View style={styles.deleteDayBackdrop}>
           <View style={styles.deleteDayCard}>
@@ -8386,11 +8564,13 @@ function JournalScreen({
                 </Text>
                 <View style={styles.pnlToggleRow}>
                   <Pressable
+                    testID="journal.trade.edit.pnl.plus"
                     onPress={() => {
                       runYdlMotionHaptic("Selection");
                       setPnlSide("plus");
                     }}
                     accessibilityRole="button"
+                    accessibilityLabel="journal.trade.edit.pnl.plus"
                     accessibilityState={{ selected: pnlSide === "plus" }}
                     style={[
                       styles.pnlToggle,
@@ -8408,11 +8588,13 @@ function JournalScreen({
                     </Text>
                   </Pressable>
                   <Pressable
+                    testID="journal.trade.edit.pnl.minus"
                     onPress={() => {
                       runYdlMotionHaptic("Selection");
                       setPnlSide("minus");
                     }}
                     accessibilityRole="button"
+                    accessibilityLabel="journal.trade.edit.pnl.minus"
                     accessibilityState={{ selected: pnlSide === "minus" }}
                     style={[
                       styles.pnlToggle,
@@ -8437,6 +8619,8 @@ function JournalScreen({
                   ]}
                 >
                   <TextInput
+                    testID="journal.trade.edit.pnl"
+                    accessibilityLabel={t("pnl")}
                     keyboardType="decimal-pad"
                     value={form.pnl}
                     onChangeText={(v: string) => setForm({ ...form, pnl: v })}
@@ -8450,7 +8634,6 @@ function JournalScreen({
                       },
                     ]}
                     textAlign="center"
-                    accessibilityLabel={t("pnl")}
                     maxFontSizeMultiplier={1.35}
                   />
                   <Text style={styles.journalPnlHint} maxFontSizeMultiplier={1.25}>
@@ -8465,11 +8648,13 @@ function JournalScreen({
                   {(["LONG", "SHORT"] as Direction[]).map((d) => (
                     <Pressable
                       key={d}
+                      testID={`journal.trade.edit.direction.${d.toLowerCase()}`}
                       onPress={() => {
                         runYdlMotionHaptic("Selection");
                         setForm({ ...form, direction: d });
                       }}
                       accessibilityRole="button"
+                      accessibilityLabel={`journal.trade.edit.direction.${d.toLowerCase()}`}
                       accessibilityState={{ selected: form.direction === d }}
                       style={[
                         styles.option,
@@ -8483,28 +8668,32 @@ function JournalScreen({
 
                 <Text style={styles.label}>{t("symbol")}</Text>
                 <Text style={styles.sectionLabel}>{t("miniContracts")}</Text>
-                <View style={styles.instrumentGrid}>
+                <View style={styles.instrumentGrid} testID="journal.trade.edit.instrument.mini">
                   {MINI_INSTRUMENTS.map((s) => (
                     <InstrumentButton
                       key={s}
                       symbol={s}
                       active={form.symbol === s}
                       onPress={() => setForm({ ...form, symbol: s })}
+                      testIDPrefix="journal.trade.edit.instrument"
                     />
                   ))}
                 </View>
                 <Text style={styles.sectionLabel}>{t("microContracts")}</Text>
-                <View style={styles.instrumentGrid}>
+                <View style={styles.instrumentGrid} testID="journal.trade.edit.instrument.micro">
                   {MICRO_INSTRUMENTS.map((s) => (
                     <InstrumentButton
                       key={s}
                       symbol={s}
                       active={form.symbol === s}
                       onPress={() => setForm({ ...form, symbol: s })}
+                      testIDPrefix="journal.trade.edit.instrument"
                     />
                   ))}
                 </View>
                 <Input
+                  testID="journal.trade.edit.instrument"
+                  accessibilityLabel="journal.trade.edit.instrument"
                   label={t("customSymbol")}
                   value={form.symbol}
                   onChangeText={(v: string) =>
@@ -8519,30 +8708,40 @@ function JournalScreen({
                   {t("journalDetailExecution")}
                 </Text>
                 <Input
+                  testID="journal.trade.edit.entry"
+                  accessibilityLabel="journal.trade.edit.entry"
                   label={t("entry")}
                   keyboardType="decimal-pad"
                   value={form.entry}
                   onChangeText={(v: string) => setForm({ ...form, entry: v })}
                 />
                 <Input
+                  testID="journal.trade.edit.exit"
+                  accessibilityLabel="journal.trade.edit.exit"
                   label={t("exit")}
                   keyboardType="decimal-pad"
                   value={form.exit}
                   onChangeText={(v: string) => setForm({ ...form, exit: v })}
                 />
                 <Input
+                  testID="journal.trade.edit.quantity"
+                  accessibilityLabel="journal.trade.edit.quantity"
                   label={t("contracts")}
                   keyboardType="number-pad"
                   value={form.contracts}
                   onChangeText={(v: string) => setForm({ ...form, contracts: v })}
                 />
                 <Input
+                  testID="journal.trade.edit.stopLoss"
+                  accessibilityLabel="journal.trade.edit.stopLoss"
                   label={t("stopLoss")}
                   keyboardType="decimal-pad"
                   value={form.stopLoss}
                   onChangeText={(v: string) => setForm({ ...form, stopLoss: v })}
                 />
                 <Input
+                  testID="journal.trade.edit.takeProfit"
+                  accessibilityLabel="journal.trade.edit.takeProfit"
                   label={t("takeProfit")}
                   keyboardType="decimal-pad"
                   value={form.takeProfit}
@@ -8579,6 +8778,8 @@ function JournalScreen({
                   ))}
                 </View>
                 <Input
+                  testID="journal.trade.edit.notes"
+                  accessibilityLabel="journal.trade.edit.notes"
                   label={t("notes")}
                   value={form.notes}
                   onChangeText={(v: string) => setForm({ ...form, notes: v.slice(0, MAX_NOTES_LENGTH) })}
@@ -8696,6 +8897,8 @@ function JournalScreen({
                 <View style={styles.formTwoCol}>
                   <View style={styles.formTwoColItem}>
                     <Input
+                      testID="journal.trade.edit.entryTime"
+                      accessibilityLabel="journal.trade.edit.entryTime"
                       label={t("entryTime")}
                       value={form.entryTime}
                       onChangeText={(v: string) => setForm({ ...form, entryTime: v })}
@@ -8705,6 +8908,8 @@ function JournalScreen({
                   </View>
                   <View style={styles.formTwoColItem}>
                     <Input
+                      testID="journal.trade.edit.exitTime"
+                      accessibilityLabel="journal.trade.edit.exitTime"
                       label={t("exitTime")}
                       value={form.exitTime}
                       onChangeText={(v: string) => setForm({ ...form, exitTime: v })}
@@ -8745,7 +8950,7 @@ function JournalScreen({
                 />
               </View>
 
-              <View style={styles.journalDetailActions} accessibilityRole="summary" accessibilityLabel={editId ? t("updateTrade") : t("saveTrade")}>
+              <View style={styles.journalDetailActions}>
                 <Text style={styles.workflowNextLabel} maxFontSizeMultiplier={1.2}>
                   {editId ? t("updateTrade") : t("saveTrade")}
                 </Text>
@@ -8755,8 +8960,9 @@ function JournalScreen({
                   style={styles.workflowPrimaryInStack}
                   contentStyle={[styles.primaryBig, styles.workflowPrimaryInStack]}
                   onPress={() => {
-                    save();
+                    void save();
                   }}
+                  testID="journal.trade.save"
                   accessibilityRole="button"
                   accessibilityLabel={editId ? t("updateTrade") : t("saveTrade")}
                 >
@@ -8771,6 +8977,7 @@ function JournalScreen({
                     style={styles.workflowSecondaryInStack}
                     contentStyle={styles.deleteBig}
                     onPress={remove}
+                    testID="journal.trade.delete"
                     accessibilityRole="button"
                     accessibilityLabel={t("deleteTrade")}
                   >
@@ -9306,24 +9513,49 @@ function CalcScreen({ lang }: { lang: Lang }) {
   const [balance, setBalance] = useState("50000");
   const [riskPct, setRiskPct] = useState("1");
   const i = INSTRUMENTS[symbol] || INSTRUMENTS.MES;
-  const unitValue = mode === "ticks" ? i.tickValue : i.tickValue / i.tickSize;
-  const result = Number(amount || 0) * unitValue * Number(contracts || 1);
-  const risk = Number(sl || 0) * unitValue * Number(contracts || 1);
-  const reward = Number(tp || 0) * unitValue * Number(contracts || 1);
-  const rr = risk ? reward / risk : 0;
-  const maxRiskDollars = (Number(balance || 0) * Number(riskPct || 0)) / 100;
-  const formatUsd = (value: number) =>
-    `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const resultA11y = `${t("resultInUsd")}. ${formatUsd(result)}. ${amount} ${mode} × $${unitValue.toFixed(2)} × ${contracts} · ${i.name}`;
+  const calc = computeCalculatorResults({
+    mode,
+    amount,
+    contracts,
+    stopLoss: sl,
+    takeProfit: tp,
+    balance,
+    riskPct,
+    instrument: { tickSize: i.tickSize, tickValue: i.tickValue, name: i.name },
+  });
+  const unitValue = calc.unitValue;
+  const result = calc.resultUsd;
+  const risk = calc.riskUsd;
+  const reward = calc.rewardUsd;
+  const rr = calc.riskReward;
+  const maxRiskDollars = calc.maxRiskUsd;
+  const formatUsd = formatCalcUsd;
+  const resultA11y = `${t("resultInUsd")}. ${formatUsd(result)}. ${amount} ${mode} × $${Number.isFinite(unitValue) ? unitValue.toFixed(2) : "—"} × ${contracts} · ${i.name}`;
+  const resetCalc = () => {
+    setSymbol("MES");
+    setMode("ticks");
+    setAmount("20");
+    setContracts("1");
+    setSl("20");
+    setTp("40");
+    setBalance("50000");
+    setRiskPct("1");
+  };
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      testID="calc.screen"
+      accessibilityLabel="calc.screen"
+    >
       {/* 1. Instrument */}
       <Card delay={0}>
         <View style={styles.calcInstrumentBlock} accessible={false}>
           <Text style={styles.calcSectionLabel} maxFontSizeMultiplier={1.2}>{t("miniContracts")}</Text>
           <View style={styles.instrumentGrid}>
             {MINI_INSTRUMENTS.map((s) => (
-              <InstrumentButton key={s} symbol={s} active={symbol === s} onPress={() => setSymbol(s)} />
+              <InstrumentButton key={s} symbol={s} active={symbol === s} onPress={() => setSymbol(s)} testIDPrefix="calc.instrument" />
             ))}
           </View>
         </View>
@@ -9331,15 +9563,16 @@ function CalcScreen({ lang }: { lang: Lang }) {
           <Text style={styles.calcSectionLabel} maxFontSizeMultiplier={1.2}>{t("microContracts")}</Text>
           <View style={styles.instrumentGrid}>
             {MICRO_INSTRUMENTS.map((s) => (
-              <InstrumentButton key={s} symbol={s} active={symbol === s} onPress={() => setSymbol(s)} />
+              <InstrumentButton key={s} symbol={s} active={symbol === s} onPress={() => setSymbol(s)} testIDPrefix="calc.instrument" />
             ))}
           </View>
         </View>
         <Input
+          testID="calc.instrument.custom"
+          accessibilityLabel="calc.instrument.custom"
           label={t("customInstrument")}
           value={symbol}
           onChangeText={(v: string) => setSymbol(v.toUpperCase())}
-          accessibilityLabel={t("customInstrument")}
           autoCapitalize="characters"
           autoCorrect={false}
         />
@@ -9353,20 +9586,22 @@ function CalcScreen({ lang }: { lang: Lang }) {
         <View style={styles.calcFieldRow}>
           <View style={styles.calcFieldCol}>
             <Input
+              testID="calc.balance"
+              accessibilityLabel="calc.balance"
               label={t("accountBalance")}
               keyboardType="decimal-pad"
               value={balance}
               onChangeText={setBalance}
-              accessibilityLabel={t("accountBalance")}
             />
           </View>
           <View style={styles.calcFieldCol}>
             <Input
+              testID="calc.riskPct"
+              accessibilityLabel="calc.riskPct"
               label={t("riskPercent")}
               keyboardType="decimal-pad"
               value={riskPct}
               onChangeText={setRiskPct}
-              accessibilityLabel={t("riskPercent")}
             />
           </View>
         </View>
@@ -9374,11 +9609,12 @@ function CalcScreen({ lang }: { lang: Lang }) {
           style={styles.calcSupportResult}
           accessible
           accessibilityRole="summary"
+          testID="calc.maxRisk"
           accessibilityLabel={`${t("maxRisk")}. ${formatUsd(maxRiskDollars)}`}
         >
           <Text style={styles.calcSectionLabel} maxFontSizeMultiplier={1.2} importantForAccessibility="no">{t("maxRisk")}</Text>
           <CountUpText
-            value={maxRiskDollars}
+            value={Number.isFinite(maxRiskDollars) ? maxRiskDollars : 0}
             durationMs={460}
             formatValue={formatUsd}
             numberOfLines={1}
@@ -9401,12 +9637,13 @@ function CalcScreen({ lang }: { lang: Lang }) {
             return (
               <AnimatedPressable
                 key={m}
+                testID={`calc.mode.${m}`}
                 press="listItem"
                 haptic
                 onPress={() => setMode(m)}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                accessibilityLabel={label}
+                accessibilityLabel={`calc.mode.${m}`}
                 style={[styles.option, active && { backgroundColor: C.purpleSoft, borderColor: C.purple }]}
                 contentStyle={{ minHeight: 44, justifyContent: "center" }}
               >
@@ -9420,20 +9657,22 @@ function CalcScreen({ lang }: { lang: Lang }) {
         <View style={styles.calcFieldRow}>
           <View style={styles.calcFieldCol}>
             <Input
+              testID="calc.amount"
+              accessibilityLabel="calc.amount"
               label={mode === "ticks" ? t("ticks") : t("points")}
               keyboardType="decimal-pad"
               value={amount}
               onChangeText={setAmount}
-              accessibilityLabel={mode === "ticks" ? t("ticks") : t("points")}
             />
           </View>
           <View style={styles.calcFieldCol}>
             <Input
+              testID="calc.contracts"
+              accessibilityLabel="calc.contracts"
               label={t("contracts")}
               keyboardType="number-pad"
               value={contracts}
               onChangeText={setContracts}
-              accessibilityLabel={t("contracts")}
             />
           </View>
         </View>
@@ -9441,31 +9680,54 @@ function CalcScreen({ lang }: { lang: Lang }) {
         <View style={styles.calcFieldRow}>
           <View style={styles.calcFieldCol}>
             <Input
+              testID="calc.stopLoss"
+              accessibilityLabel="calc.stopLoss"
               label={t("slAmount")}
               keyboardType="decimal-pad"
               value={sl}
               onChangeText={setSl}
-              accessibilityLabel={t("slAmount")}
             />
           </View>
           <View style={styles.calcFieldCol}>
             <Input
+              testID="calc.takeProfit"
+              accessibilityLabel="calc.takeProfit"
               label={t("tpAmount")}
               keyboardType="decimal-pad"
               value={tp}
               onChangeText={setTp}
-              accessibilityLabel={t("tpAmount")}
             />
           </View>
         </View>
+        <AnimatedPressable
+          testID="calc.reset"
+          accessibilityLabel="calc.reset"
+          press="buttonSecondary"
+          onPress={resetCalc}
+          style={{ marginTop: 8 }}
+          contentStyle={[styles.option, { minHeight: 44, justifyContent: "center" }]}
+        >
+          <Text style={styles.optionText} maxFontSizeMultiplier={1.25}>Reset</Text>
+        </AnimatedPressable>
+        {calc.errors.length ? (
+          <Text testID="calc.validation" accessibilityLabel="calc.validation" style={styles.sub}>
+            {calc.errors.join(", ")}
+          </Text>
+        ) : null}
       </Card>
 
       {/* 4. Position Size Result — visual anchor */}
       <Card delay={120}>
-        <View style={styles.resultBox} accessible accessibilityRole="summary" accessibilityLabel={resultA11y}>
+        <View
+          style={styles.resultBox}
+          accessible
+          accessibilityRole="summary"
+          testID="calc.result"
+          accessibilityLabel={resultA11y}
+        >
           <Text style={styles.calcHeroLabel} maxFontSizeMultiplier={1.2} importantForAccessibility="no">{t("resultInUsd")}</Text>
           <CountUpText
-            value={result}
+            value={Number.isFinite(result) ? result : 0}
             durationMs={460}
             formatValue={formatUsd}
             numberOfLines={1}
@@ -9473,7 +9735,7 @@ function CalcScreen({ lang }: { lang: Lang }) {
             textStyle={styles.result}
           />
           <Text style={styles.calcHeroSub} maxFontSizeMultiplier={1.3} importantForAccessibility="no">
-            {amount} {mode} × ${unitValue.toFixed(2)} × {contracts} · {i.name}
+            {amount} {mode} × ${Number.isFinite(unitValue) ? unitValue.toFixed(2) : "—"} × {contracts} · {i.name}
           </Text>
         </View>
       </Card>
@@ -10076,10 +10338,34 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const authReadyLogged = useRef(false);
   const shellTheme = useYdlTheme("dark");
   const [tab, setTab] = useState<Tab>("journal");
+  const [qaResetPhase, setQaResetPhase] = useState<
+    import("../qa/stagingQaResetState").StagingQaResetPhase
+  >("idle");
+  const [qaResetMode, setQaResetMode] = useState<string | null>(null);
+  const [qaResetError, setQaResetError] = useState<string | null>(null);
+  const showStagingQaResetMarkers =
+    sanitizedRuntimeConfigReport().appEnvironment === "staging" ||
+    sanitizedRuntimeConfigReport().appEnvironment === "development" ||
+    (typeof __DEV__ !== "undefined" && __DEV__);
+  const stagingQaResetOverlay =
+    showStagingQaResetMarkers && qaResetPhase !== "idle" ? (
+      <StagingQaResetMarkers phase={qaResetPhase} mode={qaResetMode} error={qaResetError} />
+    ) : null;
+  const [qaApplyEditRequest, setQaApplyEditRequest] = useState<{ url: string; nonce: number } | null>(
+    null,
+  );
+  const onQaApplyEditConsumed = useCallback(() => {
+    setQaApplyEditRequest(null);
+  }, []);
+  const clearQaApplyEditRequest = useCallback(() => {
+    setQaApplyEditRequest(null);
+  }, []);
   const [lang, setLang] = useState<Lang>("en");
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradesHydrated, setTradesHydrated] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  sessionRef.current = session;
   const [authHydrated, setAuthHydrated] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
@@ -10183,6 +10469,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     }
   }, [session?.user?.id]);
 
+
   const appReady = tradesHydrated && authHydrated;
   const acquisitionPhase = resolveAcquisitionPhase({
     hydrated: appReady && acquisitionHydrated,
@@ -10193,6 +10480,29 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     isPremium,
     revenueCatReady: !revenueCatConfigured || revenueCatReady,
   });
+
+  useEffect(() => {
+    if (!showStagingQaResetMarkers) return;
+    if (
+      acquisitionPhase !== "auth" &&
+      acquisitionPhase !== "onboarding" &&
+      acquisitionPhase !== "paywall" &&
+      acquisitionPhase !== "main" &&
+      acquisitionPhase !== "loading"
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void AsyncStorage.getItem("yt-qa-reset-complete-v1").then((mode) => {
+      if (cancelled || !mode) return;
+      setQaResetPhase("reset_complete");
+      setQaResetMode(mode);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [acquisitionPhase, showStagingQaResetMarkers]);
+
   const propPassTabVisible = isPropPassEntryVisible(
     undefined,
     null,
@@ -10835,21 +11145,70 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     const handleUrl = async (url: string) => {
       if (!url) return;
       try {
-        if (url.toLowerCase().startsWith("youtrader://qa/reset-auth")) {
+        if (
+          url.toLowerCase().startsWith("youtrader://qa/reset-")
+        ) {
           const { runStagingQaReset } = await import("../qa/stagingQaReset");
-          const reset = await runStagingQaReset({ deepLinkUrl: url });
+          const { parseStagingQaResetMode, stagingQaResetModeUi } = await import(
+            "../qa/stagingQaResetModes"
+          );
+          const mode = parseStagingQaResetMode(url) || "auth";
+          // Drop stale complete marker before wipe so Maestro cannot false-pass.
+          await AsyncStorage.removeItem("yt-qa-reset-complete-v1");
+          setQaResetPhase("reset_requested");
+          setQaResetMode(mode);
+          setQaResetError(null);
+          const reset = await runStagingQaReset({
+            deepLinkUrl: url,
+            mode,
+            onProgress: (snap) => {
+              setQaResetPhase(snap.phase);
+              setQaResetMode(snap.mode);
+              setQaResetError(snap.error);
+            },
+          });
           if (reset.allowed && reset.reason === "reset_ok") {
-            // Storage is already cleared. Apply signed-out acquisition state
-            // via stagingQaResetAcquisitionUi() — keeps acquisitionHydrated true
-            // so a null→null session does not stick on "Loading your journal...".
-            const ui = stagingQaResetAcquisitionUi();
-            setSession(ui.session);
+            const ui = stagingQaResetModeUi(mode);
+            setAuthBusy(false);
+            // Force local sign-out again so onAuthStateChange cannot revive Main.
+            try {
+              if (supabase) await supabase.auth.signOut({ scope: "local" });
+            } catch {
+              // ignore
+            }
+            setSession(null);
             setOnboardingCompleted(ui.onboardingCompleted);
             setPaywallCompleted(ui.paywallCompleted);
             setAcquisitionHydrated(ui.acquisitionHydrated);
-            Alert.alert("QA reset", "Staging auth/onboarding state cleared.");
+            setTrades([]);
+            setTradesHydrated(true);
+            setQaResetPhase("reset_complete");
+            setQaResetMode(mode);
+            setQaResetError(null);
+            void AsyncStorage.setItem("yt-qa-reset-complete-v1", mode);
+
+            console.info("[YTQA] reset mode applied", {
+              mode,
+              expectedPhase: ui.expectedPhase,
+              oauthStateCleared: reset.oauthStateCleared,
+              signedOutSupabase: reset.signedOutSupabase,
+              sessionForcedNull: true,
+              phase: reset.phase,
+            });
+            if (mode === "returning-allow" || mode === "returning-deny") {
+              const role = mode === "returning-allow" ? "allow" : "deny";
+              // Chain deterministic email bootstrap into Main (no Google).
+              await handleUrl(`youtrader://qa/email-login?role=${role}`);
+              return;
+            }
+            // No blocking Alert — Maestro cannot reliably dismiss native alerts as Auth CTAs.
           } else if (!reset.allowed) {
+            setQaResetPhase("reset_failed");
+            setQaResetError(reset.reason);
             Alert.alert("QA reset blocked", reset.reason);
+          } else if (reset.phase === "reset_failed") {
+            setQaResetPhase("reset_failed");
+            setQaResetError(reset.reason);
           }
           return;
         }
@@ -10905,10 +11264,54 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           setSession(data.session);
           setAuthHydrated(true);
           setAuthBusy(false);
+          setTab("journal");
           console.info("[YTQA] email login ok", {
             role,
             userPrefix: (data.session.user.id || "").slice(0, 8),
+            forcedTab: "journal",
           });
+          return;
+        }
+        if (url.toLowerCase().startsWith("youtrader://qa/seed-trade")) {
+          const {
+            buildStagingQaSeedTrade,
+            isStagingQaJournalSeedAllowed,
+            parseStagingQaJournalSeedUrl,
+            parseStagingQaTradeOverrides,
+          } = await import("../qa/stagingQaJournalSeed");
+          if (!isStagingQaJournalSeedAllowed() || !parseStagingQaJournalSeedUrl(url)) {
+            Alert.alert("QA seed trade blocked", "staging_only");
+            return;
+          }
+          if (!sessionRef.current?.user?.id) {
+            Alert.alert("QA seed trade", "Sign in first (email-login allow).");
+            return;
+          }
+          const overrides = parseStagingQaTradeOverrides(url);
+          const item = buildStagingQaSeedTrade(Date.now(), overrides);
+          setTrades((prev) => [item as Trade, ...prev.filter((t) => t.id !== item.id)]);
+          setTab("journal");
+          console.info("[YTQA] seed trade ok", {
+            idPrefix: item.id.slice(0, 20),
+            pnl: item.pnl,
+            notesLen: (item.notes || "").length,
+          });
+          return;
+        }
+        if (url.toLowerCase().startsWith("youtrader://qa/apply-trade-edit")) {
+          const { createStagingQaApplyEditRequest } = await import("../qa/stagingQaApplyEditRequest");
+          const request = createStagingQaApplyEditRequest(url);
+          if (!request) {
+            Alert.alert("QA apply-trade-edit blocked", "staging_only");
+            return;
+          }
+          if (!sessionRef.current?.user?.id) {
+            Alert.alert("QA apply-trade-edit", "Sign in first (email-login allow).");
+            return;
+          }
+          setTab("journal");
+          setQaApplyEditRequest(request);
+          console.info("[YTQA] apply-trade-edit queued", { hasQuery: url.includes("?"), nonce: request.nonce });
           return;
         }
         if (url.toLowerCase().startsWith("youtrader://qa/tab")) {
@@ -11292,6 +11695,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const signOut = useCallback(async () => {
     if (!supabase) return;
     const userId = session?.user.id || null;
+    try {
+      const { clearPendingOAuthClientState } = await import("../auth/clearPendingOAuth");
+      // App-owned pending OAuth only — production-safe, no full QA wipe.
+      await clearPendingOAuthClientState();
+    } catch {
+      // non-fatal
+    }
     await signOutGoogleNative();
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -11625,6 +12035,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           <AppStartupSkeleton />
           <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
         </View>
+        {stagingQaResetOverlay}
       </SafeAreaView>
     );
   }
@@ -11637,6 +12048,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           <AppStartupSkeleton />
           <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
         </View>
+        {stagingQaResetOverlay}
       </SafeAreaView>
     );
   }
@@ -11645,6 +12057,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     return (
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
         <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
+        {stagingQaResetOverlay}
         <ProductOnboardingScreen
           title={t("productOnboardingTitle")}
           body={t("productOnboardingBody")}
@@ -11659,6 +12072,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     return (
       <SafeAreaView style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
+        {stagingQaResetOverlay}
         <PremiumScreen
           lang={lang}
           onClose={dismissAcquisitionPaywall}
@@ -11678,20 +12092,44 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     return (
       <View style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
+        {stagingQaResetOverlay}
+        {qaResetPhase === "reset_complete" ? (
+          <View
+            testID="qa.reset.complete"
+            accessibilityLabel="qa.reset.complete"
+            accessible
+            importantForAccessibility="yes"
+            style={{ position: "absolute", top: 8, left: 8, zIndex: 10000, minWidth: 20, minHeight: 20, backgroundColor: "rgba(0,255,0,0.15)" }}
+          >
+            <Text style={{ color: "#0f0", fontSize: 10 }}>qa.reset.complete</Text>
+          </View>
+        ) : null}
+        {qaResetPhase === "reset_failed" ? (
+          <View
+            testID="qa.reset.failed"
+            accessibilityLabel="qa.reset.failed"
+            accessible
+            importantForAccessibility="yes"
+            style={{ position: "absolute", top: 8, left: 8, zIndex: 10000, minWidth: 20, minHeight: 20, backgroundColor: "rgba(255,0,0,0.2)" }}
+          >
+            <Text style={{ color: "#f00", fontSize: 10 }}>qa.reset.failed</Text>
+          </View>
+        ) : null}
         <AuthScreen
           busy={authBusy}
           copy={authScreenCopy}
           emailModalCopy={emailModalCopy}
           showApple={enableNativeAppleSignIn}
-          showGoogle={enableNativeGoogleSignIn}
+          showGoogle
           appleConfigWarning={
             sanitizedRuntimeConfigReport().appEnvironment === "staging" && enableNativeAppleSignIn
-              ? "Staging Apple provider enabled for native id_token exchange. If Sign in fails with provider_disabled, Management API secret still needs secure restore — CTA stays visible."
+              ? "Staging Apple: native expo-apple-authentication → signInWithIdToken (no web OAuth secret). Requires Sign in with Apple on device/sim Apple ID and Client IDs including com.youtrader.pro. CTA stays visible."
               : null
           }
           googleConfigWarning={
-            sanitizedRuntimeConfigReport().appEnvironment === "staging" && enableNativeGoogleSignIn
-              ? "Staging Google provider enabled. Confirm Web client + secret and iOS reverse client ID; CTA stays visible for QA."
+            sanitizedRuntimeConfigReport().appEnvironment === "staging" &&
+            !isGoogleClientIdPairDistinct
+              ? "Staging Google PATH A (ASWebAuth): Supabase browser OAuth. Distinct iOS client optional for native PATH B."
               : null
           }
           onSignIn={signInWithProvider}
@@ -11717,6 +12155,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   return (
     <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
         <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
+        {stagingQaResetOverlay}
         <View style={styles.body}>
           <YdlFade key={tab} style={{ flex: 1 }} enter>
           {locked ? (
@@ -11754,6 +12193,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               onContinueToReview={() => setTab("stats")}
               cloudSyncEnabled={cloudSyncEnabled}
               cloudSyncStatus={cloudSyncStatus}
+              qaApplyEditRequest={qaApplyEditRequest}
+              onQaApplyEditConsumed={onQaApplyEditConsumed}
             />
           ) : tab === "stats" ? (
             <StatsScreen
