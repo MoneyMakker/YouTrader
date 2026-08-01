@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { StatusSpinner } from "../components/ui/premium";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EMAIL_PASSWORD_MESSAGES } from "./emailPasswordMessages";
 import { isValidEmail, normalizeEmail } from "./emailOtpValidation";
@@ -219,7 +219,7 @@ export function EmailAuthModal({ visible, copy, onClose, onSignIn, onSignUp, onR
                   onPress={handleSignIn}
                   style={[styles.primaryBtn, submitting && styles.disabled]}
                 >
-                  {submitting ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryText}>{copy.signIn}</Text>}
+                  {submitting ? <StatusSpinner size="sm" variant="onLight" accessibilityLabel="Submitting" style={{ marginVertical: 0 }} /> : <Text style={styles.primaryText}>{copy.signIn}</Text>}
                 </Pressable>
                 <Pressable disabled={submitting} onPress={() => { setView("signup"); setError(null); setInfo(null); }} style={styles.linkBtn}>
                   <Text style={styles.linkText}>{copy.createAccountLink}</Text>
@@ -237,7 +237,7 @@ export function EmailAuthModal({ visible, copy, onClose, onSignIn, onSignUp, onR
                   onPress={handleSignUp}
                   style={[styles.primaryBtn, submitting && styles.disabled]}
                 >
-                  {submitting ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryText}>{copy.createAccount}</Text>}
+                  {submitting ? <StatusSpinner size="sm" variant="onLight" accessibilityLabel="Submitting" style={{ marginVertical: 0 }} /> : <Text style={styles.primaryText}>{copy.createAccount}</Text>}
                 </Pressable>
                 <Pressable disabled={submitting} onPress={() => { setView("signin"); setError(null); }} style={styles.linkBtn}>
                   <Text style={styles.linkText}>{copy.backToSignIn}</Text>
@@ -252,7 +252,7 @@ export function EmailAuthModal({ visible, copy, onClose, onSignIn, onSignUp, onR
                   onPress={handleForgot}
                   style={[styles.primaryBtn, submitting && styles.disabled]}
                 >
-                  {submitting ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryText}>{copy.sendReset}</Text>}
+                  {submitting ? <StatusSpinner size="sm" variant="onLight" accessibilityLabel="Submitting" style={{ marginVertical: 0 }} /> : <Text style={styles.primaryText}>{copy.sendReset}</Text>}
                 </Pressable>
                 <Pressable disabled={submitting} onPress={() => { setView("signin"); setError(null); setInfo(null); }} style={styles.linkBtn}>
                   <Text style={styles.linkText}>{copy.backToSignIn}</Text>

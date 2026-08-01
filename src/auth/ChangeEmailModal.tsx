@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { StatusSpinner } from "../components/ui/premium";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { t } from "../i18n";
 import { EMAIL_PASSWORD_MESSAGES } from "./emailPasswordMessages";
@@ -93,7 +93,7 @@ export function ChangeEmailModal({ visible, onClose, onSubmit }: Props) {
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Pressable disabled={submitting} onPress={() => void handleSubmit()} style={[styles.primaryBtn, submitting && styles.disabled]}>
-              {submitting ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryText}>{t("authUpdateEmail")}</Text>}
+              {submitting ? <StatusSpinner size="sm" variant="onLight" accessibilityLabel="Submitting" style={{ marginVertical: 0 }} /> : <Text style={styles.primaryText}>{t("authUpdateEmail")}</Text>}
             </Pressable>
             <Pressable onPress={onClose} style={styles.linkBtn}>
               <Text style={styles.cancelText}>{t("cancel")}</Text>
