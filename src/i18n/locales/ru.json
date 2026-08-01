@@ -1524,7 +1524,7 @@
   "subscription.currentPlan": "Current plan",
   "subscription.proActive": "YouTrader Pro",
   "subscription.unavailableTitle": "Subscriptions temporarily unavailable",
-  "subscription.unavailableBody": "Store offerings could not be loaded. Core journaling and stats stay available. Retry here when ready.",
+  "subscription.unavailableBody": "Subscriptions could not be loaded. Retry or restore purchases to continue. YouTrader requires an active subscription.",
   "subscription.retry": "Retry",
   "subscription.manageHint": "Manage or cancel in App Store account settings. Purchases restore across devices signed into the same Apple ID.",
   "stats.emptyTitle": "Your Performance Starts Here",

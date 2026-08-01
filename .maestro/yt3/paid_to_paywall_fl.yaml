@@ -1,0 +1,24 @@
+appId: com.youtrader.pro
+---
+- openLink: youtrader://qa/reset-fresh
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen-1"
+    timeout: 30000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/paid_01_screen1
+- tapOn:
+    id: "onboarding-skip"
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen-3"
+    timeout: 15000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/paid_03_screen3
+- tapOn:
+    id: "onboarding-value-continue"
+- extendedWaitUntil:
+    visible:
+      id: "acquisition-paywall"
+    timeout: 25000
+- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/paid_05_paywall
+- assertNotVisible:
+    id: "paywall-continue-free"
