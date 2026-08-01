@@ -81,10 +81,10 @@ Deno.serve(async (req) => {
     "request_limits",
   ];
   for (const table of tables) {
-    try {
-      await admin.from(table).delete().eq("user_id", userId);
-    } catch {
-      // Table may not exist in every environment — continue.
+    const { error: tableError } = await admin.from(table).delete().eq("user_id", userId);
+    if (tableError) {
+      // Best-effort: missing tables or RLS-adjacent failures must not block auth deletion.
+      console.warn(`delete-account: cleanup skipped for ${table}`);
     }
   }
 
