@@ -1,5 +1,6 @@
 appId: com.youtrader.pro
 ---
+# Paid funnel: onboarding → paywall (no free/guest bypass)
 - launchApp
 - openLink: youtrader://qa/reset-fresh
 - runFlow: _dismiss_logbox.yaml
@@ -37,12 +38,17 @@ appId: com.youtrader.pro
     visible: "Your trading system is ready"
     timeout: 20000
 - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05_paywall
+- assertNotVisible:
+    id: "paywall-continue-free"
+- assertNotVisible:
+    id: "auth.continue-guest"
 - runFlow:
     when:
-      visible: "Continue with Free Journal"
+      visible: "Subscriptions temporarily unavailable"
     commands:
       - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05e_paywall_unavailable
-      - tapOn: "Continue with Free Journal"
+      - assertVisible: "Retry"
+      - assertVisible: "Restore Purchases"
 - runFlow:
     when:
       visible:
@@ -57,22 +63,3 @@ appId: com.youtrader.pro
       - tapOn:
           id: "paywall-plan-yearly"
       - takeScreenshot: docs/releases/1.6.1/first-launch-evidence/05d_paywall_yearly
-      - tapOn:
-          id: "paywall-continue-free"
-- extendedWaitUntil:
-    visible: "Save your trading progress"
-    timeout: 20000
-- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/06_post_paywall_account
-- tapOn: "Continue without an account"
-- extendedWaitUntil:
-    visible: "Journal"
-    timeout: 25000
-- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/07_guest_main
-- tapOn: "Stats"
-- extendedWaitUntil:
-    visible: "Performance Radar"
-    timeout: 15000
-- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/08_stats_radar
-- scroll
-- scroll
-- takeScreenshot: docs/releases/1.6.1/first-launch-evidence/09_stats_heatmap

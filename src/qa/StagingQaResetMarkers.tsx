@@ -68,13 +68,13 @@ export function StagingQaResetMarkers({ phase, mode, error }: Props) {
 const styles = StyleSheet.create({
   root: {
     position: "absolute",
-    top: 4,
-    left: 4,
-    width: 24,
-    height: 24,
-    opacity: 0.05,
+    top: 0,
+    left: 0,
+    width: 1,
+    height: 1,
+    opacity: 0,
     zIndex: 9999,
   },
-  dot: { width: 8, height: 8, backgroundColor: "#00ff00" },
-  hiddenText: { fontSize: 8, color: "#00ff00", height: 8 },
+  dot: { width: 1, height: 1, opacity: 0 },
+  hiddenText: { fontSize: 1, color: "transparent", height: 1, width: 1, opacity: 0 },
 });

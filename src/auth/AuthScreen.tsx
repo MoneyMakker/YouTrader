@@ -59,9 +59,7 @@ type Props = {
   onSignInWithEmailPassword: (email: string, password: string) => Promise<void>;
   onSignUpWithEmailPassword: (email: string, password: string) => Promise<"confirmation_sent" | "signed_in">;
   onRequestPasswordReset: (email: string) => Promise<void>;
-  /** Post-paywall: local-first guest may enter without credentials. */
-  onContinueWithoutAccount?: () => void;
-  /** Hide staging QA configuration banners (default true in production export). */
+  /** Post-paywall auth is mandatory — no guest / accountless entry. */
   hideQaConfigBanners?: boolean;
 };
 
@@ -175,7 +173,6 @@ export function AuthScreen({
   onSignInWithEmailPassword,
   onSignUpWithEmailPassword,
   onRequestPasswordReset,
-  onContinueWithoutAccount,
   hideQaConfigBanners = true,
 }: Props) {
   const [emailOpen, setEmailOpen] = useState(false);
@@ -344,17 +341,6 @@ export function AuthScreen({
                 delay={buttonBaseDelay + 80}
                 onPress={() => setEmailOpen(true)}
               />
-              {onContinueWithoutAccount ? (
-                <AuthProviderButton
-                  testID="auth.continue-guest"
-                  label="Continue without an account"
-                  borderColor="rgba(255,255,255,0.18)"
-                  glowColor="rgba(255,255,255,0.2)"
-                  busy={busy}
-                  delay={buttonBaseDelay + 140}
-                  onPress={() => onContinueWithoutAccount()}
-                />
-              ) : null}
             </Animated.View>
 
             <View style={styles.footer}>

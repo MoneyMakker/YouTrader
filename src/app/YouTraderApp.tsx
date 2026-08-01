@@ -9848,65 +9848,21 @@ YouTrader does not knowingly collect data from or market to individuals under th
         />
 
         <GlassCard style={[styles.proSubscriptionCard, styles.settingsQuietCard]} intensity={36}>
-          <Text style={[styles.settingsSectionTitle, styles.proSubscriptionTitle]} maxFontSizeMultiplier={1.25}>YouTrader Pro</Text>
+          <Text style={[styles.settingsSectionTitle, styles.proSubscriptionTitle]} maxFontSizeMultiplier={1.25}>Subscription</Text>
           <View style={[styles.proStatusBox, isPremium ? styles.proStatusActive : styles.proStatusLocked]}>
             <View style={[styles.proStatusIcon, isPremium ? styles.proStatusIconActive : styles.proStatusIconLocked]}>
               {isPremium ? <Unlock size={22} color={C.green} strokeWidth={2.4} /> : <Lock size={22} color={C.purple} strokeWidth={2.4} />}
             </View>
             <View style={styles.proStatusCopy}>
               <Text style={[styles.proStatusTitle, isPremium ? styles.proStatusTitleActive : styles.proStatusTitleLocked]} maxFontSizeMultiplier={1.25}>
-                {isPremium ? t("proActiveTitle") : t("proLockedTitle")}
+                {isPremium ? t("proActiveTitle") : t("subscription.noActiveSubscription")}
               </Text>
               <Text style={styles.proStatusText} maxFontSizeMultiplier={1.25}>
-                {isPremium ? t("proActiveBody") : t("proLockedBody")}
+                {isPremium ? t("proActiveBody") : t("subscription.unavailableBody")}
               </Text>
             </View>
           </View>
-          {!isPremium && (
-            <>
-              <ProBenefitSectionList compact />
-              <SubscriptionLegalDisclosure
-                monthlyPackage={packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null}
-                monthlyProduct={storeProducts.find((product) => product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) || null}
-                yearlyPackage={packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null}
-                yearlyProduct={storeProducts.find((product) => product.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) || null}
-                compact
-              />
-            </>
-          )}
-          {!isPremium ? (
-            <View style={styles.subscriptionPlanGrid}>
-              <Pressable
-                disabled={purchaseBusy}
-                onPress={() =>
-                  onPurchase(
-                    packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null,
-                    YOU_TRADER_MONTHLY_PRODUCT_ID,
-                  )
-                }
-                style={[styles.secondaryBig, styles.purpleAction, { flex: 1 }, purchaseBusy && styles.disabledBtn]}
-                accessibilityRole="button"
-                accessibilityLabel={t("monthlyPrice")}
-              >
-                <Text style={styles.secondaryText}>{t("monthlyPrice")}</Text>
-              </Pressable>
-              <Pressable
-                disabled={purchaseBusy}
-                onPress={() =>
-                  onPurchase(
-                    packages.find((pkg) => packageTitle(pkg) === "YEARLY") || null,
-                    YOU_TRADER_YEARLY_PRODUCT_ID,
-                  )
-                }
-                style={[styles.secondaryBig, styles.greenProAction, { flex: 1 }, purchaseBusy && styles.disabledBtn]}
-                accessibilityRole="button"
-                accessibilityLabel={t("yearlyPrice")}
-              >
-                <Text style={[styles.secondaryText, styles.greenActionText]}>{t("yearlyPrice")}</Text>
-              </Pressable>
-            </View>
-          ) : null}
-          {!isPremium && (showRestorePurchases || !!paywallError) ? (
+          {(showRestorePurchases || !!paywallError) ? (
             <Pressable
               disabled={purchaseBusy}
               onPress={onRestore}
@@ -10115,7 +10071,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [acquisitionHydrated, setAcquisitionHydrated] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [paywallCompleted, setPaywallCompleted] = useState(false);
-  const [guestContinued, setGuestContinued] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<"off" | "syncing" | "synced" | "error">("off");
   const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in and upgrade to Pro to sync your journal.");
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
@@ -10147,12 +10102,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     let cancelled = false;
     void (async () => {
       try {
-        const [onboarding, devicePaywall, legacyPaywall, guestFlag] = await Promise.all([
+        const [onboarding, devicePaywall, legacyPaywall] = await Promise.all([
           AsyncStorage.getItem(ACQUISITION_ONBOARDING_KEY),
           AsyncStorage.getItem(ACQUISITION_PAYWALL_DEVICE_KEY),
           AsyncStorage.getItem(POST_AUTH_PAYWALL_SEEN_KEY),
-          AsyncStorage.getItem(ACQUISITION_GUEST_KEY),
         ]);
+        // Clear legacy guest flag — free/guest access is removed.
+        void AsyncStorage.removeItem(ACQUISITION_GUEST_KEY);
         let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
         let onboardingDone = onboarding === "1";
         const userId = session?.user?.id;
@@ -10168,13 +10124,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (cancelled) return;
         setOnboardingCompleted(onboardingDone);
         setPaywallCompleted(paywallDone);
-        setGuestContinued(guestFlag === "1");
         setAcquisitionHydrated(true);
       } catch {
         if (!cancelled) {
           setOnboardingCompleted(false);
           setPaywallCompleted(isPremium);
-          setGuestContinued(false);
           setAcquisitionHydrated(true);
         }
       }
@@ -10198,18 +10152,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     void AsyncStorage.setItem(ACQUISITION_ONBOARDING_KEY, "1");
   }, []);
 
-  const continueAsGuest = useCallback(() => {
-    setGuestContinued(true);
-    setPaywallCompleted(true);
-    void AsyncStorage.multiSet([
-      [ACQUISITION_GUEST_KEY, "1"],
-      [ACQUISITION_PAYWALL_DEVICE_KEY, "1"],
-      [POST_AUTH_PAYWALL_SEEN_KEY, "1"],
-      [ACQUISITION_ONBOARDING_KEY, "1"],
-    ]);
-  }, []);
-
-  const dismissAcquisitionPaywall = useCallback(() => {
+  const markPaywallAcknowledged = useCallback(() => {
     setPaywallCompleted(true);
     void AsyncStorage.setItem(ACQUISITION_PAYWALL_DEVICE_KEY, "1");
     void AsyncStorage.setItem(POST_AUTH_PAYWALL_SEEN_KEY, "1");
@@ -10225,7 +10168,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     hydrated: appReady && acquisitionHydrated,
     onboardingCompleted,
     paywallCompleted,
-    guestContinued,
     authRequired,
     hasSession: !!session?.user,
     isPremium,
@@ -10278,7 +10220,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       acquisitionHydrated &&
       acquisitionPhase !== "loading",
     onAdvanceFromOnboarding: completeProductOnboarding,
-    onAdvanceFromPaywall: dismissAcquisitionPaywall,
+    onAdvanceFromPaywall: markPaywallAcknowledged,
   });
 
   useLayoutEffect(() => {
@@ -11882,8 +11824,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           onRetryOfferings={() => {
             void refreshRevenueCat();
           }}
-          onContinueFree={dismissAcquisitionPaywall}
-          onClose={dismissAcquisitionPaywall}
           packageTitle={packageTitle}
           packagePrice={packagePrice}
         />
@@ -11902,10 +11842,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             accessibilityLabel="qa.reset.complete"
             accessible
             importantForAccessibility="yes"
-            style={{ position: "absolute", top: 8, left: 8, zIndex: 10000, minWidth: 20, minHeight: 20, backgroundColor: "rgba(0,255,0,0.15)" }}
-          >
-            <Text style={{ color: "#0f0", fontSize: 10 }}>qa.reset.complete</Text>
-          </View>
+            style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
+          />
         ) : null}
         {qaResetPhase === "reset_failed" ? (
           <View
@@ -11913,10 +11851,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             accessibilityLabel="qa.reset.failed"
             accessible
             importantForAccessibility="yes"
-            style={{ position: "absolute", top: 8, left: 8, zIndex: 10000, minWidth: 20, minHeight: 20, backgroundColor: "rgba(255,0,0,0.2)" }}
-          >
-            <Text style={{ color: "#f00", fontSize: 10 }}>qa.reset.failed</Text>
-          </View>
+            style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
+          />
         ) : null}
         <AuthScreen
           busy={authBusy}
@@ -11925,7 +11861,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           showApple={enableNativeAppleSignIn}
           showGoogle
           hideQaConfigBanners
-          onContinueWithoutAccount={continueAsGuest}
           appleConfigWarning={null}
           googleConfigWarning={null}
           onSignIn={signInWithProvider}

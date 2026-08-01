@@ -30,8 +30,7 @@ type Props = {
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
   onRetryOfferings: () => void;
-  onContinueFree: () => void;
-  onClose: () => void;
+  onClose?: () => void;
   packageTitle: (pkg: PurchasesPackage) => string;
   packagePrice: (pkg?: PurchasesPackage | null) => string;
 };
@@ -52,7 +51,6 @@ export function AcquisitionPaywall({
   onPurchase,
   onRestore,
   onRetryOfferings,
-  onContinueFree,
   onClose,
   packageTitle,
   packagePrice,
@@ -164,11 +162,15 @@ export function AcquisitionPaywall({
       contentContainerStyle={styles.body}
       testID="acquisition-paywall"
     >
+      {onClose ? (
       <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
         <YdlText role="body" color="text.secondary">
           ×
         </YdlText>
       </Pressable>
+      ) : (
+        <View style={styles.close} />
+      )}
 
       <YdlText role="title">Your trading system is ready</YdlText>
       <YdlText role="body" color="text.secondary">
@@ -192,19 +194,12 @@ export function AcquisitionPaywall({
           </YdlText>
           <YdlButton label={t("subscription.retry")} onPress={onRetryOfferings} disabled={purchaseBusy} />
           <YdlButton
-            label="Continue with Free Journal"
+            label={t("restorePurchases")}
             variant="secondary"
-            onPress={onContinueFree}
-            testID="paywall-continue-free"
+            onPress={onRestore}
+            disabled={purchaseBusy}
+            testID="paywall-restore"
           />
-          {(showRestorePurchases || !!paywallError) && (
-            <YdlButton
-              label={t("restorePurchases")}
-              variant="secondary"
-              onPress={onRestore}
-              disabled={purchaseBusy}
-            />
-          )}
         </View>
       ) : (
         <>

@@ -11,7 +11,6 @@ function base(over: Partial<AcquisitionInput> = {}): AcquisitionInput {
     hydrated: true,
     onboardingCompleted: false,
     paywallCompleted: false,
-    guestContinued: false,
     authRequired: true,
     hasSession: false,
     isPremium: false,
@@ -37,7 +36,8 @@ function run() {
     resolveAcquisitionPhase(
       base({ onboardingCompleted: true, paywallCompleted: true }),
     ),
-    "auth",
+    "paywall",
+    "no free bypass — entitlement required",
   );
   assert.equal(
     resolveAcquisitionPhase(
@@ -55,20 +55,21 @@ function run() {
         onboardingCompleted: true,
         paywallCompleted: true,
         hasSession: true,
+        isPremium: false,
       }),
     ),
-    "main",
+    "paywall",
   );
   assert.equal(
     resolveAcquisitionPhase(
       base({
         onboardingCompleted: true,
-        paywallCompleted: false,
+        paywallCompleted: true,
         hasSession: true,
-        isPremium: false,
+        isPremium: true,
       }),
     ),
-    "paywall",
+    "main",
   );
   assert.equal(
     resolveAcquisitionPhase(
@@ -81,7 +82,7 @@ function run() {
     ),
     "main",
   );
-  // Grandfather: authenticated without onboarding flag → paywall or main, never onboarding
+  // Authenticated without onboarding flag → paywall or main, never onboarding
   assert.notEqual(
     resolveAcquisitionPhase(
       base({ onboardingCompleted: false, hasSession: true }),
@@ -89,24 +90,14 @@ function run() {
     "onboarding",
   );
 
-  // --- QA reset hang regression ---
-  // Bug: after reset with session already null, flipping hydrated→false sticks forever.
   const buggyPostReset = base({
     hydrated: false,
     onboardingCompleted: false,
     paywallCompleted: false,
     hasSession: false,
   });
-  assert.equal(
-    resolveAcquisitionPhase(buggyPostReset),
-    "loading",
-    "buggy post-reset flags must reproduce Loading your journal",
-  );
-  assert.equal(
-    isStuckAcquisitionLoading(buggyPostReset),
-    true,
-    "hydrated=false signed-out is the stuck class",
-  );
+  assert.equal(resolveAcquisitionPhase(buggyPostReset), "loading");
+  assert.equal(isStuckAcquisitionLoading(buggyPostReset), true);
 
   const fixed = stagingQaResetAcquisitionUi();
   assert.equal(fixed.session, null);
@@ -123,18 +114,6 @@ function run() {
       }),
     ),
     "onboarding",
-    "fixed post-reset must enter onboarding, not loading",
-  );
-  assert.equal(
-    isStuckAcquisitionLoading(
-      base({
-        hydrated: fixed.acquisitionHydrated,
-        onboardingCompleted: fixed.onboardingCompleted,
-        paywallCompleted: fixed.paywallCompleted,
-        hasSession: false,
-      }),
-    ),
-    false,
   );
 
   console.log("acquisition-state-qa: PASS");

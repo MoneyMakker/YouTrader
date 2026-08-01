@@ -40,11 +40,10 @@ assert.equal(
   resolveAcquisitionPhase({
     hydrated: true,
     onboardingCompleted: true,
-    guestContinued: false,
-      paywallCompleted: true,
+    paywallCompleted: true,
     authRequired: true,
     hasSession: false,
-    isPremium: false,
+    isPremium: true,
     revenueCatReady: true,
   }),
   "auth",
@@ -53,9 +52,22 @@ assert.equal(
 assert.equal(
   resolveAcquisitionPhase({
     hydrated: true,
+    onboardingCompleted: true,
+    paywallCompleted: true,
+    authRequired: true,
+    hasSession: false,
+    isPremium: false,
+    revenueCatReady: true,
+  }),
+  "paywall",
+  "without entitlement auth screen is unreachable",
+);
+
+assert.equal(
+  resolveAcquisitionPhase({
+    hydrated: true,
     onboardingCompleted: false,
-    guestContinued: false,
-      paywallCompleted: false,
+    paywallCompleted: false,
     authRequired: true,
     hasSession: false,
     isPremium: false,

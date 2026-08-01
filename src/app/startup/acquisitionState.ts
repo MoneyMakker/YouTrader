@@ -1,8 +1,11 @@
 /**
  * Acquisition / startup phase resolver — unit-testable, no I/O.
  *
- * Fresh: onboarding → paywall → auth|guest → main
- * Returning authenticated / entitled / guest users skip completed steps.
+ * Paid-only funnel:
+ * onboarding → paywall (purchase) → auth → main
+ *
+ * Main App requires BOTH active entitlement AND authenticated session.
+ * There is no free plan and no guest application access.
  */
 
 export type AcquisitionPhase =
@@ -15,9 +18,8 @@ export type AcquisitionPhase =
 export type AcquisitionInput = {
   hydrated: boolean;
   onboardingCompleted: boolean;
+  /** @deprecated Kept for migration/tests; entitlement (isPremium) gates Main App. */
   paywallCompleted: boolean;
-  /** Local-first guest chose Continue without account after paywall. */
-  guestContinued: boolean;
   authRequired: boolean;
   hasSession: boolean;
   isPremium: boolean;
@@ -29,35 +31,29 @@ export type AcquisitionInput = {
  *
  * Rules:
  * - Not hydrated → loading
- * - No session:
- *   - onboarding incomplete → onboarding
- *   - paywall incomplete and not premium → paywall (wait RC ready)
- *   - premium purchase still shows account/guest choice (unless guest)
- *   - guest continued → main
- *   - auth required → auth (Apple / Google / Email / Continue without account)
- *   - else → main
- * - Session present:
- *   - existing accounts skip marketing onboarding (caller persists)
- *   - paywall incomplete and not premium → paywall
- *   - else → main
+ * - Onboarding incomplete → onboarding (even if session exists for fresh marketing reset;
+ *   authenticated callers persist onboardingCompleted to skip)
+ * - No entitlement → paywall (wait RevenueCat ready; never Main App)
+ * - Entitlement active, no session → auth (mandatory post-purchase)
+ * - Entitlement active + session → main
+ * - Authenticated without entitlement → paywall
  */
 export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPhase {
   if (!input.hydrated) return "loading";
 
   if (!input.hasSession) {
     if (!input.onboardingCompleted) return "onboarding";
-    if (!input.paywallCompleted && !input.isPremium) {
+    if (!input.isPremium) {
       if (!input.revenueCatReady) return "loading";
       return "paywall";
     }
-    // Entitled users still get post-purchase account choice unless guest.
-    if (input.guestContinued) return "main";
     if (input.authRequired) return "auth";
-    return "main";
+    // Auth not configured (unusual) — still block Main App without a session.
+    return "auth";
   }
 
-  // Authenticated — never force marketing onboarding.
-  if (!input.paywallCompleted && !input.isPremium) {
+  // Authenticated — never force marketing onboarding (caller marks complete).
+  if (!input.isPremium) {
     if (!input.revenueCatReady) return "loading";
     return "paywall";
   }
@@ -67,6 +63,7 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
 
 export const ACQUISITION_ONBOARDING_KEY = "yt-acquisition-onboarding-v1";
 export const ACQUISITION_PAYWALL_DEVICE_KEY = "yt-acquisition-paywall-device-v1";
+/** @deprecated Guest access removed — key ignored; kept to clear legacy installs. */
 export const ACQUISITION_GUEST_KEY = "yt-acquisition-guest-v1";
 
 export function acquisitionPaywallUserKey(userId: string): string {

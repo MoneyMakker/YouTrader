@@ -17,7 +17,6 @@ const base: AcquisitionInput = {
   hydrated: true,
   onboardingCompleted: false,
   paywallCompleted: false,
-  guestContinued: false,
   authRequired: true,
   hasSession: false,
   isPremium: false,
@@ -36,16 +35,8 @@ assert.equal(
     onboardingCompleted: true,
     paywallCompleted: true,
   }),
-  "auth",
-);
-assert.equal(
-  resolveAcquisitionPhase({
-    ...base,
-    onboardingCompleted: true,
-    paywallCompleted: true,
-    guestContinued: true,
-  }),
-  "main",
+  "paywall",
+  "paywallCompleted alone must not unlock Main App without entitlement",
 );
 assert.equal(
   resolveAcquisitionPhase({
@@ -55,7 +46,7 @@ assert.equal(
     isPremium: true,
   }),
   "auth",
-  "purchase-before-auth must still offer account/guest choice",
+  "purchase-before-auth must force registration",
 );
 assert.equal(
   resolveAcquisitionPhase({
@@ -65,7 +56,6 @@ assert.equal(
     paywallCompleted: false,
   }),
   "auth",
-  "isPremium satisfies paywall but still routes to auth when not guest",
 );
 assert.equal(
   resolveAcquisitionPhase({
@@ -73,8 +63,28 @@ assert.equal(
     onboardingCompleted: true,
     hasSession: true,
     paywallCompleted: true,
+    isPremium: false,
+  }),
+  "paywall",
+  "authenticated without entitlement stays on paywall",
+);
+assert.equal(
+  resolveAcquisitionPhase({
+    ...base,
+    onboardingCompleted: true,
+    hasSession: true,
+    paywallCompleted: true,
+    isPremium: true,
   }),
   "main",
+);
+assert.equal(
+  resolveAcquisitionPhase({
+    ...base,
+    onboardingCompleted: true,
+    revenueCatReady: false,
+  }),
+  "loading",
 );
 
 const profile = defaultOnboardingProfile({
