@@ -7,7 +7,8 @@ export type Tab =
   | "calendar"
   | "news"
   | "calc"
-  | "settings";
+  | "settings"
+  | "more";
 export type Direction = "LONG" | "SHORT";
 export type Asset = "ES" | "NQ" | "GOLD" | "OIL" | "BTC" | "ETH";
 export type Bias = "LONG" | "SHORT" | "NEUTRAL";
