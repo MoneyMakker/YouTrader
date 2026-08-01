@@ -146,6 +146,10 @@ function buildScopeChips(
   return chips;
 }
 
+function isTimeoutReason(reasonCode: string | null | undefined): boolean {
+  return reasonCode === "queue_timeout" || reasonCode === "processor_timeout";
+}
+
 function resolveDisplayState(
   calc: IntelligenceCalcState,
   snapshot: PerformanceIntelligenceSnapshot | null,
@@ -153,7 +157,9 @@ function resolveDisplayState(
   if (calc.kind === "queued" || calc.kind === "running") {
     return "calculating";
   }
-  if (calc.kind === "failed") return "failed";
+  if (calc.kind === "failed") {
+    return isTimeoutReason(calc.reasonCode) ? "timeout" : "failed";
+  }
   if (!snapshot) return "none";
   switch (snapshot.status) {
     case "current":
@@ -183,6 +189,7 @@ function stateLabelKey(displayState: string): string {
     incomplete: "propPass.intelligence.state.incomplete",
     unsupported: "propPass.intelligence.state.unsupported",
     failed: "propPass.intelligence.state.failed",
+    timeout: "propPass.intelligence.state.timeout",
   };
   return map[displayState] ?? "propPass.intelligence.state.none";
 }
@@ -272,12 +279,23 @@ export function PerformanceIntelligenceInternalPanel({
 
   useEffect(() => {
     if (!readStoreOverride) return;
+    // Server-authoritative terminal states (incl. queue_timeout / processor_timeout)
+    // must stop client polling. Client never invents success.
     if (calcState.kind !== "queued" && calcState.kind !== "running") return;
     const id = setInterval(() => {
       void refresh();
     }, 2500);
     return () => clearInterval(id);
   }, [calcState.kind, readStoreOverride, refresh]);
+
+  // Logout / account switch: userId change clears polling via effect teardown above
+  // and refreshes scope for the new identity only.
+  useEffect(() => {
+    setSnapshot(null);
+    setCalcState({ kind: "not_required" });
+    setErrorMessage(null);
+    setBusy(false);
+  }, [userId]);
 
   const handleScopeSelect = (chip: ScopeChip) => {
     setSelectedChipId(chip.id);
@@ -467,10 +485,15 @@ export function PerformanceIntelligenceInternalPanel({
         </YdlCard>
 
         <YdlButton
-          label={t("propPass.intelligence.requestCalc")}
-          onPress={() => void handleRequestCalculation(false)}
+          label={
+            displayState === "timeout"
+              ? t("propPass.intelligence.retryAfterTimeout")
+              : t("propPass.intelligence.requestCalc")
+          }
+          onPress={() => void handleRequestCalculation(displayState === "timeout")}
           loading={busy}
-          disabled={busy}
+          disabled={busy || displayState === "calculating"}
+          testID="performance-intelligence-request-calc"
         />
         {snapshot ? (
           <YdlButton
@@ -478,7 +501,7 @@ export function PerformanceIntelligenceInternalPanel({
             variant="secondary"
             onPress={() => void handleRequestCalculation(true)}
             loading={busy}
-            disabled={busy}
+            disabled={busy || displayState === "calculating"}
           />
         ) : null}
       </ScrollView>

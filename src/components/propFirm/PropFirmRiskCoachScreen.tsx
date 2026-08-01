@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { View } from "react-native";
+import { EmptyStateCard, StatusSpinner } from "../ui/premium";
 import {
   applyUserOverrides,
   buildPropRiskEngine,
@@ -12,7 +13,6 @@ import {
   type PropFirmPhase,
   type PropFirmTemplate,
 } from "../../propFirm";
-import { C } from "../../theme/colors";
 import { PropFirmRiskDashboard } from "./PropFirmRiskDashboard";
 
 type TradeLike = {
@@ -73,18 +73,19 @@ export function PropFirmRiskCoachScreen({
   if (!hydrated) {
     return (
       <View style={{ paddingVertical: 40, alignItems: "center" }}>
-        <ActivityIndicator color={C.green} />
+        <StatusSpinner accessibilityLabel="Loading prop firm assistant" />
       </View>
     );
   }
 
   if (!templates.length || !activeTemplate || !engine) {
     return (
-      <View style={{ padding: 20, gap: 8 }}>
-        <Text style={{ color: C.text, fontSize: 18, fontWeight: "800" }}>Prop Firm Risk Assistant</Text>
-        <Text style={{ color: C.sub, lineHeight: 20 }}>
-          Firm rules load from Supabase. Connect to the internet and reopen the assistant to sync Topstep, Apex, Take Profit Trader, Lucid, and Custom templates.
-        </Text>
+      <View style={{ padding: 20 }}>
+        <EmptyStateCard
+          tone="purple"
+          title="Prop Firm Risk Assistant"
+          message="Firm rules load from Supabase. Connect to the internet and reopen the assistant to sync Topstep, Apex, Take Profit Trader, Lucid, and Custom templates."
+        />
       </View>
     );
   }

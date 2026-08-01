@@ -83,13 +83,28 @@ export type AIDailyChallenge = {
   whyThisHelps: string;
 };
 
+export type AITradeVisionReview = {
+  verdict: string;
+  entryQuality: string;
+  mistakeDetected: string;
+  stopPlacementFeedback: string;
+  riskRewardFeedback: string;
+  bestAlternativeAction: string;
+  coachNote: string;
+  confidence: string;
+  evidenceFromImage: string[];
+  journalBehaviorConnection: string;
+  educationalDisclaimer: string;
+};
+
 type Action =
   | "weekly_coach"
   | "risk_predictor"
   | "journal_summary"
   | "daily_plan"
   | "news_explainer"
-  | "daily_challenge";
+  | "daily_challenge"
+  | "trade_vision_review";
 
 type Period = "day" | "week" | "month" | "custom";
 
@@ -104,6 +119,7 @@ const LOCAL_AI_CACHEABLE_ACTIONS = new Set<Action>([
 ]);
 
 const AI_COACH_LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
 
 function now() {
   return new Date().toISOString();
@@ -183,6 +199,20 @@ function fallback(action: Action, payload: Record<string, any>): any {
         difficulty: "medium",
         whyThisHelps: "Cleaner discipline creates cleaner data and protects drawdown.",
       } satisfies AIDailyChallenge;
+    case "trade_vision_review":
+      return {
+        verdict: "Cloud vision analysis is unavailable right now.",
+        entryQuality: "Entry quality cannot be reviewed without a live vision model response.",
+        mistakeDetected: "No visual mistake can be confirmed from local fallback.",
+        stopPlacementFeedback: "Stop placement cannot be judged without image analysis.",
+        riskRewardFeedback: "Risk/reward is unclear without a successful image review.",
+        bestAlternativeAction: "Try again with a clear screenshot showing entry, stop, and target context.",
+        coachNote: "No AI vision review was completed. This is not a trade signal.",
+        confidence: "Low",
+        evidenceFromImage: ["No image evidence was analyzed because cloud vision was unavailable."],
+        journalBehaviorConnection: "No journal behavior connection was made.",
+        educationalDisclaimer: "Educational trade review only. Not financial advice.",
+      } satisfies AITradeVisionReview;
   }
 }
 
@@ -286,4 +316,8 @@ export function fetchAINewsExplainer(newsItem: Record<string, unknown>) {
 
 export function fetchAIDailyChallenge(payload: Record<string, unknown>) {
   return invokeAI<AIDailyChallenge>("daily_challenge", "day", payload);
+}
+
+export function fetchAITradeVisionReview(payload: Record<string, unknown>) {
+  return invokeAI<AITradeVisionReview>("trade_vision_review", "custom", payload);
 }
