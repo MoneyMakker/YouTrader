@@ -97,6 +97,14 @@ export function PropPassChallengeHero({ model }: Props) {
       <YdlText role="body" style={styles.insight}>
         {t(`propPass.hero.insight.${status}`)}
       </YdlText>
+      <View style={styles.nextRow}>
+        <YdlText role="caption" color="text.tertiary">
+          {t("propPass.hero.nextLabel")}
+        </YdlText>
+        <YdlText role="bodyEmphasized">
+          {t(`propPass.hero.next.${status}`)}
+        </YdlText>
+      </View>
     </View>
   );
 }
@@ -126,4 +134,5 @@ const styles = StyleSheet.create({
   },
   room: { gap: 2, minWidth: 120 },
   insight: { marginTop: 8 },
+  nextRow: { gap: 2, marginTop: 4 },
 });

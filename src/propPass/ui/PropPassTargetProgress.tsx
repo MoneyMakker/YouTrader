@@ -54,7 +54,7 @@ export function PropPassTargetProgress({ model }: Props) {
           style={[
             styles.fill,
             {
-              width: `${reduceMotion ? pct : pct}%` as `${number}%`,
+              width: `${Math.max(reduceMotion ? pct : pct, pct > 0 ? 4 : 0)}%` as `${number}%`,
               backgroundColor: theme.colors.action.primary,
             },
           ]}

@@ -1,5 +1,5 @@
 /**
- * Prop Pass presentation + money formatting selftest.
+ * Prop Pass presentation + staging QA fixtures selftest.
  * Run: npx tsx scripts/qa/propPassPresentation.selftest.ts
  */
 import assert from "node:assert/strict";
@@ -20,6 +20,11 @@ import {
   tradesNeededForInsights,
 } from "../../src/propPass/presentation";
 import type { PropPassViewModel } from "../../src/propPass/types";
+import {
+  isStagingPropPassQaAllowed,
+  parseStagingPropPassQaUrl,
+  resolveStagingPropPassQa,
+} from "../../src/qa/stagingQaPropPassState";
 
 function baseModel(over: Partial<PropPassViewModel> = {}): PropPassViewModel {
   return {
@@ -90,8 +95,10 @@ function baseModel(over: Partial<PropPassViewModel> = {}): PropPassViewModel {
 assert.equal(minorToMajor(5100000), 51000);
 assert.equal(formatPropMoney(5100000), "$51,000.00");
 assert.equal(formatPropMoney(-22000), "-$220.00");
+assert.equal(formatPropMoney(-12500), "-$125.00");
 assert.equal(formatPropMoney(0), "$0.00");
 assert.equal(formatPropMoney(null), "—");
+assert.equal(formatPropMoney(300000), "$3,000.00");
 
 const healthy = baseModel();
 assert.equal(mapChallengeHeroStatus(healthy), "on_track");
@@ -141,5 +148,30 @@ assert.equal(tradesNeededForInsights(1), 2);
 
 assert.ok(!/minor/i.test(formatPropMoney(12500)));
 assert.ok(!humanAccountTitle(healthy).includes("11111111"));
+
+assert.equal(isStagingPropPassQaAllowed({ EXPO_PUBLIC_APP_ENV: "production" }), false);
+assert.equal(isStagingPropPassQaAllowed({ EXPO_PUBLIC_APP_ENV: "staging" }), true);
+assert.equal(parseStagingPropPassQaUrl("youtrader://qa/prop-pass-state?mode=healthy"), "healthy");
+assert.equal(parseStagingPropPassQaUrl("youtrader://qa/prop-pass-state?mode=bogus"), null);
+
+const healthyQa = resolveStagingPropPassQa("healthy");
+assert.equal(healthyQa.uiStateOverride?.kind, "available");
+if (healthyQa.uiStateOverride?.kind === "available") {
+  const m = healthyQa.uiStateOverride.model;
+  assert.equal(formatPropMoney(m.progress.profitTarget?.minor), "$3,000.00");
+  assert.ok(!String(m.account.displayName).includes("fixture"));
+}
+
+assert.equal(resolveStagingPropPassQa("caution").uiStateOverride?.kind, "available");
+assert.equal(resolveStagingPropPassQa("at_risk").uiStateOverride?.kind, "available");
+assert.equal(resolveStagingPropPassQa("no_account").uiStateOverride?.kind, "no_account");
+assert.equal(resolveStagingPropPassQa("loading").uiStateOverride?.kind, "loading");
+assert.equal(
+  resolveStagingPropPassQa("backend_unavailable").uiStateOverride?.kind,
+  "repository_unavailable",
+);
+assert.equal(resolveStagingPropPassQa("non_allowlisted").forceHidePropPassTab, true);
+assert.equal(resolveStagingPropPassQa("insights_failed").insightsMode, "failed");
+assert.ok(resolveStagingPropPassQa("populated_plan").plan?.instrument === "MES");
 
 console.log("propPassPresentation.selftest PASS");

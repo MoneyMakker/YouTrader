@@ -20,7 +20,13 @@ import { PropPassInsightsCard } from "./ui/PropPassInsightsCard";
 import { PropPassRecentActivity } from "./ui/PropPassRecentActivity";
 import { PropPassTargetProgress } from "./ui/PropPassTargetProgress";
 import { PropPassTodaysPlan } from "./ui/PropPassTodaysPlan";
-import type { ChallengeSummary, PropPassUiState, PropPassViewModel } from "./types";
+import type {
+  ChallengeSummary,
+  PropPassInsightsPresentation,
+  PropPassTodaysPlanView,
+  PropPassUiState,
+  PropPassViewModel,
+} from "./types";
 import type { Trade } from "../app/types";
 import {
   createMemoryIntelligenceStore,
@@ -37,6 +43,9 @@ type Props = {
   /** `tab` = primary product home; `modal` = legacy Settings preview. */
   presentation?: "tab" | "modal";
   uiStateOverride?: PropPassUiState;
+  /** Optional execution plan presentation (staging fixture or future server plan). */
+  todaysPlan?: PropPassTodaysPlanView | null;
+  insightsPresentation?: PropPassInsightsPresentation;
   developerMode?: boolean;
   /** Journal trades for assignment (optional; empty → empty assignable list). */
   trades?: Trade[];
@@ -50,6 +59,8 @@ export function PropPassInternalScreen({
   onClose,
   presentation = "modal",
   uiStateOverride,
+  todaysPlan = null,
+  insightsPresentation = "from_model",
   developerMode = typeof __DEV__ !== "undefined" && __DEV__,
   trades = [],
   intelligenceStore: intelligenceStoreProp,
@@ -168,6 +179,8 @@ export function PropPassInternalScreen({
             setShowHistory,
             userId: userId ?? null,
             setCommandMessage,
+            todaysPlan,
+            insightsPresentation,
           })
         )}
       </ScrollView>
@@ -185,6 +198,8 @@ type Actions = {
   setShowHistory: (v: boolean) => void;
   userId: string | null;
   setCommandMessage: (msg: string | null) => void;
+  todaysPlan: PropPassTodaysPlanView | null;
+  insightsPresentation: PropPassInsightsPresentation;
 };
 
 function renderState(
@@ -296,6 +311,8 @@ function renderState(
           setShowAccountMenu={actions.setShowAccountMenu}
           showHistory={actions.showHistory}
           setShowHistory={actions.setShowHistory}
+          todaysPlan={actions.todaysPlan}
+          insightsPresentation={actions.insightsPresentation}
           onArchived={() => {
             actions.setCommandMessage(t("propPass.archive.success"));
             controller.refresh();
@@ -422,6 +439,8 @@ function AvailableView({
   setShowAccountMenu,
   showHistory,
   setShowHistory,
+  todaysPlan,
+  insightsPresentation,
   onArchived,
   onMessage,
   onRefresh,
@@ -435,6 +454,8 @@ function AvailableView({
   setShowAccountMenu: (v: boolean) => void;
   showHistory: boolean;
   setShowHistory: (v: boolean) => void;
+  todaysPlan: PropPassTodaysPlanView | null;
+  insightsPresentation: PropPassInsightsPresentation;
   onArchived: () => void;
   onMessage: (msg: string | null) => void;
   onRefresh: () => void;
@@ -478,6 +499,14 @@ function AvailableView({
 
   return (
     <View style={styles.available}>
+      {model.freshness.status === "stale" ? (
+        <View style={styles.offlineBanner} testID="prop-pass-offline-banner">
+          <YdlText role="caption" color="text.secondary">
+            {t("propPass.offlineCachedBanner")}
+          </YdlText>
+          <YdlButton label={t("propPass.refreshCta")} variant="secondary" onPress={onRefresh} />
+        </View>
+      ) : null}
       <PropPassAccountSwitcher
         model={model}
         onOpenMenu={() => setShowAccountMenu(true)}
@@ -496,12 +525,18 @@ function AvailableView({
       <BufferHealthSection buffers={model.buffers} currency={currency} />
       <PropPassTodaysPlan
         model={model}
+        plan={todaysPlan}
         onReviewUnassigned={onAssignTrades}
         onEditPlan={onAssignTrades}
       />
       <PropPassInsightsCard
         model={model}
+        insightsMode={insightsPresentation}
         onOpenDetail={() => {
+          trackPropPassEvent("prop_pass_intelligence_opened", { userId });
+          onOpenIntelligence();
+        }}
+        onRetry={() => {
           trackPropPassEvent("prop_pass_intelligence_opened", { userId });
           onOpenIntelligence();
         }}
@@ -530,4 +565,5 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.06)",
   },
+  offlineBanner: { gap: 8 },
 });

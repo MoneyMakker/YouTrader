@@ -1,0 +1,25 @@
+appId: com.youtrader.pro
+---
+# Dismiss Expo LogBox / yellowbox overlays that hide the tab bar during staging QA.
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings"
+    commands:
+      - tapOn:
+          point: "94%,86%"
+- runFlow:
+    when:
+      visible: "There is an issue with your configuration"
+    commands:
+      - tapOn:
+          point: "94%,92%"
+- runFlow:
+    when:
+      visible: "Dismiss"
+    commands:
+      - tapOn: "Dismiss"
+- runFlow:
+    when:
+      visible: "Minimize"
+    commands:
+      - tapOn: "Minimize"

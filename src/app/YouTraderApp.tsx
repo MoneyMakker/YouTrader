@@ -10462,6 +10462,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     null,
   );
   const [qaNewsFaultEpoch, setQaNewsFaultEpoch] = useState(0);
+  const [qaPropPassEpoch, setQaPropPassEpoch] = useState(0);
+  const [qaPropPassPayload, setQaPropPassPayload] = useState<
+    import("../qa/stagingQaPropPassState").StagingPropPassQaPayload | null
+  >(null);
   const onQaApplyEditConsumed = useCallback(() => {
     setQaApplyEditRequest(null);
   }, []);
@@ -10611,7 +10615,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     };
   }, [acquisitionPhase, showStagingQaResetMarkers]);
 
-  const propPassTabVisible = isPropPassEntryVisible(
+  const propPassTabVisible =
+    !(qaPropPassPayload?.forceHidePropPassTab) &&
+    isPropPassEntryVisible(
     undefined,
     null,
     session?.user?.id ?? null,
@@ -11441,6 +11447,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             "news",
             "calendar",
             "settings",
+            "more",
           ]);
           if (!allowed.has(tabId)) {
             Alert.alert("QA tab", `Unsupported tab id: ${tabId}`);
@@ -11448,6 +11455,37 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           }
           setTab(tabId as Tab);
           console.info("[YTQA] tab forced", { tabId });
+          return;
+        }
+        if (url.toLowerCase().startsWith("youtrader://qa/prop-pass-state")) {
+          const {
+            isStagingPropPassQaAllowed,
+            parseStagingPropPassQaUrl,
+            resolveStagingPropPassQa,
+            STAGING_PROP_PASS_QA_STORAGE_KEY,
+          } = await import("../qa/stagingQaPropPassState");
+          if (!isStagingPropPassQaAllowed()) {
+            Alert.alert("QA prop-pass-state blocked", "staging_only");
+            return;
+          }
+          const mode = parseStagingPropPassQaUrl(url);
+          if (!mode) {
+            Alert.alert(
+              "QA prop-pass-state",
+              "Use mode=healthy|caution|at_risk|passed|violated|insufficient_data|no_account|stale|offline_cached|backend_unavailable|loading|empty_plan|populated_plan|insights_*|non_allowlisted|none",
+            );
+            return;
+          }
+          const payload = resolveStagingPropPassQa(mode);
+          await AsyncStorage.setItem(STAGING_PROP_PASS_QA_STORAGE_KEY, mode);
+          setQaPropPassPayload(payload);
+          setQaPropPassEpoch((n) => n + 1);
+          if (payload.forceHidePropPassTab) {
+            setTab("journal");
+          } else if (mode !== "none") {
+            setTab("propPass");
+          }
+          console.info("[YTQA] prop-pass state set", { mode });
           return;
         }
         if (url.toLowerCase().startsWith("youtrader://qa/news-fault")) {
@@ -12339,9 +12377,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           ) : tab === "propPass" ? (
             <React.Suspense fallback={null}>
               <LazyPropPassInternalScreen
+                key={`prop-pass-${qaPropPassEpoch}`}
                 userId={session?.user?.id ?? null}
                 trades={trades}
                 presentation="tab"
+                uiStateOverride={qaPropPassPayload?.uiStateOverride ?? undefined}
+                todaysPlan={qaPropPassPayload?.plan ?? null}
+                insightsPresentation={qaPropPassPayload?.insightsMode ?? "from_model"}
+                developerMode={false}
               />
             </React.Suspense>
           ) : tab === "news" ? (

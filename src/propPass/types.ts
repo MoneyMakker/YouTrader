@@ -89,3 +89,16 @@ export type PropPassUiState =
   | { kind: "integrity_error" }
   | { kind: "repository_unavailable" }
   | { kind: "available"; model: PropPassViewModel };
+
+/** Optional execution-plan presentation (server or staging fixture). */
+export type PropPassTodaysPlanView = {
+  maxTrades: number;
+  dailyStopDisplay: string;
+  profitLockDisplay: string;
+  instrument: string;
+  session: string;
+  focus: string;
+  behavioralRule: string;
+};
+
+export type PropPassInsightsPresentation = "from_model" | "pending" | "failed" | "current";

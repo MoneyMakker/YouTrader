@@ -46,20 +46,23 @@ export function BufferHealthSection({ buffers, currency = "USD" }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
   const reduceMotion = useYdlReduceMotion();
-  const items: Array<{ key: string; buffer?: BufferViewModel; explainKey: string }> = [
+  const items: Array<{ key: string; buffer?: BufferViewModel; labelKey: string; explainKey: string }> = [
     {
       key: "daily",
       buffer: buffers.dailyLoss,
+      labelKey: "propPass.buffer.dailyLoss",
       explainKey: "propPass.buffer.explain.dailyLoss",
     },
     {
       key: "trailing",
       buffer: buffers.trailingDrawdown,
+      labelKey: "propPass.buffer.trailingDrawdown",
       explainKey: "propPass.buffer.explain.trailingDrawdown",
     },
     {
       key: "max",
       buffer: buffers.totalLoss,
+      labelKey: "propPass.buffer.totalLoss",
       explainKey: "propPass.buffer.explain.totalLoss",
     },
   ];
@@ -72,7 +75,7 @@ export function BufferHealthSection({ buffers, currency = "USD" }: Props) {
       testID="prop-pass-buffer-health"
     >
       <YdlText role="label">{t("propPass.buffer.sectionTitle")}</YdlText>
-      {items.map(({ key, buffer, explainKey }) => {
+      {items.map(({ key, buffer, labelKey, explainKey }) => {
         const displayStatus = mapBufferDisplayStatus(buffer);
         const statusLabel = t(`propPass.buffer.displayStatus.${displayStatus}`);
         const used = moneyOrDash(bufferUsedMinor(buffer), currency);
@@ -86,13 +89,12 @@ export function BufferHealthSection({ buffers, currency = "USD" }: Props) {
               ? (usedPct ?? 0)
               : Math.max(0, 100 - (remainPct ?? 0));
         const tone = statusTone(displayStatus, theme);
+        const label = t(labelKey);
         const a11y =
           displayStatus === "unavailable"
-            ? t("propPass.a11y.bufferUnsupported", {
-                label: buffer ? t(buffer.labelKey) : key,
-              })
+            ? t("propPass.a11y.bufferUnsupported", { label })
             : t("propPass.a11y.bufferStatusMoney", {
-                label: buffer ? t(buffer.labelKey) : key,
+                label,
                 status: statusLabel,
                 used: used.a11y,
                 available: available.a11y,
@@ -106,9 +108,7 @@ export function BufferHealthSection({ buffers, currency = "USD" }: Props) {
             accessibilityRole="text"
           >
             <View style={styles.rowHeader}>
-              <YdlText role="bodyEmphasized">
-                {buffer ? t(buffer.labelKey) : key}
-              </YdlText>
+              <YdlText role="bodyEmphasized">{label}</YdlText>
               <YdlText role="caption" style={{ color: tone }}>
                 {statusLabel}
               </YdlText>

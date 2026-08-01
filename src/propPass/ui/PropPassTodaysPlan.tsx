@@ -4,22 +4,27 @@ import { useTranslation } from "react-i18next";
 import { YdlButton } from "../../ydl/components/YdlButton";
 import { YdlText } from "../../ydl/components/YdlText";
 import { useYdlTheme } from "../../ydl/tokens";
-import type { PropPassViewModel } from "../types";
+import type { PropPassViewModel, PropPassTodaysPlanView } from "../types";
 
 type Props = {
   model: PropPassViewModel;
+  plan?: PropPassTodaysPlanView | null;
   onReviewUnassigned: () => void;
   onEditPlan: () => void;
 };
 
 /**
  * Today's Trading Plan — execution-facing surface over assignment flow.
- * Does not invent plan limits; shows guidance + entry points until plan payload exists.
  */
-export function PropPassTodaysPlan({ model, onReviewUnassigned, onEditPlan }: Props) {
+export function PropPassTodaysPlan({
+  model,
+  plan,
+  onReviewUnassigned,
+  onEditPlan,
+}: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
-  const empty = model.assignedTradeCount === 0;
+  const empty = !plan && model.assignedTradeCount === 0;
 
   return (
     <View
@@ -33,6 +38,21 @@ export function PropPassTodaysPlan({ model, onReviewUnassigned, onEditPlan }: Pr
         <YdlText role="body" color="text.secondary">
           {t("propPass.plan.emptyBody")}
         </YdlText>
+      ) : plan ? (
+        <>
+          <Metric label={t("propPass.plan.maxTrades")} value={String(plan.maxTrades)} />
+          <Metric label={t("propPass.plan.dailyStop")} value={plan.dailyStopDisplay} />
+          <Metric label={t("propPass.plan.profitLock")} value={plan.profitLockDisplay} />
+          <Metric label={t("propPass.plan.instrument")} value={plan.instrument} />
+          <Metric label={t("propPass.plan.session")} value={plan.session} />
+          <YdlText role="bodyEmphasized">{t("propPass.plan.focusTitle")}</YdlText>
+          <YdlText role="body" color="text.secondary">
+            {plan.focus}
+          </YdlText>
+          <YdlText role="body" color="text.secondary">
+            {plan.behavioralRule}
+          </YdlText>
+        </>
       ) : (
         <>
           <Metric label={t("propPass.plan.assigned")} value={String(model.assignedTradeCount)} />
@@ -81,5 +101,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    minHeight: 28,
   },
 });

@@ -10,20 +10,64 @@ import {
   mapReadinessLabel,
   tradesNeededForInsights,
 } from "../presentation";
-import type { PropPassViewModel } from "../types";
+import type { PropPassViewModel, PropPassInsightsPresentation } from "../types";
 
 type Props = {
   model: PropPassViewModel;
+  insightsMode?: PropPassInsightsPresentation;
   onOpenDetail: () => void;
+  onRetry?: () => void;
 };
 
-export function PropPassInsightsCard({ model, onOpenDetail }: Props) {
+export function PropPassInsightsCard({
+  model,
+  insightsMode = "from_model",
+  onOpenDetail,
+  onRetry,
+}: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
   const readiness = mapReadinessLabel(model);
   const hero = mapChallengeHeroStatus(model);
   const needed = tradesNeededForInsights(model.assignedTradeCount);
   const updated = formatRelativeUpdated(model.freshness.calculatedAt);
+
+  if (insightsMode === "pending") {
+    return (
+      <View
+        style={[styles.wrap, { backgroundColor: theme.colors.surface.card }]}
+        testID="prop-pass-insights"
+        accessibilityLabel={t("propPass.insights.pendingA11y")}
+      >
+        <YdlText role="label">{t("propPass.insights.title")}</YdlText>
+        <YdlText role="bodyEmphasized">{t("propPass.insights.pendingTitle")}</YdlText>
+        <YdlText role="body" color="text.secondary">
+          {t("propPass.insights.pendingBody")}
+        </YdlText>
+      </View>
+    );
+  }
+
+  if (insightsMode === "failed") {
+    return (
+      <View
+        style={[styles.wrap, { backgroundColor: theme.colors.surface.card }]}
+        testID="prop-pass-insights"
+        accessibilityLabel={t("propPass.insights.failedA11y")}
+      >
+        <YdlText role="label">{t("propPass.insights.title")}</YdlText>
+        <YdlText role="bodyEmphasized">{t("propPass.insights.failedTitle")}</YdlText>
+        <YdlText role="body" color="text.secondary">
+          {t("propPass.insights.failedBody")}
+        </YdlText>
+        <YdlButton
+          label={t("propPass.insights.retry")}
+          onPress={onRetry ?? onOpenDetail}
+          testID="prop-pass-insights-retry"
+        />
+      </View>
+    );
+  }
 
   return (
     <View
