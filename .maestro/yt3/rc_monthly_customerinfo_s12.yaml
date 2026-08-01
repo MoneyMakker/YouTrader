@@ -1,0 +1,39 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "qa.reset.complete"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: "Your trading system is ready"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s12_rc_paywall
+- scroll
+- scroll
+- runFlow:
+    when:
+      visible: "MONTHLY"
+    commands:
+      - tapOn: "MONTHLY"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s12_rc_monthly_selected
+- runFlow:
+    when:
+      visible: ".*7-Day.*|Start .*Pro|Continue|Subscribe"
+    commands:
+      - tapOn: ".*7-Day.*|Start .*Pro|Continue|Subscribe"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s12_rc_after_cta
+- runFlow:
+    when:
+      visible: "Sign in to Apple Account"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s12_rc_BLOCKED_apple_account
+- runFlow:
+    when:
+      visible: "Confirm|Subscribe|Buy|Environment.*Xcode|OK"
+    commands:
+      - tapOn: "Confirm|Subscribe|Buy|OK"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s12_rc_monthly_result

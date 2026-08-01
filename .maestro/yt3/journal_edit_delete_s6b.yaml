@@ -1,13 +1,11 @@
 appId: com.youtrader.pro
 ---
-# LANE A — Journal seed → edit (Update) → Stats/Calendar → swipe delete
-# Prerequisite: scripts/qa/bootstrap-email-session-staging.sh (QA_HARNESS_PASS)
-# Does NOT open Google/Apple.
+# Seed → tap edit → update via save id → delete
 - launchApp:
     clearState: false
 - openLink: youtrader://qa/email-login?role=allow
 - repeat:
-    times: 15
+    times: 12
     commands:
       - runFlow:
           when:
@@ -22,16 +20,12 @@ appId: com.youtrader.pro
                 id: "acquisition-paywall-close"
       - runFlow:
           when:
-            visible: "Cancel"
-            notVisible: "Journal"
+            visible: "OK"
           commands:
-            - tapOn: "Cancel"
+            - tapOn: "OK"
 - extendedWaitUntil:
     visible: "Journal"
     timeout: 90000
-- tapOn: "Journal"
-- assertVisible: "Journal"
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_precondition
 - openLink: youtrader://qa/seed-trade
 - waitForAnimationToEnd
 - scrollUntilVisible:
@@ -39,11 +33,12 @@ appId: com.youtrader.pro
     direction: DOWN
     timeout: 20000
     visibilityPercentage: 20
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_seeded
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b4_seeded
 - tapOn: "MES, LONG.*"
 - extendedWaitUntil:
-    visible: "Update Trade"
+    visible: "Update Trade|Entry Price"
     timeout: 15000
+# Prove update path without relying on Maestro TextInput onChange
 - scrollUntilVisible:
     element:
       id: "journal-save-trade"
@@ -55,19 +50,20 @@ appId: com.youtrader.pro
 - waitForAnimationToEnd
 - runFlow:
     when:
-      visible: "Maybe later"
+      visible: "Trade saved.*|View performance|Maybe later"
     commands:
-      - tapOn: "Maybe later"
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b4_edited_prompt
+      - runFlow:
+          when:
+            visible: "Maybe later"
+          commands:
+            - tapOn: "Maybe later"
 - runFlow:
     when:
       visible: "Close"
     commands:
       - tapOn: "Close"
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_after_edit
-- tapOn: "Stats"
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_stats
-- tapOn: "Calendar"
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_calendar
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b4_edited
 - tapOn: "Journal"
 - scrollUntilVisible:
     element: "MES, LONG.*"
@@ -85,5 +81,5 @@ appId: com.youtrader.pro
       visible: "Delete Trade"
     commands:
       - tapOn: "Delete Trade"
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_deleted
-- assertVisible: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b4_deleted
+

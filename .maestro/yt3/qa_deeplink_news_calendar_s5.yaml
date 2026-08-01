@@ -1,0 +1,41 @@
+appId: com.youtrader.pro
+---
+# Assumes youtrader://qa/email-login?role=allow already opened OR opens it
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - tapOn: "OK"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/qa_deeplink_login_journal
+- tapOn: "News"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/news_s5_home
+- runFlow:
+    when:
+      visible: "Retry"
+    commands:
+      - tapOn: "Retry"
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/news_s5_retry
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/news_s5_scrolled
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calendar_s5_home
+- tapOn:
+    point: "12%,18%"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calendar_s5_prev
+- tapOn:
+    point: "88%,18%"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calendar_s5_next

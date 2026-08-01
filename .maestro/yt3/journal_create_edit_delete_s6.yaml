@@ -1,0 +1,117 @@
+appId: com.youtrader.pro
+---
+# Create → edit → delete one trade (day cell + list)
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 120000
+- tapOn: "Journal"
+- tapOn:
+    id: "journal-add-trade"
+- extendedWaitUntil:
+    visible: "Entry Price|LONG|MES"
+    timeout: 20000
+- tapOn: "MES"
+- scrollUntilVisible:
+    element: "Entry Price"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-entry-price"
+- inputText: "5100"
+- tapOn:
+    id: "journal-exit-price"
+- inputText: "5125"
+- tapOn:
+    id: "journal-contracts"
+- eraseText
+- inputText: "1"
+- pressKey: Enter
+- scrollUntilVisible:
+    element: "Save Trade"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 40
+    speed: 70
+- tapOn: "Save Trade"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6_01_created
+- scroll
+- scroll
+- runFlow:
+    when:
+      visible: "MES"
+    commands:
+      - tapOn: "MES"
+- runFlow:
+    when:
+      notVisible: "Update Trade"
+      visible: "\\+\\$"
+    commands:
+      - tapOn: "\\+\\$"
+- extendedWaitUntil:
+    visible: "Update Trade|Save Trade|Entry Price"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "Entry Price"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-entry-price"
+- eraseText
+- inputText: "5110"
+- tapOn:
+    id: "journal-exit-price"
+- eraseText
+- inputText: "5140"
+- pressKey: Enter
+- scrollUntilVisible:
+    element: "Update Trade"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 40
+    speed: 70
+- tapOn: "Update Trade"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6_02_edited
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6_03_stats
+- tapOn: "Journal"
+- scroll
+- scroll
+- longPressOn: "MES"
+- extendedWaitUntil:
+    visible: "Delete Trade"
+    timeout: 15000
+- tapOn: "Delete Trade"
+- runFlow:
+    when:
+      visible: "Delete Trade"
+    commands:
+      - tapOn: "Delete Trade"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6_04_deleted
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6_05_stats_deleted
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6_06_calendar_deleted

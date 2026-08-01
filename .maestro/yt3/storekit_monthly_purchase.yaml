@@ -29,12 +29,12 @@ appId: com.youtrader.pro
             - tapOn: "Continue"
             - waitForAnimationToEnd
 - extendedWaitUntil:
-    visible: "Unlock Your Trading Edge|MONTHLY|YEARLY|Continue with Apple"
+    visible: "Your trading system is ready|MONTHLY|YEARLY|Continue with Apple"
     timeout: 40000
 - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/storekit_paywall
 - runFlow:
     when:
-      visible: "Unlock Your Trading Edge"
+      visible: "Your trading system is ready"
     commands:
       - scroll
       - scroll

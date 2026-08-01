@@ -3,7 +3,7 @@ appId: com.youtrader.pro
 - launchApp:
     clearState: false
 - extendedWaitUntil:
-    visible: "Continue|Continue with Apple|Unlock Your Trading Edge|Journal"
+    visible: "Continue|Continue with Apple|Your trading system is ready|Journal"
     timeout: 60000
 - runFlow:
     when:
@@ -18,18 +18,18 @@ appId: com.youtrader.pro
       - tapOn:
           point: "18%,92%"
 - extendedWaitUntil:
-    visible: "Unlock Your Trading Edge|Continue with Apple|MONTHLY"
+    visible: "Your trading system is ready|Continue with Apple|MONTHLY"
     timeout: 25000
 - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/modeA_02_paywall
 - runFlow:
     when:
-      visible: "Unlock Your Trading Edge"
+      visible: "Your trading system is ready"
     commands:
       - tapOn:
           id: "acquisition-paywall-close"
 - runFlow:
     when:
-      visible: "Unlock Your Trading Edge"
+      visible: "Your trading system is ready"
     commands:
       - tapOn:
           text: "Close"

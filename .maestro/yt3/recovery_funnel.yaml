@@ -18,7 +18,7 @@ appId: com.youtrader.pro
 # Dismiss paywall close if present
 - runFlow:
     when:
-      visible: "Unlock Your Trading Edge"
+      visible: "Your trading system is ready"
     commands:
       - takeScreenshot: sim_funnel_03_paywall
       - tapOn:

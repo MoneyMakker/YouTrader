@@ -1,0 +1,34 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings"
+    commands:
+      - tapOn:
+          point: "92%,88%"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- tapOn: "Journal"
+- tapOn:
+    id: "journal-add-trade"
+- extendedWaitUntil:
+    visible: "\\+ Add Trade|LONG|MES"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_form_top
+- scroll
+- scroll
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_form_scrolled
+- extendedWaitUntil:
+    visible: "Save Trade"
+    timeout: 15000
+- tapOn: "Save Trade"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_after_save
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_stats
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_journal

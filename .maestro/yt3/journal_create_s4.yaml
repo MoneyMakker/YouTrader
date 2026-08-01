@@ -1,0 +1,38 @@
+appId: com.youtrader.pro
+---
+# YT3 journal create — does not require AI Analytics tab
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/journal_s4_home
+- runFlow:
+    when:
+      visible: "Log your first trade"
+    commands:
+      - tapOn: "Log your first trade"
+- runFlow:
+    when:
+      visible: ".*Add trade.*|New trade|Create trade"
+    commands:
+      - tapOn: ".*Add trade.*|New trade|Create trade"
+- runFlow:
+    when:
+      visible: "\\+"
+    commands:
+      - tapOn:
+          point: "92%,12%"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/journal_s4_after_add_tap
+- runFlow:
+    when:
+      visible: "Symbol|ES|Entry|Save|Create"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/journal_s4_form
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s4_after_journal
+- tapOn: "Calculator"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s4
+- tapOn: "Settings"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s4

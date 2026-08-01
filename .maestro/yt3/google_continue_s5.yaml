@@ -1,0 +1,33 @@
+appId: com.youtrader.pro
+---
+# Continue past ASWebAuthenticationSession permission into Google OAuth
+- launchApp:
+    clearState: false
+- runFlow:
+    when:
+      visible: "Cancel"
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Continue with Google|Continue with Apple"
+    timeout: 45000
+- tapOn: "Continue with Google"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s5_after_continue
+- extendedWaitUntil:
+    visible: "accounts.google|Sign in|Choose an account|Use your Google Account|Email or phone|Cancel"
+    timeout: 45000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s5_oauth_page
+# Attempt first account chip if already signed-in Safari profile exists
+- runFlow:
+    when:
+      visible: ".*@.*"
+    commands:
+      - tapOn: ".*@.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s5_account_attempt

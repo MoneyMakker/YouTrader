@@ -4,7 +4,7 @@ appId: com.youtrader.pro
     clearState: false
 - openLink: youtrader://qa/email-login?role=allow
 - repeat:
-    times: 15
+    times: 10
     commands:
       - runFlow:
           when:
@@ -20,7 +20,22 @@ appId: com.youtrader.pro
 - extendedWaitUntil:
     visible: "Journal"
     timeout: 90000
-- openLink: youtrader://qa/tab?id=calc
+- openLink: youtrader://qa/seed-trade
 - waitForAnimationToEnd
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_calc_open
-- assertVisible: ".*Risk|.*Size|.*Contracts|.*Calculator|.*Calc.*"
+- scrollUntilVisible:
+    element: "MES, LONG.*"
+    direction: DOWN
+    timeout: 20000
+- swipe:
+    from: "MES, LONG.*"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: "Delete Trade"
+    timeout: 10000
+- tapOn: "Delete Trade"
+- runFlow:
+    when:
+      visible: "Delete Trade"
+    commands:
+      - tapOn: "Delete Trade"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b4_deleted

@@ -1,0 +1,30 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- extendedWaitUntil:
+    visible: "Calculator"
+    timeout: 60000
+- tapOn: "Calculator"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s5_home
+- runFlow:
+    when:
+      visible: "Account|Risk|Entry|Stop"
+    commands:
+      - tapOn: "Account Size|Account|Balance"
+- runFlow:
+    when:
+      visible: "Account Size|Account balance|Balance"
+    commands:
+      - inputText: "10000"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s5_filled
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s5_result

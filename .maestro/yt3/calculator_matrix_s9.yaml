@@ -16,7 +16,7 @@ appId: com.youtrader.pro
             - tapOn: "Dismiss"
       - runFlow:
           when:
-            visible: "Unlock Your Trading Edge"
+            visible: "Your trading system is ready"
           commands:
             - tapOn:
                 id: "acquisition-paywall-close"

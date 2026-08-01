@@ -1,0 +1,10 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "qa.reset.complete"
+    timeout: 90000
+- assertVisible:
+    id: "qa.reset.complete"

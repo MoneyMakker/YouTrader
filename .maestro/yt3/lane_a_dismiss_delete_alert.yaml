@@ -1,0 +1,28 @@
+appId: com.youtrader.pro
+---
+# Confirm Alert.alert Delete via point (swipe Delete leaves dialog open)
+- launchApp:
+    clearState: false
+- runFlow:
+    when:
+      visible: "Delete trade\\?"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_delete_dialog
+      - tapOn:
+          point: "70%,55%"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Delete trade\\?"
+    commands:
+      - tapOn:
+          point: "72%,58%"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_delete_dismissed
+- assertNotVisible: "Delete trade\\?"
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_stats_post_delete
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_calendar_post_delete
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_journal_post_delete

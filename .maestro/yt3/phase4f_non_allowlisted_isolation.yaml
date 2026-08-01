@@ -20,7 +20,7 @@ name: YT3 Phase 4F — non-allowlisted isolation v2
           point: "92%,86%"
 # Wait through loading / onboarding / paywall / auth
 - extendedWaitUntil:
-    visible: "Continue|Continue with Apple|Your Trading Journal|Unlock Your Trading Edge|Log. Review. Improve."
+    visible: "Continue|Continue with Apple|Your Trading Journal|Your trading system is ready|Log. Review. Improve."
     timeout: 90000
 - runFlow:
     when:
@@ -34,7 +34,7 @@ name: YT3 Phase 4F — non-allowlisted isolation v2
       - tapOn: "Continue"
 - runFlow:
     when:
-      visible: "Unlock Your Trading Edge"
+      visible: "Your trading system is ready"
     commands:
       - tapOn:
           point: "92%,8%"

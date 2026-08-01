@@ -1,0 +1,107 @@
+appId: com.youtrader.pro
+---
+# Create with manual P&L (avoids instrument calc edge cases), edit, long-press delete
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - tapOn: "OK"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 120000
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_00_home
+- tapOn:
+    id: "journal-add-trade"
+- extendedWaitUntil:
+    visible: "Entry Price|LONG|P&L|\\+ P&L"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "P&L|\\+ P&L|− P&L"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-pnl"
+- inputText: "250"
+- pressKey: Enter
+- scrollUntilVisible:
+    element: "Save Trade"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 40
+    speed: 70
+- tapOn: "Save Trade"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Could not|Add P&L|limit"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_save_error
+      - tapOn: "OK"
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_01_after_save
+- assertVisible: "\\+\\$250|\\+\\$0\\.3K|250|MONTH"
+- scroll
+- scroll
+- longPressOn: "\\+\\$250|MES|Focused|LONG"
+- extendedWaitUntil:
+    visible: "Delete Trade|Edit Trade|Trade Actions"
+    timeout: 15000
+- tapOn: "Edit Trade"
+- extendedWaitUntil:
+    visible: "Update Trade|Entry Price"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "P&L|journal-pnl"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-pnl"
+- eraseText
+- inputText: "400"
+- pressKey: Enter
+- scrollUntilVisible:
+    element: "Update Trade"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+    speed: 70
+- tapOn: "Update Trade"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_02_edited
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_03_stats
+- tapOn: "Journal"
+- scroll
+- longPressOn: "\\+\\$400|MES|LONG"
+- tapOn: "Delete Trade"
+- runFlow:
+    when:
+      visible: "Delete Trade"
+    commands:
+      - tapOn: "Delete Trade"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_04_deleted
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_05_stats
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6b_06_calendar

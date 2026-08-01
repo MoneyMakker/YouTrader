@@ -1,0 +1,43 @@
+appId: com.youtrader.pro
+---
+# Email login against current Sign in modal (placeholders, not label "Email")
+- launchApp:
+    clearState: false
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Open debugger to view warnings"
+          commands:
+            - tapOn:
+                point: "92%,88%"
+- runFlow:
+    when:
+      visible: "Cancel"
+    commands:
+      - tapOn: "Cancel"
+- runFlow:
+    when:
+      visible: "Continue with Email"
+    commands:
+      - tapOn: "Continue with Email"
+- extendedWaitUntil:
+    visible: "Sign In|Sign in|you@example.com"
+    timeout: 20000
+- tapOn: "you@example.com"
+- eraseText
+- inputText: ${STAGING_QA_ALLOW_EMAIL}
+- tapOn: "Password"
+- eraseText
+- inputText: ${STAGING_QA_ALLOW_PASSWORD}
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/email_login_allow_s5_journal

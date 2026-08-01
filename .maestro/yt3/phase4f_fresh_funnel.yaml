@@ -32,7 +32,7 @@ name: YT3 Phase 4F — fresh user Onboarding→Paywall→Auth
 - tapOn:
     id: "product-onboarding-continue"
 - extendedWaitUntil:
-    visible: "Unlock Your Trading Edge"
+    visible: "Your trading system is ready"
     timeout: 30000
 - takeScreenshot: phase4f_fresh_paywall
 - tapOn:

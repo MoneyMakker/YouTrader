@@ -1,0 +1,91 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- openLink: youtrader://qa/email-login?role=allow
+- waitForAnimationToEnd
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - tapOn: "OK"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 120000
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_01_home
+- scroll
+- scroll
+- tapOn: "MES"
+- extendedWaitUntil:
+    visible: "Update Trade|Save Trade|Entry Price"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_02_opened
+- scrollUntilVisible:
+    element: "Entry Price"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-entry-price"
+- eraseText
+- inputText: "5205"
+- tapOn:
+    id: "journal-exit-price"
+- eraseText
+- inputText: "5220"
+- pressKey: Enter
+- scrollUntilVisible:
+    element: "Update Trade"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 40
+    speed: 70
+- tapOn: "Update Trade"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_03_after_edit
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_04_stats
+- tapOn: "Journal"
+- scroll
+- scroll
+- longPressOn: "MES"
+- extendedWaitUntil:
+    visible: "Delete Trade|Trade Actions|Edit Trade"
+    timeout: 15000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_05_actions
+- tapOn: "Delete Trade"
+- runFlow:
+    when:
+      visible: "Delete Trade"
+    commands:
+      - tapOn: "Delete Trade"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_06_after_delete
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_07_stats_after_delete
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_08_calendar_after_delete
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jedit_09_journal_final
+- assertNotVisible: "MES"

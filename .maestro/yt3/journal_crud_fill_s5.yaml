@@ -1,0 +1,101 @@
+appId: com.youtrader.pro
+---
+# Journal create with required entry/exit (or validation fails and form stays open)
+- launchApp:
+    clearState: false
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings"
+    commands:
+      - tapOn:
+          point: "92%,88%"
+- repeat:
+    times: 25
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Minimize"
+          commands:
+            - tapOn: "Minimize"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- tapOn: "Journal"
+- tapOn:
+    id: "journal-add-trade"
+- extendedWaitUntil:
+    visible: "Entry Price|LONG|MES"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_01_form
+- tapOn: "MES"
+- scrollUntilVisible:
+    element: "Entry Price"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-entry-price"
+- inputText: "5200"
+- tapOn: "Entry Price"
+- tapOn:
+    id: "journal-exit-price"
+- inputText: "5210"
+- tapOn: "Exit Price"
+- runFlow:
+    when:
+      visible:
+        id: "journal-contracts"
+    commands:
+      - tapOn:
+          id: "journal-contracts"
+      - eraseText
+      - inputText: "1"
+- runFlow:
+    when:
+      visible: "Contracts"
+      notVisible:
+        id: "journal-contracts"
+    commands:
+      - tapOn: "Contracts"
+      - eraseText
+      - inputText: "1"
+- pressKey: Enter
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- scrollUntilVisible:
+    element: "Save Trade"
+    direction: DOWN
+    timeout: 30000
+    visibilityPercentage: 40
+    centerElement: true
+    speed: 70
+- tapOn: "Save Trade"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Could not save|Add P&L|check trade|Check trade"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_validation_alert
+      - tapOn: "OK"
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_02_after_save
+- assertVisible: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_03_journal
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_04_stats
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_05_journal_back

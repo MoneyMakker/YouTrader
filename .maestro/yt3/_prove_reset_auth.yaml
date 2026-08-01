@@ -1,0 +1,27 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-auth
+- openLink: youtrader://qa/reset-auth
+- extendedWaitUntil:
+    visible:
+      id: "qa.reset.complete"
+    timeout: 90000
+- assertVisible:
+    id: "qa.reset.complete"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_auth_complete
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "auth.screen"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: "auth.google"
+    timeout: 30000
+- assertVisible:
+    id: "auth.email"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_auth_cold

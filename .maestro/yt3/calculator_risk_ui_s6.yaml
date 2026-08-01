@@ -1,0 +1,37 @@
+appId: com.youtrader.pro
+---
+# Calculator UI: fill risk fields and assert deterministic result
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- extendedWaitUntil:
+    visible: "Calculator"
+    timeout: 120000
+- tapOn: "Calculator"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6b_home
+- tapOn: "MES"
+- tapOn: "50000"
+- eraseText
+- inputText: "25000"
+- tapOn: "1"
+- eraseText
+- inputText: "2"
+- pressKey: Enter
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6b_risk2pct
+- assertVisible: "\\$500\\.00|\\$250\\.00|500"
+- assertNotVisible: "NaN"
+- assertNotVisible: "Infinity"
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6b_scrolled
+- tapOn: "Points"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6b_points
+- tapOn: "Ticks"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6b_ticks

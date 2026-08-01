@@ -1,0 +1,14 @@
+appId: com.youtrader.pro
+---
+# From Auth screen (after mode_a): start Google OAuth
+- extendedWaitUntil:
+    visible: "Continue with Google"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s4_before
+- tapOn: "Continue with Google"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s4_after_tap
+- extendedWaitUntil:
+    visible: ".*Google.*|accounts.google|Sign in|Cancel|Continue|Choose an account|Safari"
+    timeout: 30000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s4_oauth_ui

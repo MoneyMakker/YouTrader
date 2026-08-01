@@ -1,0 +1,8 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Your trading system is ready"
+    timeout: 90000
+- assertVisible: "Your trading system is ready"

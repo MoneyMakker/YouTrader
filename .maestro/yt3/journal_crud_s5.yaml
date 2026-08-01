@@ -1,0 +1,27 @@
+appId: com.youtrader.pro
+---
+# Journal CRUD against current YT3 UI (header Add Trade CTA)
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_01_home
+- tapOn:
+    id: "journal-add-trade"
+- extendedWaitUntil:
+    visible: "\\+ Add Trade|Save Trade|Update Trade"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_02_form
+- runFlow:
+    when:
+      visible: "Save Trade"
+    commands:
+      - tapOn: "Save Trade"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_03_after_save
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_04_stats
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud_05_journal_back

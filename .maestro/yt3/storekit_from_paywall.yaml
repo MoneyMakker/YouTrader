@@ -2,7 +2,7 @@ appId: com.youtrader.pro
 ---
 # Paywall StoreKit purchase attempt (must run while StoreKit Testing session is active via Xcode).
 - extendedWaitUntil:
-    visible: "Unlock Your Trading Edge|MONTHLY|YEARLY"
+    visible: "Your trading system is ready|MONTHLY|YEARLY"
     timeout: 30000
 - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/sk_s4_paywall
 - scroll

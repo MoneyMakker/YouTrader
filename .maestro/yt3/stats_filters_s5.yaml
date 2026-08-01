@@ -1,0 +1,55 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- extendedWaitUntil:
+    visible: "Stats"
+    timeout: 60000
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_home
+- runFlow:
+    when:
+      visible: "1D|1d|Today"
+    commands:
+      - tapOn: "1D"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_1d
+- runFlow:
+    when:
+      visible: "7D|7d"
+    commands:
+      - tapOn: "7D"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_7d
+- runFlow:
+    when:
+      visible: "1M|1m"
+    commands:
+      - tapOn: "1M"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_1m
+- runFlow:
+    when:
+      visible: "YTD|Ytd"
+    commands:
+      - tapOn: "YTD"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_ytd
+- runFlow:
+    when:
+      visible: "1Y|1y"
+    commands:
+      - tapOn: "1Y"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_1y
+- runFlow:
+    when:
+      visible: "ALL|All"
+    commands:
+      - tapOn: "ALL"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_all
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/stats_s5_scrolled

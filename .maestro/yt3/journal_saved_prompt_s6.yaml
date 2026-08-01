@@ -1,0 +1,86 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 120000
+- tapOn: "Journal"
+- tapOn:
+    id: "journal-add-trade"
+- extendedWaitUntil:
+    visible: "Save Trade|Entry Price|P&L"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "P&L"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-pnl"
+- inputText: "250"
+- pressKey: Enter
+- scrollUntilVisible:
+    element: "Save Trade"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 40
+    speed: 70
+- tapOn: "Save Trade"
+- extendedWaitUntil:
+    visible: "Trade saved|View performance|Maybe later"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6c_saved_prompt
+- tapOn: "Maybe later"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6c_after_save
+- assertVisible: "MONTH|\\+|250|0\\.3"
+- scroll
+- scroll
+- longPressOn: "\\+|MES|LONG|Focused"
+- extendedWaitUntil:
+    visible: "Edit Trade"
+    timeout: 15000
+- tapOn: "Edit Trade"
+- scrollUntilVisible:
+    element: "P&L"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "journal-pnl"
+- eraseText
+- inputText: "400"
+- pressKey: Enter
+- scrollUntilVisible:
+    element: "Update Trade"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+    speed: 70
+- tapOn: "Update Trade"
+- extendedWaitUntil:
+    visible: "Trade saved|View performance|Maybe later"
+    timeout: 20000
+- tapOn: "Maybe later"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6c_after_edit
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6c_stats
+- tapOn: "Journal"
+- scroll
+- longPressOn: "\\+|MES|LONG"
+- tapOn: "Delete Trade"
+- runFlow:
+    when:
+      visible: "Delete Trade"
+    commands:
+      - tapOn: "Delete Trade"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6c_deleted
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcrud6c_calendar

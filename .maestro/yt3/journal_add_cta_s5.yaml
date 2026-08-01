@@ -1,0 +1,28 @@
+appId: com.youtrader.pro
+---
+# After Add Trade: free-limit paywall OR form
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- tapOn: "Journal"
+- assertVisible:
+    id: "journal-add-trade"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcta_visible
+- tapOn:
+    id: "journal-add-trade"
+- extendedWaitUntil:
+    visible: "\\+ Add Trade|Save Trade|You've reached your free trade limit|Start 7-Day|Maybe later"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcta_after_tap
+- runFlow:
+    when:
+      visible: "Maybe later"
+    commands:
+      - tapOn: "Maybe later"
+- runFlow:
+    when:
+      visible: "\\+ Add Trade|Save Trade"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/jcta_form_open

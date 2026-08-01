@@ -1,0 +1,19 @@
+appId: com.youtrader.pro
+---
+# Shared LogBox / yellowbox dismiss (dev-client only)
+- runFlow:
+    when:
+      visible: "Dismiss"
+    commands:
+      - tapOn: "Dismiss"
+- runFlow:
+    when:
+      visible: "Minimize"
+    commands:
+      - tapOn: "Minimize"
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings"
+    commands:
+      - tapOn:
+          point: "92%,88%"

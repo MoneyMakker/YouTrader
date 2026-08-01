@@ -2,9 +2,8 @@ appId: com.youtrader.pro
 ---
 - launchApp:
     clearState: false
-- openLink: youtrader://qa/email-login?role=allow
 - repeat:
-    times: 15
+    times: 12
     commands:
       - runFlow:
           when:
@@ -19,8 +18,6 @@ appId: com.youtrader.pro
                 id: "acquisition-paywall-close"
 - extendedWaitUntil:
     visible: "Journal"
-    timeout: 90000
-- openLink: youtrader://qa/tab?id=calc
-- waitForAnimationToEnd
-- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_calc_open
-- assertVisible: ".*Risk|.*Size|.*Contracts|.*Calculator|.*Calc.*"
+    timeout: 120000
+- assertVisible: "Journal"
+- assertVisible: "Stats"

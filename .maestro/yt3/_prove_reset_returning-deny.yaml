@@ -1,0 +1,38 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-returning-deny
+- openLink: youtrader://qa/reset-returning-deny
+- extendedWaitUntil:
+    visible:
+      id: "qa.reset.complete"
+    timeout: 90000
+- assertVisible:
+    id: "qa.reset.complete"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_returning-deny_complete
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=deny
+- openLink: youtrader://qa/email-login?role=deny
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Your trading system is ready"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 120000
+- assertVisible: "Journal"
+- assertVisible: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_returning-deny_cold

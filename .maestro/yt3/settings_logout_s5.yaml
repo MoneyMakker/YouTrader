@@ -37,6 +37,6 @@ appId: com.youtrader.pro
 - waitForAnimationToEnd
 - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s5_after_logout
 - extendedWaitUntil:
-    visible: "Continue with Apple|Continue with Google|Continue with Email|Unlock Your Trading Edge|Continue"
+    visible: "Continue with Apple|Continue with Google|Continue with Email|Your trading system is ready|Continue"
     timeout: 45000
 - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s5_auth_or_onboarding

@@ -1,0 +1,45 @@
+appId: com.youtrader.pro
+---
+# Requires authenticated session (run after email login / before logout)
+- launchApp:
+    clearState: false
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- runFlow:
+    when:
+      visible: "Continue with Email|Continue with Google|Your trading system is ready"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/news_s5_blocked_auth
+- extendedWaitUntil:
+    visible: "News|Journal|Stats"
+    timeout: 60000
+- runFlow:
+    when:
+      visible: "News"
+    commands:
+      - tapOn: "News"
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/news_s5_home
+      - runFlow:
+          when:
+            visible: "Retry"
+          commands:
+            - tapOn: "Retry"
+            - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/news_s5_retry
+- runFlow:
+    when:
+      visible: "Calendar"
+    commands:
+      - tapOn: "Calendar"
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calendar_s5_home
+      - tapOn:
+          point: "12%,18%"
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calendar_s5_prev
+      - tapOn:
+          point: "88%,18%"
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calendar_s5_next

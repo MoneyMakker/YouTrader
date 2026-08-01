@@ -17,7 +17,7 @@ appId: com.youtrader.pro
                 point: "92%,88%"
       - runFlow:
           when:
-            visible: "Unlock Your Trading Edge"
+            visible: "Your trading system is ready"
           commands:
             - tapOn:
                 id: "acquisition-paywall-close"

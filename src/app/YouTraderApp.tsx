@@ -10207,6 +10207,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     "journal",
     ...(propPassTabVisible ? (["propPass"] as const) : []),
     "stats",
+    "settings",
     "more",
   ];
   useDeviceQaCaptureWalk({
@@ -11876,6 +11877,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     { id: "journal", label: t("journal") },
     ...(propPassTabVisible ? [{ id: "propPass" as const, label: t("propPass.tab") }] : []),
     { id: "stats", label: t("stats") },
+    { id: "settings", label: t("settings") },
     { id: "more", label: t("more.title") },
   ];
   const premiumTabs: Tab[] = [];
@@ -12122,7 +12124,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
                   (
                     tab === "calc" ||
                     tab === "news" ||
-                    tab === "settings" ||
                     tab === "calendar" ||
                     moreDestination === "subscription"
                       ? "more"
@@ -12135,7 +12136,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           activeId={
             tab === "calc" ||
             tab === "news" ||
-            tab === "settings" ||
             tab === "calendar" ||
             moreDestination === "subscription"
               ? "more"
@@ -12146,7 +12146,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               id === "more" &&
               (tab === "calc" ||
                 tab === "news" ||
-                tab === "settings" ||
                 tab === "calendar" ||
                 tab === "more" ||
                 moreDestination === "subscription")

@@ -1,0 +1,21 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-paywall
+- openLink: youtrader://qa/reset-paywall
+- extendedWaitUntil:
+    visible:
+      id: "qa.reset.complete"
+    timeout: 90000
+- assertVisible:
+    id: "qa.reset.complete"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_paywall_complete
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Your trading system is ready"
+    timeout: 90000
+- assertVisible: "Your trading system is ready"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_paywall_cold

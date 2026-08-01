@@ -1,0 +1,23 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-fresh
+- openLink: youtrader://qa/reset-fresh
+- extendedWaitUntil:
+    visible:
+      id: "qa.reset.complete"
+    timeout: 90000
+- assertVisible:
+    id: "qa.reset.complete"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_fresh_complete
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "product-onboarding-continue"
+    timeout: 90000
+- assertVisible:
+    id: "product-onboarding-continue"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_reset_fresh_cold

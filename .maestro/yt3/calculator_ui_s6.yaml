@@ -1,0 +1,48 @@
+appId: com.youtrader.pro
+---
+# Calculator UI matrix after allow login + paywall dismiss
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 18
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Your trading system is ready"
+          commands:
+            - runFlow:
+                when:
+                  visible:
+                    id: "acquisition-paywall-close"
+                commands:
+                  - tapOn:
+                      id: "acquisition-paywall-close"
+            - runFlow:
+                when:
+                  visible: "Your trading system is ready"
+                  notVisible: "Journal"
+                commands:
+                  - tapOn:
+                      point: "92%,8%"
+- extendedWaitUntil:
+    visible: "Journal|Calc"
+    timeout: 120000
+- tapOn: "Calc"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6_00
+- extendedWaitUntil:
+    visible: "Account|Risk|Calculate|Reset|Size"
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6_loaded
+- runFlow:
+    when:
+      visible: "Reset"
+    commands:
+      - tapOn: "Reset"
+- assertNotVisible: "NaN|Infinity"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/calc_s6_reset
