@@ -13,6 +13,13 @@ import { PropPassOnboardingFlow } from "./PropPassOnboardingFlow";
 import { PropPassAssignmentFlow } from "./PropPassAssignmentFlow";
 import { PerformanceIntelligenceInternalPanel } from "./PerformanceIntelligenceInternalPanel";
 import { usePropPassAvailability } from "./usePropPassAvailability";
+import { PropPassAccountMenu } from "./ui/PropPassAccountMenu";
+import { PropPassAccountSwitcher } from "./ui/PropPassAccountSwitcher";
+import { PropPassChallengeHero } from "./ui/PropPassChallengeHero";
+import { PropPassInsightsCard } from "./ui/PropPassInsightsCard";
+import { PropPassRecentActivity } from "./ui/PropPassRecentActivity";
+import { PropPassTargetProgress } from "./ui/PropPassTargetProgress";
+import { PropPassTodaysPlan } from "./ui/PropPassTodaysPlan";
 import type { ChallengeSummary, PropPassUiState, PropPassViewModel } from "./types";
 import type { Trade } from "../app/types";
 import {
@@ -60,7 +67,8 @@ export function PropPassInternalScreen({
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAssignment, setShowAssignment] = useState(false);
   const [showIntelligence, setShowIntelligence] = useState(false);
-  const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [commandMessage, setCommandMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -147,15 +155,17 @@ export function PropPassInternalScreen({
             }}
           />
         ) : (
-          renderState(uiState, t, controller, developerMode, {
+          renderState(uiState, t, controller, {
             onStartOnboarding: () => setShowOnboarding(true),
             onStartAssignment: () => {
               trackPropPassEvent("prop_pass_assignment_flow_opened", { userId });
               setShowAssignment(true);
             },
             onOpenIntelligence: () => setShowIntelligence(true),
-            archiveConfirm,
-            setArchiveConfirm,
+            showAccountMenu,
+            setShowAccountMenu,
+            showHistory,
+            setShowHistory,
             userId: userId ?? null,
             setCommandMessage,
           })
@@ -169,8 +179,10 @@ type Actions = {
   onStartOnboarding: () => void;
   onStartAssignment: () => void;
   onOpenIntelligence: () => void;
-  archiveConfirm: boolean;
-  setArchiveConfirm: (v: boolean) => void;
+  showAccountMenu: boolean;
+  setShowAccountMenu: (v: boolean) => void;
+  showHistory: boolean;
+  setShowHistory: (v: boolean) => void;
   userId: string | null;
   setCommandMessage: (msg: string | null) => void;
 };
@@ -179,7 +191,6 @@ function renderState(
   state: PropPassUiState,
   t: (key: string, opts?: Record<string, unknown>) => string,
   controller: ReturnType<typeof usePropPassAvailability>,
-  developerMode: boolean,
   actions: Actions,
 ): React.ReactNode {
   switch (state.kind) {
@@ -187,7 +198,14 @@ function renderState(
       return <StateCard title={t("propPass.state.disabled")} body={t("propPass.state.disabledBody")} />;
     case "loading":
       return (
-        <StateCard title={t("propPass.state.loading")} body={t("propPass.state.loadingBody")} a11yLive />
+        <View style={styles.skeleton} testID="prop-pass-loading" accessibilityLabel={t("propPass.state.loading")}>
+          <View style={[styles.skelBlock, { height: 72 }]} />
+          <View style={[styles.skelBlock, { height: 140 }]} />
+          <View style={[styles.skelBlock, { height: 96 }]} />
+          <YdlText role="caption" color="text.secondary">
+            {t("propPass.state.loadingBody")}
+          </YdlText>
+        </View>
       );
     case "no_account":
       return (
@@ -236,10 +254,13 @@ function renderState(
       return <StateCard title={t("propPass.state.noShadow")} body={t("propPass.state.noShadowBody")} />;
     case "stale_snapshot":
       return (
-        <StateCard
-          title={t("propPass.state.stale")}
-          body={t("propPass.state.staleBody", { reasons: state.reasonCodes.join(", ") })}
-        />
+        <YdlCard>
+          <YdlText role="bodyEmphasized">{t("propPass.state.stale")}</YdlText>
+          <YdlText role="body" color="text.secondary">
+            {t("propPass.state.staleBody")}
+          </YdlText>
+          <YdlButton label={t("propPass.refreshCta")} onPress={() => controller.refresh()} />
+        </YdlCard>
       );
     case "incomplete_data":
       return (
@@ -270,10 +291,11 @@ function renderState(
         <AvailableView
           model={state.model}
           t={t}
-          developerMode={developerMode}
           userId={actions.userId}
-          archiveConfirm={actions.archiveConfirm}
-          setArchiveConfirm={actions.setArchiveConfirm}
+          showAccountMenu={actions.showAccountMenu}
+          setShowAccountMenu={actions.setShowAccountMenu}
+          showHistory={actions.showHistory}
+          setShowHistory={actions.setShowHistory}
           onArchived={() => {
             actions.setCommandMessage(t("propPass.archive.success"));
             controller.refresh();
@@ -313,12 +335,12 @@ function ChallengeResolverCard({
       {challenges.map((c) => (
         <View key={c.id} style={styles.resolverRow}>
           <YdlButton
-            label={`${c.status} · ${c.id.slice(0, 8)}`}
+            label={`${c.status} · ${c.startedAt.slice(0, 10)}`}
             variant="secondary"
             onPress={() => onPreview(c.id)}
           />
           <YdlButton
-            label={t("propPass.resolver.persistSelect", { id: c.id.slice(0, 8) })}
+            label={t("propPass.resolver.persistSelect", { id: c.startedAt.slice(0, 10) })}
             onPress={() => {
               if (!userId || !accountId) {
                 onDone(t("propPass.resolver.needAccountId"));
@@ -395,10 +417,11 @@ function StateCard({
 function AvailableView({
   model,
   t,
-  developerMode,
   userId,
-  archiveConfirm,
-  setArchiveConfirm,
+  showAccountMenu,
+  setShowAccountMenu,
+  showHistory,
+  setShowHistory,
   onArchived,
   onMessage,
   onRefresh,
@@ -407,216 +430,86 @@ function AvailableView({
 }: {
   model: PropPassViewModel;
   t: (key: string, opts?: Record<string, unknown>) => string;
-  developerMode: boolean;
   userId: string | null;
-  archiveConfirm: boolean;
-  setArchiveConfirm: (v: boolean) => void;
+  showAccountMenu: boolean;
+  setShowAccountMenu: (v: boolean) => void;
+  showHistory: boolean;
+  setShowHistory: (v: boolean) => void;
   onArchived: () => void;
   onMessage: (msg: string | null) => void;
   onRefresh: () => void;
   onAssignTrades: () => void;
   onOpenIntelligence: () => void;
 }) {
-  const scoreLabel =
-    model.readiness.score == null
-      ? t("propPass.readiness.unavailable")
-      : t("propPass.readiness.score", { score: model.readiness.score });
+  const currency =
+    model.progress.profitTarget?.currency ??
+    model.account.accountSize?.currency ??
+    "USD";
 
-  return (
-    <View style={styles.available}>
-      <YdlCard>
-        <YdlText role="bodyEmphasized">{model.account.displayName}</YdlText>
-        <YdlText role="caption" color="text.secondary">
-          {t("propPass.header.lifecycle", {
-            account: model.account.lifecycleStatus,
-            challenge: model.challenge.status,
-            attempt: model.challenge.attemptNumber,
-          })}
-        </YdlText>
-        {model.account.firmName ? (
-          <YdlText role="caption" color="text.tertiary">
-            {model.account.firmName}
-          </YdlText>
-        ) : null}
-        <YdlButton
-          label={t("propPass.assignment.openCta")}
-          onPress={onAssignTrades}
-        />
-        <YdlButton
-          label={t("propPass.intelligence.openCta")}
-          variant="secondary"
-          onPress={() => {
-            trackPropPassEvent("prop_pass_intelligence_opened", { userId });
-            onOpenIntelligence();
-          }}
-        />
-        <YdlButton
-          label={t("propPass.account.setDefault")}
-          variant="secondary"
-          onPress={() => {
-            if (!userId) return;
-            const req = newPropOsClientRequestId();
-            void runPropPassCommand(
-              req,
-              userId,
-              (svc) =>
-                svc.setDefaultAccount({
-                  clientRequestId: req,
-                  accountId: model.account.id,
-                }),
-              "prop_pass_default_account_changed",
-            ).then((res) => {
-              onMessage(
-                res.kind === "success"
-                  ? t("propPass.account.defaultSaved")
-                  : t("propPass.command.unexpected"),
-              );
-              onRefresh();
-            });
-          }}
-        />
-      </YdlCard>
-
-      <YdlCard>
-        <YdlText role="label">{t("propPass.progress.title")}</YdlText>
-        <YdlText role="body">
-          {model.progress.currentBalance
-            ? t("propPass.progress.balance", {
-                value: model.progress.currentBalance.minor,
-                currency: model.progress.currentBalance.currency,
-              })
-            : t("propPass.valueUnavailable")}
-        </YdlText>
-        <YdlText role="caption" color="text.secondary">
-          {model.progress.profitTarget
-            ? t("propPass.progress.target", {
-                value: model.progress.profitTarget.minor,
-                currency: model.progress.profitTarget.currency,
-              })
-            : t("propPass.valueUnavailable")}
-        </YdlText>
-        <YdlText role="caption" color="text.secondary">
-          {model.progress.profitRemaining != null
-            ? t("propPass.progress.remaining", {
-                value: model.progress.profitRemaining.minor,
-                currency: model.progress.profitRemaining.currency,
-              })
-            : t("propPass.valueUnavailable")}
-        </YdlText>
-      </YdlCard>
-
-      <YdlCard>
-        <BufferHealthSection buffers={model.buffers} />
-      </YdlCard>
-
-      <YdlCard>
-        <YdlText role="label">{t("propPass.readiness.title")}</YdlText>
-        <YdlText role="bodyEmphasized" accessibilityLabel={scoreLabel}>
-          {model.readiness.lifecycleOverride
-            ? t("propPass.readiness.lifecycleOverride", { status: model.challenge.status })
-            : scoreLabel}
-        </YdlText>
-        <YdlText role="caption" color="text.secondary">
-          {t("propPass.readiness.confidence", { level: model.readiness.confidence })}
-        </YdlText>
-      </YdlCard>
-
-      <YdlCard>
-        <YdlText role="label">{t("propPass.quality.title")}</YdlText>
-        <YdlText role="body">
-          {t("propPass.quality.status", { status: model.dataQuality.status })}
-        </YdlText>
-        <YdlText role="caption" color="text.secondary">
-          {t("propPass.freshness.status", {
-            status: model.freshness.status,
-            at: model.freshness.calculatedAt ?? "—",
-          })}
-        </YdlText>
-        <YdlText role="caption" color="text.secondary">
-          {t("propPass.assignment.assignedCount", { count: model.assignedTradeCount })}
-        </YdlText>
-        <YdlButton
-          label={t("propPass.refreshCta")}
-          variant="secondary"
-          onPress={onRefresh}
-        />
-      </YdlCard>
-
-      <YdlCard>
-        <YdlText role="label">{t("propPass.history.title")}</YdlText>
+  if (showHistory) {
+    return (
+      <View style={styles.available} testID="prop-pass-history-screen">
+        <YdlText role="title">{t("propPass.activity.viewHistory")}</YdlText>
         {model.historicalAttempts.length === 0 ? (
           <YdlText role="caption" color="text.secondary">
             {t("propPass.history.empty")}
           </YdlText>
         ) : (
-          model.historicalAttempts.slice(0, 8).map((h) => (
-            <YdlText key={h.id} role="caption" color="text.secondary">
-              {t("propPass.history.row", {
-                status: h.status,
-                started: h.startedAt.slice(0, 10),
-                id: h.id.slice(0, 8),
-              })}
-            </YdlText>
+          model.historicalAttempts.map((h) => (
+            <View key={h.id} style={styles.historyRow}>
+              <YdlText role="bodyEmphasized">{h.startedAt.slice(0, 10)}</YdlText>
+              <YdlText role="caption" color="text.secondary">
+                {t("propPass.activity.row", { status: h.status })}
+              </YdlText>
+            </View>
           ))
         )}
-      </YdlCard>
+        <YdlText role="caption" color="text.secondary">
+          {t("propPass.assignment.assignedCount", { count: model.assignedTradeCount })}
+        </YdlText>
+        <YdlButton
+          label={t("propPass.account.closeMenu")}
+          variant="secondary"
+          onPress={() => setShowHistory(false)}
+        />
+      </View>
+    );
+  }
 
-      <YdlCard>
-        <YdlText role="label">{t("propPass.archive.title")}</YdlText>
-        {!archiveConfirm ? (
-          <YdlButton
-            label={t("propPass.archive.cta")}
-            variant="destructive"
-            onPress={() => setArchiveConfirm(true)}
-          />
-        ) : (
-          <View>
-            <YdlText role="body" color="text.secondary">
-              {t("propPass.archive.confirmBody")}
-            </YdlText>
-            <YdlButton
-              label={t("propPass.archive.confirmCta")}
-              variant="destructive"
-              onPress={() => {
-                if (!userId) return;
-                const req = newPropOsClientRequestId();
-                void runPropPassCommand(
-                  req,
-                  userId,
-                  (svc) =>
-                    svc.archivePropAccount({
-                      clientRequestId: req,
-                      accountId: model.account.id,
-                      confirmActive: true,
-                    }),
-                  "prop_pass_account_archived",
-                ).then((res) => {
-                  if (res.kind === "success") onArchived();
-                  else onMessage(t("propPass.command.unexpected"));
-                  setArchiveConfirm(false);
-                });
-              }}
-            />
-            <YdlButton
-              label={t("propPass.archive.cancel")}
-              variant="tertiary"
-              onPress={() => setArchiveConfirm(false)}
-            />
-          </View>
-        )}
-      </YdlCard>
-
-      {developerMode ? (
-        <YdlCard>
-          <YdlText role="label">{t("propPass.diagnostics.title")}</YdlText>
-          <YdlText role="caption" color="text.tertiary">
-            {t("propPass.diagnostics.body", {
-              accountId: model.account.id.slice(0, 8),
-              challengeId: model.challenge.id.slice(0, 8),
-            })}
-          </YdlText>
-        </YdlCard>
-      ) : null}
+  return (
+    <View style={styles.available}>
+      <PropPassAccountSwitcher
+        model={model}
+        onOpenMenu={() => setShowAccountMenu(true)}
+      />
+      <PropPassAccountMenu
+        model={model}
+        userId={userId}
+        open={showAccountMenu}
+        onClose={() => setShowAccountMenu(false)}
+        onRefresh={onRefresh}
+        onMessage={onMessage}
+        onArchived={onArchived}
+      />
+      <PropPassChallengeHero model={model} />
+      <PropPassTargetProgress model={model} />
+      <BufferHealthSection buffers={model.buffers} currency={currency} />
+      <PropPassTodaysPlan
+        model={model}
+        onReviewUnassigned={onAssignTrades}
+        onEditPlan={onAssignTrades}
+      />
+      <PropPassInsightsCard
+        model={model}
+        onOpenDetail={() => {
+          trackPropPassEvent("prop_pass_intelligence_opened", { userId });
+          onOpenIntelligence();
+        }}
+      />
+      <PropPassRecentActivity
+        model={model}
+        onViewHistory={() => setShowHistory(true)}
+      />
     </View>
   );
 }
@@ -629,6 +522,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   body: { gap: 12, paddingBottom: 40, paddingTop: 8 },
-  available: { gap: 12 },
+  available: { gap: 14 },
   resolverRow: { gap: 6, marginTop: 6 },
+  historyRow: { gap: 2, paddingVertical: 6 },
+  skeleton: { gap: 12 },
+  skelBlock: {
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
 });
