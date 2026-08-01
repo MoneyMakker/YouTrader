@@ -160,6 +160,7 @@ import { computeCalculatorResults, formatCalcUsd } from "../calc/riskCalculator"
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { FirstLaunchFunnel } from "./startup/FirstLaunchFunnel";
 import { AcquisitionPaywall } from "./startup/AcquisitionPaywall";
+import { buildSettingsSubscriptionPresentation } from "./startup/settingsSubscriptionPresentation";
 import {
   ACQUISITION_GUEST_KEY,
   ACQUISITION_ONBOARDING_KEY,
@@ -9721,6 +9722,7 @@ function SettingsScreen({
   authBusy,
   authConfigured,
   isPremium,
+  customerInfo,
   packages,
   storeProducts,
   purchaseBusy,
@@ -9750,6 +9752,7 @@ function SettingsScreen({
   authBusy: boolean;
   authConfigured: boolean;
   isPremium: boolean;
+  customerInfo: CustomerInfo | null;
   packages: PurchasesPackage[];
   storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
@@ -9849,17 +9852,40 @@ YouTrader does not knowingly collect data from or market to individuals under th
 
         <GlassCard style={[styles.proSubscriptionCard, styles.settingsQuietCard]} intensity={36}>
           <Text style={[styles.settingsSectionTitle, styles.proSubscriptionTitle]} maxFontSizeMultiplier={1.25}>Subscription</Text>
-          <View style={[styles.proStatusBox, isPremium ? styles.proStatusActive : styles.proStatusLocked]}>
+          <View style={[styles.proStatusBox, isPremium ? styles.proStatusActive : styles.proStatusLocked]} testID="settings-subscription-card">
             <View style={[styles.proStatusIcon, isPremium ? styles.proStatusIconActive : styles.proStatusIconLocked]}>
               {isPremium ? <Unlock size={22} color={C.green} strokeWidth={2.4} /> : <Lock size={22} color={C.purple} strokeWidth={2.4} />}
             </View>
             <View style={styles.proStatusCopy}>
-              <Text style={[styles.proStatusTitle, isPremium ? styles.proStatusTitleActive : styles.proStatusTitleLocked]} maxFontSizeMultiplier={1.25}>
-                {isPremium ? t("proActiveTitle") : t("subscription.noActiveSubscription")}
-              </Text>
-              <Text style={styles.proStatusText} maxFontSizeMultiplier={1.25}>
-                {isPremium ? t("proActiveBody") : t("subscription.unavailableBody")}
-              </Text>
+              {(() => {
+                const presentation = isPremium
+                  ? buildSettingsSubscriptionPresentation(customerInfo, REVENUECAT_ENTITLEMENT_ID)
+                  : null;
+                if (presentation) {
+                  return (
+                    <>
+                      <Text style={[styles.proStatusTitle, styles.proStatusTitleActive]} maxFontSizeMultiplier={1.25}>
+                        {presentation.statusLine}
+                      </Text>
+                      {presentation.detailLines.map((line) => (
+                        <Text key={line} style={styles.proStatusText} maxFontSizeMultiplier={1.25}>
+                          {line}
+                        </Text>
+                      ))}
+                    </>
+                  );
+                }
+                return (
+                  <>
+                    <Text style={[styles.proStatusTitle, isPremium ? styles.proStatusTitleActive : styles.proStatusTitleLocked]} maxFontSizeMultiplier={1.25}>
+                      {isPremium ? t("proActiveTitle") : t("subscription.noActiveSubscription")}
+                    </Text>
+                    <Text style={styles.proStatusText} maxFontSizeMultiplier={1.25}>
+                      {isPremium ? t("proActiveBody") : t("subscription.unavailableBody")}
+                    </Text>
+                  </>
+                );
+              })()}
             </View>
           </View>
           {(showRestorePurchases || !!paywallError) ? (
@@ -12060,6 +12086,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               authBusy={authBusy}
               authConfigured={authConfigured}
               isPremium={isPremium}
+              customerInfo={customerInfo}
               packages={packages}
               storeProducts={storeProducts}
               purchaseBusy={purchaseBusy}
