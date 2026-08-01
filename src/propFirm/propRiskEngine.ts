@@ -413,7 +413,7 @@ export function buildPropRiskEngine(input: PropRiskEngineInput): PropRiskEngineR
   };
 }
 
-/** Legacy snapshot shape used across App.tsx AI Analytics */
+/** Legacy snapshot shape used across App.tsx Trading Review */
 export function toLegacyPropSnapshot(
   result: PropRiskEngineResult,
   selectedDate: string,

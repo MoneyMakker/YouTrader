@@ -5,7 +5,7 @@ import { Platform, useWindowDimensions } from "react-native";
  * Shared responsive layout helpers for YouTrader.
  *
  * Single source of truth for tablet/iPad detection and adaptive sizing so screens
- * (Journal, Stats, AI Analytics, Calendar, Settings) do not duplicate breakpoint logic.
+ * (Journal, Stats, Trading Review, Calendar, Settings) do not duplicate breakpoint logic.
  *
  * iPhone layouts are preserved: `isTablet` is false on phones, so existing phone
  * styles keep rendering unchanged. Tablet branches only activate at >= TABLET_BREAKPOINT.

@@ -89,6 +89,7 @@ import {
   Trophy,
   Unlock,
   Zap,
+  Ellipsis,
 } from "lucide-react-native";
 import Svg, {
   Circle,
@@ -164,6 +165,7 @@ import {
 } from "./startup/acquisitionState";
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { isPropPassEntryVisible } from "../propPass/access";
+import { MoreScreen } from "./MoreScreen";
 import {
   isDeviceQaCaptureEnabled,
   useDeviceQaCaptureWalk,
@@ -5216,7 +5218,7 @@ function AiOperatingSystemTodaySection({ operatingSystem }: { operatingSystem: A
       />
       {lowConfidence ? (
         <WarningCard
-          title={today.emptyState?.title || "Low-confidence AI Analytics sample"}
+          title={today.emptyState?.title || "Low-confidence Trading Review sample"}
           body={today.emptyState?.message || "Add more saved trades across multiple trading days to unlock a reliable daily plan."}
         />
       ) : today.mission ? (
@@ -10400,6 +10402,7 @@ function TabGlyph({ id, active }: { id: Tab; active: boolean }) {
   if (id === "news") return <Newspaper {...iconProps} />;
   if (id === "calendar") return <CalendarDays {...iconProps} />;
   if (id === "settings") return <SettingsIcon {...iconProps} />;
+  if (id === "more") return <Ellipsis {...iconProps} />;
   return null;
 }
 
@@ -10615,12 +10618,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   );
   const qaTabIds = [
     "journal",
-    "stats",
-    "calc",
     ...(propPassTabVisible ? (["propPass"] as const) : []),
-    "news",
+    "stats",
     "calendar",
-    "settings",
+    "more",
   ];
   useDeviceQaCaptureWalk({
     phase: acquisitionPhase,
@@ -12269,12 +12270,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "journal", label: t("journal") },
-    { id: "stats", label: t("stats") },
-    { id: "calc", label: t("calc") },
     ...(propPassTabVisible ? [{ id: "propPass" as const, label: t("propPass.tab") }] : []),
-    { id: "news", label: t("news") },
+    { id: "stats", label: t("stats") },
     { id: "calendar", label: t("calendar") },
-    { id: "settings", label: t("settings") },
+    { id: "more", label: t("more.title") },
   ];
   const premiumTabs: Tab[] = [];
   const locked = !isPremium && premiumTabs.includes(tab);
@@ -12287,7 +12286,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           {locked ? (
             <PremiumScreen
               lang={lang}
-              onClose={() => setTab("calc")}
+              onClose={() => setTab("more")}
               packages={packages}
               storeProducts={storeProducts}
               purchaseBusy={purchaseBusy}
@@ -12357,6 +12356,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             <CalendarScreen lang={lang} trades={trades} isPremium={isPremium} onUpgrade={() => purchasePackage(packages.find((pkg) => packageTitle(pkg) === "MONTHLY") || packages[0] || null, YOU_TRADER_MONTHLY_PRODUCT_ID)} />
           ) : tab === "calc" ? (
             <CalcScreen lang={lang} />
+          ) : tab === "more" ? (
+            <MoreScreen onOpen={setTab} />
           ) : (
             <SettingsScreen
               lang={lang}
@@ -12430,10 +12431,28 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           tabs={tabs.map((x) => ({
             id: x.id,
             label: x.label,
-            glyph: <TabGlyph id={x.id} active={tab === x.id} />,
+            glyph: (
+              <TabGlyph
+                id={x.id}
+                active={
+                  (tab === "calc" || tab === "news" || tab === "settings" ? "more" : tab) === x.id
+                }
+              />
+            ),
           }))}
-          activeId={tab}
-          onSelect={setTab}
+          activeId={
+            tab === "calc" || tab === "news" || tab === "settings" ? "more" : tab
+          }
+          onSelect={(id) => {
+            if (
+              id === "more" &&
+              (tab === "calc" || tab === "news" || tab === "settings" || tab === "more")
+            ) {
+              setTab("more");
+              return;
+            }
+            setTab(id);
+          }}
         />
         {shareExportHostReady ? (
           <React.Suspense fallback={null}>

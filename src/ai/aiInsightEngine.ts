@@ -904,9 +904,9 @@ export function buildNormalizedAiAnalytics(input: AiInsightEngineInput): Normali
     sample: sample.sample,
     emptyState: sample.confidence === "empty" || sample.confidence === "low"
       ? {
-          title: sample.confidence === "empty" ? "No journal evidence yet" : "Low-confidence AI Analytics sample",
+          title: sample.confidence === "empty" ? "No journal evidence yet" : "Low-confidence Trading Review sample",
           message: sample.confidence === "empty"
-            ? "Log trades before AI Analytics generates coaching insights."
+            ? "Log trades before Trading Review generates coaching insights."
             : `Only ${sample.sample.tradeCount} trades across ${sample.sample.tradingDays} trading days. Add at least 5 trades across 2 days for reliable insights.`,
           requiredTrades: 5,
         }
