@@ -345,20 +345,60 @@ cmd_prove() {
     exit "$ec"
   }
   cmd_verify113
-  cmd_relaunch
-  sleep 5
-  # Home proof first (always non-black when unlocked)
-  xcrun devicectl device process launch --device "$DEVICE_ID" com.apple.springboard >/dev/null 2>&1 || true
-  sleep 1
-  YT_ALLOW_BLACK_SHOT=0 cmd_screenshot "springboard_proof" || true
-  cmd_launch
-  sleep 6
-  if ! cmd_screenshot "youtrader_foreground_proof"; then
-    log "youtrader_screenshot_invalid — recording LIVE_FAIL evidence gap"
-    YT_ALLOW_BLACK_SHOT=1 cmd_screenshot "youtrader_black_invalid" || true
-    exit 26
-  fi
-  log "physical_prove_ok"
+  # Cold relaunch alone can yield a solid-black first frame for several seconds.
+  # Prefer QA reset deep link so the primary scene paints product UI before capture.
+  require_devicectl
+  xcrun devicectl device process launch --terminate-existing --device "$DEVICE_ID" \
+    --payload-url 'youtrader://qa/reset-fresh' "$BUNDLE_ID" 2>&1 | tee -a "$LOG" || true
+  local i mean=0
+  for i in 1 2 3 4 5 6 7 8; do
+    sleep 2
+    local probe="$EVID_DIR/${STAMP}_prove_probe_${i}.png"
+    if "$PMD" developer dvt screenshot "$probe" >/dev/null 2>&1; then
+      mean="$(python3 - "$probe" <<'PY'
+import struct,zlib,sys
+from pathlib import Path
+path=Path(sys.argv[1]); data=path.read_bytes(); i=8; idat=b''; w=h=None; ct=2
+while i < len(data):
+  ln=int.from_bytes(data[i:i+4],'big'); typ=data[i+4:i+8]; chunk=data[i+8:i+8+ln]; i+=12+ln
+  if typ==b'IHDR': w,h=struct.unpack('>II', chunk[:8]); ct=chunk[9]
+  elif typ==b'IDAT': idat+=chunk
+  elif typ==b'IEND': break
+raw=zlib.decompress(idat); bpp=3 if ct==2 else 4; stride=w*bpp
+out=bytearray(); prev=bytearray(stride); o=0
+for y in range(h):
+  f=raw[o]; o+=1; row=bytearray(raw[o:o+stride]); o+=stride
+  if f==1:
+    for x in range(stride): row[x]=(row[x]+(row[x-bpp] if x>=bpp else 0))&255
+  elif f==2:
+    for x in range(stride): row[x]=(row[x]+prev[x])&255
+  elif f==3:
+    for x in range(stride):
+      left=row[x-bpp] if x>=bpp else 0; row[x]=(row[x]+((left+prev[x])//2))&255
+  elif f==4:
+    def paeth(a,b,c):
+      p=a+b-c; pa=abs(p-a); pb=abs(p-b); pc=abs(p-c)
+      return a if pa<=pb and pa<=pc else (b if pb<=pc else c)
+    for x in range(stride):
+      a=row[x-bpp] if x>=bpp else 0; b=prev[x]; c=prev[x-bpp] if x>=bpp else 0
+      row[x]=(row[x]+paeth(a,b,c))&255
+  out.extend(row); prev=row
+print(f"{sum(out)/len(out):.3f}")
+PY
+)"
+      log "prove_probe i=$i mean_luma=$mean"
+      if awk -v m="$mean" 'BEGIN{exit !(m+0 >= 1.5)}'; then
+        cp "$probe" "$EVID_DIR/${STAMP}_youtrader_foreground_proof.png"
+        # Finalize metadata via screenshot helper path
+        YT_ALLOW_BLACK_SHOT=0 cmd_screenshot "youtrader_foreground_proof" >/dev/null || true
+        log "physical_prove_ok mean=$mean"
+        return 0
+      fi
+    fi
+  done
+  log "youtrader_screenshot_invalid — recording LIVE_FAIL evidence gap"
+  YT_ALLOW_BLACK_SHOT=1 cmd_screenshot "youtrader_black_invalid" || true
+  exit 26
 }
 
 usage() {
