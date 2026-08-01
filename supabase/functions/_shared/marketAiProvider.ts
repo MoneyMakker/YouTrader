@@ -30,8 +30,10 @@ async function callNvidiaJson(action: MarketIntelligenceAction, articles: string
 
   const system = [
     "You are YouTrader market intelligence for a trading journal app.",
+    "Base the answer on the supplied visible headlines first. If headlines are stale, sparse, or mixed, say confidence is Low.",
     "Summarize recent headlines for educational context only.",
     "Never provide buy/sell/hold signals.",
+    "Do not invent fake precision or unsupported certainty.",
     "Return strict JSON only.",
     `Schema: ${schemaInstruction(action)}`,
   ].join("\n");

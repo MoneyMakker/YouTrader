@@ -17,7 +17,7 @@ const BUCKET_ACTIONS: Record<RateLimitBucket, string[]> = {
   ai_news: ["news_explainer", "market_sentiment"],
   ai_analytics: ["market_narrative", "volatility_radar", "opportunity_scanner", "noise_filter"],
   weekly_review: ["weekly_coach", "pre_market_brief"],
-  heavy_analysis: ["watchlist_risk", "why_market_moving", "trade_analysis"],
+  heavy_analysis: ["watchlist_risk", "why_market_moving", "trade_analysis", "trade_vision_review"],
 };
 
 function startOfWindow(window: "day" | "week") {
