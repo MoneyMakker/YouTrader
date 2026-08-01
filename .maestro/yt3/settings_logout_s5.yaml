@@ -1,0 +1,42 @@
+appId: com.youtrader.pro
+---
+# Settings logout without obsolete AI Analytics assertion
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Journal|Settings"
+    timeout: 60000
+- tapOn: "Settings"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s5_home
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- scrollUntilVisible:
+    element: "Sign Out"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 40
+    speed: 70
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s5_scrolled
+- runFlow:
+    when:
+      visible: "Restore Purchases|Restore purchases"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s5_restore_visible
+- tapOn: "Sign Out"
+- runFlow:
+    when:
+      visible: "Sign Out|Log out|Sign out|Confirm|OK"
+    commands:
+      - tapOn: "Sign Out|Log out|Sign out|Confirm|OK"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s5_after_logout
+- extendedWaitUntil:
+    visible: "Continue with Apple|Continue with Google|Continue with Email|Unlock Your Trading Edge|Continue"
+    timeout: 45000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/settings_s5_auth_or_onboarding

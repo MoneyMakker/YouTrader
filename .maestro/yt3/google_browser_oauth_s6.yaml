@@ -1,0 +1,49 @@
+appId: com.youtrader.pro
+---
+# Logout to Auth, then Google browser OAuth (distinct iOS client absent → browser path)
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 16
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+- extendedWaitUntil:
+    visible: "Journal|Settings"
+    timeout: 90000
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Sign Out|Sign out|Log out"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Sign Out|Sign out"
+- runFlow:
+    when:
+      visible: "Sign Out|Cancel|OK"
+    commands:
+      - tapOn: "Sign Out|OK"
+- extendedWaitUntil:
+    visible: "Continue with Google|Continue with Apple|Continue with Email"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s6_auth_cta
+- tapOn: "Continue with Google"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Google|Sign in|Choose an account|Error 400|invalid_request|Custom scheme|Cancel|Safari"
+    timeout: 45000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s6_oauth_page
+- runFlow:
+    when:
+      visible: "Error 400|invalid_request|Custom scheme"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/google_s6_web_client_error

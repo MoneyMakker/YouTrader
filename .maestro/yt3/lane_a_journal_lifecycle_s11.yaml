@@ -1,0 +1,170 @@
+appId: com.youtrader.pro
+---
+# Unique marker S11-041719 — edit then delete, no reseed
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- tapOn: "Journal"
+- assertVisible: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_precondition
+
+- openLink: "youtrader://qa/seed-trade?marker=S11-041719&pnl=50&notes=QA-S11-041719"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: ".*notes:QA-S11-041719.*"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 10
+- assertVisible: ".*notes:QA-S11-041719.*"
+- assertVisible: ".*\\+\\$50\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_journal_create
+
+- openLink: youtrader://qa/tab?id=stats
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_stats_before_edit
+- openLink: youtrader://qa/tab?id=calendar
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_calendar_before_edit
+- openLink: youtrader://qa/tab?id=journal
+- waitForAnimationToEnd
+
+- openLink: "youtrader://qa/apply-trade-edit?marker=S11-041719&notes=QA-S11-041719-EDITED&pnl=125&exit=5225"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Update Trade"
+    timeout: 25000
+- assertVisible:
+    id: "journal.trade.edit.pnl"
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.save"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+- tapOn:
+    id: "journal.trade.save"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Maybe later"
+    commands:
+      - tapOn: "Maybe later"
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- scrollUntilVisible:
+    element: ".*notes:QA-S11-041719-EDITED.*"
+    direction: DOWN
+    timeout: 25000
+    visibilityPercentage: 10
+- assertVisible: ".*notes:QA-S11-041719-EDITED.*"
+- assertVisible: ".*\\+\\$125\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_journal_after_edit
+
+- openLink: youtrader://qa/tab?id=stats
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_stats_after_edit
+- openLink: youtrader://qa/tab?id=calendar
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_calendar_after_edit
+- openLink: youtrader://qa/tab?id=journal
+- waitForAnimationToEnd
+
+# DELETE cancel
+- openLink: "youtrader://qa/apply-trade-edit?marker=S11-041719&notes=QA-S11-041719-EDITED&pnl=125&t=cancel1"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Update Trade"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.delete"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+- tapOn:
+    id: "journal.trade.delete"
+- extendedWaitUntil:
+    visible:
+      id: "journal.trade.delete.confirm"
+    timeout: 10000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_delete_sheet
+- tapOn:
+    id: "journal.trade.delete.cancel"
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: "journal.trade.delete.confirm"
+- scrollUntilVisible:
+    element: ".*notes:QA-S11-041719-EDITED.*"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 10
+- assertVisible: ".*notes:QA-S11-041719-EDITED.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_after_delete_cancel
+
+# DELETE confirm (no reseed)
+- scrollUntilVisible:
+    element: ".*notes:QA-S11-041719-EDITED.*"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 10
+- longPressOn: ".*notes:QA-S11-041719-EDITED.*"
+- extendedWaitUntil:
+    visible:
+      id: "journal.trade.actions.delete"
+    timeout: 10000
+- tapOn:
+    id: "journal.trade.actions.delete"
+- extendedWaitUntil:
+    visible:
+      id: "journal.trade.delete.confirm"
+    timeout: 10000
+- tapOn:
+    id: "journal.trade.delete.confirm"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- assertNotVisible: ".*notes:QA-S11-041719-EDITED.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_journal_after_delete
+
+- openLink: youtrader://qa/tab?id=stats
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_stats_after_delete
+- openLink: youtrader://qa/tab?id=calendar
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_calendar_after_delete
+
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- openLink: youtrader://qa/tab?id=journal
+- waitForAnimationToEnd
+- assertNotVisible: ".*notes:QA-S11-041719-EDITED.*"
+- assertNotVisible: ".*notes:QA-S11-041719.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s11_life_after_relaunch

@@ -43,6 +43,8 @@ if ! JAVA_HOME="$(resolve_java_home)"; then
 fi
 export JAVA_HOME
 export PATH="$JAVA_HOME/bin:${PATH:-}"
+# Maestro 2.8 parses this as milliseconds (default ~15s is too short after driver reinstall).
+export MAESTRO_DRIVER_STARTUP_TIMEOUT="${MAESTRO_DRIVER_STARTUP_TIMEOUT:-180000}"
 
 {
   echo "JAVA_HOME=$JAVA_HOME"

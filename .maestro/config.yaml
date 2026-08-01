@@ -1,9 +1,1 @@
-flows:
-  - login/*.yaml
-  - trades/*.yaml
-  - stats/*.yaml
-  - analytics/*.yaml
-  - calendar/*.yaml
-  - news/*.yaml
-  - subscriptions/*.yaml
-  - settings/*.yaml
+flows: []

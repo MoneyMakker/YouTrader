@@ -183,7 +183,9 @@ async function ensureTradeAndAssignment(
   userId: string,
   accountId: string,
   challengeId: string,
+  opts: { count?: number; forPiSemantic?: boolean } = {},
 ) {
+  const count = Math.max(1, opts.count ?? (opts.forPiSemantic ? 5 : 1));
   const { data: ch } = await client
     .from("prop_challenges")
     .select("started_at,ended_at,status")
@@ -192,29 +194,38 @@ async function ensureTradeAndAssignment(
   const startedAt = ch?.started_at ? new Date(String(ch.started_at)).getTime() : Date.now() - 86400000;
   // Trades must occur at/after challenge.started_at (server assignability).
   const base = Math.max(startedAt + 60_000, Date.now() - 3_600_000);
-  const entryIso = new Date(base).toISOString();
-  const exitIso = new Date(base + 30 * 60 * 1000).toISOString();
-  const tradeDate = exitIso.slice(0, 10);
-  const tradeClientId = `ytqa-${Date.now().toString(36)}`;
+  const tradeClientIds: string[] = [];
+  const stamp = Date.now().toString(36);
 
-  const { error: tradeErr } = await client.from("trade_journal").insert({
-    user_id: userId,
-    client_id: tradeClientId,
-    trade_date: tradeDate,
-    symbol: "ES",
-    direction: "LONG",
-    entry_time: entryIso,
-    exit_time: exitIso,
-    contracts: 1,
-    pnl: 250,
-    notes: "YTQA staging fixture trade",
-  });
-  if (tradeErr) throw new Error(`trade insert failed: ${tradeErr.message}`);
+  for (let i = 0; i < count; i++) {
+    const entryMs = base + i * 45 * 60 * 1000;
+    const entryIso = new Date(entryMs).toISOString();
+    const exitIso = new Date(entryMs + 20 * 60 * 1000).toISOString();
+    const tradeDate = exitIso.slice(0, 10);
+    const tradeClientId = `ytqa-${stamp}-${i}`;
+    tradeClientIds.push(tradeClientId);
+    // Risk via stop_loss (trade_journal has stop_loss; no risk_amount column).
+    const riskAmount = 100 + i * 25;
+    const { error: tradeErr } = await client.from("trade_journal").insert({
+      user_id: userId,
+      client_id: tradeClientId,
+      trade_date: tradeDate,
+      symbol: "ES",
+      direction: i % 2 === 0 ? "LONG" : "SHORT",
+      entry_time: entryIso,
+      exit_time: exitIso,
+      contracts: 1 + (i % 2),
+      pnl: i % 2 === 0 ? 250 + i * 10 : -(120 + i * 5),
+      notes: `YTQA staging fixture trade ${i + 1}/${count}`,
+      stop_loss: riskAmount,
+    });
+    if (tradeErr) throw new Error(`trade insert failed: ${tradeErr.message}`);
+  }
 
   const cmd = {
     accountId,
     challengeId,
-    tradeClientIds: [tradeClientId],
+    tradeClientIds,
     source: "manual",
     reasonCode: null,
     allowReassign: true,
@@ -235,12 +246,13 @@ async function ensureTradeAndAssignment(
       assigned: false,
       detail: error?.message || JSON.stringify(data)?.slice(0, 180),
       assignmentRevision: null as number | null,
+      tradeCount: tradeClientIds.length,
     };
   }
   const assignmentRevision = Number(
     (data as { value?: { assignmentRevision?: number } }).value?.assignmentRevision ?? 1,
   );
-  return { assigned: true, detail: "ok", assignmentRevision };
+  return { assigned: true, detail: "ok", assignmentRevision, tradeCount: tradeClientIds.length };
 }
 
 async function cleanupQaLabel(client: SupabaseClient, admin: SupabaseClient | null) {
@@ -356,15 +368,19 @@ async function main() {
     });
   }
 
+  const forPiSemantic = process.argv.includes("--pi-semantic");
   const assign = await ensureTradeAndAssignment(
     allow.client,
     allow.userId,
     account.accountId,
     challenge.challengeId,
+    { forPiSemantic, count: forPiSemantic ? 5 : 1 },
   );
   console.info("[YTQA:seed] assignment", {
     assigned: assign.assigned,
     revision: assign.assignmentRevision,
+    tradeCount: assign.tradeCount,
+    forPiSemantic,
     detail: assign.detail,
   });
 

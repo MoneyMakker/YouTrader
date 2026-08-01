@@ -1,0 +1,46 @@
+appId: com.youtrader.pro
+---
+# LANE B only — do not interleave with Lane A Journal
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-auth
+- extendedWaitUntil:
+    visible: "Continue with Google|Continue with Apple|QA reset|OK"
+    timeout: 60000
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- runFlow:
+    when:
+      visible: "Continue"
+      notVisible: "Continue with Google"
+    commands:
+      - tapOn:
+          point: "18%,92%"
+- runFlow:
+    when:
+      visible: "Unlock Your Trading Edge"
+    commands:
+      - tapOn:
+          id: "acquisition-paywall-close"
+- extendedWaitUntil:
+    visible: "Continue with Google"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_b_google_cta
+- tapOn: "Continue with Google"
+- extendedWaitUntil:
+    visible: "Continue|Cancel|Google|Sign in|Choose an account"
+    timeout: 45000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_b_google_aswebauth
+- runFlow:
+    when:
+      visible: "Continue"
+      notVisible: "Continue with Google|Continue with Apple"
+    commands:
+      - tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "Google|Sign in|Choose an account|accounts.google|Error|denied"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_b_google_account

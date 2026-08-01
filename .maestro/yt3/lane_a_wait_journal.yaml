@@ -1,0 +1,42 @@
+appId: com.youtrader.pro
+---
+# Lane A: wait until Journal is stable (no Google/Apple).
+- repeat:
+    times: 20
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Open debugger to view warnings"
+          commands:
+            - tapOn:
+                point: "92%,88%"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+      - runFlow:
+          when:
+            visible: "Cancel"
+            notVisible: "Journal"
+          commands:
+            - tapOn: "Cancel"
+      - runFlow:
+          when:
+            visible: "Continue"
+            notVisible: "Journal|Continue with Apple|Continue with Google"
+          commands:
+            - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- tapOn: "Journal"
+- assertVisible: "Journal"
+- assertVisible: "\\+ Add Trade|journal-add-trade|Your next edge|Month P&L|Synced"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_journal_ready

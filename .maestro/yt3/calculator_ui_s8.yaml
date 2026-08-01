@@ -1,0 +1,26 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 15
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- openLink: youtrader://qa/tab?id=calc
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_calc_open
+- assertVisible: ".*Risk|.*Size|.*Contracts|.*Calculator|.*Calc.*"

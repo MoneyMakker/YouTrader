@@ -1,0 +1,129 @@
+appId: com.youtrader.pro
+---
+# Calculator edge matrix Session 10 (Lane A — Journal already ready)
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- openLink: youtrader://qa/email-login?role=allow
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- openLink: youtrader://qa/tab?id=calc
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "calc.screen"
+    timeout: 20000
+# Valid baseline
+- assertVisible:
+    id: "calc.maxRisk"
+- assertVisible: ".*\\$500\\.00.*"
+- scrollUntilVisible:
+    element:
+      id: "calc.result"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 40
+- assertVisible: ".*\\$25\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_valid
+# Decimal balance / risk
+- scrollUntilVisible:
+    element:
+      id: "calc.balance"
+    direction: UP
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    id: "calc.balance"
+- eraseText
+- inputText: "10000.50"
+- pressKey: Enter
+- tapOn:
+    id: "calc.riskPct"
+- eraseText
+- inputText: "0.5"
+- pressKey: Enter
+- assertVisible:
+    id: "calc.maxRisk"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_decimal
+# Very small stop
+- scrollUntilVisible:
+    element:
+      id: "calc.stopLoss"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    id: "calc.stopLoss"
+- eraseText
+- inputText: "0.25"
+- pressKey: Enter
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_small_stop
+# Zero account
+- scrollUntilVisible:
+    element:
+      id: "calc.balance"
+    direction: UP
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    id: "calc.balance"
+- eraseText
+- inputText: "0"
+- pressKey: Enter
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_zero_balance
+# Negative balance
+- tapOn:
+    id: "calc.balance"
+- eraseText
+- inputText: "-100"
+- pressKey: Enter
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_neg_balance
+# Invalid symbols
+- tapOn:
+    id: "calc.amount"
+- eraseText
+- inputText: "12abc"
+- pressKey: Enter
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_invalid_symbols
+# Reset after validation error
+- scrollUntilVisible:
+    element:
+      id: "calc.reset"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    id: "calc.reset"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "calc.result"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- assertVisible: ".*\\$25\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_reset_after_error
+# Large values
+- scrollUntilVisible:
+    element:
+      id: "calc.amount"
+    direction: UP
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    id: "calc.amount"
+- eraseText
+- inputText: "999999"
+- pressKey: Enter
+- scrollUntilVisible:
+    element:
+      id: "calc.result"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s10_calc_large
+- tapOn:
+    id: "calc.reset"
+- assertVisible:
+    id: "calc.result"

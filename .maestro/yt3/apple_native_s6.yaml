@@ -1,0 +1,46 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- runFlow:
+    when:
+      visible: "Settings"
+    commands:
+      - tapOn: "Settings"
+      - scrollUntilVisible:
+          element: "Sign Out"
+          direction: DOWN
+          timeout: 25000
+          visibilityPercentage: 40
+          speed: 70
+      - tapOn: "Sign Out"
+      - runFlow:
+          when:
+            visible: "Sign Out"
+          commands:
+            - tapOn: "Sign Out"
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/apple_s6_auth
+- tapOn: "Continue with Apple"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/apple_s6_after_tap
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/apple_s6_system_sheet
+      - tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "Journal|Sign In Failed|couldn't be completed|Continue with Apple"
+    timeout: 90000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/apple_s6_result

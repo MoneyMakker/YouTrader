@@ -1,0 +1,51 @@
+appId: com.youtrader.pro
+name: YT3 Phase 4F — Prop Pass PI request/poll
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Continue with Apple|Journal|Log. Review. Improve.|Your Trading Journal"
+    timeout: 60000
+- openLink: "youtrader://qa/email-login?role=allow"
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          point: "92%,86%"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- takeScreenshot: phase4f_pi_00_journal
+- openLink: "youtrader://qa/tab?id=propPass"
+- extendedWaitUntil:
+    visible: "Prop Pass"
+    timeout: 30000
+- assertVisible: "Buffer Health"
+- takeScreenshot: phase4f_pi_01_prop_pass_home
+- tapOn: "Performance Intelligence"
+- extendedWaitUntil:
+    visible: "Request calculation|Performance Intelligence|Calculating|Current|No calculation"
+    timeout: 30000
+- takeScreenshot: phase4f_pi_02_panel_open
+- runFlow:
+    when:
+      visible: "Request calculation"
+    commands:
+      - tapOn: "Request calculation"
+- extendedWaitUntil:
+    visible: "Calculating|Current|Insufficient|Incomplete|Outdated|Failed|No calculation|Request calculation"
+    timeout: 45000
+- takeScreenshot: phase4f_pi_03_after_request
+# Poll up to ~60s for non-calculating state
+- extendedWaitUntil:
+    visible: "Current|Insufficient|Incomplete|Outdated|Failed|No calculation|Overview|Consistency|Segments"
+    timeout: 90000
+- takeScreenshot: phase4f_pi_04_after_poll
+- scroll
+- takeScreenshot: phase4f_pi_05_scrolled
+- assertNotVisible: "AI Analytics"

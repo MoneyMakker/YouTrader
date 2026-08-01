@@ -1,0 +1,35 @@
+appId: com.youtrader.pro
+---
+# Lane B: Google after Auth readiness
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-auth
+- waitForAnimationToEnd
+- repeat:
+    times: 10
+    commands:
+      - waitForAnimationToEnd
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "auth.google"
+    timeout: 90000
+- assertVisible:
+    id: "auth.screen"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_google_precondition
+- tapOn:
+    id: "auth.google"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_google_after_tap
+- extendedWaitUntil:
+    visible: "Wants to Use|zleojeqkzizeyerhjpur|Continue"
+    timeout: 45000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_google_aswebauth
+- tapOn: "Continue"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_google_after_continue
+- extendedWaitUntil:
+    visible: "Google|Sign in|accounts.google|Choose an account|Email or phone"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_google_account_chooser

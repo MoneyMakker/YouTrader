@@ -1,0 +1,28 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-auth
+- waitForAnimationToEnd
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - tapOn: "OK"
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+- extendedWaitUntil:
+    visible: "Continue with Google"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_google_auth_cta
+- tapOn: "Continue with Google"
+- extendedWaitUntil:
+    visible: ".*accounts\\.google\\.com.*|.*Sign in.*|.*Choose an account.*|.*zleojeqkzizeyerhjpur.*"
+    timeout: 45000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_google_aswebauth

@@ -1,0 +1,34 @@
+appId: com.youtrader.pro
+---
+# Paywall StoreKit purchase attempt (must run while StoreKit Testing session is active via Xcode).
+- extendedWaitUntil:
+    visible: "Unlock Your Trading Edge|MONTHLY|YEARLY"
+    timeout: 30000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/sk_s4_paywall
+- scroll
+- scroll
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/sk_s4_paywall_scrolled
+- runFlow:
+    when:
+      visible: "MONTHLY"
+    commands:
+      - tapOn: "MONTHLY"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/sk_s4_monthly_selected
+- runFlow:
+    when:
+      visible: ".*7-Day.*|Start .*Pro|Continue"
+    commands:
+      - tapOn: ".*7-Day.*|Start .*Pro|Continue"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/sk_s4_after_cta
+- runFlow:
+    when:
+      visible: "Sign in to Apple Account"
+    commands:
+      - takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/sk_s4_BLOCKED_apple_account
+- runFlow:
+    when:
+      visible: "Confirm|Subscribe|Buy|Environment.*Xcode"
+    commands:
+      - tapOn: "Confirm|Subscribe|Buy|OK"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/sk_s4_result

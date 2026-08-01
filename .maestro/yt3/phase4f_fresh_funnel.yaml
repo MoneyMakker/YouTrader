@@ -1,0 +1,44 @@
+# Fresh-user acquisition funnel — staging Debug-Staging + Metro
+appId: com.youtrader.pro
+name: YT3 Phase 4F — fresh user Onboarding→Paywall→Auth
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-auth
+# Alert may race / be skipped when onboarding already mounts — optional.
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - takeScreenshot: phase4f_fresh_00_reset_alert
+      - tapOn: "OK"
+# Dismiss LogBox overlays that cover Continue
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          point: "92%,86%"
+- runFlow:
+    when:
+      visible: ".*non_critical_init_done.*"
+    commands:
+      - tapOn:
+          point: "92%,92%"
+- extendedWaitUntil:
+    visible: "Log. Review. Improve."
+    timeout: 45000
+- takeScreenshot: phase4f_fresh_onboarding
+- tapOn:
+    id: "product-onboarding-continue"
+- extendedWaitUntil:
+    visible: "Unlock Your Trading Edge"
+    timeout: 30000
+- takeScreenshot: phase4f_fresh_paywall
+- tapOn:
+    id: "acquisition-paywall-close"
+- extendedWaitUntil:
+    visible: "Continue with Apple"
+    timeout: 45000
+- takeScreenshot: phase4f_fresh_auth
+- assertVisible: "Continue with Google"

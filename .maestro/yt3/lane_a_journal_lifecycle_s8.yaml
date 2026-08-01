@@ -1,0 +1,225 @@
+appId: com.youtrader.pro
+---
+# LANE A Session 8 — one trade lifecycle: seed → journal → stats → calendar → edit → updated surfaces → delete cancel/confirm → relaunch
+# Prerequisite: scripts/qa/bootstrap-email-session-staging.sh
+# Does NOT open Google/Apple. Does NOT reseed between edit and delete.
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 15
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+      - runFlow:
+          when:
+            visible: "Cancel"
+            notVisible: "Journal"
+          commands:
+            - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- tapOn: "Journal"
+- assertVisible: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_precondition
+
+# CREATE (seed unique QA trade)
+- openLink: "youtrader://qa/seed-trade?marker=S8-LIFE&pnl=50&notes=QA-S8-LIFE"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: ".*notes:QA-S8-LIFE.*"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 10
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_journal_create
+- assertVisible: ".*notes:QA-S8-LIFE.*"
+
+# JOURNAL → STATS → CALENDAR baseline
+- openLink: youtrader://qa/tab?id=stats
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_stats_before_edit
+- openLink: youtrader://qa/tab?id=calendar
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_calendar_before_edit
+- openLink: youtrader://qa/tab?id=journal
+- waitForAnimationToEnd
+
+# EDIT via staging apply (patches React form state) + real Save
+- openLink: "youtrader://qa/apply-trade-edit?marker=S8-LIFE&notes=QA-S8-LIFE-EDITED&pnl=125&exit=5225"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Update Trade"
+    timeout: 20000
+- assertVisible:
+    id: "journal.trade.edit.pnl"
+- assertVisible:
+    id: "journal.trade.edit.direction.long"
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.edit.entry"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 40
+- assertVisible:
+    id: "journal.trade.edit.entry"
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.edit.exit"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- assertVisible:
+    id: "journal.trade.edit.exit"
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.edit.quantity"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- assertVisible:
+    id: "journal.trade.edit.quantity"
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.edit.notes"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 40
+- assertVisible:
+    id: "journal.trade.edit.notes"
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.delete"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 40
+- assertVisible:
+    id: "journal.trade.delete"
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.save"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+- tapOn:
+    id: "journal.trade.save"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Maybe later"
+    commands:
+      - tapOn: "Maybe later"
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- scrollUntilVisible:
+    element: ".*notes:QA-S8-LIFE-EDITED.*"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 10
+- assertVisible: ".*\\+\\$125\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_journal_after_edit
+
+# UPDATED STATS / CALENDAR
+- openLink: youtrader://qa/tab?id=stats
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_stats_after_edit
+- openLink: youtrader://qa/tab?id=calendar
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_calendar_after_edit
+- openLink: youtrader://qa/tab?id=journal
+- waitForAnimationToEnd
+
+# DELETE — Cancel leaves trade (re-open same edited trade; no reseed)
+- openLink: "youtrader://qa/apply-trade-edit?marker=S8-LIFE&notes=QA-S8-LIFE-EDITED&pnl=125&t=cancel1"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Update Trade"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: "journal.trade.delete"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+- tapOn:
+    id: "journal.trade.delete"
+- extendedWaitUntil:
+    visible:
+      id: "journal.trade.delete.confirm"
+    timeout: 10000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_delete_sheet
+- tapOn:
+    id: "journal.trade.delete.cancel"
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: "journal.trade.delete.confirm"
+# Edit sheet closes before confirm; cancel returns to Journal list with trade intact.
+- scrollUntilVisible:
+    element: ".*notes:QA-S8-LIFE-EDITED.*"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 10
+- assertVisible: ".*notes:QA-S8-LIFE-EDITED.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_after_delete_cancel
+
+# DELETE — Confirm via long-press actions sheet (no reseed)
+- scrollUntilVisible:
+    element: ".*notes:QA-S8-LIFE-EDITED.*"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 10
+- longPressOn: ".*notes:QA-S8-LIFE-EDITED.*"
+- extendedWaitUntil:
+    visible:
+      id: "journal.trade.actions.delete"
+    timeout: 10000
+- tapOn:
+    id: "journal.trade.actions.delete"
+- extendedWaitUntil:
+    visible:
+      id: "journal.trade.delete.confirm"
+    timeout: 10000
+- tapOn:
+    id: "journal.trade.delete.confirm"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- assertNotVisible: ".*notes:QA-S8-LIFE-EDITED.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_journal_after_delete
+
+# STATS / CALENDAR reversal surfaces
+- openLink: youtrader://qa/tab?id=stats
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_stats_after_delete
+- openLink: youtrader://qa/tab?id=calendar
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_calendar_after_delete
+
+# COLD RELAUNCH — no ghost trade
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- openLink: youtrader://qa/tab?id=journal
+- waitForAnimationToEnd
+- assertNotVisible: ".*notes:QA-S8-LIFE-EDITED.*"
+- assertNotVisible: ".*notes:QA-S8-LIFE.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s8_life_after_relaunch

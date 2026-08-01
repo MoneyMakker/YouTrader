@@ -1,0 +1,91 @@
+appId: com.youtrader.pro
+---
+# Calculator functional matrix (Lane A).
+# Prerequisite: scripts/qa/bootstrap-email-session-staging.sh (Journal ready).
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- openLink: youtrader://qa/tab?id=calc
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "calc.screen"
+    timeout: 20000
+- assertVisible:
+    id: "calc.balance"
+- assertVisible:
+    id: "calc.riskPct"
+- assertVisible:
+    id: "calc.maxRisk"
+# Max risk $500.00 = 50000 × 1% (agrees with unit selftest)
+- assertVisible: ".*\\$500\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_calc_valid_maxrisk
+- scrollUntilVisible:
+    element:
+      id: "calc.result"
+    direction: DOWN
+    timeout: 15000
+    visibilityPercentage: 40
+- assertVisible:
+    id: "calc.result"
+# Position result $25.00 = 20 ticks × $1.25 × 1 (MES)
+- assertVisible: ".*\\$25\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_calc_valid_result
+# Boundary: zero stop
+- scrollUntilVisible:
+    element:
+      id: "calc.stopLoss"
+    direction: UP
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    id: "calc.stopLoss"
+- eraseText
+- inputText: "0"
+- pressKey: Enter
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_calc_zero_stop
+# Invalid characters on amount
+- tapOn:
+    id: "calc.amount"
+- eraseText
+- inputText: "abc"
+- pressKey: Enter
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_calc_invalid_amount
+# Reset
+- scrollUntilVisible:
+    element:
+      id: "calc.reset"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- tapOn:
+    id: "calc.reset"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: "calc.result"
+    direction: DOWN
+    timeout: 10000
+    visibilityPercentage: 40
+- assertVisible:
+    id: "calc.result"
+- assertVisible: ".*\\$25\\.00.*"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_calc_after_reset

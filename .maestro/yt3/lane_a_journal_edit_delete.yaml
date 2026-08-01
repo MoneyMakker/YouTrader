@@ -1,0 +1,89 @@
+appId: com.youtrader.pro
+---
+# LANE A — Journal seed → edit (Update) → Stats/Calendar → swipe delete
+# Prerequisite: scripts/qa/bootstrap-email-session-staging.sh (QA_HARNESS_PASS)
+# Does NOT open Google/Apple.
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 15
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+      - runFlow:
+          when:
+            visible: "Cancel"
+            notVisible: "Journal"
+          commands:
+            - tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- tapOn: "Journal"
+- assertVisible: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_precondition
+- openLink: youtrader://qa/seed-trade
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "MES, LONG.*"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 20
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_seeded
+- tapOn: "MES, LONG.*"
+- extendedWaitUntil:
+    visible: "Update Trade"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: "journal-save-trade"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 40
+- tapOn:
+    id: "journal-save-trade"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Maybe later"
+    commands:
+      - tapOn: "Maybe later"
+- runFlow:
+    when:
+      visible: "Close"
+    commands:
+      - tapOn: "Close"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_after_edit
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_stats
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_calendar
+- tapOn: "Journal"
+- scrollUntilVisible:
+    element: "MES, LONG.*"
+    direction: DOWN
+    timeout: 15000
+- swipe:
+    from: "MES, LONG.*"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: "Delete Trade"
+    timeout: 10000
+- tapOn: "Delete Trade"
+- runFlow:
+    when:
+      visible: "Delete Trade"
+    commands:
+      - tapOn: "Delete Trade"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_deleted
+- assertVisible: "Journal"

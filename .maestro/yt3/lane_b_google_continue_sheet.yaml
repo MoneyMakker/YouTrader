@@ -1,0 +1,24 @@
+appId: com.youtrader.pro
+---
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/reset-auth
+- waitForAnimationToEnd
+- stopApp
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "auth.google"
+    timeout: 90000
+- tapOn:
+    id: "auth.google"
+- extendedWaitUntil:
+    visible: "Wants to Use|zleojeqkzizeyerhjpur|Continue"
+    timeout: 30000
+- tapOn: "Continue"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_google_after_continue
+- extendedWaitUntil:
+    visible: "Google|Sign in|accounts.google|Choose an account|Email or phone"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_google_account_chooser

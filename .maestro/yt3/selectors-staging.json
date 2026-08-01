@@ -1,0 +1,48 @@
+{
+  "lane_a": {
+    "journal_tab": "Journal",
+    "journal_add_trade": { "id": "journal-add-trade" },
+    "journal_save": { "id": "journal.trade.save" },
+    "journal_delete": { "id": "journal.trade.delete" },
+    "journal_delete_confirm_sheet": { "id": "journal.trade.delete.confirmation" },
+    "journal_delete_cancel": { "id": "journal.trade.delete.cancel" },
+    "journal_delete_confirm": { "id": "journal.trade.delete.confirm" },
+    "journal_pnl": { "id": "journal.trade.edit.pnl" },
+    "journal_entry_price": { "id": "journal.trade.edit.entry" },
+    "journal_exit_price": { "id": "journal.trade.edit.exit" },
+    "journal_quantity": { "id": "journal.trade.edit.quantity" },
+    "journal_notes": { "id": "journal.trade.edit.notes" },
+    "journal_instrument": { "id": "journal.trade.edit.instrument" },
+    "trade_row_mes_long": "MES, LONG.*",
+    "trade_row_s8": ".*notes:QA-S8-LIFE.*",
+    "trades_today": "TRADES TODAY.*",
+    "update_trade": "Update Trade",
+    "delete_trade": "Delete Trade",
+    "trade_saved": "Trade saved.*",
+    "maybe_later": "Maybe later",
+    "paywall_close": { "id": "acquisition-paywall-close" },
+    "stats_tab": "Stats",
+    "calendar_tab": "Calendar",
+    "calc_tab": "Calc|Calculator",
+    "news_tab": "News",
+    "settings_tab": "Settings",
+    "obsolete_forbidden": ["AI Analytics"]
+  },
+  "lane_b": {
+    "auth_google": "Continue with Google",
+    "auth_apple": "Continue with Apple",
+    "auth_email": "Continue with Email",
+    "sign_out": "Sign Out|Sign out"
+  },
+  "deep_links": {
+    "email_login_allow": "youtrader://qa/email-login?role=allow",
+    "email_login_deny": "youtrader://qa/email-login?role=deny",
+    "seed_trade": "youtrader://qa/seed-trade",
+    "seed_trade_s8": "youtrader://qa/seed-trade?marker=S8-LIFE&pnl=50&notes=QA-S8-LIFE",
+    "apply_edit_s8": "youtrader://qa/apply-trade-edit?marker=S8-LIFE&notes=QA-S8-LIFE-EDITED&pnl=125&exit=5225",
+    "tab_journal": "youtrader://qa/tab?id=journal",
+    "tab_stats": "youtrader://qa/tab?id=stats",
+    "tab_calendar": "youtrader://qa/tab?id=calendar",
+    "reset_auth": "youtrader://qa/reset-auth"
+  }
+}

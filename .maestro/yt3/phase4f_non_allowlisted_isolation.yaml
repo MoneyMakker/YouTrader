@@ -1,0 +1,72 @@
+appId: com.youtrader.pro
+name: YT3 Phase 4F — non-allowlisted isolation v2
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: ".*"
+    timeout: 30000
+- openLink: "youtrader://qa/reset-auth"
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- runFlow:
+    when:
+      visible: "Open debugger to view warnings."
+    commands:
+      - tapOn:
+          point: "92%,86%"
+# Wait through loading / onboarding / paywall / auth
+- extendedWaitUntil:
+    visible: "Continue|Continue with Apple|Your Trading Journal|Unlock Your Trading Edge|Log. Review. Improve."
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- runFlow:
+    when:
+      visible: "Unlock Your Trading Edge"
+    commands:
+      - tapOn:
+          point: "92%,8%"
+- extendedWaitUntil:
+    visible: "Continue with Apple|Continue with Email|Your Trading Journal"
+    timeout: 60000
+- takeScreenshot: phase4f_deny_auth_before
+- openLink: "youtrader://qa/email-login?role=deny"
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 90000
+- takeScreenshot: phase4f_deny_00_journal
+- assertVisible: "Journal"
+- assertVisible: "Stats"
+- assertVisible: "Settings"
+- assertNotVisible: "Prop Pass"
+- assertNotVisible: "AI Analytics"
+- takeScreenshot: phase4f_deny_01_no_prop_pass_tab
+- tapOn: "Stats"
+- takeScreenshot: phase4f_deny_02_stats
+- tapOn: "Settings"
+- takeScreenshot: phase4f_deny_03_settings
+- openLink: "youtrader://qa/tab?id=propPass"
+- extendedWaitUntil:
+    visible: "Journal|Stats|Settings"
+    timeout: 15000
+- takeScreenshot: phase4f_deny_04_after_prop_deeplink
+- assertNotVisible: "Buffer Health"
+- assertNotVisible: "YTQA Staging Fixture"
+- assertNotVisible: "AI Analytics"

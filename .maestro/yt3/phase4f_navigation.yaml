@@ -1,0 +1,32 @@
+appId: com.youtrader.pro
+name: YT3 Phase 4F — navigation & tab chrome
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 20000
+- assertVisible: "Journal"
+- assertVisible: "Stats"
+- assertVisible: "Calculator"
+- assertVisible: "Prop Pass"
+- assertVisible: "News"
+- assertVisible: "Calendar"
+- assertVisible: "Settings"
+- assertNotVisible: "AI Analytics"
+- takeScreenshot: yt3_4f_tabs_journal
+- tapOn: "Stats"
+- takeScreenshot: yt3_4f_tabs_stats
+- tapOn: "Calculator"
+- takeScreenshot: yt3_4f_tabs_calc
+- tapOn: "Prop Pass"
+- takeScreenshot: yt3_4f_tabs_prop_pass
+- tapOn: "News"
+- takeScreenshot: yt3_4f_tabs_news
+- tapOn: "Calendar"
+- takeScreenshot: yt3_4f_tabs_calendar
+- tapOn: "Settings"
+- takeScreenshot: yt3_4f_tabs_settings
+- assertNotVisible: "Prop Pass (Internal)"
+- assertNotVisible: "Open Prop Pass"
+- tapOn: "Journal"
+- takeScreenshot: yt3_4f_tabs_back_journal

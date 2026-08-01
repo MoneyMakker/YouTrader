@@ -1,0 +1,20 @@
+appId: com.youtrader.pro
+---
+- extendedWaitUntil:
+    visible:
+      id: "auth.screen"
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: "auth.google"
+    timeout: 30000
+- assertVisible:
+    id: "auth.email"
+- runFlow:
+    when:
+      visible:
+        id: "auth.apple"
+    commands:
+      - assertVisible:
+          id: "auth.apple"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/s9_auth_ready_bootstrap

@@ -1,0 +1,55 @@
+appId: com.youtrader.pro
+---
+# LANE A — finish delete confirm + verify absence (no Google)
+- launchApp:
+    clearState: false
+- openLink: youtrader://qa/email-login?role=allow
+- repeat:
+    times: 12
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+      - runFlow:
+          when:
+            visible: "Unlock Your Trading Edge"
+          commands:
+            - tapOn:
+                id: "acquisition-paywall-close"
+      - runFlow:
+          when:
+            visible: "Delete trade\\?"
+          commands:
+            - tapOn: "Delete Trade"
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 60000
+- tapOn: "Journal"
+- openLink: youtrader://qa/seed-trade
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "MES, LONG.*"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_before_delete
+- swipe:
+    from: "MES, LONG.*"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: "Delete Trade"
+    timeout: 10000
+- tapOn: "Delete Trade"
+- extendedWaitUntil:
+    visible: "Delete trade\\?"
+    timeout: 10000
+- tapOn: "Delete Trade"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_after_delete
+- tapOn: "Stats"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_stats_after_delete
+- tapOn: "Calendar"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_calendar_after_delete
+- tapOn: "Journal"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/lane_a_journal_after_delete

@@ -1,0 +1,47 @@
+appId: com.youtrader.pro
+name: YT3 Phase 4F — non-allowlisted smoke
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+    timeout: 20000
+- takeScreenshot: yt3_4f_deny_launch
+- runFlow:
+    when:
+      visible: "Continue with Email"
+    commands:
+      - tapOn: "Continue with Email"
+- runFlow:
+    when:
+      visible: "Email"
+    commands:
+      - tapOn: "Email"
+      - inputText: ${STAGING_QA_DENY_EMAIL}
+      - tapOn: "Password"
+      - inputText: ${STAGING_QA_DENY_PASSWORD}
+      - tapOn:
+          text: "Sign in"
+          optional: true
+      - tapOn:
+          text: "Log in"
+          optional: true
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 25000
+- takeScreenshot: yt3_4f_deny_journal
+- tapOn: "Stats"
+- takeScreenshot: yt3_4f_deny_stats
+- tapOn: "Calculator"
+- takeScreenshot: yt3_4f_deny_calc
+- tapOn: "Prop Pass"
+- takeScreenshot: yt3_4f_deny_prop_pass
+# Product tab remains present; content must be unavailable / disabled — not a live allowlisted home.
+- assertVisible: "Prop Pass"
+- assertNotVisible: "AI Analytics"
+- tapOn: "News"
+- takeScreenshot: yt3_4f_deny_news
+- tapOn: "Calendar"
+- takeScreenshot: yt3_4f_deny_calendar
+- tapOn: "Settings"
+- takeScreenshot: yt3_4f_deny_settings

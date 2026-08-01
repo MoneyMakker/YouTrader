@@ -1,0 +1,45 @@
+# Maestro env file — DO NOT commit real passwords.
+# Copy from gitignored staging QA secrets locally before device runs:
+#   set -a; source .codex/secrets/staging-qa-credentials.env; set +a
+# Expected vars (names only; values stay secret):
+#   STAGING_QA_ALLOW_EMAIL, STAGING_QA_ALLOW_PASSWORD
+#   STAGING_QA_DENY_EMAIL, STAGING_QA_DENY_PASSWORD
+appId: com.youtrader.pro
+name: YT3 Phase 4F — allowlisted Prop Pass smoke
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+    timeout: 20000
+- takeScreenshot: yt3_4f_allow_launch
+- runFlow:
+    when:
+      visible: "Continue with Email"
+    commands:
+      - tapOn: "Continue with Email"
+- runFlow:
+    when:
+      visible: "Email"
+    commands:
+      - tapOn: "Email"
+      - inputText: ${STAGING_QA_ALLOW_EMAIL}
+      - tapOn: "Password"
+      - inputText: ${STAGING_QA_ALLOW_PASSWORD}
+      - tapOn:
+          text: "Sign in"
+          optional: true
+      - tapOn:
+          text: "Log in"
+          optional: true
+- extendedWaitUntil:
+    visible: "Journal"
+    timeout: 25000
+- takeScreenshot: yt3_4f_allow_journal
+- tapOn: "Prop Pass"
+- extendedWaitUntil:
+    visible:
+      text: "Prop Pass"
+    timeout: 15000
+- takeScreenshot: yt3_4f_allow_prop_pass
+- assertNotVisible: "AI Analytics"
