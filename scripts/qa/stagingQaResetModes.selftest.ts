@@ -40,7 +40,8 @@ assert.equal(
   resolveAcquisitionPhase({
     hydrated: true,
     onboardingCompleted: true,
-    paywallCompleted: true,
+    guestContinued: false,
+      paywallCompleted: true,
     authRequired: true,
     hasSession: false,
     isPremium: false,
@@ -53,7 +54,8 @@ assert.equal(
   resolveAcquisitionPhase({
     hydrated: true,
     onboardingCompleted: false,
-    paywallCompleted: false,
+    guestContinued: false,
+      paywallCompleted: false,
     authRequired: true,
     hasSession: false,
     isPremium: false,

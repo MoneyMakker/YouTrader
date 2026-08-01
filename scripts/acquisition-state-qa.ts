@@ -11,6 +11,7 @@ function base(over: Partial<AcquisitionInput> = {}): AcquisitionInput {
     hydrated: true,
     onboardingCompleted: false,
     paywallCompleted: false,
+    guestContinued: false,
     authRequired: true,
     hasSession: false,
     isPremium: false,

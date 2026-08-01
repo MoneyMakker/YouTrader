@@ -1,7 +1,8 @@
 /**
- * Deterministic acquisition / startup phase for YouTrader.
- * Fresh install: onboarding → paywall → auth → main.
- * Returning authenticated / entitled users skip completed steps.
+ * Acquisition / startup phase resolver — unit-testable, no I/O.
+ *
+ * Fresh: onboarding → paywall → auth|guest → main
+ * Returning authenticated / entitled / guest users skip completed steps.
  */
 
 export type AcquisitionPhase =
@@ -13,13 +14,10 @@ export type AcquisitionPhase =
 
 export type AcquisitionInput = {
   hydrated: boolean;
-  /** Device completed first-launch product onboarding. */
   onboardingCompleted: boolean;
-  /**
-   * Paywall step completed for this install path
-   * (anonymous pre-auth and/or per-user post-auth).
-   */
   paywallCompleted: boolean;
+  /** Local-first guest chose Continue without account after paywall. */
+  guestContinued: boolean;
   authRequired: boolean;
   hasSession: boolean;
   isPremium: boolean;
@@ -27,47 +25,38 @@ export type AcquisitionInput = {
 };
 
 /**
- * Pure resolver — unit-testable, no I/O.
+ * Pure resolver.
  *
  * Rules:
  * - Not hydrated → loading
- * - No session + auth required:
+ * - No session:
  *   - onboarding incomplete → onboarding
- *   - paywall incomplete (and not already premium via anonymous RC) → paywall
- *   - else → auth
- * - Session present:
- *   - grandfather incomplete onboarding (caller should persist)
- *   - paywall incomplete and not premium and RC ready → paywall
+ *   - paywall incomplete and not premium → paywall (wait RC ready)
+ *   - premium purchase still shows account/guest choice (unless guest)
+ *   - guest continued → main
+ *   - auth required → auth (Apple / Google / Email / Continue without account)
  *   - else → main
- * - Auth not required (misconfig) → still respect onboarding then main
+ * - Session present:
+ *   - existing accounts skip marketing onboarding (caller persists)
+ *   - paywall incomplete and not premium → paywall
+ *   - else → main
  */
 export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPhase {
   if (!input.hydrated) return "loading";
 
   if (!input.hasSession) {
     if (!input.onboardingCompleted) return "onboarding";
-    if (input.authRequired) {
-      if (!input.paywallCompleted && !input.isPremium) {
-        // Wait for RC before forcing paywall so entitlements do not flash wrong.
-        if (!input.revenueCatReady) return "loading";
-        return "paywall";
-      }
-      return "auth";
-    }
-    return "main";
-  }
-
-  // Authenticated
-  if (!input.onboardingCompleted) {
-    // Existing accounts must not be forced through marketing onboarding.
-    // Caller persists onboardingCompleted=true when entering this branch.
     if (!input.paywallCompleted && !input.isPremium) {
       if (!input.revenueCatReady) return "loading";
       return "paywall";
     }
+    // Entitled users still get post-purchase account choice unless guest.
+    if (input.guestContinued) return "main";
+    if (input.authRequired) return "auth";
     return "main";
   }
 
+  // Authenticated — never force marketing onboarding.
   if (!input.paywallCompleted && !input.isPremium) {
     if (!input.revenueCatReady) return "loading";
     return "paywall";
@@ -78,23 +67,12 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
 
 export const ACQUISITION_ONBOARDING_KEY = "yt-acquisition-onboarding-v1";
 export const ACQUISITION_PAYWALL_DEVICE_KEY = "yt-acquisition-paywall-device-v1";
+export const ACQUISITION_GUEST_KEY = "yt-acquisition-guest-v1";
 
 export function acquisitionPaywallUserKey(userId: string): string {
   return `yt-acquisition-paywall-user-v1:${userId}`;
 }
 
-/**
- * UI flags after a successful staging QA auth reset.
- * Storage has already been cleared; apply signed-out acquisition state immediately.
- *
- * Critical: keep `acquisitionHydrated=true`. Flipping it to false while
- * `session.user.id` is already null does not re-trigger the hydrate effect,
- * leaving the shell stuck on "Loading your journal...".
- * Staging-only callers invoke this after gated QA reset — production never reaches it.
- *
- * @deprecated Prefer stagingQaResetModeUi(mode) — this helper mapped to fresh onboarding
- * and was the root cause of Auth CTA precondition failures after qa/reset-auth.
- */
 export type StagingQaResetAcquisitionUi = {
   session: null;
   onboardingCompleted: boolean;
@@ -102,22 +80,16 @@ export type StagingQaResetAcquisitionUi = {
   acquisitionHydrated: true;
 };
 
-/** @deprecated Use stagingQaResetModeUi("auth") for Auth, "fresh" for onboarding. */
+/** Fresh-device QA reset baseline — signed out into Screen 1 onboarding. */
 export function stagingQaResetAcquisitionUi(): StagingQaResetAcquisitionUi {
-  // Historical bug: returned onboardingCompleted=false → phase=onboarding, not auth.
-  // Keep name but default to Auth contract expected by qa/reset-auth.
   return {
     session: null,
-    onboardingCompleted: true,
-    paywallCompleted: true,
+    onboardingCompleted: false,
+    paywallCompleted: false,
     acquisitionHydrated: true,
   };
 }
 
-/**
- * Reproduce the infinite-loading bug class for tests:
- * signed-out + acquisition flags cleared + hydrated=false → loading forever.
- */
 export function isStuckAcquisitionLoading(input: AcquisitionInput): boolean {
   return resolveAcquisitionPhase(input) === "loading" && !input.hydrated;
 }
