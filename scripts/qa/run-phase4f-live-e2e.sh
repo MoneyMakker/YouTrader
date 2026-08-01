@@ -2,9 +2,21 @@
 # Phase 4F live E2E orchestrator — resumes from first incomplete gate.
 # Never invents PASS. Records branch failures and continues independent gates.
 # Build 114 forbidden. Production Supabase forbidden.
+# Maestro → OpenJDK 17 · physical → scripts/qa/physical-device-tool.sh + QA venv.
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+
+# shellcheck disable=SC1091
+source "$ROOT/scripts/qa/lib/resolve-jdk17.sh"
+if resolve_jdk17 >/tmp/yt-phase4f-jdk17.txt 2>/tmp/yt-phase4f-jdk17.err; then
+  :
+else
+  echo "warn: JDK 17 resolve failed — Maestro gates will record ENVIRONMENT_BLOCKER" >&2
+fi
+export PATH="$HOME/.maestro/bin:${PATH:-}"
+
+PHYSICAL_TOOL="$ROOT/scripts/qa/physical-device-tool.sh"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 REPORT_DIR="$ROOT/docs/releases/1.6.1"
 mkdir -p "$REPORT_DIR"
@@ -157,6 +169,21 @@ else
   gate_pass recover_simulator
 fi
 
+# --- Gate: jdk17_maestro ---
+if [[ -n "${JAVA_HOME:-}" ]] && java -version 2>&1 | rg -q 'version "17\.'; then
+  set +e
+  maestro --version >"/tmp/yt-maestro-ver-$STAMP.txt" 2>&1
+  m_rc=$?
+  set -e
+  if [[ $m_rc -eq 0 ]]; then
+    gate_pass jdk17_maestro "JAVA_HOME=$JAVA_HOME · $(head -1 /tmp/yt-maestro-ver-$STAMP.txt)"
+  else
+    record_gate jdk17_maestro ENVIRONMENT_BLOCKER "JDK 17 ok but maestro --version failed"
+  fi
+else
+  record_gate jdk17_maestro ENVIRONMENT_BLOCKER "OpenJDK 17 not resolved for Maestro"
+fi
+
 # --- Gate: recover_device ---
 set +e
 bash scripts/qa/recover-physical-device-services.sh >"/tmp/yt-dev-$STAMP.txt" 2>&1
@@ -169,18 +196,70 @@ else
   gate_pass recover_device
 fi
 
-# Remaining live UI gates require device/simulator automation hooks
+# --- Gate: physical_tool_env ---
+set +e
+bash "$PHYSICAL_TOOL" env >"/tmp/yt-pdev-env-$STAMP.txt" 2>&1
+pdev_env_rc=$?
+set -e
+if [[ $pdev_env_rc -eq 0 ]]; then
+  gate_pass physical_tool_env "$(rg -n 'pymobiledevice3_version|physical_tool_env_ok' "/tmp/yt-pdev-env-$STAMP.txt" | tr '\n' '; ')"
+else
+  record_gate physical_tool_env ENVIRONMENT_BLOCKER "physical-device-tool env exit=$pdev_env_rc"
+fi
+
+# --- Gate: physical_unlock_status ---
+set +e
+bash "$PHYSICAL_TOOL" status >"/tmp/yt-pdev-status-$STAMP.txt" 2>&1
+pdev_status_rc=$?
+set -e
+case "$pdev_status_rc" in
+  0) gate_pass physical_unlock_status "DEVICE_UNLOCKED" ;;
+  22) record_gate physical_unlock_status ENVIRONMENT_BLOCKER "DEVICE LOCKED — preserve checkpoint; owner Face ID/passcode only" ;;
+  21) record_gate physical_unlock_status ENVIRONMENT_BLOCKER "device absent" ;;
+  *) record_gate physical_unlock_status ENVIRONMENT_BLOCKER "status exit=$pdev_status_rc — see /tmp/yt-pdev-status-$STAMP.txt" ;;
+esac
+
+# --- Gate: physical_verify113 ---
+set +e
+bash "$PHYSICAL_TOOL" verify113 >"/tmp/yt-pdev-v113-$STAMP.txt" 2>&1
+pdev_v113_rc=$?
+set -e
+if [[ $pdev_v113_rc -eq 0 ]]; then
+  gate_pass physical_verify113 "1.6.1 (113) · Metro OFF · embedded bundle"
+else
+  record_gate physical_verify113 FAIL "verify113 exit=$pdev_v113_rc"
+fi
+
+# --- Gate: physical_screenshot_proof ---
+set +e
+bash "$PHYSICAL_TOOL" prove >"/tmp/yt-pdev-prove-$STAMP.txt" 2>&1
+pdev_prove_rc=$?
+set -e
+if [[ $pdev_prove_rc -eq 0 ]]; then
+  gate_pass physical_screenshot_proof "PNG evidence under docs/releases/1.6.1/phase4f-screenshots/physical/"
+elif [[ $pdev_prove_rc -eq 22 ]]; then
+  record_gate physical_screenshot_proof ENVIRONMENT_BLOCKER "DEVICE LOCKED during prove"
+elif [[ $pdev_prove_rc -eq 26 ]]; then
+  record_gate physical_screenshot_proof LIVE_FAIL \
+    "YouTrader foreground screenshot invalid/near-black — see /tmp/yt-pdev-prove-$STAMP.txt. Continuing independent gates."
+else
+  record_gate physical_screenshot_proof ENVIRONMENT_BLOCKER "prove exit=$pdev_prove_rc"
+fi
+
+# Remaining live UI gates — continue independently; wire Maestro sim when JDK+sim OK
 for g in select_target install_app onboarding paywall weekly_monthly_yearly post_purchase_auth \
          journal_stats_calendar prop_pass news settings_isolation pi_timeout_retry \
          collect_artifacts final_report; do
-  if [[ $sim_rc -ne 0 && $dev_rc -ne 0 ]]; then
+  if [[ $pdev_status_rc -eq 22 ]]; then
+    record_gate "$g" NOT_RUN "Physical device locked; checkpoint preserved"
+  elif [[ $pdev_prove_rc -eq 26 && "$g" != "collect_artifacts" && "$g" != "final_report" ]]; then
+    record_gate "$g" NOT_RUN "Physical YouTrader UI evidence gap (black/invalid screenshot); automation cannot assert product UI"
+  elif [[ $sim_rc -ne 0 && $dev_rc -ne 0 ]]; then
     record_gate "$g" NOT_RUN "No simulator and no physical device available on this host"
-  elif [[ $sim_rc -ne 0 ]]; then
-    record_gate "$g" NOT_RUN "Simulator blocked; physical-only path not yet automated for gate $g"
-  elif [[ $dev_rc -ne 0 ]]; then
-    record_gate "$g" NOT_RUN "Device blocked; simulator automation hooks not wired for gate $g on this host"
+  elif [[ $sim_rc -eq 0 && -n "${JAVA_HOME:-}" ]]; then
+    record_gate "$g" NOT_RUN "Services OK; gate-specific Maestro physical matrix still outstanding for $g"
   else
-    record_gate "$g" NOT_RUN "Services recovered but live UI automation hooks not wired for gate $g"
+    record_gate "$g" NOT_RUN "Automation hooks pending for gate $g"
   fi
 done
 

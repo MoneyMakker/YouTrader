@@ -1,50 +1,24 @@
 #!/usr/bin/env bash
-# Resolve a project/local JDK without sudo and run Maestro staging flows.
+# Pin Maestro to OpenJDK 17 and run staging flows. Does not edit global shell profiles.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+
+# shellcheck disable=SC1091
+source "$ROOT/scripts/qa/lib/resolve-jdk17.sh"
+if ! resolve_jdk17 >/tmp/yt-jdk17-home.txt; then
+  echo "error: OpenJDK 17 required for Maestro QA" >&2
+  exit 2
+fi
 
 ART_DIR="${YT_QA_ARTIFACTS_DIR:-$ROOT/docs/releases/1.6.1/qa-artifacts}"
 mkdir -p "$ART_DIR"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="$ART_DIR/maestro-$STAMP.log"
 
-resolve_java_home() {
-  local cand
-  for cand in \
-    "${JAVA_HOME:-}" \
-    "/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home" \
-    "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home" \
-    "/opt/homebrew/opt/openjdk@17" \
-    "/opt/homebrew/opt/openjdk" \
-    "$ROOT/.tools/jdk-17" \
-    "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-  do
-    [[ -z "$cand" ]] && continue
-    if [[ -x "$cand/bin/java" ]]; then
-      echo "$cand"
-      return 0
-    fi
-  done
-  if command -v /usr/libexec/java_home >/dev/null 2>&1; then
-    local home
-    home="$(/usr/libexec/java_home 2>/dev/null || true)"
-    if [[ -n "$home" && -x "$home/bin/java" ]]; then
-      echo "$home"
-      return 0
-    fi
-  fi
-  return 1
-}
-
-if ! JAVA_HOME="$(resolve_java_home)"; then
-  echo "error: no usable JDK found without sudo. Tried Homebrew openjdk@17/openjdk and .tools/jdk-17." >&2
-  exit 2
-fi
-export JAVA_HOME
-export PATH="$JAVA_HOME/bin:${PATH:-}"
 # Maestro 2.8 parses this as milliseconds (default ~15s is too short after driver reinstall).
 export MAESTRO_DRIVER_STARTUP_TIMEOUT="${MAESTRO_DRIVER_STARTUP_TIMEOUT:-180000}"
+export PATH="$HOME/.maestro/bin:${PATH:-}"
 
 {
   echo "JAVA_HOME=$JAVA_HOME"
@@ -57,6 +31,11 @@ if ! command -v maestro >/dev/null 2>&1; then
   exit 3
 fi
 maestro --version 2>&1 | tee -a "$LOG"
+# Guard: refuse if java somehow drifted off 17
+java -version 2>&1 | tee -a "$LOG" | rg -q 'version "17\.' || {
+  echo "error: Java runtime is not 17" | tee -a "$LOG" >&2
+  exit 2
+}
 
 FLOW="${1:-}"
 if [[ -z "$FLOW" ]]; then

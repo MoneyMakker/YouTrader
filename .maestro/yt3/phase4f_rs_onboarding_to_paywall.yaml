@@ -1,0 +1,64 @@
+# Release-Staging / FirstLaunchFunnel copy (not legacy ProductOnboarding title)
+appId: com.youtrader.pro
+name: YT3 Phase 4F — RS onboarding to paywall (3 plans)
+---
+- launchApp:
+    clearState: true
+- openLink: youtrader://qa/reset-fresh
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+- extendedWaitUntil:
+    visible: "The market is not your biggest risk."
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/rs_ob_screen1
+- tapOn: "Revenge trading after a loss"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- waitForAnimationToEnd
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/rs_ob_after_s1
+# Advance remaining onboarding screens opportunistically
+- repeat:
+    times: 8
+    commands:
+      - runFlow:
+          when:
+            visible: "Continue"
+          commands:
+            - tapOn: "Continue"
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible: "Skip"
+          commands:
+            - tapOn: "Skip"
+            - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Your trading system is ready|WEEKLY|MONTHLY|ANNUAL|Yearly|Weekly|Monthly"
+    timeout: 60000
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/rs_paywall_inventory
+- runFlow:
+    when:
+      visible: "WEEKLY|Weekly"
+    commands:
+      - tapOn: "WEEKLY|Weekly"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/rs_weekly_selected
+- runFlow:
+    when:
+      visible: "MONTHLY|Monthly"
+    commands:
+      - tapOn: "MONTHLY|Monthly"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/rs_monthly_selected
+- runFlow:
+    when:
+      visible: "ANNUAL|Annual|YEARLY|Yearly"
+    commands:
+      - tapOn: "ANNUAL|Annual|YEARLY|Yearly"
+- takeScreenshot: docs/releases/1.6.1/phase4f-screenshots/rs_annual_selected
+- assertVisible: "Your trading system is ready|WEEKLY|Weekly|MONTHLY|Monthly"
