@@ -11461,8 +11461,15 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     serverEntitlementActiveRef.current = false;
     if (purchasesConfigured.current) {
       try {
-        const customerInfo = await Purchases.logOut();
-        applyCustomerInfo(customerInfo, "signOut");
+        const anonymous = await Purchases.isAnonymous();
+        if (!anonymous) {
+          const customerInfo = await Purchases.logOut();
+          applyCustomerInfo(customerInfo, "signOut");
+        } else {
+          customerInfoRef.current = null;
+          setCustomerInfo(null);
+          setProAccess(emptyProAccessState());
+        }
       } catch (logoutError) {
         logger.warn("RevenueCat logOut failed during sign out", {
           feature: "revenuecat",
