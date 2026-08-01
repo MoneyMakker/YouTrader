@@ -85,7 +85,7 @@ Report: `PHYSICAL_DEVICE_DIAG_20260801T144756Z.md`
 | production host absent | PASS |
 | build 113 | PASS |
 | credential file absent | PASS |
-| `npx expo export --platform ios` | pending in this paragraph — run next |
+| `npx expo export --platform ios` | **PASS** |
 
 ## 15. Remaining live E2E blockers
 
