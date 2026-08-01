@@ -19,4 +19,7 @@ regexes = [
   '''prop-daily-risk-notification-id-v1''',
   '''daily-prop-reminder-notification-id-v1''',
   '''prop-risk-alert-notification-id-v1''',
+  # AsyncStorage key constants (not credentials) — verified FALSE_POSITIVE_WITH_EVIDENCE
+  '''yt-acquisition-guest-v1''',
+  '''yt-qa-news-fault-v1''',
 ]
