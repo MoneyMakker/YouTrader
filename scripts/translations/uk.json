@@ -250,7 +250,6 @@
   "signOut": "Вийти",
   "signedInAs": "Увійшов",
   "slAmount": "SL",
-  "startThreeDayPro": "Спробувати Pro 3 дні безкоштовно",
   "statistics": "Статистика",
   "stats": "Статистика",
   "stopLoss": "Стоп-лосс",
@@ -276,7 +275,6 @@
   "unlimitedScreenshots": "Необмежені або розширені скріншоти",
   "unlimitedTradesMedia": "Необмежені угоди та медіанотатки",
   "unlockAiAnalytics": "Відкрити AI-аналітику",
-  "unlockFullEdgeAnalysis": "Відкрити повний Edge Analysis",
   "unlockPro": "Відкрити Pro",
   "updateTrade": "Оновити угоду",
   "upgradeMonthly": "Перейти на місячний",
@@ -292,5 +290,6 @@
   "yearlyPlan": "РІЧНИЙ",
   "yearlyPrice": "Річний • $99.99",
   "youTraderEconomicCalendar": "Економічний календар YouTrader",
-  "youTraderRiskCoach": "YouTrader Risk Coach"
+  "youTraderRiskCoach": "YouTrader Risk Coach",
+  "startSevenDayPro": "Спробувати Pro 7 днів безкоштовно"
 }

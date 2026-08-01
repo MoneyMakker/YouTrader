@@ -26,7 +26,7 @@ const REPLACEMENTS = {
   "Strengths": "strengths",
   "Weakest Area": "weakestArea",
   "Trading Radar": "tradingRadar",
-  "Unlock Full Trading Profile": "unlockFullTradingProfile",
+  "Performance details": "unlockFullTradingProfile",
   "Heatmap": "heatmap",
   "Log trades to build session intelligence.": "logTradesSessionIntel",
   "Mistakes: watch overtrading, weak notes and trades outside your best session.": "breakdownMistakesHint",

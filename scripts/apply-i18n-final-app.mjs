@@ -31,7 +31,7 @@ const REPLACEMENTS = [
   ['"Revenge Trading Alert"', 't("revengeTradingAlert")', "literal"],
   ['"Revenge Trading Check"', 't("revengeTradingCheck")', "literal"],
   ['"Unlock premium exports."', 't("unlockPremiumExports")', "literal"],
-  ['"Unlock Full Trading Profile"', 't("unlockFullTradingProfile")', "literal"],
+  ['"Performance details"', 't("unlockFullTradingProfile")', "literal"],
   ['"Premium exports"', 't("premiumExports")', "literal"],
   ['"Full radar profile score"', 't("radarUnlockBullet1")', "literal"],
   ['"Strengths and weakest-area insights"', 't("radarUnlockBullet2")', "literal"],

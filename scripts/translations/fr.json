@@ -250,7 +250,6 @@
   "signOut": "Se déconnecter",
   "signedInAs": "Connecté",
   "slAmount": "SL",
-  "startThreeDayPro": "Essai Pro gratuit 3 jours",
   "statistics": "Statistiques",
   "stats": "Stats",
   "stopLoss": "Stop Loss",
@@ -276,7 +275,6 @@
   "unlimitedScreenshots": "Captures illimitées ou à limite élevée",
   "unlimitedTradesMedia": "Trades et notes média illimités",
   "unlockAiAnalytics": "Débloquer l'Analytique IA",
-  "unlockFullEdgeAnalysis": "Débloquer l'analyse Edge complète",
   "unlockPro": "Débloquer Pro",
   "updateTrade": "Mettre à jour le trade",
   "upgradeMonthly": "Passer au mensuel",
@@ -292,5 +290,6 @@
   "yearlyPlan": "ANNUEL",
   "yearlyPrice": "Annuel • $99.99",
   "youTraderEconomicCalendar": "Calendrier économique YouTrader",
-  "youTraderRiskCoach": "YouTrader Risk Coach"
+  "youTraderRiskCoach": "YouTrader Risk Coach",
+  "startSevenDayPro": "Essai Pro gratuit 7 jours"
 }

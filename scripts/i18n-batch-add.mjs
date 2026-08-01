@@ -86,7 +86,7 @@ const ADDITIONS = {
   weakestArea: { en: "Weakest Area", ru: "Слабое место", es: "Área más débil", fr: "Point faible", it: "Area più debole", uk: "Слабка зона", de: "Schwächster Bereich" },
   tradingRadar: { en: "Trading Radar", ru: "Trading Radar", es: "Radar de trading", fr: "Radar de trading", it: "Radar di trading", uk: "Trading Radar", de: "Trading-Radar" },
   unlockFullTradingProfile: {
-    en: "Unlock Full Trading Profile",
+    en: "Performance details",
     ru: "Открыть полный торговый профиль",
     es: "Desbloquear perfil de trading completo",
     fr: "Débloquer le profil de trading complet",
