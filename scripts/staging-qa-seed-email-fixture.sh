@@ -5,9 +5,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-SECRETS="${YT_STAGING_QA_SECRETS:-$ROOT/.codex/secrets/staging-qa-credentials.env}"
-if [[ ! -f "$SECRETS" ]]; then
-  echo "error: secrets file missing (expected gitignored staging QA credentials)" >&2
+# Prefer explicit env, then repo gitignored secrets, then external secure stores.
+EXTERNAL_SECRETS_APP_SUPPORT="${HOME}/Library/Application Support/YouTraderQA/secrets/staging-qa-credentials.env"
+EXTERNAL_SECRETS_HOME="${HOME}/.youtrader-qa-secrets/staging-qa-credentials.env"
+SECRETS="${YT_STAGING_QA_SECRETS:-}"
+if [[ -z "$SECRETS" ]]; then
+  if [[ -f "$ROOT/.codex/secrets/staging-qa-credentials.env" ]]; then
+    SECRETS="$ROOT/.codex/secrets/staging-qa-credentials.env"
+  elif [[ -f "$EXTERNAL_SECRETS_HOME" ]]; then
+    SECRETS="$EXTERNAL_SECRETS_HOME"
+  elif [[ -f "$EXTERNAL_SECRETS_APP_SUPPORT" ]]; then
+    SECRETS="$EXTERNAL_SECRETS_APP_SUPPORT"
+  fi
+fi
+if [[ -z "$SECRETS" || ! -f "$SECRETS" ]]; then
+  echo "error: secrets file missing (expected gitignored staging QA credentials or ~/.youtrader-qa-secrets)" >&2
   exit 1
 fi
 

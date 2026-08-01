@@ -71,6 +71,15 @@ storybook-static
 # Local agent secrets (never commit)
 .codex/secrets/
 
+# Credential / password artifacts (never commit; use Keychain or .codex/secrets/)
+**/SIM_EMAIL_PASSWORD*
+**/*PASSWORD_UNIT.txt
+**/*credentials.env
+**/staging-qa-credentials.env
+docs/releases/**/*PASSWORD*
+docs/releases/**/*SECRET*
+docs/releases/**/*credential*.txt
+
 # Project-local tooling (JDK archives, Maestro QA logs)
 .tools/
 docs/releases/**/qa-artifacts/

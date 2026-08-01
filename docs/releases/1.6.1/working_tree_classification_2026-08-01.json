@@ -1,0 +1,4315 @@
+{
+  "total": 430,
+  "by_class": {
+    "E": 5,
+    "C": 358,
+    "A": 51,
+    "B": 2,
+    "H": 10,
+    "F": 2,
+    "D": 1,
+    "G": 1
+  },
+  "entries": [
+    {
+      "path": ".cursor/mcp.json",
+      "git_status": "M",
+      "classification": "E",
+      "owning_feature": "local-docs-tooling",
+      "verified": "unverified",
+      "intended_action": "exclude-or-separate",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "AGENTS.md",
+      "git_status": "M",
+      "classification": "E",
+      "owning_feature": "local-docs-tooling",
+      "verified": "unverified",
+      "intended_action": "exclude-or-separate",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/MY_UI.md",
+      "git_status": "M",
+      "classification": "E",
+      "owning_feature": "local-docs-tooling",
+      "verified": "unverified",
+      "intended_action": "exclude-or-separate",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/prop-pass-home-with-snapshot.png",
+      "git_status": "M",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "eas.json",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "tooling-config",
+      "verified": "unverified",
+      "intended_action": "careful-review-no-prod",
+      "related_test": "build",
+      "related_commit_target": "eas/ios"
+    },
+    {
+      "path": "ios/YouTrader.xcodeproj/project.pbxproj",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "tooling-config",
+      "verified": "unverified",
+      "intended_action": "careful-review-no-prod",
+      "related_test": "build",
+      "related_commit_target": "eas/ios"
+    },
+    {
+      "path": "scripts/apply-i18n-final-app.mjs",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "scripts/apply-i18n-replacements.mjs",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "scripts/i18n-batch-add.mjs",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "scripts/staging-qa-reset-qa.ts",
+      "git_status": "M",
+      "classification": "B",
+      "owning_feature": "qa-harness",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "maestro/selftest",
+      "related_commit_target": "qa"
+    },
+    {
+      "path": "scripts/translations/de.json",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "scripts/translations/es.json",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "scripts/translations/fr.json",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "scripts/translations/it.json",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "scripts/translations/uk.json",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "i18n",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "translations:check",
+      "related_commit_target": "i18n"
+    },
+    {
+      "path": "src/api/aiCoach.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/api/marketIntelligence.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/app/styles.ts",
+      "git_status": "M",
+      "classification": "H",
+      "owning_feature": "incomplete-wip",
+      "verified": "unverified",
+      "intended_action": "preserve-until-verified",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "src/auth/ChangeEmailModal.tsx",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "auth-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "auth",
+      "related_commit_target": "auth-loading"
+    },
+    {
+      "path": "src/auth/ChangePasswordModal.tsx",
+      "git_status": "M",
+      "classification": "F",
+      "owning_feature": "secrets",
+      "verified": "unverified",
+      "intended_action": "secure-relocate-or-ignore",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "src/auth/EmailAuthModal.tsx",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "auth-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "auth",
+      "related_commit_target": "auth-loading"
+    },
+    {
+      "path": "src/components/propFirm/PropFirmRiskCoachScreen.tsx",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "prop-pass-pi",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "pi",
+      "related_commit_target": "prop-pass"
+    },
+    {
+      "path": "src/components/traderStatus/TraderStatusDashboard.tsx",
+      "git_status": "M",
+      "classification": "H",
+      "owning_feature": "incomplete-wip",
+      "verified": "unverified",
+      "intended_action": "preserve-until-verified",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "src/components/ui/premium/AnimatedPressable.tsx",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/components/ui/premium/PremiumLoadingBar.tsx",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/components/ui/premium/ShimmerPlaceholder.tsx",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/components/ui/premium/index.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/config/appConfig.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "google-oauth",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "auth",
+      "related_commit_target": "google"
+    },
+    {
+      "path": "src/config/growthConfig.ts",
+      "git_status": "M",
+      "classification": "H",
+      "owning_feature": "incomplete-wip",
+      "verified": "unverified",
+      "intended_action": "preserve-until-verified",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "src/lib/startupPerf.ts",
+      "git_status": "M",
+      "classification": "H",
+      "owning_feature": "incomplete-wip",
+      "verified": "unverified",
+      "intended_action": "preserve-until-verified",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "src/propPass/PerformanceIntelligenceInternalPanel.tsx",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "prop-pass-pi",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "pi",
+      "related_commit_target": "prop-pass"
+    },
+    {
+      "path": "supabase/functions/_shared/aiProvider.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/_shared/aiSchemas.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/_shared/marketAiProvider.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/_shared/marketAiSchemas.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/_shared/rateLimits.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/ai-coach/index.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/market-intelligence/index.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/prop-os-pi-processor/index.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/functions/prop-os-recalc-processor/index.ts",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "tsconfig.json",
+      "git_status": "M",
+      "classification": "A",
+      "owning_feature": "tooling-config",
+      "verified": "unverified",
+      "intended_action": "careful-review-no-prod",
+      "related_test": "build",
+      "related_commit_target": "eas/ios"
+    },
+    {
+      "path": ".codex/",
+      "git_status": "??",
+      "classification": "E",
+      "owning_feature": "local-tooling",
+      "verified": "unverified",
+      "intended_action": "exclude-or-keep-local",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": ".cursor/plans/",
+      "git_status": "??",
+      "classification": "E",
+      "owning_feature": "local-tooling",
+      "verified": "unverified",
+      "intended_action": "exclude-or-keep-local",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "build/",
+      "git_status": "??",
+      "classification": "D",
+      "owning_feature": "generated-build",
+      "verified": "unverified",
+      "intended_action": "exclude-never-commit",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/SIM_EMAIL_PASSWORD_UNIT.txt",
+      "git_status": "??",
+      "classification": "F",
+      "owning_feature": "secrets",
+      "verified": "unverified",
+      "intended_action": "secure-relocate-or-ignore",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/nav_allow_boot.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_00_boot.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_03_screen3_previews.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_04_screen4_prep.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_05_after_prep.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_05_paywall.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_after_failed_reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_after_simctl_reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_live_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/first-launch-evidence/vis_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/01_fresh_after_reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/02_fresh_onboarding_or_next.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/03_fresh_onboarding.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/04_fresh_paywall.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/05_fresh_auth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/06_returning_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/10_prop_pass_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/11_prop_pass_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/12_pi_live_after_maestro.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/12_pi_panel_open.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/13_pi_after_request.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/14_pi_after_poll.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/15_pi_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/16_pi_insufficient_panel.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/17_pi_after_poll_complete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/20_deny_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/21_deny_no_prop_pass.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/22_deny_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/23_deny_settings.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/24_deny_prop_deeplink.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/30_auth_funnel_after_ok.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/31_auth_funnel_paywall_or_next.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/32_auth_ctas.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/40_cold_install_boot.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/41_cold_after_continue_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/42_cold_live_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/43_after_continue2_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/44_auth_fail_step.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/45_after_point_continue.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/46_after_point_continue_wait.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/47_continue_left_try.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/50_paywall_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/51_after_paywall_close_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/52_auth_assert_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/55_plans_auth_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/56_paywall_plans_evidence.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/57_purchase_auth_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/58_after_purchase_point_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/60_storekit_sheet_or_cta.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/61_purchase_cancelled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/70_finish_matrix_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/71_core_login_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/72_core_fail_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/73_after_seed_login_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/74_after_seed_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/75_after_force_allow.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/80_core_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/81_core_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/82_core_calc.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/83_core_proppass.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/84_core_news.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/85_core_calendar.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/86_core_settings.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/90_auth_final_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/91_auth_keychain2_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/92_auth_keychain2_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/RUN_DEVICE_QA.sh",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/after_allow_login_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/after_deeplink_s6.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/apple_s6_after_tap.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/apple_s6_auth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/apple_s6_result.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/auth_after_fix_still_loading.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/auth_after_ok_post_reload.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/auth_apple_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/auth_boot_after_reload.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/auth_providers_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/auth_providers_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/auth_reset_dialog_after_reload.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T032038Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T032243Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T032529Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T032750Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T033242Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T033512Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T034153Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_fail_20260801T034353Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_auth_ready_ok_20260801T030527Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_email_ok_20260801T012353Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_email_ok_20260801T014122Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_email_ok_20260801T024908Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_email_ok_20260801T033331Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_email_ok_20260801T034539Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_email_ok_20260801T041555Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/bootstrap_email_ok_20260801T041719Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calc_ready.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calc_s4.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calc_s6_final.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calc_s6_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calc_s6_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calc_s6b_risk2pct.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calendar_s5_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calendar_s5_next.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/calendar_s5_prev.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_allow_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_c_01.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_cal_01.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_i_01_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_i_03_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_i_04_calc.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_i_05_news.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_i_06_calendar.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_i_07_settings.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_j_01.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_n_01.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_s_01.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/core_set_01.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_00_launch.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_01_after_reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_02_after_ok.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_03_pre_deny_login.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_04_after_deny_login.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_advance_1.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_advance_2.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_advance_3.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_advance_4.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/deny_manual_advance_5.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/fresh_funnel_final_state.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_s4_after_tap.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_s4_oauth_ui.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_s5_account_attempt.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_s5_after_continue.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_s5_oauth_page.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_s6_auth_cta.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/google_s6_oauth_page.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6_01_created.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6b2_save_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6b2_stuck.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6b3_save_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6b4_seed_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6b_00_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6b_01_after_save.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud6c_save_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_01_form.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_02_after_save.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_03_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_04_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jcrud_fill_05_journal_back.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jedit_01_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/jedit_mes_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/journal_after_add_attempt.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/journal_before_crud.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/journal_s4_after_add_tap.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/journal_s4_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_before_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_calendar_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_calendar_post_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_delete_dismissed.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_after_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_calendar.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_deleted.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_precondition.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_seeded.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_jcrud_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_journal_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_journal_post_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_journal_ready.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_stats_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/lane_a_stats_post_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/metro_watch_reconnect.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_00_after_reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_01_onboarding.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_02_paywall_or_auth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_03_auth_ctas.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_auth_final.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_auth_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_auth_live2.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_auth_live3.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_live_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_post_maestro.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeA_pre_maestro.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeB_01_main.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeB_02_prop_pass.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeB_03_prop_pass_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeC_01_main.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeC_02_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/modeC_03_settings.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/news_s5_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/news_s5_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_after_close_attempts.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_after_cta_point.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_auth_final_paywall.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_before_purchase.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_cold_00.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_cold_after_dismiss.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_cold_onboarding.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_calc.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_calendar.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_news.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_prep.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_proppass.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_settings.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_core_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_deny_00_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_deny_01_no_prop_pass_tab.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_deny_02_stats.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_deny_03_settings.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_deny_04_after_prop_deeplink.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_fresh_00_after_reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_fresh_auth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_fresh_final.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_fresh_onboarding.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_fresh_paywall.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_monthly_tapped.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_paywall_before_close.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_paywall_plans_full.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_paywall_preclose.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_paywall_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_00_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_01_prop_pass_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_02_panel_open.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_03_after_request.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_04_after_poll.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_05_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_06_completed_panel.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_07_after_rerequest_poll.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pi_08_completed_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_post_close_attempt.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_pre_cta_point.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_purchase_cancelled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_returning_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_returning_prop_pass.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/phase4f_returning_prop_pass_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/pi_home_deeplink.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/pi_m_01_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/pi_m_02_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/pi_m_03_after_request.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/pi_semantic_snapshot_current.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/pi_semantic_ui.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/qa_deeplink_login_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/returning_prop_pass_final_state.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_decimal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_invalid_symbols.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_large.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_neg_balance.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_reset_after_error.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_small_stop.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_valid.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_calc_zero_balance.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_google_after_continue.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s10_reset_debug.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_after_openurl_reset_auth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_life_FAIL_S11-041555.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_life_after_delete_cancel.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_life_calendar_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_life_calendar_after_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_life_calendar_before_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_life_precondition.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_reset_auth_FAIL_20260801T035947Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_reset_fresh_FAIL_20260801T035947Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_reset_paywall_FAIL_20260801T035947Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_reset_returning-allow_FAIL_20260801T035947Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s11_reset_returning-deny_FAIL_20260801T035947Z.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s12_rc_after_cta.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s12_rc_live_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s12_rc_monthly_result.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s12_rc_monthly_selected.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s12_rc_paywall.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s4_current_ui.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_calc_open.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_after_delete_cancel.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_after_relaunch.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_calendar_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_calendar_after_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_calendar_before_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_delete_sheet.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_journal_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_journal_after_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_journal_create.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_precondition.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_stats_after_delete.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_stats_after_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s8_life_stats_before_edit.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_auth_ready.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_calc_after_reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_calc_invalid_amount.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_calc_journal_fail.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_calc_valid_maxrisk.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_calc_valid_result.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_calc_zero_stop.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_google_after_continue.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_google_after_tap.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_google_aswebauth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_google_precondition.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_manual_after_reset_cold.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/s9_manual_reset_sleep8.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/settings_s4.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/sim_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/simctl_launch2.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/simctl_launch_ui.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/stats_populated.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/stats_s4_after_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/stats_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/step-013-assertCondition-Continue_with_Apple.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/step-067-assertCondition-Journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/storekit_after_buy_live.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/storekit_after_rerun.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/storekit_after_xcode_run.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/storekit_live_now.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/storekit_now2.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/phase4f-screenshots/storekit_xcode_launch_ui.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T012353Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T014122Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T024908Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T033331Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T034539Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T041555Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T041719Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/qa-logs/bootstrap-email-precondition-20260801T051328Z.json",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-reports",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "docs",
+      "related_commit_target": null
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/03_fresh_onboarding.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/04_fresh_paywall.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/05_fresh_auth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/10_prop_pass_home.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/allowlisted-after-tab-walk.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/allowlisted-main-after-walk.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/allowlisted-restored-main.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-after-allow-login.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-after-deeplink-reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-allow-login-attempt.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-1.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-2.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-3.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-4.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-5.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-6.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-7.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-boot-8.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-env-fixed.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-funnel-after-reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-metro-1.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-post-email-login.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-qa-capture-late.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-qa-capture-mid.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/debug-staging-warm-auth.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/device-qa-captures/phase_main.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/device-qa-captures/tab_calc.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/device-qa-captures/tab_calendar.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/device-qa-captures/tab_journal.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/device-qa-captures/tab_news.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/device-qa-captures/tab_propPass.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/device-qa-captures/tab_settings.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/funnel-after-reset.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/simulator-recovery/phase4f_returning_prop_pass_scrolled.png",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "docs/releases/1.6.1/stats-redesign-evidence/",
+      "git_status": "??",
+      "classification": "C",
+      "owning_feature": "qa-evidence",
+      "verified": "unverified",
+      "intended_action": "preserve-selective-commit",
+      "related_test": "manual-device",
+      "related_commit_target": "docs commit"
+    },
+    {
+      "path": "scripts/calculator-risk-qa.ts",
+      "git_status": "??",
+      "classification": "H",
+      "owning_feature": "incomplete-wip",
+      "verified": "unverified",
+      "intended_action": "preserve-until-verified",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "scripts/pi-timeout-reaper-qa.ts",
+      "git_status": "??",
+      "classification": "H",
+      "owning_feature": "incomplete-wip",
+      "verified": "unverified",
+      "intended_action": "preserve-until-verified",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "scripts/qa/stats-more-screenshot-matrix.sh",
+      "git_status": "??",
+      "classification": "B",
+      "owning_feature": "qa-harness",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "maestro/selftest",
+      "related_commit_target": "qa"
+    },
+    {
+      "path": "scripts/start-metro-staging.sh.bak",
+      "git_status": "??",
+      "classification": "G",
+      "owning_feature": "obsolete-or-accidental",
+      "verified": "unverified",
+      "intended_action": "exclude",
+      "related_test": null,
+      "related_commit_target": null
+    },
+    {
+      "path": "src/app/ai/animations.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/app/ai/coachRead.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/app/ai/index.ts",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/app/ai/propCoach.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/app/ai/sharedUi.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/app/ai/tradeVision.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "src/app/theme.ts",
+      "git_status": "??",
+      "classification": "H",
+      "owning_feature": "app-extract-wip",
+      "verified": "unverified",
+      "intended_action": "preserve",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "src/app/ui/",
+      "git_status": "??",
+      "classification": "H",
+      "owning_feature": "app-extract-wip",
+      "verified": "unverified",
+      "intended_action": "preserve",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "src/app/utils/",
+      "git_status": "??",
+      "classification": "H",
+      "owning_feature": "app-extract-wip",
+      "verified": "unverified",
+      "intended_action": "preserve",
+      "related_test": "typecheck",
+      "related_commit_target": null
+    },
+    {
+      "path": "src/components/stats/StatsCharts.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/stats/StatsFocus.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/stats/StatsMetricDashboard.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/stats/StatsMetrics.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/stats/StatsOverview.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/stats/StatsSessionHeatmap.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/stats/index.ts",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/stats/radarAxes.ts",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "stats-ui",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "stats",
+      "related_commit_target": "stats"
+    },
+    {
+      "path": "src/components/ui/AnimatedEntrance.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/components/ui/BottomSheetPanel.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/components/ui/premium/SkeletonCard.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/components/ui/premium/StatusInlineMessage.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "src/components/ui/premium/StatusSpinner.tsx",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ui-primitives",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "ui",
+      "related_commit_target": "premium-ui"
+    },
+    {
+      "path": "supabase/functions/_shared/revenueCatEntitlement.ts",
+      "git_status": "??",
+      "classification": "A",
+      "owning_feature": "ai-cleanup",
+      "verified": "unverified",
+      "intended_action": "review-commit",
+      "related_test": "forbiddenAiCopy",
+      "related_commit_target": "ai/terminology"
+    },
+    {
+      "path": "supabase/migrations/20260731290000_prop_os_pi_timeout_reaper.sql",
+      "git_status": "??",
+      "classification": "H",
+      "owning_feature": "db-migration-wip",
+      "verified": "unverified",
+      "intended_action": "preserve-no-prod-apply",
+      "related_test": "migration",
+      "related_commit_target": null
+    }
+  ]
+}
