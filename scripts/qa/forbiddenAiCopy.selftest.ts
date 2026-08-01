@@ -29,6 +29,10 @@ const FORBIDDEN_VALUE_PATTERNS: RegExp[] = [
   /\bPerformance Intelligence\b/i,
   /\bPerformance Coach\b/i,
   /\bUnlock AI\b/i,
+  /\bSmart Analytics\b/i,
+  /\bAuto-analysis\b/i,
+  /\bAuto analysis\b/i,
+  /\balgorithm-generated\b/i,
 ];
 
 const LOCALE_DIR = path.join(root, "src/i18n/locales");

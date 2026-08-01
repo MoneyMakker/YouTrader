@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { C } from "../../theme/colors";
+import { ydlSpace } from "../../ydl/space";
+import { ydlTypography } from "../../ydl/typography";
 import { PremiumCard, PremiumLoadingBar, ShimmerPlaceholder } from "../ui/premium";
 
 const DEFAULT_STAGES = [
   "Analyzing your edge...",
   "Checking risk behavior...",
   "Reading trade patterns...",
-  "Building AI report...",
+  "Building performance report...",
   "Finalizing insights...",
 ];
 
@@ -21,28 +23,6 @@ export function AiAnalysisLoading({ stages = DEFAULT_STAGES, compact = false, st
   const safeStages = stages.length ? stages : DEFAULT_STAGES;
   const [stageIndex, setStageIndex] = useState(0);
   const [typedText, setTypedText] = useState("");
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 1800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    pulseLoop.start();
-    return () => pulseLoop.stop();
-  }, [pulse]);
 
   useEffect(() => {
     const stageTimer = setInterval(() => {
@@ -63,23 +43,21 @@ export function AiAnalysisLoading({ stages = DEFAULT_STAGES, compact = false, st
     return () => clearInterval(typingTimer);
   }, [safeStages, stageIndex]);
 
-  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.42] });
   const progress = (stageIndex + 1) / safeStages.length;
 
   return (
     <PremiumCard tone="purple" compact={compact} style={[styles.card, compact && styles.compactCard, style]} contentStyle={styles.content}>
-      <Animated.View pointerEvents="none" style={[styles.glow, { opacity: glowOpacity }]} />
-      <View style={styles.header}>
+      <View style={styles.header} accessibilityRole="progressbar" accessibilityLabel={typedText || "Performance analysis loading"}>
         <View style={styles.statusDot} />
-        <Text style={styles.kicker}>AI ANALYSIS</Text>
+        <Text style={styles.kicker}>PERFORMANCE ANALYSIS</Text>
       </View>
-      <Text style={[styles.stageText, compact && styles.stageTextCompact]}>
+      <Text style={[styles.stageText, compact && styles.stageTextCompact]} maxFontSizeMultiplier={1.3}>
         {typedText}
         <Text style={styles.cursor}>_</Text>
       </Text>
-      <PremiumLoadingBar progress={progress} height={4} tone="purple" />
+      <PremiumLoadingBar progress={progress} height={4} tone="purple" accessibilityLabel="Performance analysis progress" />
       {!compact ? (
-        <View style={styles.statusStack}>
+        <View style={styles.statusStack} importantForAccessibility="no">
           {safeStages.slice(0, 3).map((line, index) => (
             <View key={line} style={styles.statusLine}>
               <Text style={[styles.statusCode, index <= stageIndex % safeStages.length && styles.statusCodeActive]}>
@@ -107,21 +85,12 @@ const styles = StyleSheet.create({
     minWidth: 160,
   },
   content: {
-    gap: 11,
-  },
-  glow: {
-    position: "absolute",
-    right: -44,
-    top: -52,
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    backgroundColor: C.purpleSoft,
+    gap: ydlSpace.sm,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: ydlSpace.xs,
   },
   statusDot: {
     width: 7,
@@ -130,37 +99,35 @@ const styles = StyleSheet.create({
     backgroundColor: C.green,
   },
   kicker: {
+    ...ydlTypography.label,
     color: C.sub,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.8,
+    textTransform: "uppercase",
   },
   stageText: {
+    ...ydlTypography.callout,
     color: C.text,
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: "900",
+    fontWeight: "600",
   },
   stageTextCompact: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...ydlTypography.footnote,
+    fontWeight: "600",
   },
   cursor: {
     color: C.green,
   },
   statusStack: {
-    gap: 8,
+    gap: ydlSpace.xs,
   },
   statusLine: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
+    gap: ydlSpace.xs,
   },
   statusCode: {
     width: 28,
     color: C.muted,
     fontSize: 9,
-    fontWeight: "900",
+    fontWeight: "700",
     letterSpacing: 0.6,
   },
   statusCodeActive: {
