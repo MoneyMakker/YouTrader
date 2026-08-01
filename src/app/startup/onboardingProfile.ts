@@ -217,7 +217,12 @@ export function buildOnboardingProfilePreview(
 
 export function buildPersonalizedValueBullets(profile: OnboardingProfileV1): string[] {
   const preview = buildOnboardingProfilePreview(profile);
-  const instrument = preview.primarySymbol;
+  const instrument =
+    preview.market === "stocks"
+      ? "equity"
+      : preview.market === "forex"
+        ? "FX"
+        : preview.primarySymbol;
   const sessionLabel = preview.sessionLabel;
   const styleLabel = preview.styleLabel.toLowerCase();
 
