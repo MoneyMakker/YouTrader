@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import {
+  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,9 +19,14 @@ import {
   LogOut,
   Mail,
   RefreshCw,
+  Trash2,
 } from "lucide-react-native";
 import type { AuthProvider } from "../../auth/types";
 import { userHasPasswordSet } from "../../auth/emailPasswordAuth";
+import {
+  openAppleSubscriptionManagement,
+  requestAccountDeletion,
+} from "../../auth/accountDeletion";
 import {
   enableNativeAppleSignIn,
   enableNativeGoogleSignIn,
@@ -299,6 +305,31 @@ export function SettingsAccountSection({
 
   const cardPadding = useMemo(() => (compact ? 16 : 20), [compact]);
 
+  const confirmDeleteAccount = () => {
+    Alert.alert(t("deleteAccountConfirmTitle"), t("deleteAccountConfirmBody"), [
+      { text: t("cancel") || "Cancel", style: "cancel" },
+      {
+        text: t("deleteAccountManageSubscription"),
+        onPress: () => openAppleSubscriptionManagement(),
+      },
+      {
+        text: t("deleteAccountContinue"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            const result = await requestAccountDeletion();
+            if (!result.ok) {
+              Alert.alert(t("deleteAccount"), t("deleteAccountFailed"));
+              return;
+            }
+            Alert.alert(t("deleteAccount"), t("deleteAccountSuccess"));
+            onSignOut();
+          })();
+        },
+      },
+    ]);
+  };
+
   return (
     <View style={styles.glowShell}>
       <View pointerEvents="none" style={styles.glowOrbLime} />
@@ -357,6 +388,12 @@ export function SettingsAccountSection({
               label={t("signOut")}
               icon={LogOut}
               onPress={onSignOut}
+              variant="danger"
+            />
+            <PremiumButton
+              label={t("deleteAccount")}
+              icon={Trash2}
+              onPress={confirmDeleteAccount}
               variant="danger"
             />
           </View>
