@@ -19,3 +19,5 @@ export { calculatePayoutReadiness } from "./payout";
 export type { PayoutReadinessInput, PayoutReadinessValues } from "./payout";
 export { buildChallengeTimeline } from "./timeline";
 export type { ChallengeTimelineEvent, PersistedTimelineFact, TimelineEventType } from "./timeline";
+export { createDecisionReplay } from "./replay";
+export type { DecisionReplay, DecisionReplayInput, DecisionVerdict } from "./replay";
