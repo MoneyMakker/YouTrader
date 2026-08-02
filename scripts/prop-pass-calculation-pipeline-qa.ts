@@ -99,7 +99,10 @@ assert.equal(output.contractSize?.values.recommendedContracts, 5);
 assert.equal(output.preTrade?.status, "safe_to_take");
 assert.equal(output.decisionReplay.verdict, "good_decision");
 assert.equal(output.challengeLifecycle?.values.state, "active");
-assert.deepEqual(output.calculationTrace.map((item) => item.order), Array.from({ length: 13 }, (_, index) => index + 1));
+assert.deepEqual(output.calculationTrace.map((item) => item.order), Array.from({ length: 20 }, (_, index) => index + 1));
+assert.equal(output.survival.values.prediction, false);
+assert.equal(output.breachReplay.status, "needs_input");
+assert.equal(output.payoutPlanner.status, "needs_input");
 assert.equal(output.journalApplication.persistenceRequired, true);
 
 const duplicate = calculatePropPassState({ ...input, journal: { ...input.journal, appliedTradeIds: ["trade-1", "trade-1"] } });

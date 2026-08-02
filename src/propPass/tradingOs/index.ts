@@ -47,6 +47,16 @@ export type { ChallengeBreachFact, ChallengeLifecycleInput, ChallengeLifecycleSt
 export { evaluateLiveAccount } from "./liveAccount";
 export type { LiveAccountIntegrationInput, LiveAccountIntegrationValues, LiveAccountState } from "./liveAccount";
 export { calculatePropPassState } from "./pipeline";
+export { calculateRulesComplianceScore, RULES_COMPLIANCE_WEIGHTS } from "./compliance";
+export type { ComplianceComponentId, RulesComplianceValues } from "./compliance";
+export { calculateAccountSurvival } from "./survival";
+export type { AccountSurvivalValues, SurvivalModeCapacity } from "./survival";
+export { createBreachReplay } from "./breachReplay";
+export type { BreachReplayInput, BreachReplayValues } from "./breachReplay";
+export { buildPayoutPlanner } from "./payoutPlanner";
+export type { PayoutPlannerValues, PayoutPlanScenario } from "./payoutPlanner";
+export { buildDailyRiskCalendar } from "./riskCalendar";
+export type { DailyRiskCalendarDay, DailyRiskCalendarFact } from "./riskCalendar";
 export { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
 export type {
   PropPassActiveRuleVersion,

@@ -11,6 +11,13 @@ import { createDecisionReplay } from "./replay";
 import { calculateLiveRiskMeter } from "./riskMeter";
 import { evaluateChallengeLifecycle } from "./challenge";
 import { calculateMaximumSafeWithdrawal } from "./withdrawal";
+import { recommendScaling } from "./scaling";
+import { evaluatePositionSizeProgression } from "./progression";
+import { evaluateProfitProtection } from "./profitProtection";
+import { calculateRulesComplianceScore } from "./compliance";
+import { calculateAccountSurvival } from "./survival";
+import { createBreachReplay } from "./breachReplay";
+import { buildPayoutPlanner } from "./payoutPlanner";
 import {
   RISK_MODE_POLICIES,
   type AllowedRiskValues,
@@ -192,11 +199,36 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
   });
   const payoutReadiness = input.payout ? calculatePayoutReadiness(input.payout) : null;
   const withdrawalReadiness = input.withdrawal ? calculateMaximumSafeWithdrawal(input.withdrawal) : null;
+  const profitProtection = input.profitProtection ? evaluateProfitProtection(input.profitProtection) : null;
+  const scaling = input.scaling ? recommendScaling(input.scaling) : null;
+  const positionProgression = input.progression ? evaluatePositionSizeProgression(input.progression) : null;
+  const compliance = input.compliance ? calculateRulesComplianceScore(input.compliance) : null;
+  const survival = calculateAccountSurvival({
+    context: account?.contextType ?? null,
+    riskRooms: rooms,
+    lossPerContractMinor: contractSize?.values.totalLossPerContractMinor ?? null,
+    targetDistanceMinor: challengeLifecycle?.values.profitRemainingMinor ?? null,
+  });
+  const breachReplay = createBreachReplay(input.breachReplay ?? null);
+  const payoutPlanner = buildPayoutPlanner({
+    readiness: payoutReadiness,
+    currentEquityMinor: account?.currentEquityMinor ?? null,
+    tradingDayId: tradingDay?.tradingDayId ?? null,
+    scenarioAmountsMinor: input.payoutScenarioAmountsMinor ?? [50_000, 100_000, 150_000],
+  });
+  trace.push(step(14, "profit_protection", profitProtection?.status ?? "needs_input", rules?.versionId ?? null, { configured: Boolean(input.profitProtection) }, { active: profitProtection?.values.active ?? null }));
+  trace.push(step(15, "scaling", scaling?.status ?? "needs_input", rules?.versionId ?? null, { configured: Boolean(input.scaling) }, { eligible: scaling?.values.eligible ?? null }));
+  trace.push(step(16, "position_progression", positionProgression?.status ?? "needs_input", rules?.versionId ?? null, { configured: Boolean(input.progression) }, { stage: positionProgression?.values.stage ?? null }));
+  trace.push(step(17, "compliance", compliance?.status ?? "needs_input", PROP_PASS_CALCULATION_VERSION, { configured: Boolean(input.compliance) }, { score: compliance?.values.score ?? null }));
+  trace.push(step(18, "survival", survival.status, PROP_PASS_CALCULATION_VERSION, { context: account?.contextType ?? null }, { hardRoomMinor: survival.values.hardRoomMinor }));
+  trace.push(step(19, "breach_replay", breachReplay.status, PROP_PASS_CALCULATION_VERSION, { tradeId: input.breachReplay?.tradeId ?? null }, { available: Boolean(breachReplay.values) }));
+  trace.push(step(20, "payout_planner", payoutPlanner.status, rules?.versionId ?? null, { configured: Boolean(input.payout) }, { safePayoutMinor: payoutPlanner.values.recommendedSafePayoutMinor }));
   const statuses: DecisionStatus[] = [allowedRisk.status, dailyPlan.status, riskMeter.status, lifecycleStatus];
   if (preTrade) statuses.push(preTrade.status);
   if (contractSize) statuses.push(contractSize.status);
   if (killSwitch) statuses.push(killSwitch.status);
   if (interventions.some((item) => item.blocking)) statuses.push("stop_trading");
+  for (const optional of [profitProtection, scaling, positionProgression, compliance]) if (optional) statuses.push(optional.status);
   if (missingInputs.length) statuses.push("needs_input");
 
   return Object.freeze({
@@ -216,6 +248,13 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
     liveLifecycle,
     payoutReadiness,
     withdrawalReadiness,
+    scaling,
+    positionProgression,
+    profitProtection,
+    compliance,
+    survival,
+    breachReplay,
+    payoutPlanner,
     missingInputs: [...new Set(missingInputs)],
     calculationTrace: trace,
   });

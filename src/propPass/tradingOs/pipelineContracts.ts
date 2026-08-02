@@ -23,6 +23,14 @@ import type { DecisionReplay, DecisionReplayInput } from "./replay";
 import type { LiveRiskMeterValues } from "./riskMeter";
 import type { ChallengeTimelineEvent, PersistedTimelineFact } from "./timeline";
 import type { SafeWithdrawalInput, SafeWithdrawalValues } from "./withdrawal";
+import type { ScalingRecommendationInput, ScalingRecommendationValues } from "./scaling";
+import type { PositionSizeProgressionInput, PositionSizeProgressionValues } from "./progression";
+import type { ProfitProtectionInput, ProfitProtectionValues } from "./profitProtection";
+import type { CapitalPreservationInput } from "./preservation";
+import type { ComplianceComponentId, RulesComplianceValues } from "./compliance";
+import type { AccountSurvivalValues } from "./survival";
+import type { BreachReplayInput, BreachReplayValues } from "./breachReplay";
+import type { PayoutPlannerValues } from "./payoutPlanner";
 import { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
 import type { TradingTimeContext } from "../../propOs/tradingTime";
 
@@ -86,6 +94,13 @@ export type PropPassCalculationPipelineInput = Readonly<{
   liveFacts: PropPassLiveFacts | null;
   payout: PayoutReadinessInput | null;
   withdrawal: SafeWithdrawalInput | null;
+  scaling?: ScalingRecommendationInput | null;
+  progression?: PositionSizeProgressionInput | null;
+  profitProtection?: ProfitProtectionInput | null;
+  preservation?: CapitalPreservationInput | null;
+  compliance?: Readonly<{ components: Partial<Record<ComplianceComponentId, number>> }> | null;
+  breachReplay?: BreachReplayInput | null;
+  payoutScenarioAmountsMinor?: MoneyMinor[];
 }>;
 
 export type PropPassCalculationTraceStep = Readonly<{
@@ -103,7 +118,14 @@ export type PropPassCalculationTraceStep = Readonly<{
     | "smart_intervention"
     | "journal_application"
     | "decision_replay"
-    | "account_lifecycle";
+    | "account_lifecycle"
+    | "profit_protection"
+    | "scaling"
+    | "position_progression"
+    | "compliance"
+    | "survival"
+    | "breach_replay"
+    | "payout_planner";
   status: TradingOsResult<unknown>["status"];
   sourceVersion: string | null;
   inputs: Readonly<Record<string, string | number | boolean | null>>;
@@ -136,6 +158,13 @@ export type PropPassCalculationPipelineOutput = Readonly<{
   liveLifecycle: TradingOsResult<LiveAccountIntegrationValues> | null;
   payoutReadiness: TradingOsResult<PayoutReadinessValues> | null;
   withdrawalReadiness: TradingOsResult<SafeWithdrawalValues> | null;
+  scaling: TradingOsResult<ScalingRecommendationValues> | null;
+  positionProgression: TradingOsResult<PositionSizeProgressionValues> | null;
+  profitProtection: TradingOsResult<ProfitProtectionValues> | null;
+  compliance: TradingOsResult<RulesComplianceValues> | null;
+  survival: TradingOsResult<AccountSurvivalValues>;
+  breachReplay: TradingOsResult<BreachReplayValues | null>;
+  payoutPlanner: TradingOsResult<PayoutPlannerValues>;
   missingInputs: string[];
   calculationTrace: PropPassCalculationTraceStep[];
 }>;
