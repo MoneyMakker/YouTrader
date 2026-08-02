@@ -101,7 +101,17 @@ export type PersistedTimelineEvent = Readonly<{
   payload: ChallengeTimelineEvent;
 }>;
 
-export type PropPassLiveRiskSettings = Readonly<{ rules: LiveRiskRules; configuredAt: string }>;
+export type PropPassLiveRiskSettings = Readonly<{
+  rules: LiveRiskRules;
+  configuredAt: string;
+  selectedMode?: "calm" | "balanced" | "gambler";
+  /** Explicit locale-independent trading week boundary. 0 Sunday, 1 Monday. */
+  weekStartsOn?: 0 | 1;
+  normalRiskPerTradeMinor?: number;
+  normalMaximumContracts?: number;
+  recoveryRiskBps?: number;
+  minimumCompliantProfitableSessions?: number;
+}>;
 export type PropPassPayoutWithdrawalSettings = Readonly<{ payout: PayoutReadinessInput | null; withdrawal: SafeWithdrawalInput | null; configuredAt: string }>;
 export type PropPassKillSwitchSettings = Readonly<{ configuration: KillSwitchConfiguration; configuredAt: string }>;
 export type PropPassRecoveryState = Readonly<{ state: RecoveryModeValues; updatedAt: string }>;

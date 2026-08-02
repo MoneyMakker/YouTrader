@@ -1,4 +1,5 @@
 import { calculateChallenge } from "../../propOs/engine";
+import { tradingDayId } from "../../propOs/tradingDay";
 import {
   mapAccountRow,
   mapChallengeRow,
@@ -24,6 +25,7 @@ import {
   type RiskRooms,
   type TradingRiskMode,
 } from "../tradingOs/index";
+import type { PropPassLiveRiskSettings, PropPassRecoveryState } from "./contracts";
 
 export type PropPassRuntimeRebuildBundle = Readonly<{
   accountRow: AccountRow;
@@ -36,6 +38,8 @@ export type PropPassRuntimeRebuildBundle = Readonly<{
   currentDailyPlan: DailyTradingPlanSnapshot | null;
   persistedTimelineFacts: PersistedTimelineFact[];
   killSwitchConfiguration: KillSwitchConfiguration | null;
+  liveRiskSettings: PropPassLiveRiskSettings | null;
+  recoveryState: PropPassRecoveryState | null;
 }>;
 
 export type PropPassRuntimeRebuildResult = Readonly<{
@@ -59,16 +63,26 @@ export function rebuildPropPassRuntime(
   const events = mapDomainEvents(bundle.executions, bundle.accountEvents);
   const engine = calculateChallenge({ challenge, events, asOfUtc: bundle.asOfUtc });
   const context = challenge.phase === "funded" ? "live" : "challenge";
-  const dailyRoom = engine.buffers.find((buffer) => buffer.id === "daily_loss")?.remainingMinor ?? null;
-  const drawdownRoom = engine.buffers.find((buffer) => buffer.id === "drawdown")?.remainingMinor ?? null;
+  const challengeDailyRoom = engine.buffers.find((buffer) => buffer.id === "daily_loss")?.remainingMinor ?? null;
+  const challengeDrawdownRoom = engine.buffers.find((buffer) => buffer.id === "drawdown")?.remainingMinor ?? null;
+  const liveMetrics = context === "live"
+    ? calculateLiveMetrics(bundle, legacyRules, engine.accountState.tradingDayId, engine.accountState.hwmMinor - engine.accountState.equityMinor)
+    : null;
+  const dailyRoom = liveMetrics?.dailyRoomMinor ?? challengeDailyRoom;
+  const drawdownRoom = liveMetrics?.drawdownRoomMinor ?? challengeDrawdownRoom;
   const hardRoom = drawdownRoom;
   const rules = mapChallengeRules(legacyRules, bundle.ruleSnapshotRow.captured_at);
   const riskRooms: RiskRooms = {
     dailyLossRemainingMinor: dailyRoom,
     maximumLossRemainingMinor: hardRoom,
     drawdownRemainingMinor: drawdownRoom,
-    configuredDailyRiskBudgetMinor: minimumKnown([dailyRoom, hardRoom]),
-    configuredPerTradeRiskCapMinor: minimumKnown([dailyRoom, hardRoom]),
+    configuredDailyRiskBudgetMinor: context === "live"
+      ? bundle.liveRiskSettings?.rules.dailyRiskBudgetMinor ?? null
+      : minimumKnown([dailyRoom, hardRoom]),
+    configuredPerTradeRiskCapMinor: context === "live"
+      ? bundle.liveRiskSettings?.rules.perTradeRiskCapMinor ?? null
+      : minimumKnown([dailyRoom, hardRoom]),
+    weeklyLossRemainingMinor: liveMetrics?.weeklyRoomMinor,
   };
   const applied = bundle.executions
     .filter((row) => !row.voided && row.challenge_id === challenge.id && row.trade_client_id)
@@ -100,12 +114,12 @@ export function rebuildPropPassRuntime(
       challengeRules: context === "challenge" ? rules : null,
       // Funded accounts require an explicit Live rule payload. A challenge
       // snapshot is never silently reinterpreted as Live risk configuration.
-      liveRules: null,
+      liveRules: context === "live" ? bundle.liveRiskSettings?.rules ?? null : null,
     },
     instrument: null,
     tradingDay: null,
     riskRooms,
-    selectedMode: bundle.selectedMode ?? "balanced",
+    selectedMode: bundle.liveRiskSettings?.selectedMode ?? bundle.selectedMode ?? "balanced",
     // Personal limits are opt-in. An absent row means no personal thresholds,
     // not permission to bypass the immutable account loss rooms.
     killSwitch,
@@ -148,7 +162,18 @@ export function rebuildPropPassRuntime(
           archivedAt: account.status === "archived" ? bundle.asOfUtc : null,
         }
       : null,
-    liveFacts: null,
+    liveFacts: context === "live" && bundle.liveRiskSettings
+      ? {
+          normalRiskPerTradeMinor: bundle.liveRiskSettings.normalRiskPerTradeMinor ?? null,
+          normalMaximumContracts: bundle.liveRiskSettings.normalMaximumContracts ?? null,
+          recoveryRiskBps: bundle.liveRiskSettings.recoveryRiskBps ?? null,
+          minimumCompliantProfitableSessions: bundle.liveRiskSettings.minimumCompliantProfitableSessions ?? null,
+          completedCompliantProfitableSessions: bundle.recoveryState?.state.exitProgress?.completedCompliantProfitableSessions ?? null,
+          // Required components are derived elsewhere from persisted compliance
+          // facts. Empty means the score is withheld, never fabricated.
+          preservation: { components: {} },
+        }
+      : null,
     payout: null,
     withdrawal: null,
     scaling: null,
@@ -221,6 +246,45 @@ function mapBreach(
 function minimumKnown(values: Array<number | null>): number | null {
   const present = values.filter((value): value is number => Number.isSafeInteger(value));
   return present.length ? Math.max(0, Math.min(...present)) : null;
+}
+
+function calculateLiveMetrics(
+  bundle: PropPassRuntimeRebuildBundle,
+  legacyRules: ReturnType<typeof mapRuleSnapshotRow>,
+  currentTradingDay: string,
+  currentDrawdownMinor: number,
+): { dailyRoomMinor: number | null; weeklyRoomMinor: number | null; drawdownRoomMinor: number | null } {
+  const rules = bundle.liveRiskSettings?.rules;
+  if (!rules) return { dailyRoomMinor: null, weeklyRoomMinor: null, drawdownRoomMinor: null };
+  const active = bundle.executions.filter((row) => !row.voided && row.realized_pnl_minor != null);
+  const dayPnl = active
+    .filter((row) => tradingDayId(row.occurred_at, legacyRules.firmTimezone, legacyRules.tradingDayRolloverHour) === currentTradingDay)
+    .reduce((sum, row) => sum + (row.realized_pnl_minor ?? 0) - (row.fees_minor ?? 0), 0);
+  const dailyRoomMinor = rules.dailyRiskBudgetMinor == null
+    ? null
+    : Math.max(0, rules.dailyRiskBudgetMinor - Math.max(0, -dayPnl));
+  const drawdownRoomMinor = rules.maximumDrawdownMinor == null
+    ? null
+    : Math.max(0, rules.maximumDrawdownMinor - Math.max(0, currentDrawdownMinor));
+  const weekStartsOn = bundle.liveRiskSettings?.weekStartsOn;
+  let weeklyRoomMinor: number | null = null;
+  if (rules.weeklyLossLimitMinor != null && weekStartsOn != null) {
+    const weekStart = startOfWeek(currentTradingDay, weekStartsOn);
+    const weeklyPnl = active.filter((row) => {
+      const day = tradingDayId(row.occurred_at, legacyRules.firmTimezone, legacyRules.tradingDayRolloverHour);
+      return day >= weekStart && day <= currentTradingDay;
+    }).reduce((sum, row) => sum + (row.realized_pnl_minor ?? 0) - (row.fees_minor ?? 0), 0);
+    weeklyRoomMinor = Math.max(0, rules.weeklyLossLimitMinor - Math.max(0, -weeklyPnl));
+  }
+  return { dailyRoomMinor, weeklyRoomMinor, drawdownRoomMinor };
+}
+
+function startOfWeek(day: string, weekStartsOn: 0 | 1): string {
+  const [year, month, date] = day.split("-").map(Number);
+  const value = new Date(Date.UTC(year, month - 1, date, 12));
+  const delta = (value.getUTCDay() - weekStartsOn + 7) % 7;
+  value.setUTCDate(value.getUTCDate() - delta);
+  return value.toISOString().slice(0, 10);
 }
 
 export const PROP_PASS_RUNTIME_CALCULATION_VERSION = PROP_PASS_CALCULATION_VERSION;

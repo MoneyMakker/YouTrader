@@ -19,6 +19,8 @@ type RuntimeBundle = {
   currentDailyPlan: Record<string, unknown> | null;
   persistedTimelineFacts: Record<string, unknown>[];
   killSwitchConfiguration: Record<string, unknown> | null;
+  liveRiskSettings: Record<string, unknown> | null;
+  recoveryState: Record<string, unknown> | null;
 };
 
 export type RuntimeProcessorReport = Readonly<{
@@ -110,7 +112,7 @@ async function loadBundle(
   client: SupabaseClient,
   event: PendingEvent,
 ): Promise<RuntimeBundle> {
-  const [account, challenge, rules, executions, accountEvents, plans, timeline, killSettings, liveSettings] = await Promise.all([
+  const [account, challenge, rules, executions, accountEvents, plans, timeline, killSettings, liveSettings, recoveryState] = await Promise.all([
     requiredSingle(client.from("prop_accounts").select("*").eq("user_id", event.user_id).eq("id", event.account_id).maybeSingle(), "account"),
     requiredSingle(client.from("prop_challenges").select("*").eq("user_id", event.user_id).eq("id", event.challenge_id!).maybeSingle(), "challenge"),
     requiredSingle(client.from("prop_challenge_rule_snapshots").select("*").eq("user_id", event.user_id).eq("challenge_id", event.challenge_id!).maybeSingle(), "rules"),
@@ -120,6 +122,7 @@ async function loadBundle(
     rows(client.from("prop_timeline_events").select("payload").eq("user_id", event.user_id).eq("account_id", event.account_id).order("occurred_at", { ascending: true }), "timeline"),
     optionalSingle(client.from("prop_kill_switch_settings").select("payload").eq("user_id", event.user_id).eq("account_id", event.account_id).maybeSingle(), "kill_switch"),
     optionalSingle(client.from("prop_live_risk_settings").select("payload").eq("user_id", event.user_id).eq("account_id", event.account_id).maybeSingle(), "live_settings"),
+    optionalSingle(client.from("prop_recovery_mode_states").select("payload,updated_at").eq("user_id", event.user_id).eq("account_id", event.account_id).maybeSingle(), "recovery_state"),
   ]);
   const livePayload = objectOrNull(liveSettings?.payload);
   return {
@@ -133,6 +136,10 @@ async function loadBundle(
     currentDailyPlan: objectOrNull(plans[0]?.payload),
     persistedTimelineFacts: timeline.map((row) => objectOrNull(row.payload)).filter((row): row is Record<string, unknown> => Boolean(row)),
     killSwitchConfiguration: objectOrNull(objectOrNull(killSettings?.payload)?.configuration),
+    liveRiskSettings: livePayload,
+    recoveryState: recoveryState
+      ? { state: objectOrNull(recoveryState.payload), updatedAt: recoveryState.updated_at }
+      : null,
   };
 }
 
