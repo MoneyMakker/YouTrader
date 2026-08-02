@@ -34,3 +34,4 @@ export {
   resetPropPassCommandGatewayForTests,
 } from "./commandGateway";
 export { newPropOsClientRequestId } from "../propOs/commands/hash";
+export * from "./tradingOs";

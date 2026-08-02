@@ -503,6 +503,63 @@ local checks from environment-dependent approval gates.
 | Status | BLOCKED |
 | Notes | Execution requires a stable candidate and Product Owner authorization for environment-specific validation. |
 
+---
+
+## Epic 10 — PROP PASS TRADING OS — BUILD 117
+
+**Status:** READY
+**Authorization:** Product Owner authorization recorded 2026-08-02. Build `116`
+is immutable in App Store Connect; `117` is the only authorized next build.
+No App Review, external TestFlight, public metadata, screenshots, or public
+release work belongs to this epic.
+
+**Goal:** Evolve Prop Pass into a deterministic daily trading operating system
+that uses actual account, rule, and Journal data to explain safety, hard risk
+limits, sizing, consequences, and the next protective action. It must never
+place orders, fabricate data/probabilities/rules, promise outcomes, or permit
+a hard prop-risk limit to be bypassed.
+
+**Baseline:** `ca531f3` reconciles the final build-116 archive fingerprint
+(`aebee59`) with the archive fingerprint/evidence commit. The binary source
+contained `aebee59` application code and the generated final fingerprint that
+was subsequently recorded in `ca531f3`; no product fix is discarded.
+
+| Order | ID | Child task | Dependency | Backlog status |
+|---:|---|---|---|---|
+| 1 | PPOS-117-01 | Prop Pass domain architecture | existing Prop Pass engine | READY |
+| 2 | PPOS-117-02 | Pre-Trade Check | PPOS-117-01 | BLOCKED |
+| 3 | PPOS-117-03 | Contract Size Calculator | PPOS-117-01 | BLOCKED |
+| 4 | PPOS-117-04 | What-If Simulator | PPOS-117-02, PPOS-117-03 | BLOCKED |
+| 5 | PPOS-117-05 | Daily Trading Plan | PPOS-117-01 | BLOCKED |
+| 6 | PPOS-117-06 | Live Risk Meter | PPOS-117-05 | BLOCKED |
+| 7 | PPOS-117-07 | Smart Intervention 2.0 | PPOS-117-02, PPOS-117-05 | BLOCKED |
+| 8 | PPOS-117-08 | Editable Rule Engine | PPOS-117-01 | BLOCKED |
+| 9 | PPOS-117-09 | Payout Readiness | PPOS-117-08 | BLOCKED |
+| 10 | PPOS-117-10 | Challenge Timeline | PPOS-117-01 | BLOCKED |
+| 11 | PPOS-117-11 | Decision Replay 2.0 | PPOS-117-05, PPOS-117-10 | BLOCKED |
+| 12 | PPOS-117-12 | Calm / Balanced / Gambler comparison and safety | PPOS-117-01 | BLOCKED |
+| 13 | PPOS-117-13 | Complete Live Account product | PPOS-117-05, PPOS-117-08 | BLOCKED |
+| 14 | PPOS-117-14 | Capital Preservation Score | PPOS-117-13 | BLOCKED |
+| 15 | PPOS-117-15 | Recovery Mode | PPOS-117-13 | BLOCKED |
+| 16 | PPOS-117-16 | Scaling recommendations | PPOS-117-13 | BLOCKED |
+| 17 | PPOS-117-17 | Personal Kill Switch | PPOS-117-13 | BLOCKED |
+| 18 | PPOS-117-18 | Premium native-feeling Prop Pass UI | PPOS-117-02 through PPOS-117-17 | BLOCKED |
+| 19 | PPOS-117-19 | Persistence, additive migrations and RLS | PPOS-117-01 through PPOS-117-17 | BLOCKED |
+| 20 | PPOS-117-20 | Mathematical and integration tests | PPOS-117-01 through PPOS-117-19 | BLOCKED |
+| 21 | PPOS-117-21 | Physical QA | PPOS-117-18, PPOS-117-20 | BLOCKED |
+| 22 | PPOS-117-22 | Apple stored:true and revoke | production build 117 | BLOCKED |
+| 23 | PPOS-117-23 | Subscription/authentication matrix | production build 117 | BLOCKED |
+| 24 | PPOS-117-24 | Production archive 117 | PPOS-117-20 through PPOS-117-23 | BLOCKED |
+| 25 | PPOS-117-25 | TestFlight upload and internal testing | PPOS-117-24 | BLOCKED |
+| 26 | PPOS-117-26 | Final documentation and handoff | PPOS-117-25 | BLOCKED |
+
+**Epic acceptance criteria:** all engines are runtime-neutral and deterministic;
+missing inputs are explicit; risk is clamped by daily, maximum-loss, drawdown,
+contract, session, and Live Kill Switch limits; temporary scenarios do not
+mutate real state; persisted user data is owner-isolated by RLS; and build 117
+alone carries this scope. Each child task follows the one-task workflow and
+contributes focused tests and documentation before its successor starts.
+
 ## Deferred scope
 
 The following are intentionally not backlog tasks for the current 2.0 critical
