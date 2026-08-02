@@ -23,3 +23,5 @@ export { createDecisionReplay } from "./replay";
 export type { DecisionReplay, DecisionReplayInput, DecisionVerdict } from "./replay";
 export { compareRiskModes } from "./modes";
 export type { ModeComparison } from "./modes";
+export { calculateLiveEngine } from "./live";
+export type { LiveEngineInput, LiveEngineValues } from "./live";

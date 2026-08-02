@@ -1,0 +1,3 @@
+import assert from "node:assert/strict"; import { calculateLiveEngine } from "../src/propPass/tradingOs";
+const base={currentEquityMinor:960_000,equityHighMinor:1_000_000,dailyRiskRemainingMinor:50_000,weeklyLossRemainingMinor:60_000,normalRiskPerTradeMinor:20_000,recoveryThresholdBps:300,recoveryRiskBps:5000,killSwitchActive:false};
+assert.equal(calculateLiveEngine(base).values.recoveryModeActive,true);assert.equal(calculateLiveEngine(base).values.allowedRiskPerTradeMinor,10_000);assert.equal(calculateLiveEngine({...base,killSwitchActive:true}).values.allowedRiskPerTradeMinor,0);console.log("prop-pass-live-engine-qa: PASS");
