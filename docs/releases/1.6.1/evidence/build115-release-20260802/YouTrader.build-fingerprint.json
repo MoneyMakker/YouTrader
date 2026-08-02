@@ -5,8 +5,8 @@
   "version": "1.6.1",
   "buildNumber": "115",
   "xcodeConfiguration": "Release",
-  "archivePath": "/Users/valentynborovyk/Projects/youtrader-final/build/YouTrader-1.6.1-115.xcarchive",
-  "ipaPath": "/Users/valentynborovyk/Projects/youtrader-final/build/YouTrader-1.6.1-115.ipa",
-  "appPath": "/Users/valentynborovyk/Projects/youtrader-final/build/DerivedData-yt3-release-115/Build/Products/Release-iphoneos/YouTrader.app",
+  "archivePath": "build/YouTrader-1.6.1-115.xcarchive",
+  "ipaPath": "build/YouTrader-1.6.1-115.ipa",
+  "appPath": "build/DerivedData-yt3-release-115/Build/Products/Release-iphoneos/YouTrader.app",
   "searchToken": "YT_BUILD_FP_v1:bc97e1f:115:Release"
 }

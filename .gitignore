@@ -48,6 +48,23 @@ docs/releases/**/simulator-recovery/
 docs/releases/**/stats-redesign-evidence/
 docs/releases/**/qa-logs/
 
+# Local-only 1.6.1 Phase4F / premature build dumps (committed evidence is under evidence/*-release-20260802 + deletion-smoke)
+docs/releases/1.6.1/evidence/build115-20260801/
+docs/releases/1.6.1/evidence/build115-physical-20260801/
+docs/releases/1.6.1/evidence/build115-release-20260801/
+docs/releases/1.6.1/evidence/phase4f-*/
+docs/releases/1.6.1/evidence/settings-cleanup-uiqa-20260802/
+docs/releases/1.6.1/PHASE4F_LIVE_E2E_RUN_*.md
+docs/releases/1.6.1/PHYSICAL_*
+docs/releases/1.6.1/SIMULATOR_SERVICE_RECOVERY_*.md
+docs/releases/1.6.1/evidence-sim-*.png
+docs/releases/1.6.1/YT3_LIVE_E2E_CONTINUATION_REPORT_*.md
+docs/releases/1.6.1/YT3_PHASE4F_STALE_PHYSICAL_ARTIFACT_*.md
+
+# App Store / upload local tooling noise
+**/YouTrader_*.xcdistributionlogs/
+**/ContentDelivery/
+
 # Backups and temporary generated files
 *.before-*
 recovery-backups/
