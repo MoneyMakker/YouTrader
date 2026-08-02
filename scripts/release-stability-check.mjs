@@ -6,10 +6,9 @@ import path from "node:path";
 const root = process.cwd();
 const requiredLocales = ["en", "ru", "es", "fr", "de", "it", "uk"];
 const expectedVersion = "1.6.1";
-// Build 115 is the immutable TestFlight baseline for this branch. This gate
-// verifies that the checked-in native metadata still matches it; it never
-// creates or increments a build.
-const expectedBuild = "115";
+// Build 116 is the authorized production candidate for this branch. This gate
+// verifies checked-in native metadata; it never creates or increments a build.
+const expectedBuild = "116";
 
 function run(name, command, args) {
   console.log(`\n[release:stability] ${name}`);

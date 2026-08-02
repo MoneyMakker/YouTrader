@@ -33,7 +33,7 @@ export function resolvePropPassProductState(input: {
       return { kind: "unsupported" };
     case "disabled": {
       const environment = String(input.appEnvironment ?? "").trim().toLowerCase();
-      // Build 115 embeds `production`; an off staging-only read gate is not a
+      // Build 116 embeds `production`; an off staging-only read gate is not a
       // production product state. Keep staging diagnostics explicit instead.
       return environment === "production" ? { kind: "setup" } : { kind: "unsupported" };
     }

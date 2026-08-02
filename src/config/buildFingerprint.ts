@@ -38,7 +38,7 @@ export function resolveBuildFingerprint(): BuildFingerprint {
     gitSha: pick(g.gitSha, "EXPO_PUBLIC_YT_GIT_SHA"),
     buildTimeUtc: pick(g.buildTimeUtc, "EXPO_PUBLIC_YT_BUILD_TIME"),
     version: pick(g.version, "EXPO_PUBLIC_YT_APP_VERSION", "1.6.1"),
-    buildNumber: pick(g.buildNumber, "EXPO_PUBLIC_YT_BUILD_NUMBER", "113"),
+    buildNumber: pick(g.buildNumber, "EXPO_PUBLIC_YT_BUILD_NUMBER", "116"),
     xcodeConfiguration: pick(g.xcodeConfiguration, "EXPO_PUBLIC_YT_XCODE_CONFIG"),
     embeddedBundleMarker: pick(g.embeddedBundleMarker, "EXPO_PUBLIC_YT_BUNDLE_MARKER"),
   };
