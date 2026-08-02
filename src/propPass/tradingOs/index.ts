@@ -27,3 +27,5 @@ export { calculateLiveEngine } from "./live";
 export type { LiveEngineInput, LiveEngineValues } from "./live";
 export { calculateCapitalPreservationScore, CAPITAL_PRESERVATION_WEIGHTS } from "./preservation";
 export type { CapitalPreservationInput, CapitalPreservationValues, PreservationComponentId } from "./preservation";
+export { evaluateRecoveryMode } from "./recovery";
+export type { RecoveryModeInput, RecoveryModeValues } from "./recovery";
