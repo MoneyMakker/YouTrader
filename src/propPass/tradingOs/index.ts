@@ -29,3 +29,5 @@ export { calculateCapitalPreservationScore, CAPITAL_PRESERVATION_WEIGHTS } from 
 export type { CapitalPreservationInput, CapitalPreservationValues, PreservationComponentId } from "./preservation";
 export { evaluateRecoveryMode } from "./recovery";
 export type { RecoveryModeInput, RecoveryModeValues } from "./recovery";
+export { recommendScaling } from "./scaling";
+export type { ScalingRecommendationInput, ScalingRecommendationValues } from "./scaling";

@@ -1,0 +1,6 @@
+import assert from "node:assert/strict";
+import { recommendScaling } from "../src/propPass/tradingOs";
+const base = { currentRiskPerTradeMinor: 10_000, currentContracts: 1, maximumAllowedRiskPerTradeMinor: 25_000, maximumAllowedContracts: 3, userMaximumRiskPerTradeMinor: 20_000, riskStepMinor: 5_000, requiresNewEquityHigh: true, atNewEquityHigh: true, minimumProfitableSessions: 3, completedCompliantProfitableSessions: 3, currentDrawdownBps: 0, maximumAcceptableDrawdownBps: 250, capitalPreservationScore: 90, minimumPreservationScore: 80, stablePositionSizing: true, recoveryModeActive: false, killSwitchActive: false, weeklyRiskRoomPositive: true };
+const eligible = recommendScaling(base); assert.equal(eligible.values.eligible, true); assert.equal(eligible.values.recommendedNextRiskPerTradeMinor, 15_000); assert.equal(eligible.values.recommendedNextContracts, 2);
+const oneWin = recommendScaling({ ...base, completedCompliantProfitableSessions: 1 }); assert.equal(oneWin.values.eligible, false); assert.ok(oneWin.values.blockers.includes("minimum_compliant_profitable_sessions_not_met"));
+const stopped = recommendScaling({ ...base, killSwitchActive: true }); assert.equal(stopped.values.eligible, false); assert.equal(stopped.values.recommendedNextContracts, 1); assert.ok(stopped.values.blockers.includes("kill_switch_active"));
