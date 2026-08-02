@@ -526,26 +526,26 @@ was subsequently recorded in `ca531f3`; no product fix is discarded.
 
 | Order | ID | Child task | Dependency | Backlog status |
 |---:|---|---|---|---|
-| 1 | PPOS-117-01 | Prop Pass domain architecture | existing Prop Pass engine | READY |
-| 2 | PPOS-117-02 | Pre-Trade Check | PPOS-117-01 | BLOCKED |
-| 3 | PPOS-117-03 | Contract Size Calculator | PPOS-117-01 | BLOCKED |
-| 4 | PPOS-117-04 | What-If Simulator | PPOS-117-02, PPOS-117-03 | BLOCKED |
-| 5 | PPOS-117-05 | Daily Trading Plan | PPOS-117-01 | BLOCKED |
-| 6 | PPOS-117-06 | Live Risk Meter | PPOS-117-05 | BLOCKED |
-| 7 | PPOS-117-07 | Smart Intervention 2.0 | PPOS-117-02, PPOS-117-05 | BLOCKED |
-| 8 | PPOS-117-08 | Editable Rule Engine | PPOS-117-01 | BLOCKED |
-| 9 | PPOS-117-09 | Payout Readiness | PPOS-117-08 | BLOCKED |
-| 10 | PPOS-117-10 | Challenge Timeline | PPOS-117-01 | BLOCKED |
-| 11 | PPOS-117-11 | Decision Replay 2.0 | PPOS-117-05, PPOS-117-10 | BLOCKED |
-| 12 | PPOS-117-12 | Calm / Balanced / Gambler comparison and safety | PPOS-117-01 | BLOCKED |
-| 13 | PPOS-117-13 | Complete Live Account product | PPOS-117-05, PPOS-117-08 | BLOCKED |
-| 14 | PPOS-117-14 | Capital Preservation Score | PPOS-117-13 | BLOCKED |
-| 15 | PPOS-117-15 | Recovery Mode | PPOS-117-13 | BLOCKED |
-| 16 | PPOS-117-16 | Scaling recommendations | PPOS-117-13 | BLOCKED |
-| 17 | PPOS-117-17 | Personal Kill Switch | PPOS-117-13 | BLOCKED |
-| 18 | PPOS-117-18 | Premium native-feeling Prop Pass UI | PPOS-117-02 through PPOS-117-17 | BLOCKED |
-| 19 | PPOS-117-19 | Persistence, additive migrations and RLS | PPOS-117-01 through PPOS-117-17 | BLOCKED |
-| 20 | PPOS-117-20 | Mathematical and integration tests | PPOS-117-01 through PPOS-117-19 | BLOCKED |
+| 1 | PPOS-117-01 | Prop Pass domain architecture | existing Prop Pass engine | DONE |
+| 2 | PPOS-117-02 | Pre-Trade Check | PPOS-117-01 | DONE |
+| 3 | PPOS-117-03 | Contract Size Calculator | PPOS-117-01 | DONE |
+| 4 | PPOS-117-04 | What-If Simulator | PPOS-117-02, PPOS-117-03 | DONE |
+| 5 | PPOS-117-05 | Daily Trading Plan | PPOS-117-01 | DONE |
+| 6 | PPOS-117-06 | Live Risk Meter | PPOS-117-05 | DONE |
+| 7 | PPOS-117-07 | Smart Intervention 2.0 | PPOS-117-02, PPOS-117-05 | DONE |
+| 8 | PPOS-117-08 | Editable Rule Engine | PPOS-117-01 | DONE |
+| 9 | PPOS-117-09 | Payout Readiness | PPOS-117-08 | DONE |
+| 10 | PPOS-117-10 | Challenge Timeline | PPOS-117-01 | DONE |
+| 11 | PPOS-117-11 | Decision Replay 2.0 | PPOS-117-05, PPOS-117-10 | DONE |
+| 12 | PPOS-117-12 | Calm / Balanced / Gambler comparison and safety | PPOS-117-01 | DONE |
+| 13 | PPOS-117-13 | Complete Live Account product | PPOS-117-05, PPOS-117-08 | IN PROGRESS |
+| 14 | PPOS-117-14 | Capital Preservation Score | PPOS-117-13 | DONE |
+| 15 | PPOS-117-15 | Recovery Mode | PPOS-117-13 | DONE |
+| 16 | PPOS-117-16 | Scaling recommendations | PPOS-117-13 | DONE |
+| 17 | PPOS-117-17 | Personal Kill Switch | PPOS-117-13 | DONE |
+| 18 | PPOS-117-18 | Premium native-feeling Prop Pass UI | PPOS-117-02 through PPOS-117-17 | IN PROGRESS |
+| 19 | PPOS-117-19 | Persistence, additive migrations and RLS | PPOS-117-01 through PPOS-117-17 | IN PROGRESS |
+| 20 | PPOS-117-20 | Mathematical and integration tests | PPOS-117-01 through PPOS-117-19 | IN PROGRESS |
 | 21 | PPOS-117-21 | Physical QA | PPOS-117-18, PPOS-117-20 | BLOCKED |
 | 22 | PPOS-117-22 | Apple stored:true and revoke | production build 117 | BLOCKED |
 | 23 | PPOS-117-23 | Subscription/authentication matrix | production build 117 | BLOCKED |
@@ -559,6 +559,14 @@ contract, session, and Live Kill Switch limits; temporary scenarios do not
 mutate real state; persisted user data is owner-isolated by RLS; and build 117
 alone carries this scope. Each child task follows the one-task workflow and
 contributes focused tests and documentation before its successor starts.
+
+**Implementation note (2026-08-02):** PPOS-117-01 through PPOS-117-12 and
+PPOS-117-14 through PPOS-117-17 have focused commits and deterministic QA.
+PPOS-117-13 remains open for persisted product wiring. PPOS-117-18 has
+context-correct funded Live presentation work underway. PPOS-117-19 includes
+an additive, static-QA migration; local/staging SQL execution remains required.
+PPOS-117-20 has the consolidated deterministic gate but remains open until
+persistence integration and live RLS verification complete.
 
 ## Deferred scope
 
