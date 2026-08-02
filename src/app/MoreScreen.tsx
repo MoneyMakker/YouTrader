@@ -1,7 +1,8 @@
 /**
- * More hub — Calendar, Calculator, News, Reports.
+ * More hub — Calendar, Calculator, News, Reports, Import Trades.
  * Settings is a primary bottom tab (not duplicated here).
- * Bottom tabs: ≤5 allowlisted / ≤4 non-allowlisted.
+ * Prop Pass is a primary bottom tab (not placed in More).
+ * Bottom tabs: always five (Journal, Prop Pass, Stats, Settings, More).
  */
 
 import React from "react";

@@ -262,6 +262,13 @@ import { JournalCalendarDayPressable } from "../components/journal/JournalCalend
 import { AnimatedEntrance } from "../components/ui/AnimatedEntrance";
 import { BottomSheetPanel } from "../components/ui/BottomSheetPanel";
 import {
+  inferManualResultType,
+  resolveManualSignedPnl,
+  type ManualPnlResultType,
+  type PnlEntryMode,
+} from "../journal/manualPnl";
+import { PropPassLockedPreview } from "../propPass/PropPassLockedPreview";
+import {
   StatsCharts,
   StatsFocusInsight,
   StatsMetrics,
@@ -557,6 +564,10 @@ function validateTradeForm(
     voiceUri: string;
   },
   lang: Lang = "en",
+  options?: {
+    pnlMode?: PnlEntryMode;
+    manualResultType?: ManualPnlResultType;
+  },
 ) {
   const symbol = normalizeSymbolInput(form.symbol);
   const entryTime = normalizeTradeClock(form.entryTime);
@@ -582,9 +593,21 @@ function validateTradeForm(
   if (takeProfit.error) return { error: takeProfit.error };
 
   const instrument = INSTRUMENTS[symbol];
+  const pnlMode = options?.pnlMode || "calculate";
   let pnl: number;
-  // Prefer deterministic calculation from execution when instrument is known.
-  if (instrument && entry.value != null && exit.value != null) {
+  if (pnlMode === "manual") {
+    const resolved = resolveManualSignedPnl(
+      form.pnl,
+      options?.manualResultType || "profit",
+    );
+    if (resolved.ok === false) {
+      return { error: resolved.error === "empty" ? t("manualPnlRequired") : t("pnlOutsideSafeRange") };
+    }
+    if (Math.abs(resolved.pnl) > MAX_ABS_PNL) {
+      return { error: t("pnlOutsideSafeRange") };
+    }
+    pnl = resolved.pnl;
+  } else if (instrument && entry.value != null && exit.value != null) {
     const diff =
       form.direction === "LONG"
         ? exit.value - entry.value
@@ -594,18 +617,18 @@ function validateTradeForm(
       return { error: t("calculatedPnlOutsideSafeRange") };
     }
   } else {
-    const manualPnl = String(form.pnl || "").trim();
-    if (!manualPnl) {
+    // Calculate mode without enough execution → require visible manual amount field path.
+    const resolved = resolveManualSignedPnl(form.pnl, options?.manualResultType || "profit");
+    if (resolved.ok === false) {
       if (entry.value == null || exit.value == null) {
         return { error: t("addPnlOrEntryExit") };
       }
-      return { error: t("manualPnlRequired") };
+      return { error: resolved.error === "empty" ? t("manualPnlRequired") : t("pnlOutsideSafeRange") };
     }
-    const signed = Number(manualPnl.replace(",", "."));
-    if (!Number.isFinite(signed) || Math.abs(signed) > MAX_ABS_PNL) {
+    if (Math.abs(resolved.pnl) > MAX_ABS_PNL) {
       return { error: t("pnlOutsideSafeRange") };
     }
-    pnl = Number(signed.toFixed(2));
+    pnl = resolved.pnl;
   }
 
   return {
@@ -798,6 +821,14 @@ function eventDateLabel(date: string) {
     weekday: "short",
     day: "2-digit",
     month: "short",
+    year: "numeric",
+  });
+}
+function journalLongDateLabel(date: string) {
+  return safeDateFromISO(date).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    month: "long",
+    day: "numeric",
     year: "numeric",
   });
 }
@@ -6854,9 +6885,12 @@ function JournalScreen({
   const recorderState = useAudioRecorderState(audioRecorder);
   const [audioReady, setAudioReady] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayISO());
+  const [dayPanelOpen, setDayPanelOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(new Date());
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [modal, setModal] = useState(false);
+  const [pnlEntryMode, setPnlEntryMode] = useState<PnlEntryMode>("calculate");
+  const [manualResultType, setManualResultType] = useState<ManualPnlResultType>("profit");
   const [photoView, setPhotoView] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [symbolIsCustom, setSymbolIsCustom] = useState(false);
@@ -7058,16 +7092,23 @@ function JournalScreen({
       return;
     }
     setSelectedDate(date);
+    setDayPanelOpen(false);
     setEditId(null);
     setSymbolIsCustom(false);
+    setPnlEntryMode("calculate");
+    setManualResultType("profit");
     setForm({ ...emptyForm, entryTime: formatClockFromDate() });
     setModal(true);
   };
   const openEdit = (tr: Trade) => {
     setEditId(tr.id);
+    setDayPanelOpen(false);
     const preset = (MINI_INSTRUMENTS as readonly string[]).includes(tr.symbol)
       || (MICRO_INSTRUMENTS as readonly string[]).includes(tr.symbol);
     setSymbolIsCustom(!preset);
+    const hasExecution = tr.entry != null && tr.exit != null && preset;
+    setPnlEntryMode(hasExecution ? "calculate" : "manual");
+    setManualResultType(inferManualResultType(Number(tr.pnl) || 0));
     setForm({
       symbol: tr.symbol,
       direction: tr.direction,
@@ -7078,7 +7119,7 @@ function JournalScreen({
       contracts: String(tr.contracts || 1),
       stopLoss: tr.stopLoss != null ? String(tr.stopLoss) : "",
       takeProfit: tr.takeProfit != null ? String(tr.takeProfit) : "",
-      pnl: String(tr.pnl),
+      pnl: String(Math.abs(Number(tr.pnl) || 0)),
       mood: tr.mood,
       notes: tr.notes || "",
       tags: tagsToInput(tr.tags),
@@ -7243,6 +7284,10 @@ function JournalScreen({
     setTradeActionTarget(tr);
   }, []);
   const calcPnl = () => {
+    if (pnlEntryMode === "manual") {
+      const resolved = resolveManualSignedPnl(form.pnl, manualResultType);
+      return resolved.ok ? resolved.pnl : 0;
+    }
     const i = INSTRUMENTS[normalizeSymbolInput(form.symbol)];
     if (i && form.entry && form.exit) {
       const diff =
@@ -7252,13 +7297,6 @@ function JournalScreen({
       return Number(
         ((diff / i.tickSize) * i.tickValue * Number(form.contracts || 1)).toFixed(2),
       );
-    }
-    const manual = String(form.pnl || "").trim();
-    if (manual) {
-      const n = Number(manual.replace(",", "."));
-      if (Number.isFinite(n)) {
-        return Number(Math.max(-MAX_ABS_PNL, Math.min(MAX_ABS_PNL, n)).toFixed(2));
-      }
     }
     return 0;
   };
@@ -7279,7 +7317,10 @@ function JournalScreen({
       const now = Date.now();
       // Double-tap guard only — failed validations must remain retryable (see lastSaveAt below).
       if (now - lastSaveAtRef.current < TRADE_SAVE_DEBOUNCE_MS) return;
-      const validated = validateTradeForm(form, lang);
+      const validated = validateTradeForm(form, lang, {
+        pnlMode: pnlEntryMode,
+        manualResultType,
+      });
       if ("error" in validated) {
         Alert.alert(t("couldNotSaveTrade"), validated.error || t("checkTradeDetails"));
         return;
@@ -7652,10 +7693,10 @@ function JournalScreen({
                     hasTrades={hasTrades}
                     selected={active}
                     accessibilityLabel={dayA11yLabel}
-                    accessibilityHint={hasTrades ? t("tapToViewEdit") : t("addTrade")}
+                    accessibilityHint={hasTrades ? t("journalViewTradesForDate", { date: journalLongDateLabel(d) }) : t("journalAddTradeForDate", { date: journalLongDateLabel(d) })}
                     onDayPress={() => {
-                      // Always select the day first; Add Trade lives in the day-detail area.
                       setSelectedDate(d);
+                      setDayPanelOpen(true);
                     }}
                     onDayLongPress={() => openDeleteDayConfirm(d)}
                     style={[
@@ -7707,12 +7748,18 @@ function JournalScreen({
         </View>
       </View>
       {!isTabletLayout ? (
-        <View style={styles.journalScrollCue}>
-          <Text style={styles.journalScrollCueLabel}>{t("scrollToViewTrades")}</Text>
+        <Pressable
+          style={styles.journalScrollCue}
+          onPress={() => setDayPanelOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t("journalViewTradesForDate", { date: journalLongDateLabel(selectedDate) })}
+          testID="journal-open-day-panel"
+        >
+          <Text style={styles.journalScrollCueLabel}>{t("journalViewDayTrades")}</Text>
           <View style={styles.journalScrollCueGlass}>
             <ChevronDown size={18} color={C.green} strokeWidth={UI_ICON_STROKE} />
           </View>
-        </View>
+        </Pressable>
       ) : null}
       <Modal visible={monthPickerOpen} transparent animationType="fade">
         <Pressable style={styles.monthPickerBackdrop} onPress={() => setMonthPickerOpen(false)}>
@@ -7809,7 +7856,7 @@ function JournalScreen({
           <Pressable
             testID="journal-add-trade"
             accessibilityRole="button"
-            accessibilityLabel={t("addTrade")}
+            accessibilityLabel={t("journalAddTradeForDate", { date: journalLongDateLabel(selectedDate) })}
             onPress={() => {
               runYdlMotionHaptic("Selection");
               openNew(selectedDate);
@@ -7826,7 +7873,7 @@ function JournalScreen({
         <Pressable
           testID="journal-add-trade"
           accessibilityRole="button"
-          accessibilityLabel={t("addTrade")}
+          accessibilityLabel={t("journalAddTradeForDate", { date: journalLongDateLabel(selectedDate) })}
           onPress={() => {
             runYdlMotionHaptic("Selection");
             openNew(selectedDate);
@@ -8022,6 +8069,67 @@ function JournalScreen({
         </GlassCard>
       ) : null}
       <BottomSheetPanel
+        visible={dayPanelOpen}
+        title={eventDateLabel(selectedDate)}
+        onClose={() => setDayPanelOpen(false)}
+      >
+        <View testID="journal-day-panel" style={{ gap: 12, paddingBottom: 24 }}>
+          <Text
+            style={styles.calendarDayDetailDate}
+            accessibilityLabel={t("journalViewTradesForDate", { date: journalLongDateLabel(selectedDate) })}
+            maxFontSizeMultiplier={1.3}
+          >
+            {eventDateLabel(selectedDate)}
+          </Text>
+          {selectedDayPnl != null ? (
+            <Text
+              style={[
+                styles.calendarDayDetailPnl,
+                { color: selectedDayPnl >= 0 ? C.green : C.red },
+              ]}
+              maxFontSizeMultiplier={1.35}
+            >
+              {dayMoney(selectedDayPnl)}
+            </Text>
+          ) : null}
+          {filtered.length === 0 ? (
+            <Text style={styles.journalDayEmptyText} maxFontSizeMultiplier={1.3}>
+              {t("journalNoTradesForDay")}
+            </Text>
+          ) : (
+            filtered.map((tr) => (
+              <Pressable
+                key={`panel-${tr.id}`}
+                testID={`journal.day.panel.trade.${tr.id}`}
+                onPress={() => openEdit(tr)}
+                style={styles.tradeSheetAction}
+                accessibilityRole="button"
+                accessibilityLabel={`${tr.symbol} ${tr.direction} ${moneyCompact(tr.pnl)}`}
+              >
+                <Text style={styles.tradeSheetActionText} maxFontSizeMultiplier={1.25}>
+                  {`${tr.symbol} ${tr.direction} · ${moneyCompact(tr.pnl)}`}
+                </Text>
+              </Pressable>
+            ))
+          )}
+          <Pressable
+            testID="journal-day-panel-add-trade"
+            accessibilityRole="button"
+            accessibilityLabel={t("journalAddTradeForDate", { date: journalLongDateLabel(selectedDate) })}
+            onPress={() => {
+              runYdlMotionHaptic("Selection");
+              openNew(selectedDate);
+            }}
+            style={styles.journalDayAddTradeBtn}
+          >
+            <Plus size={ydlIconRules.sizes.sm} color={C.bg} strokeWidth={UI_ICON_STROKE} />
+            <Text style={styles.journalDayAddTradeLabel} maxFontSizeMultiplier={1.2}>
+              {t("journalDayAddTrade")}
+            </Text>
+          </Pressable>
+        </View>
+      </BottomSheetPanel>
+      <BottomSheetPanel
         visible={!!tradeActionTarget}
         title={t("journalTradeActions")}
         onClose={() => setTradeActionTarget(null)}
@@ -8177,11 +8285,99 @@ function JournalScreen({
                 </Pressable>
               </View>
 
-              {/* 1. Outcome — P&L is derived from execution (or signed manual for custom symbols). */}
+              {/* 1. Outcome — Calculate from execution or Manual absolute amount. */}
               <View style={styles.journalDetailSection}>
                 <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
                   {t("journalFormTradeResult")}
                 </Text>
+                <Text style={styles.label}>{t("journalFormPnlEntry")}</Text>
+                <View style={styles.row} testID="journal.trade.edit.pnl.mode">
+                  {([
+                    { id: "calculate" as const, label: t("journalFormPnlCalculate") },
+                    { id: "manual" as const, label: t("journalFormPnlManual") },
+                  ]).map((mode) => (
+                    <Pressable
+                      key={mode.id}
+                      testID={`journal.trade.edit.pnl.mode.${mode.id}`}
+                      onPress={() => {
+                        if (mode.id === pnlEntryMode) return;
+                        const hasManualDraft =
+                          pnlEntryMode === "manual" &&
+                          (String(form.pnl || "").trim().length > 0 || manualResultType !== "profit");
+                        const switchMode = () => {
+                          runYdlMotionHaptic("Selection");
+                          if (mode.id === "calculate") {
+                            setForm((prev) => ({ ...prev, pnl: "" }));
+                            setManualResultType("profit");
+                          }
+                          setPnlEntryMode(mode.id);
+                        };
+                        if (hasManualDraft && mode.id === "calculate") {
+                          Alert.alert(
+                            t("journalFormPnlSwitchConfirmTitle"),
+                            t("journalFormPnlSwitchConfirmBody"),
+                            [
+                              { text: t("cancel"), style: "cancel" },
+                              { text: t("journalFormPnlSwitchConfirm"), onPress: switchMode },
+                            ],
+                          );
+                          return;
+                        }
+                        switchMode();
+                      }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: pnlEntryMode === mode.id }}
+                      style={[styles.option, pnlEntryMode === mode.id && styles.optionActive]}
+                    >
+                      <Text style={styles.optionText}>{mode.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {pnlEntryMode === "manual" ? (
+                  <>
+                    <Input
+                      testID="journal.trade.edit.pnl.manual"
+                      accessibilityLabel={t("journalFormPnlAmount")}
+                      label={t("journalFormPnlAmount")}
+                      keyboardType="decimal-pad"
+                      value={form.pnl}
+                      onChangeText={(v: string) => setForm({ ...form, pnl: v.replace(/[^0-9.,]/g, "") })}
+                      placeholder="0.00"
+                    />
+                    <View style={styles.row} testID="journal.trade.edit.pnl.resultType">
+                      {([
+                        { id: "profit" as const, label: t("journalFormPnlProfit"), testID: "journal.trade.edit.pnl.plus" },
+                        { id: "loss" as const, label: t("journalFormPnlLoss"), testID: "journal.trade.edit.pnl.minus" },
+                        { id: "breakeven" as const, label: t("journalFormPnlBreakeven"), testID: "journal.trade.edit.pnl.breakeven" },
+                      ]).map((opt) => (
+                        <Pressable
+                          key={opt.id}
+                          testID={opt.testID}
+                          onPress={() => {
+                            runYdlMotionHaptic("Selection");
+                            setManualResultType(opt.id);
+                            if (opt.id === "breakeven") setForm((prev) => ({ ...prev, pnl: "0" }));
+                          }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: manualResultType === opt.id }}
+                          style={[
+                            styles.option,
+                            manualResultType === opt.id &&
+                              (opt.id === "loss"
+                                ? styles.optionShortActive
+                                : opt.id === "profit"
+                                  ? styles.optionActive
+                                  : styles.optionActive),
+                          ]}
+                        >
+                          <Text style={styles.optionText}>{opt.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+
                 <View
                   testID="journal.trade.edit.pnl"
                   accessibilityLabel={t("pnl")}
@@ -8203,27 +8399,18 @@ function JournalScreen({
                     ]}
                     maxFontSizeMultiplier={1.35}
                   >
-                    {form.entry && form.exit
+                    {pnlEntryMode === "manual"
                       ? money(pnlPreview)
-                      : t("journalFormPnlEnterExecution")}
+                      : form.entry && form.exit
+                        ? money(pnlPreview)
+                        : t("journalFormPnlEnterExecution")}
                   </Text>
                   <Text style={styles.journalPnlHint} maxFontSizeMultiplier={1.25}>
-                    {INSTRUMENTS[normalizeSymbolInput(form.symbol)] && form.entry && form.exit
-                      ? t("journalFormPnlHintAuto")
-                      : t("journalFormPnlHintManual")}
+                    {pnlEntryMode === "manual"
+                      ? t("journalFormPnlAmount")
+                      : t("journalFormPnlHintAuto")}
                   </Text>
                 </View>
-                {!INSTRUMENTS[normalizeSymbolInput(form.symbol)] ? (
-                  <Input
-                    testID="journal.trade.edit.pnl.manual"
-                    accessibilityLabel={t("pnl")}
-                    label={t("pnl")}
-                    keyboardType="numbers-and-punctuation"
-                    value={form.pnl}
-                    onChangeText={(v: string) => setForm({ ...form, pnl: v })}
-                    placeholder="0.00"
-                  />
-                ) : null}
 
                 <Text style={styles.label}>{t("direction")}</Text>
                 <View style={styles.row}>
@@ -8258,7 +8445,7 @@ function JournalScreen({
                       active={!symbolIsCustom && form.symbol === s}
                       onPress={() => {
                         setSymbolIsCustom(false);
-                        setForm({ ...form, symbol: s, pnl: "" });
+                        setForm({ ...form, symbol: s, pnl: pnlEntryMode === "manual" ? form.pnl : "" });
                       }}
                       testIDPrefix="journal.trade.edit.instrument"
                     />
@@ -8273,7 +8460,7 @@ function JournalScreen({
                       active={!symbolIsCustom && form.symbol === s}
                       onPress={() => {
                         setSymbolIsCustom(false);
-                        setForm({ ...form, symbol: s, pnl: "" });
+                        setForm({ ...form, symbol: s, pnl: pnlEntryMode === "manual" ? form.pnl : "" });
                       }}
                       testIDPrefix="journal.trade.edit.instrument"
                     />
@@ -10255,14 +10442,17 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   useEffect(() => {
     const stagingEnv = isPropPassEnvironmentAllowed();
-    const visible =
+    const entitledVisible =
       !!session?.user?.id &&
       isPremium &&
       (stagingEnv
         ? isPropPassEntryVisible(undefined, null, session.user.id)
         : true);
-    if (tab === "propPass" && !visible) setTab("journal");
-  }, [isPremium, session?.user?.id, tab]);
+    // Tab always stays in the dock; only QA force-hide may remove it.
+    const tabPresent = !(qaPropPassPayload?.forceHidePropPassTab);
+    if (tab === "propPass" && !tabPresent) setTab("journal");
+    void entitledVisible;
+  }, [isPremium, qaPropPassPayload?.forceHidePropPassTab, session?.user?.id, tab]);
 
   const completeProductOnboarding = useCallback(() => {
     setOnboardingCompleted(true);
@@ -10313,8 +10503,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     };
   }, [acquisitionPhase, showStagingQaResetMarkers]);
 
-  const propPassTabVisible =
-    !(qaPropPassPayload?.forceHidePropPassTab) &&
+  const propPassTabVisible = !(qaPropPassPayload?.forceHidePropPassTab);
+  const propPassEntitled =
     !!session?.user?.id &&
     isPremium &&
     (isPropPassEnvironmentAllowed()
@@ -12158,6 +12348,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               }}
             />
           ) : tab === "propPass" ? (
+            propPassEntitled ? (
             <React.Suspense fallback={null}>
               <LazyPropPassInternalScreen
                 key={`prop-pass-${qaPropPassEpoch}`}
@@ -12170,6 +12361,16 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
                 developerMode={false}
               />
             </React.Suspense>
+            ) : (
+              <PropPassLockedPreview
+                onViewPlans={() => {
+                  setTab("more");
+                  setMoreDestination("subscription");
+                }}
+                onRestore={restorePurchases}
+                restoreBusy={purchaseBusy}
+              />
+            )
           ) : tab === "news" ? (
             <NewsScreen
               key={`news-${qaNewsFaultEpoch}`}

@@ -6,7 +6,8 @@
  *
  * Anonymous users never enter the tab shell.
  * Authenticated + entitled → five-tab main.
- * Authenticated + not entitled → four-tab main (paywall reachable from Settings).
+ * Authenticated + not entitled → five-tab main (Prop Pass shows locked preview).
+ * Paywall remains reachable from Settings / Prop Pass CTAs / More subscription.
  */
 
 export type AcquisitionPhase =
