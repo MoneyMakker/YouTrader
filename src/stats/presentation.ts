@@ -15,7 +15,8 @@ export type StatsEdgeLeak = {
   insight: string;
 } | null;
 
-const MIN_EDGE_TRADES = 5;
+export const MIN_EDGE_TRADES = 5;
+export const RECENT_TREND_MIN_TRADES = 6;
 
 export function sessionBucket(trade: Trade): string {
   const raw = String(trade.entryTime || trade.exitTime || "").trim();
@@ -154,7 +155,7 @@ export function deriveRecentTrend(trades: Trade[]): {
   tradeDelta: string;
   summary: string;
 } | null {
-  if (trades.length < 6) return null;
+  if (trades.length < RECENT_TREND_MIN_TRADES) return null;
   const ordered = [...trades].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const mid = Math.floor(ordered.length / 2);
   const prev = ordered.slice(0, mid);

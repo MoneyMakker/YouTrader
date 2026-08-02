@@ -26,6 +26,7 @@ import {
   type StatsPeriodId,
 } from "./presentation";
 import { buildPerformanceRadar } from "./performanceRadar";
+import { getInsightsLearningState, type InsightsLearningTarget } from "./insightsLearning";
 import { buildTradingHeatmap, HEATMAP_MODE_LABELS, type HeatmapMode } from "./tradingHeatmap";
 
 const PERIODS: StatsPeriodId[] = ["1D", "7D", "1M", "YTD", "1Y", "ALL"];
@@ -76,6 +77,17 @@ export function StatsDashboard({
   const biggestLeak = useMemo(() => deriveBiggestLeak(trades), [trades]);
   const recentTrend = useMemo(() => deriveRecentTrend(trades), [trades]);
   const radar = useMemo(() => buildPerformanceRadar(trades), [trades]);
+  const insightsLearning = useMemo(
+    () =>
+      getInsightsLearningState({
+        tradeCount: trades.length,
+        hasRecentTrend: Boolean(recentTrend),
+        radarReady: radar.ready,
+        hasBestEdge: Boolean(bestEdge),
+        hasBiggestLeak: Boolean(biggestLeak),
+      }),
+    [bestEdge, biggestLeak, radar.ready, recentTrend, trades.length],
+  );
   const heatmap = useMemo(() => buildTradingHeatmap(trades, heatmapMode), [trades, heatmapMode]);
   const breakdownRows = useMemo(() => {
     if (breakdown === "direction") {
@@ -104,18 +116,7 @@ export function StatsDashboard({
             <YdlButton label={t("stats.logTradeCta")} onPress={onLogTrade} testID="stats-log-trade" />
           ) : null}
         </View>
-        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-radar">
-          <YdlText role="label">Performance Radar</YdlText>
-          <YdlText role="body" color="text.secondary">
-            {radar.insufficientMessage}
-          </YdlText>
-        </View>
-        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-heatmap">
-          <YdlText role="label">Trading Heatmap</YdlText>
-          <YdlText role="body" color="text.secondary">
-            No trades in this period for heatmap cells.
-          </YdlText>
-        </View>
+        <InsightsLearningCard state={insightsLearning} t={t} />
       </ScrollView>
     );
   }
@@ -176,13 +177,10 @@ export function StatsDashboard({
         </View>
       </View>
 
-      <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-radar">
-        <YdlText role="label">Performance Radar</YdlText>
-        {!radar.ready ? (
-          <YdlText role="body" color="text.secondary">
-            {radar.insufficientMessage}
-          </YdlText>
-        ) : (
+      {!insightsLearning.isLearning || radar.ready ? (
+        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-radar">
+          <YdlText role="label">Performance Radar</YdlText>
+          {radar.ready ? (
           <>
             <View style={styles.grid}>
               {radar.axes.map((axis) => (
@@ -209,12 +207,17 @@ export function StatsDashboard({
               </YdlText>
             ) : null}
           </>
-        )}
-      </View>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-heatmap">
         <YdlText role="label">Trading Heatmap</YdlText>
-        <View style={styles.segmentRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.segmentRow}
+        >
           {(["dayHour", "weekday", "session", "instrument", "setup"] as HeatmapMode[]).map((id) => (
             <Pressable
               key={id}
@@ -224,6 +227,7 @@ export function StatsDashboard({
                 {
                   backgroundColor:
                     heatmapMode === id ? theme.colors.action.primary : theme.colors.surface.interactive,
+                  borderColor: theme.colors.border.subtle,
                   minHeight: YDL_MIN_TOUCH_TARGET,
                 },
               ]}
@@ -233,6 +237,7 @@ export function StatsDashboard({
             >
               <YdlText
                 role="caption"
+                numberOfLines={1}
                 style={{
                   color: heatmapMode === id ? theme.colors.action.primaryText : theme.colors.text.secondary,
                 }}
@@ -241,7 +246,7 @@ export function StatsDashboard({
               </YdlText>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
         {!heatmap.length ? (
           <YdlText role="body" color="text.secondary">
             No trades in this period for heatmap cells.
@@ -297,7 +302,8 @@ export function StatsDashboard({
         ))}
       </View>
 
-      <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-recent-trend">
+      {!insightsLearning.isLearning || recentTrend ? (
+        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-recent-trend">
         <YdlText role="label">{t("stats.recentTrend")}</YdlText>
         {recentTrend ? (
           <>
@@ -308,16 +314,17 @@ export function StatsDashboard({
               {`P&L ${recentTrend.pnlDelta} · WR ${recentTrend.wrDelta} · Trades ${recentTrend.tradeDelta}`}
             </YdlText>
           </>
-        ) : (
-          <YdlText role="body" color="text.secondary">
-            {t("stats.trendInsufficient")}
-          </YdlText>
-        )}
-      </View>
+        ) : null}
+        </View>
+      ) : null}
 
       <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-breakdown">
         <YdlText role="label">{t("stats.breakdown")}</YdlText>
-        <View style={styles.segmentRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.segmentRow}
+        >
           {(["instrument", "direction", "session"] as const).map((id) => (
             <Pressable
               key={id}
@@ -327,6 +334,7 @@ export function StatsDashboard({
                 {
                   backgroundColor:
                     breakdown === id ? theme.colors.action.primary : theme.colors.surface.interactive,
+                  borderColor: theme.colors.border.subtle,
                   minHeight: YDL_MIN_TOUCH_TARGET,
                 },
               ]}
@@ -335,13 +343,14 @@ export function StatsDashboard({
             >
               <YdlText
                 role="caption"
+                numberOfLines={1}
                 style={{ color: breakdown === id ? theme.colors.action.primaryText : theme.colors.text.secondary }}
               >
                 {t(`stats.breakdown.${id}`)}
               </YdlText>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
         {breakdownRows.slice(0, 6).map((row) => (
           <View key={row.key} style={styles.breakdownRow}>
             <View style={{ flex: 1 }}>
@@ -360,20 +369,21 @@ export function StatsDashboard({
         ))}
       </View>
 
+      {insightsLearning.isLearning ? <InsightsLearningCard state={insightsLearning} t={t} /> : null}
+      {bestEdge ? (
       <InsightCard
         testID="stats-best-edge"
-        emptyTitle={t("stats.edgeMoreDataTitle")}
-        emptyBody={t("stats.edgeMoreDataBody")}
         data={bestEdge}
         positive
       />
+      ) : null}
+      {biggestLeak ? (
       <InsightCard
         testID="stats-biggest-leak"
-        emptyTitle={t("stats.leakMoreDataTitle")}
-        emptyBody={t("stats.leakMoreDataBody")}
         data={biggestLeak}
         positive={false}
       />
+      ) : null}
 
       <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-risk">
         <YdlText role="label">{t("stats.riskTitle")}</YdlText>
@@ -441,27 +451,14 @@ function PeriodBar({
 function InsightCard({
   testID,
   data,
-  emptyTitle,
-  emptyBody,
   positive,
 }: {
   testID: string;
   data: ReturnType<typeof deriveBestEdge>;
-  emptyTitle: string;
-  emptyBody: string;
   positive: boolean;
 }) {
   const theme = useYdlTheme("dark");
-  if (!data) {
-    return (
-      <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID={testID}>
-        <YdlText role="bodyEmphasized">{emptyTitle}</YdlText>
-        <YdlText role="body" color="text.secondary">
-          {emptyBody}
-        </YdlText>
-      </View>
-    );
-  }
+  if (!data) return null;
   return (
     <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID={testID}>
       <YdlText role="label">{data.title}</YdlText>
@@ -479,10 +476,39 @@ function InsightCard({
   );
 }
 
+function InsightsLearningCard({
+  state,
+  t,
+}: {
+  state: ReturnType<typeof getInsightsLearningState>;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const theme = useYdlTheme("dark");
+  const targetLabels: Record<InsightsLearningTarget, string> = {
+    recentTrend: t("stats.recentTrend"),
+    performanceRadar: t("stats.insightsTargetRadar"),
+    bestEdge: t("stats.insightsTargetBestEdge"),
+    biggestLeak: t("stats.insightsTargetBiggestLeak"),
+  };
+  const targets = state.targets.map((target) => targetLabels[target]).join(" · ");
+
+  return (
+    <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-insights-learning">
+      <YdlText role="bodyEmphasized">{t("stats.insightsLearningTitle")}</YdlText>
+      <YdlText role="body" color="text.secondary">
+        {t("stats.insightsLearningBody", { targets })}
+      </YdlText>
+      <YdlText role="caption" color="text.secondary">
+        {t("stats.insightsProgress", { count: state.tradeCount, required: state.requiredTrades })}
+      </YdlText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  body: { padding: 16, gap: 14, paddingBottom: 48 },
+  body: { padding: 16, gap: 14, paddingBottom: 32 },
   hero: { borderRadius: 16, padding: 18, gap: 8 },
-  card: { borderRadius: 14, padding: 16, gap: 10 },
+  card: { borderRadius: 14, padding: 14, gap: 10 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   metric: { width: "46%", gap: 2 },
   periodRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -492,13 +518,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  segmentRow: { flexDirection: "row", gap: 8 },
+  segmentRow: { flexDirection: "row", gap: 8, paddingRight: 16 },
   segment: {
-    flex: 1,
+    flexShrink: 0,
     borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: 14,
   },
   breakdownRow: {
     flexDirection: "row",
