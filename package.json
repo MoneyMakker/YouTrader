@@ -109,6 +109,7 @@
     "test:prop-pass-recovery": "npx tsx scripts/prop-pass-recovery-qa.ts",
     "test:prop-pass-scaling": "npx tsx scripts/prop-pass-scaling-qa.ts",
     "test:prop-pass-withdrawal": "npx tsx scripts/prop-pass-withdrawal-qa.ts",
+    "test:prop-pass-progression": "npx tsx scripts/prop-pass-progression-qa.ts",
     "test:calendar-month-picker-contrast": "npx tsx scripts/qa/calendarMonthPickerContrast.selftest.ts",
     "test:revenuecat-mobile-identity": "npx tsx scripts/revenuecat-mobile-identity-qa.ts",
     "test:revenuecat-entitlement": "node --experimental-strip-types scripts/security/revenuecat-entitlement-qa.mjs"

@@ -33,3 +33,5 @@ export { recommendScaling } from "./scaling";
 export type { ScalingRecommendationInput, ScalingRecommendationValues } from "./scaling";
 export { calculateMaximumSafeWithdrawal } from "./withdrawal";
 export type { SafeWithdrawalInput, SafeWithdrawalValues } from "./withdrawal";
+export { evaluatePositionSizeProgression } from "./progression";
+export type { PositionSizeStage, PositionSizeProgressionInput, PositionSizeProgressionValues, PositionSizeTransition } from "./progression";
