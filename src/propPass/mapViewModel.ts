@@ -94,6 +94,7 @@ export function mapActivatedReadModelToViewModel(
     },
     challenge: {
       id: challenge.id,
+      phase: challenge.phase,
       attemptNumber,
       status: challenge.status,
       startedAt: challenge.startedAt,

@@ -133,6 +133,7 @@ function baseModel(over: Partial<PropPassViewModel> = {}): PropPassViewModel {
     },
     challenge: {
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      phase: "evaluation",
       attemptNumber: 1,
       status: "active",
       startedAt: "2026-07-01T12:00:00.000Z",
@@ -346,6 +347,7 @@ export function resolveStagingPropPassQa(mode: StagingPropPassQaMode): StagingPr
         model: baseModel({
           challenge: {
             id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            phase: "evaluation",
             attemptNumber: 1,
             status: "passed",
             startedAt: "2026-07-01T12:00:00.000Z",
@@ -377,6 +379,7 @@ export function resolveStagingPropPassQa(mode: StagingPropPassQaMode): StagingPr
         model: baseModel({
           challenge: {
             id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            phase: "evaluation",
             attemptNumber: 1,
             status: "breached",
             startedAt: "2026-07-01T12:00:00.000Z",

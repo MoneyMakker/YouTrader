@@ -37,6 +37,7 @@ function baseModel(over: Partial<PropPassViewModel> = {}): PropPassViewModel {
     },
     challenge: {
       id: "22222222-2222-4222-8222-222222222222",
+      phase: "evaluation",
       attemptNumber: 1,
       status: "active",
       startedAt: "2026-07-01T00:00:00.000Z",

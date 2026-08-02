@@ -47,7 +47,7 @@ function drawdownSafetyLabel(
 export function PropPassRiskModePanel({ model, currency }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
-  const [context, setContext] = useState<PropPassAccountContext>("challenge");
+  const context: PropPassAccountContext = model.challenge.phase === "funded" ? "live" : "challenge";
   const [mode, setMode] = useState<PropPassRiskModeId>("balanced");
   const [gamblerUnlocked, setGamblerUnlocked] = useState(false);
   const [stopDistanceDraft, setStopDistanceDraft] = useState("");
@@ -103,28 +103,9 @@ export function PropPassRiskModePanel({ model, currency }: Props) {
       testID="prop-pass-risk-mode-panel"
     >
       <YdlText role="label">{t("propPass.riskMode.contextTitle")}</YdlText>
-      <View style={styles.row} testID="prop-pass-account-context">
-        {(["challenge", "live"] as const).map((id) => (
-          <Pressable
-            key={id}
-            testID={`prop-pass-context-${id}`}
-            onPress={() => setContext(id)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: context === id }}
-            style={[
-              styles.chip,
-              {
-                borderColor: context === id ? theme.colors.action.primary : theme.colors.border.subtle,
-                backgroundColor: context === id ? "rgba(163,230,53,0.14)" : "transparent",
-              },
-            ]}
-          >
-            <YdlText role="bodyEmphasized">
-              {id === "challenge" ? t("propPass.riskMode.challenge") : t("propPass.riskMode.live")}
-            </YdlText>
-          </Pressable>
-        ))}
-      </View>
+      <YdlText role="bodyEmphasized" testID="prop-pass-account-context">
+        {context === "challenge" ? t("propPass.riskMode.challenge") : t("propPass.riskMode.live")}
+      </YdlText>
 
       <YdlText role="label">{t("propPass.riskMode.modeTitle")}</YdlText>
       <View style={styles.row} testID="prop-pass-risk-modes">

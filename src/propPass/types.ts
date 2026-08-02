@@ -38,6 +38,7 @@ export type PropPassViewModel = {
   };
   challenge: {
     id: string;
+    phase: "evaluation" | "funded";
     attemptNumber: number;
     status: string;
     startedAt?: string;
