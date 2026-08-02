@@ -1,10 +1,10 @@
 /**
- * More hub — Calendar, Calculator, News, Reports, Import Trades.
+ * Futures hub — Calendar, Calculator, News, Reports, Import Trades.
  * Settings is a primary bottom tab (not duplicated here).
- * Prop Pass is a primary bottom tab (not placed in More).
- * Bottom tabs: always five (Journal, Prop Pass, Stats, Settings, More).
+ * Prop Pass is a primary bottom tab (not placed in Futures).
+ * Bottom tabs: always five (Journal, Prop Pass, Stats, Settings, Futures).
+ * Route id remains `more` for deep-link stability.
  */
-
 import React from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
