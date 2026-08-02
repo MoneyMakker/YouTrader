@@ -50,6 +50,8 @@ function cellKey(trade: Trade, mode: HeatmapMode): string {
   return `${day} ${String(hour).padStart(2, "0")}:00`;
 }
 
+export const HEATMAP_COMPARE_MIN = 4;
+
 export function buildTradingHeatmap(trades: Trade[], mode: HeatmapMode): HeatmapCell[] {
   const map = new Map<string, Trade[]>();
   for (const trade of trades) {
@@ -74,6 +76,57 @@ export function buildTradingHeatmap(trades: Trade[], mode: HeatmapMode): Heatmap
       };
     })
     .sort((a, b) => b.pnl - a.pnl);
+}
+
+function emptyCell(key: string): HeatmapCell {
+  return { key, label: key, pnl: 0, count: 0, wins: 0, winRate: 0, avg: 0 };
+}
+
+/** Fixed scaffold keys so empty / sparse periods still render a visual grid. */
+export function scaffoldHeatmapKeys(mode: HeatmapMode): string[] {
+  if (mode === "weekday") return [...WEEKDAYS];
+  if (mode === "session") return ["New York AM", "New York PM", "Other session"];
+  if (mode === "dayHour") {
+    return WEEKDAYS.flatMap((day) =>
+      [9, 10, 11, 12, 13, 14, 15].map((hour) => `${day} ${String(hour).padStart(2, "0")}:00`),
+    );
+  }
+  if (mode === "instrument") return ["MES", "MNQ", "ES", "NQ", "M2K", "MYM"];
+  return ["Unlabeled", "A", "B", "C", "D", "E"];
+}
+
+/**
+ * Visual heatmap cells: real data merged onto scaffold.
+ * Never invents P&L — empty scaffold cells stay count=0 / pnl=0.
+ */
+export function buildVisualHeatmap(trades: Trade[], mode: HeatmapMode): HeatmapCell[] {
+  const live = buildTradingHeatmap(trades, mode);
+  const byKey = new Map(live.map((cell) => [cell.key, cell]));
+  const keys = scaffoldHeatmapKeys(mode);
+  const scaffolded = keys.map((key) => byKey.get(key) || emptyCell(key));
+  // Include any live keys not in scaffold (custom instruments/setups).
+  for (const cell of live) {
+    if (!keys.includes(cell.key)) scaffolded.push(cell);
+  }
+  return scaffolded;
+}
+
+export function heatmapReadiness(tradeCount: number): {
+  ready: boolean;
+  needed: number;
+  progressLabel: string;
+  message: string;
+} {
+  const needed = Math.max(0, HEATMAP_COMPARE_MIN - tradeCount);
+  return {
+    ready: tradeCount >= HEATMAP_COMPARE_MIN,
+    needed,
+    progressLabel: `${tradeCount} of ${HEATMAP_COMPARE_MIN} trades`,
+    message:
+      needed > 0
+        ? `Log ${needed} more comparable trade${needed === 1 ? "" : "s"}`
+        : "Heatmap ready",
+  };
 }
 
 export const HEATMAP_MODE_LABELS: Record<HeatmapMode, string> = {

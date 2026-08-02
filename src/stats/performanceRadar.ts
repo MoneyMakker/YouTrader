@@ -49,7 +49,11 @@ function clampScore(value: number): number {
  */
 export function buildPerformanceRadar(trades: Trade[]): PerformanceRadarModel {
   const tradeCount = trades.length;
-  const insufficientMessage = `Log at least ${RADAR_MIN_TRADES} trades to unlock Performance Radar.`;
+  const needed = Math.max(0, RADAR_MIN_TRADES - tradeCount);
+  const insufficientMessage =
+    needed > 0
+      ? `Log ${needed} more trade${needed === 1 ? "" : "s"} to unlock your complete performance profile.`
+      : `Log at least ${RADAR_MIN_TRADES} trades to unlock Performance Radar.`;
   if (tradeCount < RADAR_MIN_TRADES) {
     return {
       ready: false,

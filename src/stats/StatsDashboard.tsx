@@ -1,6 +1,7 @@
 /**
  * Premium Stats dashboard — trader-focused IA.
  * Free users see useful core metrics; no full-screen unlock overlays.
+ * Radar + Heatmap always present (visual readiness when data is thin).
  */
 
 import React, { useMemo, useState } from "react";
@@ -27,7 +28,8 @@ import {
 } from "./presentation";
 import { buildPerformanceRadar } from "./performanceRadar";
 import { getInsightsLearningState, type InsightsLearningTarget } from "./insightsLearning";
-import { buildTradingHeatmap, HEATMAP_MODE_LABELS, type HeatmapMode } from "./tradingHeatmap";
+import { StatsRadarCard } from "./StatsRadarCard";
+import { StatsHeatmapCard } from "./StatsHeatmapCard";
 
 const PERIODS: StatsPeriodId[] = ["1D", "7D", "1M", "YTD", "1Y", "ALL"];
 
@@ -69,9 +71,6 @@ export function StatsDashboard({
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
   const [breakdown, setBreakdown] = useState<"instrument" | "direction" | "session">("instrument");
-  const [heatmapMode, setHeatmapMode] = useState<HeatmapMode>("weekday");
-  const [selectedRadar, setSelectedRadar] = useState<string | null>(null);
-  const [selectedHeat, setSelectedHeat] = useState<string | null>(null);
   const stats = useMemo(() => calcStats(trades), [trades]);
   const bestEdge = useMemo(() => deriveBestEdge(trades), [trades]);
   const biggestLeak = useMemo(() => deriveBiggestLeak(trades), [trades]);
@@ -88,7 +87,6 @@ export function StatsDashboard({
       }),
     [bestEdge, biggestLeak, radar.ready, recentTrend, trades.length],
   );
-  const heatmap = useMemo(() => buildTradingHeatmap(trades, heatmapMode), [trades, heatmapMode]);
   const breakdownRows = useMemo(() => {
     if (breakdown === "direction") {
       return groupTradesByKey(trades, (tr) => String(tr.direction || "—").toUpperCase());
@@ -116,7 +114,8 @@ export function StatsDashboard({
             <YdlButton label={t("stats.logTradeCta")} onPress={onLogTrade} testID="stats-log-trade" />
           ) : null}
         </View>
-        <InsightsLearningCard state={insightsLearning} t={t} />
+        <StatsRadarCard trades={trades} model={radar} />
+        <StatsHeatmapCard trades={trades} />
       </ScrollView>
     );
   }
@@ -177,146 +176,8 @@ export function StatsDashboard({
         </View>
       </View>
 
-      {!insightsLearning.isLearning || radar.ready ? (
-        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-radar">
-          <YdlText role="label">Performance Radar</YdlText>
-          {radar.ready ? (
-          <>
-            <View style={styles.grid}>
-              {radar.axes.map((axis) => (
-                <Pressable
-                  key={axis.key}
-                  onPress={() => setSelectedRadar(axis.key)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${axis.label} ${axis.score}. ${axis.explanation}`}
-                  style={styles.metric}
-                >
-                  <YdlText role="caption" color="text.secondary">
-                    {axis.label}
-                  </YdlText>
-                  <YdlText role="title">{axis.score == null ? "—" : String(axis.score)}</YdlText>
-                  <YdlText role="caption" color="text.secondary">
-                    {axis.valueLabel}
-                  </YdlText>
-                </Pressable>
-              ))}
-            </View>
-            {selectedRadar ? (
-              <YdlText role="body" color="text.secondary">
-                {radar.axes.find((a) => a.key === selectedRadar)?.explanation}
-              </YdlText>
-            ) : null}
-          </>
-          ) : null}
-        </View>
-      ) : null}
-
-      <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-heatmap">
-        <YdlText role="label">Trading Heatmap</YdlText>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.segmentRow}
-        >
-          {(["dayHour", "weekday", "session", "instrument", "setup"] as HeatmapMode[]).map((id) => (
-            <Pressable
-              key={id}
-              onPress={() => setHeatmapMode(id)}
-              style={[
-                styles.segment,
-                {
-                  backgroundColor:
-                    heatmapMode === id ? theme.colors.action.primary : theme.colors.surface.interactive,
-                  borderColor: theme.colors.border.subtle,
-                  minHeight: YDL_MIN_TOUCH_TARGET,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: heatmapMode === id }}
-              accessibilityLabel={HEATMAP_MODE_LABELS[id]}
-            >
-              <YdlText
-                role="caption"
-                numberOfLines={1}
-                style={{
-                  color: heatmapMode === id ? theme.colors.action.primaryText : theme.colors.text.secondary,
-                }}
-              >
-                {HEATMAP_MODE_LABELS[id]}
-              </YdlText>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {!heatmap.length ? (
-          <YdlText role="body" color="text.secondary">
-            No trades in this period for heatmap cells.
-          </YdlText>
-        ) : (
-          heatmap.slice(0, 8).map((cell) => (
-            <Pressable
-              key={cell.key}
-              onPress={() => setSelectedHeat(cell.key)}
-              accessibilityRole="button"
-              accessibilityLabel={`${cell.label}. ${formatStatsMoney(cell.pnl)}. ${cell.count} trades. Win rate ${formatStatsPct(cell.winRate)}.`}
-              style={styles.breakdownRow}
-            >
-              <View style={{ flex: 1 }}>
-                <YdlText role="bodyEmphasized">{cell.label}</YdlText>
-                <YdlText role="caption" color="text.secondary">
-                  {`${cell.count} trades · ${formatStatsPct(cell.winRate)} WR · avg ${formatStatsMoney(cell.avg)}`}
-                </YdlText>
-              </View>
-              <YdlText
-                role="bodyEmphasized"
-                style={{ color: cell.pnl >= 0 ? theme.colors.status.positive : theme.colors.status.negative }}
-              >
-                {formatStatsMoney(cell.pnl)}
-              </YdlText>
-            </Pressable>
-          ))
-        )}
-        {selectedHeat ? (
-          <YdlText role="caption" color="text.secondary">
-            {`Selected ${selectedHeat}`}
-          </YdlText>
-        ) : null}
-      </View>
-
-      <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-consistency">
-        <YdlText role="label">{t("stats.consistency")}</YdlText>
-        {(stats.weekday || []).slice(0, 5).map((row) => (
-          <View key={row.label} style={styles.breakdownRow}>
-            <View style={{ flex: 1 }}>
-              <YdlText role="bodyEmphasized">{row.label}</YdlText>
-              <YdlText role="caption" color="text.secondary">
-                {`${row.count} ${t("stats.tradesLabel")} · ${formatStatsPct(row.wr)} WR`}
-              </YdlText>
-            </View>
-            <YdlText
-              role="bodyEmphasized"
-              style={{ color: row.pnl >= 0 ? theme.colors.status.positive : theme.colors.status.negative }}
-            >
-              {formatStatsMoney(row.pnl)}
-            </YdlText>
-          </View>
-        ))}
-      </View>
-
-      {!insightsLearning.isLearning || recentTrend ? (
-        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-recent-trend">
-        <YdlText role="label">{t("stats.recentTrend")}</YdlText>
-        {recentTrend ? (
-          <>
-            <YdlText role="body" color="text.secondary">
-              {recentTrend.summary}
-            </YdlText>
-            <YdlText role="caption" color="text.secondary">
-              {`P&L ${recentTrend.pnlDelta} · WR ${recentTrend.wrDelta} · Trades ${recentTrend.tradeDelta}`}
-            </YdlText>
-          </>
-        ) : null}
-        </View>
-      ) : null}
+      <StatsRadarCard trades={trades} model={radar} />
+      <StatsHeatmapCard trades={trades} />
 
       <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-breakdown">
         <YdlText role="label">{t("stats.breakdown")}</YdlText>
@@ -370,20 +231,8 @@ export function StatsDashboard({
       </View>
 
       {insightsLearning.isLearning ? <InsightsLearningCard state={insightsLearning} t={t} /> : null}
-      {bestEdge ? (
-      <InsightCard
-        testID="stats-best-edge"
-        data={bestEdge}
-        positive
-      />
-      ) : null}
-      {biggestLeak ? (
-      <InsightCard
-        testID="stats-biggest-leak"
-        data={biggestLeak}
-        positive={false}
-      />
-      ) : null}
+      {bestEdge ? <InsightCard testID="stats-best-edge" data={bestEdge} positive /> : null}
+      {biggestLeak ? <InsightCard testID="stats-biggest-leak" data={biggestLeak} positive={false} /> : null}
 
       <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-risk">
         <YdlText role="label">{t("stats.riskTitle")}</YdlText>
@@ -395,6 +244,42 @@ export function StatsDashboard({
           })}
         </YdlText>
       </View>
+
+      <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-consistency">
+        <YdlText role="label">{t("stats.consistency")}</YdlText>
+        {(stats.weekday || []).slice(0, 5).map((row) => (
+          <View key={row.label} style={styles.breakdownRow}>
+            <View style={{ flex: 1 }}>
+              <YdlText role="bodyEmphasized">{row.label}</YdlText>
+              <YdlText role="caption" color="text.secondary">
+                {`${row.count} ${t("stats.tradesLabel")} · ${formatStatsPct(row.wr)} WR`}
+              </YdlText>
+            </View>
+            <YdlText
+              role="bodyEmphasized"
+              style={{ color: row.pnl >= 0 ? theme.colors.status.positive : theme.colors.status.negative }}
+            >
+              {formatStatsMoney(row.pnl)}
+            </YdlText>
+          </View>
+        ))}
+      </View>
+
+      {!insightsLearning.isLearning || recentTrend ? (
+        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="stats-recent-trend">
+          <YdlText role="label">{t("stats.recentTrend")}</YdlText>
+          {recentTrend ? (
+            <>
+              <YdlText role="body" color="text.secondary">
+                {recentTrend.summary}
+              </YdlText>
+              <YdlText role="caption" color="text.secondary">
+                {`P&L ${recentTrend.pnlDelta} · WR ${recentTrend.wrDelta} · Trades ${recentTrend.tradeDelta}`}
+              </YdlText>
+            </>
+          ) : null}
+        </View>
+      ) : null}
 
       {onOpenReports ? (
         <YdlButton
