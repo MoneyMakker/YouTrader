@@ -35,7 +35,7 @@ export function YdlTabBar<T extends string>({
   const theme = useYdlTheme("dark");
   const insets = useSafeAreaInsets();
   const accent = theme.colors.action.primary; // lime
-  const inactiveLabel = theme.colors.text.secondary;
+  const inactiveLabel = accent;
 
   return (
     <View
@@ -80,7 +80,7 @@ export function YdlTabBar<T extends string>({
             <YdlText
               role="caption"
               numberOfLines={1}
-              style={[styles.label, { color: active ? accent : inactiveLabel }]}
+              style={[styles.label, { color: accent, opacity: active ? 1 : 0.58 }]}
             >
               {tab.label}
             </YdlText>

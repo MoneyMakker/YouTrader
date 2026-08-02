@@ -134,7 +134,7 @@ function buttonIconColor(
   if (disabled) return C.muted;
   if (variant === "primary") return LIME;
   if (variant === "danger") return C.sub;
-  return C.purple;
+  return LIME;
 }
 
 function AccountIdentityBlock({
@@ -151,7 +151,7 @@ function AccountIdentityBlock({
   return (
     <View style={styles.emailCapsule}>
       <View style={styles.emailIconWrap}>
-        <CircleUserRound size={ICON_SIZE} color={C.purple} strokeWidth={ICON_STROKE} />
+        <CircleUserRound size={ICON_SIZE} color={LIME} strokeWidth={ICON_STROKE} />
       </View>
       <View style={styles.emailCopy}>
         <Text
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   card: {
-    borderColor: "rgba(176,38,255,0.38)",
+    borderColor: "rgba(163,255,18,0.28)",
     backgroundColor: "rgba(8,10,14,0.72)",
     ...Platform.select({
       ios: {
@@ -504,8 +504,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(176,38,255,0.35)",
-    backgroundColor: "rgba(176,38,255,0.10)",
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(163,255,18,0.08)",
   },
   emailCopy: { flex: 1, minWidth: 0, gap: 4 },
   emailValue: {
@@ -534,8 +534,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(176,38,255,0.32)",
-    backgroundColor: "rgba(176,38,255,0.08)",
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   relayAppleMark: {
     color: C.sub,
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   relayBadgeText: {
-    color: C.purple,
+    color: LIME,
     fontSize: 10,
     lineHeight: 13,
     fontWeight: "800",
@@ -570,12 +570,12 @@ const styles = StyleSheet.create({
   },
   premiumBtnSecondary: {
     borderWidth: 1,
-    borderColor: "rgba(176,38,255,0.48)",
+    borderColor: "rgba(163,255,18,0.42)",
     backgroundColor: "rgba(0,0,0,0.55)",
   },
   premiumBtnSecondaryPressed: {
-    backgroundColor: "rgba(176,38,255,0.10)",
-    borderColor: "rgba(176,38,255,0.65)",
+    backgroundColor: "rgba(163,255,18,0.08)",
+    borderColor: "rgba(163,255,18,0.55)",
   },
   premiumBtnDanger: {
     borderWidth: 1,
