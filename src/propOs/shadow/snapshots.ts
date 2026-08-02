@@ -41,6 +41,7 @@ export function mapEngineResultToSnapshots(input: {
     accountState: result.accountState,
     buffers: result.buffers,
     breachReasons: result.breachReasons,
+    tradingStats: result.tradingStats,
     readiness: result.readiness,
     evidence: result.evidence,
     limitations: result.limitations,
@@ -96,6 +97,7 @@ export function engineResultFromSnapshotPayload(
     accountState: p.accountState as PropEngineResultV0["accountState"],
     buffers: p.buffers as PropEngineResultV0["buffers"],
     breachReasons: p.breachReasons as PropEngineResultV0["breachReasons"],
+    tradingStats: p.tradingStats as PropEngineResultV0["tradingStats"],
     readiness: p.readiness as PropEngineResultV0["readiness"],
     limitations: (p.limitations as string[]) ?? [],
   };

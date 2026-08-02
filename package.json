@@ -90,6 +90,7 @@
     "test:prop-pass-phase2c-pg": "bash scripts/prop-pass-phase2c-pg-qa.sh",
     "test:prop-pass-phase3a": "npm run test:prop-os-types && node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-phase3a-qa.ts",
     "test:prop-pass-phase3a-pg": "bash scripts/prop-pass-phase3a-pg-qa.sh",
+    "test:prop-pass-lifecycle": "npx tsx scripts/prop-pass-lifecycle-qa.ts",
     "test:revenuecat-mobile-identity": "npx tsx scripts/revenuecat-mobile-identity-qa.ts",
     "test:revenuecat-entitlement": "node --experimental-strip-types scripts/security/revenuecat-entitlement-qa.mjs"
   },

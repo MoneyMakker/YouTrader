@@ -21,10 +21,24 @@ export function mapActivatedReadModelToViewModel(
     | null
     | {
         score?: number;
+        delta?: number | null;
+        drivers?: Array<{ factor?: string; label?: string; contribution?: number }>;
         confidence?: { level?: string };
         gate?: string;
       }
     | undefined;
+  const tradingStats = payload.tradingStats as
+    | {
+        daysTraded?: number;
+        tradeCount?: number;
+        disciplineStreakDays?: number;
+        bestDisciplineStreakDays?: number;
+        ruleViolations?: number;
+      }
+    | undefined;
+  const breachReasons = Array.isArray(payload.breachReasons)
+    ? (payload.breachReasons as Array<{ code: string; at: string; tradeId?: string }>)
+    : [];
   const limitations = Array.isArray(payload.limitations)
     ? (payload.limitations as string[])
     : Array.isArray(engine?.limitations)
@@ -67,6 +81,8 @@ export function mapActivatedReadModelToViewModel(
   if (readiness?.gate) reasonCodes.push(String(readiness.gate));
   reasonCodes.push(...readModel.dataQuality.flags);
   reasonCodes.push(...limitations.slice(0, 8));
+  const firstDriver = readiness?.drivers?.[0];
+  const rules = readModel.ruleSnapshot?.snapshot;
 
   return {
     account: {
@@ -81,6 +97,7 @@ export function mapActivatedReadModelToViewModel(
       attemptNumber,
       status: challenge.status,
       startedAt: challenge.startedAt,
+      endedAt: challenge.endedAt,
     },
     historicalAttempts: readModel.historicalAttempts.map((h) => ({
       id: h.id,
@@ -106,6 +123,49 @@ export function mapActivatedReadModelToViewModel(
       reasonCodes: [...new Set(reasonCodes)],
       lifecycleOverride,
     },
+    rules: rules
+      ? {
+          firmKey: rules.firmKey,
+          currency: rules.currency,
+          profitTargetMinor: rules.profitTargetMinor,
+          dailyLossLimitMinor: rules.dailyLossLimitMinor ?? null,
+          drawdownAmountMinor: rules.drawdown.amountMinor,
+          drawdownKind: rules.drawdown.kind,
+          minimumTradingDays: rules.minimumTradingDays ?? null,
+          startedAt: challenge.startedAt,
+        }
+      : null,
+    breachReasons,
+    readinessDelta:
+      readiness && typeof readiness.delta === "number" ? readiness.delta : null,
+    readinessPrimaryDriver:
+      firstDriver && typeof firstDriver.factor === "string"
+        ? {
+            id: firstDriver.factor,
+            label: firstDriver.label ?? firstDriver.factor,
+            contribution:
+              typeof firstDriver.contribution === "number" ? firstDriver.contribution : null,
+          }
+        : null,
+    daysTraded:
+      tradingStats && typeof tradingStats.daysTraded === "number"
+        ? tradingStats.daysTraded
+        : null,
+    tradeCountInSnapshot:
+      tradingStats && typeof tradingStats.tradeCount === "number"
+        ? tradingStats.tradeCount
+        : null,
+    tradingStats:
+      tradingStats &&
+      typeof tradingStats.disciplineStreakDays === "number" &&
+      typeof tradingStats.bestDisciplineStreakDays === "number" &&
+      typeof tradingStats.ruleViolations === "number"
+        ? {
+            disciplineStreakDays: tradingStats.disciplineStreakDays,
+            bestDisciplineStreakDays: tradingStats.bestDisciplineStreakDays,
+            ruleViolations: tradingStats.ruleViolations,
+          }
+        : null,
     dataQuality: {
       status: readModel.dataQuality.level,
       limitations,

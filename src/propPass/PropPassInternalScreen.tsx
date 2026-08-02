@@ -9,6 +9,7 @@ import { newPropOsClientRequestId } from "../propOs/commands/hash";
 import { trackPropPassEvent } from "./analytics";
 import { BufferHealthSection } from "./BufferHealthSection";
 import { runPropPassCommand } from "./commandGateway";
+import { formatPropMoney } from "./formatMoney";
 import { PropPassOnboardingFlow } from "./PropPassOnboardingFlow";
 import { PropPassAssignmentFlow } from "./PropPassAssignmentFlow";
 import { PerformanceIntelligenceInternalPanel } from "./PerformanceIntelligenceInternalPanel";
@@ -18,11 +19,17 @@ import { PropPassAccountSwitcher } from "./ui/PropPassAccountSwitcher";
 import { PropPassChallengeHero } from "./ui/PropPassChallengeHero";
 import { PropPassInsightsCard } from "./ui/PropPassInsightsCard";
 import { PropPassRecentActivity } from "./ui/PropPassRecentActivity";
+import { PropPassDecisionReplay } from "./ui/PropPassDecisionReplay";
+import { PropPassDisciplineStreak } from "./ui/PropPassDisciplineStreak";
+import { PropPassPassProbability } from "./ui/PropPassPassProbability";
+import { PropPassRuleStatus } from "./ui/PropPassRuleStatus";
+import { PropPassSmartIntervention } from "./ui/PropPassSmartIntervention";
 import { PropPassTargetProgress } from "./ui/PropPassTargetProgress";
 import { PropPassTodaysPlan } from "./ui/PropPassTodaysPlan";
 import type {
   ChallengeSummary,
   PropPassInsightsPresentation,
+  PropPassTerminalModel,
   PropPassTodaysPlanView,
   PropPassUiState,
   PropPassViewModel,
@@ -51,6 +58,7 @@ type Props = {
   trades?: Trade[];
   /** Optional PI memory store for QA injection; falls back to empty in-memory store. */
   intelligenceStore?: MemoryIntelligenceStore;
+  onOpenTrade?: (tradeId: string) => void;
 };
 
 export function PropPassInternalScreen({
@@ -64,6 +72,7 @@ export function PropPassInternalScreen({
   developerMode = typeof __DEV__ !== "undefined" && __DEV__,
   trades = [],
   intelligenceStore: intelligenceStoreProp,
+  onOpenTrade,
 }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
@@ -145,14 +154,35 @@ export function PropPassInternalScreen({
           />
         ) : showAssignment &&
           userId &&
-          uiState.kind === "available" ? (
+          (uiState.kind === "available" ||
+            (uiState.kind === "no_shadow_snapshot" && uiState.assignmentContext)) ? (
           <PropPassAssignmentFlow
             userId={userId}
-            accountId={uiState.model.account.id}
-            challengeId={uiState.model.challenge.id}
-            challengeStatus={uiState.model.challenge.status}
-            accountStatus={uiState.model.account.lifecycleStatus}
-            challengeStartedAt={uiState.model.challenge.startedAt ?? new Date().toISOString()}
+            accountId={
+              uiState.kind === "available"
+                ? uiState.model.account.id
+                : uiState.assignmentContext!.accountId
+            }
+            challengeId={
+              uiState.kind === "available"
+                ? uiState.model.challenge.id
+                : uiState.assignmentContext!.challengeId
+            }
+            challengeStatus={
+              uiState.kind === "available"
+                ? uiState.model.challenge.status
+                : uiState.assignmentContext!.challengeStatus
+            }
+            accountStatus={
+              uiState.kind === "available"
+                ? uiState.model.account.lifecycleStatus
+                : uiState.assignmentContext!.accountStatus
+            }
+            challengeStartedAt={
+              uiState.kind === "available"
+                ? uiState.model.challenge.startedAt ?? new Date().toISOString()
+                : uiState.assignmentContext!.challengeStartedAt
+            }
             trades={trades}
             onClose={() => setShowAssignment(false)}
             onCompleted={() => {
@@ -175,8 +205,10 @@ export function PropPassInternalScreen({
             setShowHistory,
             userId: userId ?? null,
             setCommandMessage,
+            t,
             todaysPlan,
             insightsPresentation,
+            onOpenTrade,
           })
         )}
       </ScrollView>
@@ -194,8 +226,10 @@ type Actions = {
   setShowHistory: (v: boolean) => void;
   userId: string | null;
   setCommandMessage: (msg: string | null) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
   todaysPlan: PropPassTodaysPlanView | null;
   insightsPresentation: PropPassInsightsPresentation;
+  onOpenTrade?: (tradeId: string) => void;
 };
 
 function renderState(
@@ -245,6 +279,27 @@ function renderState(
           />
         </YdlCard>
       );
+    case "challenge_passed":
+      return (
+        <TerminalChallengeCard
+          model={state.model}
+          passed
+          t={t}
+          onStart={actions.onStartOnboarding}
+          onArchive={() => archiveTerminalAccount(state.model.account.id, actions, controller)}
+        />
+      );
+    case "challenge_failed":
+      return (
+        <TerminalChallengeCard
+          model={state.model}
+          passed={false}
+          t={t}
+          onStart={actions.onStartOnboarding}
+          onReview={actions.onStartAssignment}
+          onArchive={() => archiveTerminalAccount(state.model.account.id, actions, controller)}
+        />
+      );
     case "challenge_selection_required":
       return (
         <ChallengeResolverCard
@@ -262,7 +317,18 @@ function renderState(
     case "missing_rule_snapshot":
       return <StateCard title={t("propPass.state.missingRule")} body={t("propPass.state.missingRuleBody")} />;
     case "no_shadow_snapshot":
-      return <StateCard title={t("propPass.state.noShadow")} body={t("propPass.state.noShadowBody")} />;
+      return (
+        <YdlCard>
+          <YdlText role="bodyEmphasized">{t("propPass.state.noShadow")}</YdlText>
+          <YdlText role="body" color="text.secondary">
+            {t("propPass.state.noShadowBody")}
+          </YdlText>
+          <YdlButton
+            label={t("propPass.assignment.openCta")}
+            onPress={actions.onStartAssignment}
+          />
+        </YdlCard>
+      );
     case "stale_snapshot":
       return (
         <YdlCard>
@@ -317,6 +383,7 @@ function renderState(
           onRefresh={() => controller.refresh()}
           onAssignTrades={actions.onStartAssignment}
           onOpenIntelligence={actions.onOpenIntelligence}
+          onOpenTrade={actions.onOpenTrade}
         />
       );
     default:
@@ -427,6 +494,90 @@ function StateCard({
   );
 }
 
+function archiveTerminalAccount(
+  accountId: string,
+  actions: Actions,
+  controller: ReturnType<typeof usePropPassAvailability>,
+) {
+  if (!actions.userId) {
+    actions.setCommandMessage(actions.t("propPass.resolver.needAccountId"));
+    return;
+  }
+  const req = newPropOsClientRequestId();
+  void runPropPassCommand(
+    req,
+    actions.userId,
+    (svc) => svc.archivePropAccount({ clientRequestId: req, accountId, confirmActive: true }),
+    "prop_pass_account_archived",
+  ).then((res) => {
+    actions.setCommandMessage(
+      res.kind === "success"
+        ? actions.t("propPass.archive.success")
+        : actions.t("propPass.command.unexpected"),
+    );
+    if (res.kind === "success") controller.refresh();
+  });
+}
+
+function TerminalChallengeCard({
+  model,
+  passed,
+  t,
+  onStart,
+  onReview,
+  onArchive,
+}: {
+  model: PropPassTerminalModel;
+  passed: boolean;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+  onStart: () => void;
+  onReview?: () => void;
+  onArchive: () => void;
+}) {
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const reason = model.breachReasons[0];
+  return (
+    <YdlCard>
+      <YdlText role="bodyEmphasized">
+        {t(passed ? "propPass.terminal.passedTitle" : "propPass.terminal.failedTitle")}
+      </YdlText>
+      <YdlText role="body" color="text.secondary">
+        {t(passed ? "propPass.terminal.passedBody" : "propPass.terminal.failedBody", {
+          status: reason?.code ?? model.challenge.status,
+          date: (model.challenge.endedAt ?? model.challenge.startedAt).slice(0, 10),
+        })}
+      </YdlText>
+      {model.metrics ? (
+        <YdlText role="caption" color="text.secondary">
+          {t("propPass.terminal.metrics", {
+            equity: formatPropMoney(model.metrics.equityMinor, {
+              currency: model.metrics.currency,
+            }),
+            remaining: formatPropMoney(model.metrics.profitRemainingMinor, {
+              currency: model.metrics.currency,
+            }),
+          })}
+        </YdlText>
+      ) : null}
+      {!passed && onReview ? (
+        <YdlButton label={t("propPass.terminal.reviewTrades")} variant="secondary" onPress={onReview} />
+      ) : null}
+      {archiveConfirm ? (
+        <>
+          <YdlText role="caption" color="text.secondary">
+            {t("propPass.archive.confirmBody")}
+          </YdlText>
+          <YdlButton label={t("propPass.archive.confirmCta")} variant="destructive" onPress={onArchive} />
+          <YdlButton label={t("propPass.archive.cancel")} variant="tertiary" onPress={() => setArchiveConfirm(false)} />
+        </>
+      ) : (
+        <YdlButton label={t("propPass.archive.cta")} variant="secondary" onPress={() => setArchiveConfirm(true)} />
+      )}
+      <YdlButton label={t("propPass.terminal.startAnother")} onPress={onStart} />
+    </YdlCard>
+  );
+}
+
 function AvailableView({
   model,
   t,
@@ -442,6 +593,7 @@ function AvailableView({
   onRefresh,
   onAssignTrades,
   onOpenIntelligence,
+  onOpenTrade,
 }: {
   model: PropPassViewModel;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -457,6 +609,7 @@ function AvailableView({
   onRefresh: () => void;
   onAssignTrades: () => void;
   onOpenIntelligence: () => void;
+  onOpenTrade?: (tradeId: string) => void;
 }) {
   const currency =
     model.progress.profitTarget?.currency ??
@@ -519,6 +672,11 @@ function AvailableView({
       <PropPassChallengeHero model={model} />
       <PropPassTargetProgress model={model} />
       <BufferHealthSection buffers={model.buffers} currency={currency} />
+      <PropPassPassProbability model={model} />
+      <PropPassDisciplineStreak model={model} />
+      <PropPassSmartIntervention model={model} />
+      <PropPassDecisionReplay model={model} onOpenTrade={onOpenTrade} />
+      <PropPassRuleStatus model={model} />
       <PropPassTodaysPlan
         model={model}
         plan={todaysPlan}

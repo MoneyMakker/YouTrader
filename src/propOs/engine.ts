@@ -109,6 +109,7 @@ export function calculateChallenge(input: EngineInput): PropEngineResultV0 {
   let equitySource: PropEngineResultV0["accountState"]["equitySource"] = "trade_only";
   let sawEquityMark = false;
   const dayPnls = new Map<string, MoneyMinor>();
+  const breachDays = new Set<string>();
   const rSamples: number[] = [];
   const dd = rules.drawdown.amountMinor;
 
@@ -122,6 +123,9 @@ export function calculateChallenge(input: EngineInput): PropEngineResultV0 {
     if (lifecycle === "passed" || lifecycle === "funded" || lifecycle === "reset") return;
     if (lifecycle === "breached") return;
     breachReasons.push({ code, at, tradeId });
+    if (code === "daily_loss") {
+      breachDays.add(tradingDayId(at, rules.firmTimezone, rules.tradingDayRolloverHour));
+    }
     lifecycle = "breached";
   };
 
@@ -250,6 +254,24 @@ export function calculateChallenge(input: EngineInput): PropEngineResultV0 {
   }
 
   const daysTraded = dayPnls.size;
+  for (const reason of breachReasons) {
+    if (reason.code === "daily_loss") {
+      breachDays.add(tradingDayId(reason.at, rules.firmTimezone, rules.tradingDayRolloverHour));
+    }
+  }
+  let disciplineStreakDays = 0;
+  let bestDisciplineStreakDays = 0;
+  for (const day of [...dayPnls.keys()].sort()) {
+    if (breachDays.has(day)) {
+      disciplineStreakDays = 0;
+      continue;
+    }
+    disciplineStreakDays += 1;
+    bestDisciplineStreakDays = Math.max(bestDisciplineStreakDays, disciplineStreakDays);
+  }
+  const ruleViolations = breachReasons.filter((reason) =>
+    ["daily_loss", "static_drawdown", "trailing_drawdown"].includes(reason.code),
+  ).length;
   const minDays = rules.minimumTradingDays ?? 0;
   if (
     lifecycle !== "breached" &&
@@ -383,6 +405,13 @@ export function calculateChallenge(input: EngineInput): PropEngineResultV0 {
       tradingDayId: asOfDay,
       dayPnlMinor: dayPnl,
       equitySource,
+    },
+    tradingStats: {
+      daysTraded,
+      tradeCount,
+      disciplineStreakDays,
+      bestDisciplineStreakDays,
+      ruleViolations,
     },
     buffers,
     readiness: publicReadiness,

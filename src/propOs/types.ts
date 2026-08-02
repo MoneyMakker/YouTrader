@@ -166,6 +166,14 @@ export type PropEngineResultV0 = {
     equitySource: "trade_only" | "equity_stream" | "incomplete";
   };
 
+  tradingStats: {
+    daysTraded: number;
+    tradeCount: number;
+    disciplineStreakDays: number;
+    bestDisciplineStreakDays: number;
+    ruleViolations: number;
+  };
+
   buffers: BufferSlice[];
 
   readiness: null | {

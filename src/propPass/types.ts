@@ -41,6 +41,7 @@ export type PropPassViewModel = {
     attemptNumber: number;
     status: string;
     startedAt?: string;
+    endedAt?: string | null;
   };
   /** Non-active attempts — display only; never auto-promoted. */
   historicalAttempts: Array<{
@@ -65,6 +66,30 @@ export type PropPassViewModel = {
     reasonCodes: string[];
     lifecycleOverride: boolean;
   };
+  rules: {
+    firmKey: string;
+    currency: string;
+    profitTargetMinor: number;
+    dailyLossLimitMinor: number | null;
+    drawdownAmountMinor: number;
+    drawdownKind: string;
+    minimumTradingDays: number | null;
+    startedAt: string;
+  } | null;
+  breachReasons: Array<{ code: string; at: string; tradeId?: string }>;
+  readinessDelta: number | null;
+  readinessPrimaryDriver: {
+    id: string;
+    label: string;
+    contribution: number | null;
+  } | null;
+  daysTraded: number | null;
+  tradeCountInSnapshot: number | null;
+  tradingStats: {
+    disciplineStreakDays: number;
+    bestDisciplineStreakDays: number;
+    ruleViolations: number;
+  } | null;
   dataQuality: {
     status: string;
     limitations: string[];
@@ -75,14 +100,41 @@ export type PropPassViewModel = {
   };
 };
 
+export type PropPassTerminalModel = {
+  account: PropPassViewModel["account"];
+  challenge: {
+    id: string;
+    status: string;
+    startedAt: string;
+    endedAt: string | null;
+  };
+  breachReasons: Array<{ code: string; at: string; tradeId?: string }>;
+  metrics: {
+    equityMinor: number | null;
+    profitRemainingMinor: number | null;
+    currency: string;
+  } | null;
+};
+
 export type PropPassUiState =
   | { kind: "disabled" }
   | { kind: "loading" }
   | { kind: "no_account" }
   | { kind: "no_active_challenge" }
+  | { kind: "challenge_passed"; model: PropPassTerminalModel }
+  | { kind: "challenge_failed"; model: PropPassTerminalModel }
   | { kind: "challenge_selection_required"; challenges: ChallengeSummary[]; accountId: string | null }
   | { kind: "missing_rule_snapshot" }
-  | { kind: "no_shadow_snapshot" }
+  | {
+      kind: "no_shadow_snapshot";
+      assignmentContext?: {
+        accountId: string;
+        accountStatus: string;
+        challengeId: string;
+        challengeStatus: string;
+        challengeStartedAt: string;
+      };
+    }
   | { kind: "stale_snapshot"; reasonCodes: string[] }
   | { kind: "incomplete_data"; reasonCodes: string[] }
   | { kind: "unsupported"; reasonCodes: string[] }
