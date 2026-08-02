@@ -541,7 +541,7 @@
   "microClose": "Закрито",
   "microClosed": "Закритий",
   "microCompleted": "Завершено",
-  "microContracts": "Contracts",
+  "microContracts": "Мікро-контракти",
   "microContractsRec": "Contracts Rec.",
   "microCurrent": "Поточний",
   "microDailyLimit": "Daily Limit",
@@ -1574,5 +1574,15 @@
   "manageSubscription": "Керування підпискою",
   "viewPlans": "Переглянути плани",
   "deleteAccountAppleManualRevokeBody": "Обліковий запис YouTrader видалено. Вхід через Apple може потребувати ручного відкликання в Налаштування → Apple ID → Ухід і безпека → Apps Using Apple ID.",
-  "deleteAccountAppleManualRevokeAction": "Відкрити налаштування Apple ID"
+  "deleteAccountAppleManualRevokeAction": "Відкрити налаштування Apple ID",
+  "journalNoTradesForDay": "Немає угод за цей день",
+  "journalDayAddTrade": "Додати угоду",
+  "customSymbolOption": "Свій",
+  "stats.insightsLearningTitle": "Інсайти ще навчаються",
+  "stats.insightsLearningBody": "Продовжуйте вести журнал, щоб відкрити: {{targets}}.",
+  "stats.insightsProgress": "Записано {{count}} з {{required}} угод",
+  "stats.insightsTargetRadar": "Радар результатів",
+  "stats.insightsTargetBestEdge": "Найсильніша перевага",
+  "stats.insightsTargetBiggestLeak": "Найбільша слабкість",
+  "journalFormPnlEnterExecution": "Введіть деталі виконання"
 }

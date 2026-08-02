@@ -541,7 +541,7 @@
   "microClose": "Cerrado",
   "microClosed": "Cerrado",
   "microCompleted": "Completado",
-  "microContracts": "Contratos",
+  "microContracts": "Contratos micro",
   "microContractsRec": "Contratos rec.",
   "microCurrent": "Actual",
   "microDailyLimit": "Límite diario",
@@ -1574,5 +1574,15 @@
   "manageSubscription": "Administrar suscripción",
   "viewPlans": "Ver planes",
   "deleteAccountAppleManualRevokeBody": "Tu cuenta de YouTrader se eliminó. Es posible que debas revocar el acceso de Apple manualmente en Ajustes → Apple ID → Inicio de sesión y seguridad → Apps que usan el Apple ID.",
-  "deleteAccountAppleManualRevokeAction": "Abrir ajustes de Apple ID"
+  "deleteAccountAppleManualRevokeAction": "Abrir ajustes de Apple ID",
+  "journalNoTradesForDay": "Sin operaciones este día",
+  "journalDayAddTrade": "Añadir operación",
+  "customSymbolOption": "Personalizado",
+  "stats.insightsLearningTitle": "Los análisis aún están aprendiendo",
+  "stats.insightsLearningBody": "Sigue registrando operaciones para desbloquear: {{targets}}.",
+  "stats.insightsProgress": "{{count}} de {{required}} operaciones registradas",
+  "stats.insightsTargetRadar": "Radar de rendimiento",
+  "stats.insightsTargetBestEdge": "Mayor fortaleza",
+  "stats.insightsTargetBiggestLeak": "Mayor debilidad",
+  "journalFormPnlEnterExecution": "Introduce los datos de ejecución"
 }

@@ -556,7 +556,6 @@ function validateTradeForm(
     photoUri: string;
     voiceUri: string;
   },
-  pnlSide: "plus" | "minus",
   lang: Lang = "en",
 ) {
   const symbol = normalizeSymbolInput(form.symbol);
@@ -582,22 +581,10 @@ function validateTradeForm(
   const takeProfit = optionalPositiveNumber(form.takeProfit, t("takeProfitPrice"), lang);
   if (takeProfit.error) return { error: takeProfit.error };
 
-  const manualPnl = String(form.pnl || "").trim();
+  const instrument = INSTRUMENTS[symbol];
   let pnl: number;
-  if (manualPnl) {
-    const amount = Math.abs(Number(manualPnl.replace(",", ".")));
-    if (!Number.isFinite(amount) || amount > MAX_ABS_PNL) {
-      return { error: t("pnlOutsideSafeRange") };
-    }
-    pnl = Number((pnlSide === "minus" ? -amount : amount).toFixed(2));
-  } else {
-    if (entry.value == null || exit.value == null) {
-      return { error: t("addPnlOrEntryExit") };
-    }
-    const instrument = INSTRUMENTS[symbol];
-    if (!instrument) {
-      return { error: t("manualPnlRequired") };
-    }
+  // Prefer deterministic calculation from execution when instrument is known.
+  if (instrument && entry.value != null && exit.value != null) {
     const diff =
       form.direction === "LONG"
         ? exit.value - entry.value
@@ -606,6 +593,19 @@ function validateTradeForm(
     if (!Number.isFinite(pnl) || Math.abs(pnl) > MAX_ABS_PNL) {
       return { error: t("calculatedPnlOutsideSafeRange") };
     }
+  } else {
+    const manualPnl = String(form.pnl || "").trim();
+    if (!manualPnl) {
+      if (entry.value == null || exit.value == null) {
+        return { error: t("addPnlOrEntryExit") };
+      }
+      return { error: t("manualPnlRequired") };
+    }
+    const signed = Number(manualPnl.replace(",", "."));
+    if (!Number.isFinite(signed) || Math.abs(signed) > MAX_ABS_PNL) {
+      return { error: t("pnlOutsideSafeRange") };
+    }
+    pnl = Number(signed.toFixed(2));
   }
 
   return {
@@ -6859,7 +6859,7 @@ function JournalScreen({
   const [modal, setModal] = useState(false);
   const [photoView, setPhotoView] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
-  const [pnlSide, setPnlSide] = useState<"plus" | "minus">("plus");
+  const [symbolIsCustom, setSymbolIsCustom] = useState(false);
   const [savingTrade, setSavingTrade] = useState(false);
   const [valueModal, setValueModal] = useState<ProValueModalContent>({ visible: false, reason: "pro_feature", title: "YouTrader Pro", message: t("unlockSeriousTraderTools") });
   const [firstInsightDismissed, setFirstInsightDismissed] = useState(false);
@@ -7059,13 +7059,15 @@ function JournalScreen({
     }
     setSelectedDate(date);
     setEditId(null);
-    setPnlSide("plus");
+    setSymbolIsCustom(false);
     setForm({ ...emptyForm, entryTime: formatClockFromDate() });
     setModal(true);
   };
   const openEdit = (tr: Trade) => {
     setEditId(tr.id);
-    setPnlSide(tr.pnl < 0 ? "minus" : "plus");
+    const preset = (MINI_INSTRUMENTS as readonly string[]).includes(tr.symbol)
+      || (MICRO_INSTRUMENTS as readonly string[]).includes(tr.symbol);
+    setSymbolIsCustom(!preset);
     setForm({
       symbol: tr.symbol,
       direction: tr.direction,
@@ -7076,7 +7078,7 @@ function JournalScreen({
       contracts: String(tr.contracts || 1),
       stopLoss: tr.stopLoss != null ? String(tr.stopLoss) : "",
       takeProfit: tr.takeProfit != null ? String(tr.takeProfit) : "",
-      pnl: String(Math.abs(tr.pnl)),
+      pnl: String(tr.pnl),
       mood: tr.mood,
       notes: tr.notes || "",
       tags: tagsToInput(tr.tags),
@@ -7124,7 +7126,9 @@ function JournalScreen({
       }
       const nextPnl = overrides.pnl != null ? overrides.pnl : target.pnl;
       setEditId(target.id);
-      setPnlSide(nextPnl < 0 ? "minus" : "plus");
+      const preset = (MINI_INSTRUMENTS as readonly string[]).includes(target.symbol)
+        || (MICRO_INSTRUMENTS as readonly string[]).includes(target.symbol);
+      setSymbolIsCustom(!preset);
       setForm({
         symbol: target.symbol,
         direction: target.direction,
@@ -7135,7 +7139,7 @@ function JournalScreen({
         contracts: String(overrides.contracts ?? target.contracts ?? 1),
         stopLoss: target.stopLoss != null ? String(target.stopLoss) : "",
         takeProfit: target.takeProfit != null ? String(target.takeProfit) : "",
-        pnl: String(Math.abs(nextPnl)),
+        pnl: String(nextPnl),
         mood: target.mood,
         notes: overrides.notes ?? target.notes ?? "",
         tags: tagsToInput(target.tags),
@@ -7239,21 +7243,24 @@ function JournalScreen({
     setTradeActionTarget(tr);
   }, []);
   const calcPnl = () => {
-    if (form.pnl.trim()) {
-      const amount = Math.min(MAX_ABS_PNL, Math.abs(toNum(form.pnl)));
-      return Number((pnlSide === "minus" ? -amount : amount).toFixed(2));
-    }
     const i = INSTRUMENTS[normalizeSymbolInput(form.symbol)];
-    if (!i || !form.entry || !form.exit) return 0;
-    const diff =
-      form.direction === "LONG"
-        ? toNum(form.exit) - toNum(form.entry)
-        : toNum(form.entry) - toNum(form.exit);
-    return Number(
-      ((diff / i.tickSize) * i.tickValue * Number(form.contracts || 1)).toFixed(
-        2,
-      ),
-    );
+    if (i && form.entry && form.exit) {
+      const diff =
+        form.direction === "LONG"
+          ? toNum(form.exit) - toNum(form.entry)
+          : toNum(form.entry) - toNum(form.exit);
+      return Number(
+        ((diff / i.tickSize) * i.tickValue * Number(form.contracts || 1)).toFixed(2),
+      );
+    }
+    const manual = String(form.pnl || "").trim();
+    if (manual) {
+      const n = Number(manual.replace(",", "."));
+      if (Number.isFinite(n)) {
+        return Number(Math.max(-MAX_ABS_PNL, Math.min(MAX_ABS_PNL, n)).toFixed(2));
+      }
+    }
+    return 0;
   };
   const save = async () => {
     if (savingTrade) return;
@@ -7272,7 +7279,7 @@ function JournalScreen({
       const now = Date.now();
       // Double-tap guard only — failed validations must remain retryable (see lastSaveAt below).
       if (now - lastSaveAtRef.current < TRADE_SAVE_DEBOUNCE_MS) return;
-      const validated = validateTradeForm(form, pnlSide, lang);
+      const validated = validateTradeForm(form, lang);
       if ("error" in validated) {
         Alert.alert(t("couldNotSaveTrade"), validated.error || t("checkTradeDetails"));
         return;
@@ -7506,81 +7513,7 @@ function JournalScreen({
         isTabletLayout && styles.journalTabletContent,
       ]}
     >
-      <View style={styles.journalHeader} accessibilityRole="header">
-        <Text
-          style={styles.journalHeaderTitle}
-          maxFontSizeMultiplier={1.35}
-        >
-          {t("journal")}
-        </Text>
-        <View style={styles.journalHeaderActions}>
-          <Pressable
-            testID="journal-add-trade"
-            accessibilityRole="button"
-            accessibilityLabel={t("addTrade")}
-            hitSlop={8}
-            onPress={() => {
-              runYdlMotionHaptic("Selection");
-              openNew();
-            }}
-            style={styles.journalAddTradeBtn}
-          >
-            <Plus
-              size={ydlIconRules.sizes.sm}
-              color={C.green}
-              strokeWidth={UI_ICON_STROKE}
-            />
-            <Text style={styles.journalAddTradeLabel} maxFontSizeMultiplier={1.2}>
-              {t("addTrade")}
-            </Text>
-          </Pressable>
-          <View
-            style={styles.journalSyncChip}
-            accessible
-            accessibilityRole="text"
-            accessibilityLabel={
-              !cloudSyncEnabled || cloudSyncStatus === "off"
-                ? t("syncStatusLocal")
-                : cloudSyncStatus === "syncing"
-                  ? t("syncStatusSyncing")
-                  : cloudSyncStatus === "error"
-                    ? t("syncStatusError")
-                    : t("syncStatusSynced")
-            }
-          >
-            <View
-              style={[
-                styles.journalSyncDot,
-                (!cloudSyncEnabled || cloudSyncStatus === "off") && styles.journalSyncDotLocal,
-                cloudSyncStatus === "syncing" && styles.journalSyncDotSyncing,
-                cloudSyncStatus === "synced" && styles.journalSyncDotSynced,
-                cloudSyncStatus === "error" && styles.journalSyncDotError,
-              ]}
-            />
-            <Text style={styles.journalSyncText} maxFontSizeMultiplier={1.2}>
-              {!cloudSyncEnabled || cloudSyncStatus === "off"
-                ? t("syncStatusLocal")
-                : cloudSyncStatus === "syncing"
-                  ? t("syncStatusSyncing")
-                  : cloudSyncStatus === "error"
-                    ? t("syncStatusError")
-                    : t("syncStatusSynced")}
-            </Text>
-          </View>
-        </View>
-      </View>
-      {trades.length === 0 ? (
-        <EmptyStateCard
-          tone="lime"
-          title={t("journalEmptyTitle")}
-          message={t("journalEmptyMessage")}
-          icon={<BookOpen size={24} color={C.green} strokeWidth={2.4} />}
-          actionLabel={t("journalEmptyCta")}
-          onActionPress={() => openNew()}
-          style={styles.journalEmptyCard}
-        />
-      ) : null}
-      <View style={[styles.calendarCard, { width: calendarWidth }]}>
+      <View style={[styles.calendarCard, { width: calendarWidth }]} testID="journal-calendar">
         <View style={styles.monthControlRow}>
           <Pressable
             accessibilityLabel={t("previousMonth")}
@@ -7721,13 +7654,8 @@ function JournalScreen({
                     accessibilityLabel={dayA11yLabel}
                     accessibilityHint={hasTrades ? t("tapToViewEdit") : t("addTrade")}
                     onDayPress={() => {
-                      if (!hasTrades) {
-                        openNew(d);
-                      } else if (selectedDate === d) {
-                        openNew(d);
-                      } else {
-                        setSelectedDate(d);
-                      }
+                      // Always select the day first; Add Trade lives in the day-detail area.
+                      setSelectedDate(d);
                     }}
                     onDayLongPress={() => openDeleteDayConfirm(d)}
                     style={[
@@ -7757,7 +7685,7 @@ function JournalScreen({
                         styles.dayPnlText,
                         {
                           color: active && !hasTrades
-                            ? C.white
+                            ? C.text
                             : hasTrades
                               ? (pnl >= 0 ? C.green : C.red)
                               : C.muted,
@@ -7770,7 +7698,7 @@ function JournalScreen({
                     >
                       {hasTrades ? dayMoney(pnl) : ""}
                     </SafeText>
-                    {isToday ? <View style={styles.todayDot} accessibilityElementsHidden /> : null}
+                    {isToday || active ? <View style={styles.todayDot} accessibilityElementsHidden /> : null}
                   </JournalCalendarDayPressable>
                 );
               })}
@@ -7782,7 +7710,7 @@ function JournalScreen({
         <View style={styles.journalScrollCue}>
           <Text style={styles.journalScrollCueLabel}>{t("scrollToViewTrades")}</Text>
           <View style={styles.journalScrollCueGlass}>
-            <ChevronDown size={18} color={C.purple} strokeWidth={UI_ICON_STROKE} />
+            <ChevronDown size={18} color={C.green} strokeWidth={UI_ICON_STROKE} />
           </View>
         </View>
       ) : null}
@@ -7873,6 +7801,44 @@ function JournalScreen({
           <Text style={styles.calendarDayDetailPnlMuted} maxFontSizeMultiplier={1.2}>—</Text>
         )}
       </View>
+      {filtered.length === 0 ? (
+        <View style={styles.journalDayEmpty} testID="journal-day-empty">
+          <Text style={styles.journalDayEmptyText} maxFontSizeMultiplier={1.3}>
+            {t("journalNoTradesForDay")}
+          </Text>
+          <Pressable
+            testID="journal-add-trade"
+            accessibilityRole="button"
+            accessibilityLabel={t("addTrade")}
+            onPress={() => {
+              runYdlMotionHaptic("Selection");
+              openNew(selectedDate);
+            }}
+            style={styles.journalDayAddTradeBtn}
+          >
+            <Plus size={ydlIconRules.sizes.sm} color={C.bg} strokeWidth={UI_ICON_STROKE} />
+            <Text style={styles.journalDayAddTradeLabel} maxFontSizeMultiplier={1.2}>
+              {t("journalDayAddTrade")}
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          testID="journal-add-trade"
+          accessibilityRole="button"
+          accessibilityLabel={t("addTrade")}
+          onPress={() => {
+            runYdlMotionHaptic("Selection");
+            openNew(selectedDate);
+          }}
+          style={styles.journalDayAddTradeBtnSecondary}
+        >
+          <Plus size={ydlIconRules.sizes.sm} color={C.green} strokeWidth={UI_ICON_STROKE} />
+          <Text style={styles.journalDayAddTradeLabelSecondary} maxFontSizeMultiplier={1.2}>
+            {t("journalDayAddTrade")}
+          </Text>
+        </Pressable>
+      )}
       {filtered.map((tr) => {
         const sessionLabel = [tr.entryTime, tr.exitTime].filter(Boolean).join(" → ");
         const executionBits = [
@@ -8211,91 +8177,53 @@ function JournalScreen({
                 </Pressable>
               </View>
 
-              {/* 1. Outcome */}
+              {/* 1. Outcome — P&L is derived from execution (or signed manual for custom symbols). */}
               <View style={styles.journalDetailSection}>
                 <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
                   {t("journalFormTradeResult")}
                 </Text>
-                <View style={styles.pnlToggleRow}>
-                  <Pressable
-                    testID="journal.trade.edit.pnl.plus"
-                    onPress={() => {
-                      runYdlMotionHaptic("Selection");
-                      setPnlSide("plus");
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="journal.trade.edit.pnl.plus"
-                    accessibilityState={{ selected: pnlSide === "plus" }}
-                    style={[
-                      styles.pnlToggle,
-                      pnlSide !== "plus" && styles.pnlTogglePlusIdle,
-                      pnlSide === "plus" && styles.pnlPlusActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pnlToggleText,
-                        pnlSide === "plus" && { color: C.bg },
-                      ]}
-                    >
-                      + {t("plusPnl")}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    testID="journal.trade.edit.pnl.minus"
-                    onPress={() => {
-                      runYdlMotionHaptic("Selection");
-                      setPnlSide("minus");
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="journal.trade.edit.pnl.minus"
-                    accessibilityState={{ selected: pnlSide === "minus" }}
-                    style={[
-                      styles.pnlToggle,
-                      pnlSide !== "minus" && styles.pnlToggleMinusIdle,
-                      pnlSide === "minus" && styles.pnlMinusActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pnlToggleText,
-                        pnlSide === "minus" && { color: C.white },
-                      ]}
-                    >
-                      − {t("minusPnl")}
-                    </Text>
-                  </Pressable>
-                </View>
                 <View
+                  testID="journal.trade.edit.pnl"
+                  accessibilityLabel={t("pnl")}
                   style={[
                     styles.journalDetailResultBox,
+                    pnlPreview > 0 && styles.journalDetailResultBoxGreen,
                     pnlPreview < 0 && styles.journalDetailResultBoxRed,
+                    pnlPreview === 0 && styles.journalDetailResultBoxNeutral,
                   ]}
                 >
-                  <TextInput
-                    testID="journal.trade.edit.pnl"
-                    accessibilityLabel={t("pnl")}
-                    keyboardType="decimal-pad"
-                    value={form.pnl}
-                    onChangeText={(v: string) => setForm({ ...form, pnl: v })}
-                    placeholder={money(Math.abs(pnlPreview))}
-                    placeholderTextColor={pnlPreview < 0 ? C.red : C.green}
+                  <Text
                     style={[
-                      styles.journalDetailResultInput,
+                      styles.journalDetailResultDisplay,
                       {
-                        color: pnlPreview < 0 ? C.red : C.green,
+                        color:
+                          pnlPreview > 0 ? C.bg : pnlPreview < 0 ? C.white : C.text,
                         fontVariant: getYdlNumberMotionConfig("currency").fontVariant,
                       },
                     ]}
-                    textAlign="center"
                     maxFontSizeMultiplier={1.35}
-                  />
+                  >
+                    {form.entry && form.exit
+                      ? money(pnlPreview)
+                      : t("journalFormPnlEnterExecution")}
+                  </Text>
                   <Text style={styles.journalPnlHint} maxFontSizeMultiplier={1.25}>
-                    {String(form.pnl || "").trim()
-                      ? t("journalFormPnlHintManual")
-                      : t("journalFormPnlHintAuto")}
+                    {INSTRUMENTS[normalizeSymbolInput(form.symbol)] && form.entry && form.exit
+                      ? t("journalFormPnlHintAuto")
+                      : t("journalFormPnlHintManual")}
                   </Text>
                 </View>
+                {!INSTRUMENTS[normalizeSymbolInput(form.symbol)] ? (
+                  <Input
+                    testID="journal.trade.edit.pnl.manual"
+                    accessibilityLabel={t("pnl")}
+                    label={t("pnl")}
+                    keyboardType="numbers-and-punctuation"
+                    value={form.pnl}
+                    onChangeText={(v: string) => setForm({ ...form, pnl: v })}
+                    placeholder="0.00"
+                  />
+                ) : null}
 
                 <Text style={styles.label}>{t("direction")}</Text>
                 <View style={styles.row}>
@@ -8327,8 +8255,11 @@ function JournalScreen({
                     <InstrumentButton
                       key={s}
                       symbol={s}
-                      active={form.symbol === s}
-                      onPress={() => setForm({ ...form, symbol: s })}
+                      active={!symbolIsCustom && form.symbol === s}
+                      onPress={() => {
+                        setSymbolIsCustom(false);
+                        setForm({ ...form, symbol: s, pnl: "" });
+                      }}
                       testIDPrefix="journal.trade.edit.instrument"
                     />
                   ))}
@@ -8339,21 +8270,52 @@ function JournalScreen({
                     <InstrumentButton
                       key={s}
                       symbol={s}
-                      active={form.symbol === s}
-                      onPress={() => setForm({ ...form, symbol: s })}
+                      active={!symbolIsCustom && form.symbol === s}
+                      onPress={() => {
+                        setSymbolIsCustom(false);
+                        setForm({ ...form, symbol: s, pnl: "" });
+                      }}
                       testIDPrefix="journal.trade.edit.instrument"
                     />
                   ))}
                 </View>
-                <Input
-                  testID="journal.trade.edit.instrument"
-                  accessibilityLabel="journal.trade.edit.instrument"
-                  label={t("customSymbol")}
-                  value={form.symbol}
-                  onChangeText={(v: string) =>
-                    setForm({ ...form, symbol: normalizeSymbolInput(v) })
-                  }
-                />
+                <View style={styles.instrumentGrid}>
+                  <AnimatedPressable
+                    press="listItem"
+                    haptic
+                    onPress={() => {
+                      setSymbolIsCustom(true);
+                      setForm({
+                        ...form,
+                        symbol: (MINI_INSTRUMENTS as readonly string[]).includes(form.symbol)
+                          || (MICRO_INSTRUMENTS as readonly string[]).includes(form.symbol)
+                          ? ""
+                          : form.symbol,
+                      });
+                    }}
+                    testID="journal.trade.edit.instrument.CUSTOM"
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: symbolIsCustom }}
+                    accessibilityLabel={t("customSymbolOption")}
+                    style={[styles.instrumentBtn, symbolIsCustom && styles.instrumentBtnActive]}
+                    contentStyle={{ minHeight: 0, minWidth: 0, justifyContent: "center" }}
+                  >
+                    <Text style={styles.instrumentSymbol} maxFontSizeMultiplier={1.25}>
+                      {t("customSymbolOption")}
+                    </Text>
+                  </AnimatedPressable>
+                </View>
+                {symbolIsCustom ? (
+                  <Input
+                    testID="journal.trade.edit.instrument"
+                    accessibilityLabel="journal.trade.edit.instrument"
+                    label={t("customSymbol")}
+                    value={form.symbol}
+                    onChangeText={(v: string) =>
+                      setForm({ ...form, symbol: normalizeSymbolInput(v) })
+                    }
+                  />
+                ) : null}
               </View>
 
               {/* 2. Execution */}
@@ -10100,8 +10062,14 @@ YouTrader does not knowingly collect data from or market to individuals under th
 
 function TabGlyph({ id, active }: { id: Tab; active: boolean }) {
   const theme = useYdlTheme("dark");
-  const color = active ? theme.colors.action.primary : theme.colors.text.tertiary;
-  const iconProps = { size: UI_ICON_SIZE + 5, color, strokeWidth: UI_ICON_STROKE };
+  // All tab glyphs stay lime; inactive uses reduced opacity (still visibly lime).
+  const color = theme.colors.action.primary;
+  const iconProps = {
+    size: UI_ICON_SIZE + 5,
+    color,
+    strokeWidth: UI_ICON_STROKE,
+    opacity: active ? 1 : 0.42,
+  };
   if (id === "journal") return <BookOpen {...iconProps} />;
   if (id === "stats") return <ChartColumnIncreasing {...iconProps} />;
   if (id === "propPass") return <ShieldCheck {...iconProps} />;

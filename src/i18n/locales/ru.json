@@ -541,7 +541,7 @@
   "microClose": "Закрыто",
   "microClosed": "Закрыт",
   "microCompleted": "Завершено",
-  "microContracts": "Contracts",
+  "microContracts": "Микро-контракты",
   "microContractsRec": "Contracts Rec.",
   "microCurrent": "Текущий",
   "microDailyLimit": "Daily Limit",
@@ -1576,5 +1576,15 @@
   "manageSubscription": "Управление подпиской",
   "viewPlans": "Смотреть планы",
   "deleteAccountAppleManualRevokeBody": "Аккаунт YouTrader удалён. Вход через Apple может потребовать ручного отзыва в Настройки → Apple ID → Вход и безопасность → Apps Using Apple ID.",
-  "deleteAccountAppleManualRevokeAction": "Открыть настройки Apple ID"
+  "deleteAccountAppleManualRevokeAction": "Открыть настройки Apple ID",
+  "journalNoTradesForDay": "Нет сделок за этот день",
+  "journalDayAddTrade": "Добавить сделку",
+  "customSymbolOption": "Свой",
+  "stats.insightsLearningTitle": "Инсайты ещё обучаются",
+  "stats.insightsLearningBody": "Продолжайте вести журнал, чтобы открыть: {{targets}}.",
+  "stats.insightsProgress": "Записано {{count}} из {{required}} сделок",
+  "stats.insightsTargetRadar": "Радар результатов",
+  "stats.insightsTargetBestEdge": "Сильнейшая сторона",
+  "stats.insightsTargetBiggestLeak": "Главная слабость",
+  "journalFormPnlEnterExecution": "Введите детали исполнения"
 }
