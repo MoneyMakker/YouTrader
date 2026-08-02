@@ -49,6 +49,7 @@ export function PropPassChallengeHero({ model }: Props) {
   const maxLoss = model.buffers.totalLoss ?? model.buffers.trailingDrawdown;
   const color = statusColor(status, theme);
   const needed = tradesNeededForInsights(model.assignedTradeCount);
+  const isLive = model.challenge.phase === "funded";
 
   if (status === "insufficient_data") {
     return (
@@ -71,6 +72,31 @@ export function PropPassChallengeHero({ model }: Props) {
   const remainingFmt = moneyOrDash(remaining, currency);
   const dailyFmt = moneyOrDash(daily?.remainingMinor ?? null, currency);
   const maxFmt = moneyOrDash(maxLoss?.remainingMinor ?? null, currency);
+
+  if (isLive) {
+    return (
+      <View
+        style={[styles.hero, { backgroundColor: theme.colors.surface.card }]}
+        accessibilityRole="summary"
+        testID="prop-pass-hero"
+        accessibilityLabel={`${t("propPass.riskMode.live")}. ${profitFmt.a11y}. ${t("propPass.hero.dailyRoom")}: ${dailyFmt.a11y}.`}
+      >
+        <YdlText role="label" style={{ color, letterSpacing: 1.2 }}>
+          {t("propPass.riskMode.live")}
+        </YdlText>
+        <YdlText role="display" style={styles.pnl}>{profitFmt.display}</YdlText>
+        <YdlText role="body" color="text.secondary">{t("propPass.hero.dailyRoom")}</YdlText>
+        <View style={styles.rooms}>
+          <Room label={t("propPass.hero.dailyRoom")} value={dailyFmt.display} />
+          <Room label={t("propPass.hero.maxRoom")} value={maxFmt.display} />
+        </View>
+        <View style={styles.nextRow}>
+          <YdlText role="caption" color="text.tertiary">{t("propPass.hero.nextLabel")}</YdlText>
+          <YdlText role="bodyEmphasized">{t("propPass.hero.next.on_track")}</YdlText>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View
