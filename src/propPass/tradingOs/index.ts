@@ -13,3 +13,5 @@ export { calculateLiveRiskMeter } from "./riskMeter";
 export type { LiveRiskMeterInput, LiveRiskMeterValues } from "./riskMeter";
 export { assessSmartInterventions } from "./interventions";
 export type { SmartIntervention, SmartInterventionInput, InterventionTradeFact } from "./interventions";
+export { duplicateEditableRuleTemplate, payoutSafetyFloor, validateEditableRuleTemplate } from "./rules";
+export type { EditableRuleTemplate, RuleValidation } from "./rules";

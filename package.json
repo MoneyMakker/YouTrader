@@ -99,6 +99,7 @@
     "test:prop-pass-daily-plan": "npx tsx scripts/prop-pass-daily-plan-qa.ts",
     "test:prop-pass-risk-meter": "npx tsx scripts/prop-pass-risk-meter-qa.ts",
     "test:prop-pass-interventions": "npx tsx scripts/prop-pass-interventions-qa.ts",
+    "test:prop-pass-rules": "npx tsx scripts/prop-pass-rules-qa.ts",
     "test:calendar-month-picker-contrast": "npx tsx scripts/qa/calendarMonthPickerContrast.selftest.ts",
     "test:revenuecat-mobile-identity": "npx tsx scripts/revenuecat-mobile-identity-qa.ts",
     "test:revenuecat-entitlement": "node --experimental-strip-types scripts/security/revenuecat-entitlement-qa.mjs"
