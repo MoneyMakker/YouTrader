@@ -1572,5 +1572,7 @@
   "accountProviderApple": "Apple",
   "accountProviderGoogle": "Google",
   "manageSubscription": "Manage Subscription",
-  "viewPlans": "View Plans"
+  "viewPlans": "View Plans",
+  "deleteAccountAppleManualRevokeBody": "Your YouTrader account was deleted. Apple Sign in may still need to be revoked manually in Settings → Apple ID → Sign-In & Security → Apps Using Apple ID.",
+  "deleteAccountAppleManualRevokeAction": "Open Apple ID settings"
 }

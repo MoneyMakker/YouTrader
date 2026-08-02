@@ -22,6 +22,7 @@ import {
 } from "lucide-react-native";
 import type { AuthProvider } from "../../auth/types";
 import {
+  openAppleAppsUsingAppleIdSettings,
   openAppleSubscriptionManagement,
   requestAccountDeletion,
 } from "../../auth/accountDeletion";
@@ -216,7 +217,14 @@ export function SettingsAccountSection({
               Alert.alert(t("deleteAccount"), t("deleteAccountFailed"));
               return;
             }
-            Alert.alert(t("deleteAccount"), t("deleteAccountSuccess"));
+            if (result.manualAppleRevocationRequired) {
+              Alert.alert(t("deleteAccount"), t("deleteAccountAppleManualRevokeBody"), [
+                { text: t("deleteAccountAppleManualRevokeAction"), onPress: () => openAppleAppsUsingAppleIdSettings() },
+                { text: t("ok") || "OK", style: "cancel" },
+              ]);
+            } else {
+              Alert.alert(t("deleteAccount"), t("deleteAccountSuccess"));
+            }
             onSignOut();
           })();
         },

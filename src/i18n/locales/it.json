@@ -1572,5 +1572,7 @@
   "accountProviderApple": "Apple",
   "accountProviderGoogle": "Google",
   "manageSubscription": "Gestisci abbonamento",
-  "viewPlans": "Vedi piani"
+  "viewPlans": "Vedi piani",
+  "deleteAccountAppleManualRevokeBody": "Il tuo account YouTrader è stato eliminato. Potrebbe essere necessario revocare manualmente l’accesso Apple in Impostazioni → Apple ID → Accesso e sicurezza → App che usano l’ID Apple.",
+  "deleteAccountAppleManualRevokeAction": "Apri impostazioni Apple ID"
 }

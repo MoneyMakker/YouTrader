@@ -1572,5 +1572,7 @@
   "accountProviderApple": "Apple",
   "accountProviderGoogle": "Google",
   "manageSubscription": "Abo verwalten",
-  "viewPlans": "Pläne ansehen"
+  "viewPlans": "Pläne ansehen",
+  "deleteAccountAppleManualRevokeBody": "Dein YouTrader-Konto wurde gelöscht. Die Apple-Anmeldung musst du ggf. manuell widerrufen unter Einstellungen → Apple-ID → Anmeldung & Sicherheit → Mit Apple ID verwendete Apps.",
+  "deleteAccountAppleManualRevokeAction": "Apple-ID-Einstellungen öffnen"
 }

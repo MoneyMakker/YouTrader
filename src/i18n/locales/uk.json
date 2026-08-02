@@ -1572,5 +1572,7 @@
   "accountProviderApple": "Apple",
   "accountProviderGoogle": "Google",
   "manageSubscription": "Керування підпискою",
-  "viewPlans": "Переглянути плани"
+  "viewPlans": "Переглянути плани",
+  "deleteAccountAppleManualRevokeBody": "Обліковий запис YouTrader видалено. Вхід через Apple може потребувати ручного відкликання в Налаштування → Apple ID → Ухід і безпека → Apps Using Apple ID.",
+  "deleteAccountAppleManualRevokeAction": "Відкрити налаштування Apple ID"
 }
