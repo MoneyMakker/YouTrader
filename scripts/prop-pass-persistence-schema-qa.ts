@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+const sql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802212828_prop_pass_trading_os_persistence.sql"), "utf8");
+const tables = ["prop_daily_plan_snapshots", "prop_pre_trade_assessments", "prop_rule_templates", "prop_intervention_events", "prop_timeline_events", "prop_live_risk_settings", "prop_payout_withdrawal_settings", "prop_kill_switch_settings", "prop_position_size_progressions", "prop_recovery_mode_states"];
+for (const table of tables) assert.match(sql, new RegExp(`'${table}'`), `${table} must be RLS-scoped`);
+assert.match(sql, /enable row level security/); assert.match(sql, /force row level security/); assert.match(sql, /to authenticated using \(user_id = \(select auth\.uid\(\)\)\)/);
+assert.match(sql, /revoke all on table public\.%I from public, anon, authenticated/); assert.doesNotMatch(sql, /provider_token|identity_token|authorization_code/i);
+assert.match(sql, /unique \(user_id, event_key\)/, "event persistence must support idempotency");
+assert.match(sql, /append_only/, "historical plans and events must stay immutable");
