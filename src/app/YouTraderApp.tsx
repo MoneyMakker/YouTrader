@@ -126,6 +126,7 @@ import { SmartNotificationsSection } from "../notifications/SmartNotificationsSe
 import { SettingsAccountSection } from "../components/settings/SettingsAccountSection";
 import { registerPropPassSupabaseClient } from "../propPass/gatewayClient";
 import { registerPropPassRpcClient } from "../propPass/commandGateway";
+import { hasActivePropPassEntitlement } from "../billing/propPassEntitlement";
 import { YdlTabBar } from "../ydl/shell";
 import { useYdlTheme } from "../ydl/tokens";
 import { YdlFade } from "../ydl/motion";
@@ -10322,6 +10323,16 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const authRequired = isSupabaseConfigured;
   const revenueCatConfigured = isRevenueCatConfigured;
   const isPremium = proAccess.isPro;
+  // Prop Pass follows active CustomerInfo entitlement directly. Do not use a
+  // local premium flag, a subscription-card label, a server mirror, or a
+  // staging allowlist to decide this product's state.
+  const propPassEntitled =
+    !!session?.user?.id &&
+    hasActivePropPassEntitlement(
+      customerInfo,
+      REVENUECAT_ENTITLEMENT_ID,
+      YOU_TRADER_PRO_PRODUCT_IDS,
+    );
   const cloudSyncEnabled = authConfigured && !!session?.user.id;
   const currentTradeSignature = useMemo(() => tradesSignature(trades), [trades]);
   /** Legacy key — still honored so existing installs are not re-paywalled. */
@@ -10431,7 +10442,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const propPassTabVisible = !(qaPropPassPayload?.forceHidePropPassTab);
   // Active Pro → InternalScreen; none → Locked Preview. Staging allowlist does not
   // gate this swap (Release bundles often omit dynamic EXPO_PUBLIC_* peek env).
-  const propPassEntitled = !!session?.user?.id && isPremium;
   const qaTabIds = [
     "journal",
     ...(propPassTabVisible ? (["propPass"] as const) : []),
@@ -12056,6 +12066,16 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     return () => subscription.remove();
   }, [refreshCurrentEntitlements, refreshServerEntitlement, revenueCatConfigured]);
 
+  useEffect(() => {
+    if (
+      (tab !== "propPass" && tab !== "settings") ||
+      !purchasesConfigured.current
+    ) {
+      return;
+    }
+    void refreshCurrentEntitlements(`${tab}-focus`, [0]);
+  }, [refreshCurrentEntitlements, tab]);
+
   useNetworkReconnect(() => {
     if (cloudSyncEnabled) syncTradesWithCloud();
     if (purchasesConfigured.current) {
@@ -12592,4 +12612,3 @@ function AppRoot() {
 }
 
 export default wrapAppWithSentry(AppRoot);
-

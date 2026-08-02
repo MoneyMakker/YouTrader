@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PropOsActivationResult } from "../propOs/activation/types";
 import type { PropOsActivatedReadModel } from "../propOs/activation/readService";
-import { isPropPassEntryVisible, resolvePropPassAccess } from "./access";
+import { resolvePropPassAccess } from "./access";
 import { trackPropPassEvent } from "./analytics";
 import { getPropPassGateway, peekPropPassAvailability } from "./gatewayClient";
 import { mapActivationToPropPassUiState } from "./mapUiState";
@@ -36,9 +36,11 @@ export function usePropPassAvailability(input: {
 
   const peek = peekPropPassAvailability(input.userId);
   const access = resolvePropPassAccess(undefined, peek, input.userId);
-  const entryVisible =
-    (input.enabled ?? true) &&
-    isPropPassEntryVisible(undefined, peek, input.userId);
+  // The product tab is a subscription surface, not a staging allowlist
+  // surface. Keep the remote Prop OS eligibility gate inside the gateway; it
+  // can decide whether a configured remote model is readable without making
+  // the paid product disappear or render as unavailable in production.
+  const entryVisible = (input.enabled ?? true) && !!input.userId;
 
   const refresh = useCallback(
     (opts?: { selectedChallengeId?: string | null }) => {

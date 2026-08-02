@@ -383,9 +383,11 @@ function InsightsLearningCard({
       <YdlText role="body" color="text.secondary">
         {t("stats.insightsLearningBody", { targets })}
       </YdlText>
-      <YdlText role="caption" color="text.secondary">
-        {t("stats.insightsProgress", { count: state.tradeCount, required: state.requiredTrades })}
-      </YdlText>
+      {state.targetProgress.map((target) => (
+        <YdlText key={target.target} role="caption" color="text.secondary">
+          {`${targetLabels[target.target]} · ${target.currentTrades} of ${target.requiredTrades} trades`}
+        </YdlText>
+      ))}
     </View>
   );
 }

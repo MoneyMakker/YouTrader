@@ -6721,7 +6721,7 @@ export const styles = StyleSheet.create({
   monthPickerYearActive: { borderColor: C.green, backgroundColor: C.greenSoft },
   monthPickerYearText: {
     ...ydlTypography.callout,
-    color: C.sub,
+    color: C.text,
     fontWeight: "600",
   },
   monthPickerYearTextActive: { color: C.green, fontWeight: "700" },
@@ -6740,6 +6740,7 @@ export const styles = StyleSheet.create({
   monthPickerMonthActive: { borderColor: C.green, backgroundColor: C.greenSoft },
   monthPickerMonthText: {
     ...ydlTypography.callout,
+    color: C.text,
     fontWeight: "600",
   },
   monthPickerMonthTextActive: { color: C.green, fontWeight: "700" },

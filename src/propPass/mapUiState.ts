@@ -29,9 +29,14 @@ export function mapActivationToPropPassUiState(input: {
     case "activation_off":
     case "ineligible":
     case "missing_user":
-    case "schema_incompatible":
-    case "evaluation_error":
       return { kind: "disabled" };
+    case "schema_incompatible":
+      return { kind: "unsupported", reasonCodes: result.reasonCodes };
+    case "evaluation_error":
+      // A gateway evaluation failure is operational, not a product-access
+      // decision. Preserve a retryable state instead of showing setup or a
+      // normal unavailable screen to an entitled customer.
+      return { kind: "repository_unavailable" };
     case "no_account":
       return { kind: "no_account" };
     case "no_active_challenge":

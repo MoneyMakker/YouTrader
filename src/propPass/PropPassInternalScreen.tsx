@@ -42,6 +42,8 @@ import {
   type MemoryIntelligenceStore,
 } from "../propOs/intelligence";
 import { supabase } from "../config/appConfig";
+import { GENERATED_APP_ENV } from "../config/buildFingerprint.generated";
+import { resolveEntitledPropPassUiState } from "./productState";
 
 type Props = {
   userId: string | null | undefined;
@@ -78,7 +80,11 @@ export function PropPassInternalScreen({
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
   const controller = usePropPassAvailability({ userId, accountId });
-  const uiState = uiStateOverride ?? controller.uiState;
+  const gatewayUiState = uiStateOverride ?? controller.uiState;
+  const uiState = resolveEntitledPropPassUiState({
+    appEnvironment: GENERATED_APP_ENV,
+    uiState: gatewayUiState,
+  });
   const fallbackIntelligenceStore = useMemo(() => createMemoryIntelligenceStore(), []);
   const intelligenceStore = intelligenceStoreProp ?? fallbackIntelligenceStore;
   const remoteIntelligenceStore = useMemo(() => {

@@ -21,6 +21,14 @@ const radarPending = getInsightsLearningState({
 });
 assert.equal(radarPending.tradeCount, 4);
 assert.equal(radarPending.requiredTrades, 6);
+assert.deepEqual(
+  radarPending.targetProgress.find((item) => item.target === "performanceRadar"),
+  { target: "performanceRadar", currentTrades: 4, requiredTrades: 5 },
+);
+assert.deepEqual(
+  radarPending.targetProgress.find((item) => item.target === "bestEdge"),
+  { target: "bestEdge", currentTrades: 4, requiredTrades: 5 },
+);
 
 const ready = getInsightsLearningState({
   tradeCount: 8,
