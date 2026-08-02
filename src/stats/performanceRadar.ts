@@ -142,7 +142,7 @@ export function buildPerformanceRadar(trades: Trade[]): PerformanceRadarModel {
     },
     {
       key: "sessionTiming",
-      label: "Session Timing",
+      label: "Timing",
       score: sessionTiming,
       valueLabel: `${sessionTiming}`,
       target: "Focused",

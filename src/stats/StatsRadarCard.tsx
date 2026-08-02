@@ -162,7 +162,7 @@ export function StatsRadarCard({ trades, model: modelProp }: Props) {
                   ]}
                   pointerEvents="none"
                 >
-                  <YdlText role="caption" color="text.secondary" numberOfLines={1}>
+                  <YdlText role="caption" color="text.secondary" numberOfLines={2} style={{ textAlign: "center" }}>
                     {axis.label}
                   </YdlText>
                   <YdlText role="caption" style={{ color: LIME }} numberOfLines={1}>

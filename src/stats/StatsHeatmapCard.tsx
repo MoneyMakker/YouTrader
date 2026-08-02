@@ -35,6 +35,20 @@ function heatColor(cell: HeatmapCell, maxAbs: number): string {
   return "rgba(255,255,255,0.06)";
 }
 
+function heatTextColors(cell: HeatmapCell, maxAbs: number): { primary: string; secondary: string } {
+  if (!cell.count) {
+    return { primary: "rgba(255,255,255,0.55)", secondary: "rgba(255,255,255,0.42)" };
+  }
+  const intensity = Math.min(1, Math.abs(cell.pnl) / Math.max(1, maxAbs));
+  if (cell.pnl > 0 && intensity >= 0.45) {
+    return { primary: "#0B1208", secondary: "rgba(11,18,8,0.72)" };
+  }
+  if (cell.pnl < 0 && intensity >= 0.55) {
+    return { primary: "#FFFFFF", secondary: "rgba(255,255,255,0.78)" };
+  }
+  return { primary: "#FFFFFF", secondary: "rgba(255,255,255,0.62)" };
+}
+
 /** Compact P&L for dense day×hour cells — avoids ellipsis on small tiles. */
 function formatCompactHeatMoney(value: number): string {
   const sign = value > 0 ? "+" : value < 0 ? "−" : "";
@@ -120,7 +134,9 @@ export function StatsHeatmapCard({ trades }: Props) {
       </ScrollView>
 
       <View style={[styles.grid, compact && styles.gridCompact]} testID="stats-heatmap-grid">
-        {cells.map((cell) => (
+        {cells.map((cell) => {
+          const textColors = heatTextColors(cell, maxAbs);
+          return (
           <Pressable
             key={cell.key}
             onPress={() => setSelectedKey(cell.key)}
@@ -136,10 +152,10 @@ export function StatsHeatmapCard({ trades }: Props) {
               { backgroundColor: heatColor(cell, maxAbs) },
             ]}
           >
-            <YdlText role="caption" numberOfLines={1} color="text.secondary">
+            <YdlText role="caption" numberOfLines={1} style={{ color: textColors.secondary }}>
               {cell.label}
             </YdlText>
-            <YdlText role="caption" numberOfLines={1}>
+            <YdlText role="caption" numberOfLines={1} style={{ color: textColors.primary }}>
               {cell.count
                 ? compact
                   ? formatCompactHeatMoney(cell.pnl)
@@ -147,7 +163,8 @@ export function StatsHeatmapCard({ trades }: Props) {
                 : "—"}
             </YdlText>
           </Pressable>
-        ))}
+          );
+        })}
       </View>
 
       <View style={styles.legend} accessibilityRole="summary" accessibilityLabel="Legend. Lime positive. Red negative. Neutral no data.">
