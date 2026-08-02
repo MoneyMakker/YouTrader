@@ -53,6 +53,7 @@ import {
   Image,
   InteractionManager,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Linking,
   LogBox,
   Modal,
@@ -64,6 +65,7 @@ import {
   Switch,
   Text,
   TextInput,
+  UIManager,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -177,10 +179,6 @@ import {
   decidePostLoginEntitlementReconcile,
   isActiveEntitlement,
 } from "../billing/entitlementReconcile";
-import {
-  isPropPassEntryVisible,
-  isPropPassEnvironmentAllowed,
-} from "../propPass/access";
 import { MoreScreen, type MoreDestination } from "./MoreScreen";
 import { SubscriptionScreen } from "./SubscriptionScreen";
 import { StatsDashboard } from "../stats/StatsDashboard";
@@ -6891,6 +6889,8 @@ function JournalScreen({
   const [modal, setModal] = useState(false);
   const [pnlEntryMode, setPnlEntryMode] = useState<PnlEntryMode>("calculate");
   const [manualResultType, setManualResultType] = useState<ManualPnlResultType>("profit");
+  const [tradeContextExpanded, setTradeContextExpanded] = useState(false);
+  const [marketType, setMarketType] = useState<"emini" | "micro" | "custom">("emini");
   const [photoView, setPhotoView] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [symbolIsCustom, setSymbolIsCustom] = useState(false);
@@ -7095,6 +7095,8 @@ function JournalScreen({
     setDayPanelOpen(false);
     setEditId(null);
     setSymbolIsCustom(false);
+    setMarketType("emini");
+    setTradeContextExpanded(false);
     setPnlEntryMode("calculate");
     setManualResultType("profit");
     setForm({ ...emptyForm, entryTime: formatClockFromDate() });
@@ -7103,9 +7105,12 @@ function JournalScreen({
   const openEdit = (tr: Trade) => {
     setEditId(tr.id);
     setDayPanelOpen(false);
-    const preset = (MINI_INSTRUMENTS as readonly string[]).includes(tr.symbol)
-      || (MICRO_INSTRUMENTS as readonly string[]).includes(tr.symbol);
+    const isMini = (MINI_INSTRUMENTS as readonly string[]).includes(tr.symbol);
+    const isMicro = (MICRO_INSTRUMENTS as readonly string[]).includes(tr.symbol);
+    const preset = isMini || isMicro;
     setSymbolIsCustom(!preset);
+    setMarketType(isMini ? "emini" : isMicro ? "micro" : "custom");
+    setTradeContextExpanded(false);
     const hasExecution = tr.entry != null && tr.exit != null && preset;
     setPnlEntryMode(hasExecution ? "calculate" : "manual");
     setManualResultType(inferManualResultType(Number(tr.pnl) || 0));
@@ -8285,12 +8290,11 @@ function JournalScreen({
                 </Pressable>
               </View>
 
-              {/* 1. Outcome — Calculate from execution or Manual absolute amount. */}
-              <View style={styles.journalDetailSection}>
+              {/* A. Trade Result */}
+              <View style={styles.journalDetailSection} testID="journal.trade.section.result">
                 <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
                   {t("journalFormTradeResult")}
                 </Text>
-                <Text style={styles.label}>{t("journalFormPnlEntry")}</Text>
                 <View style={styles.row} testID="journal.trade.edit.pnl.mode">
                   {([
                     { id: "calculate" as const, label: t("journalFormPnlCalculate") },
@@ -8364,11 +8368,7 @@ function JournalScreen({
                           style={[
                             styles.option,
                             manualResultType === opt.id &&
-                              (opt.id === "loss"
-                                ? styles.optionShortActive
-                                : opt.id === "profit"
-                                  ? styles.optionActive
-                                  : styles.optionActive),
+                              (opt.id === "loss" ? styles.optionShortActive : styles.optionActive),
                           ]}
                         >
                           <Text style={styles.optionText}>{opt.label}</Text>
@@ -8411,7 +8411,13 @@ function JournalScreen({
                       : t("journalFormPnlHintAuto")}
                   </Text>
                 </View>
+              </View>
 
+              {/* B. Trade Setup */}
+              <View style={styles.journalDetailSection} testID="journal.trade.section.setup">
+                <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
+                  {t("journalFormTradeSetup")}
+                </Text>
                 <Text style={styles.label}>{t("direction")}</Text>
                 <View style={styles.row}>
                   {(["LONG", "SHORT"] as Direction[]).map((d) => (
@@ -8435,64 +8441,67 @@ function JournalScreen({
                   ))}
                 </View>
 
-                <Text style={styles.label}>{t("symbol")}</Text>
-                <Text style={styles.sectionLabel}>{t("miniContracts")}</Text>
-                <View style={styles.instrumentGrid} testID="journal.trade.edit.instrument.mini">
-                  {MINI_INSTRUMENTS.map((s) => (
-                    <InstrumentButton
-                      key={s}
-                      symbol={s}
-                      active={!symbolIsCustom && form.symbol === s}
+                <Text style={styles.label}>{t("journalFormMarketType")}</Text>
+                <View style={styles.row} testID="journal.trade.edit.marketType">
+                  {([
+                    { id: "emini" as const, label: t("journalFormMarketEmini") },
+                    { id: "micro" as const, label: t("journalFormMarketMicro") },
+                    { id: "custom" as const, label: t("journalFormMarketCustom") },
+                  ]).map((opt) => (
+                    <Pressable
+                      key={opt.id}
+                      testID={`journal.trade.edit.marketType.${opt.id}`}
                       onPress={() => {
-                        setSymbolIsCustom(false);
-                        setForm({ ...form, symbol: s, pnl: pnlEntryMode === "manual" ? form.pnl : "" });
+                        runYdlMotionHaptic("Selection");
+                        setMarketType(opt.id);
+                        if (opt.id === "custom") {
+                          setSymbolIsCustom(true);
+                          setForm({
+                            ...form,
+                            symbol:
+                              (MINI_INSTRUMENTS as readonly string[]).includes(form.symbol) ||
+                              (MICRO_INSTRUMENTS as readonly string[]).includes(form.symbol)
+                                ? ""
+                                : form.symbol,
+                          });
+                        } else {
+                          setSymbolIsCustom(false);
+                          const list = opt.id === "emini" ? MINI_INSTRUMENTS : MICRO_INSTRUMENTS;
+                          setForm({
+                            ...form,
+                            symbol: list.includes(form.symbol as never) ? form.symbol : list[0],
+                            pnl: pnlEntryMode === "manual" ? form.pnl : "",
+                          });
+                        }
                       }}
-                      testIDPrefix="journal.trade.edit.instrument"
-                    />
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: marketType === opt.id }}
+                      style={[styles.option, marketType === opt.id && styles.optionActive]}
+                    >
+                      <Text style={styles.optionText}>{opt.label}</Text>
+                    </Pressable>
                   ))}
                 </View>
-                <Text style={styles.sectionLabel}>{t("microContracts")}</Text>
-                <View style={styles.instrumentGrid} testID="journal.trade.edit.instrument.micro">
-                  {MICRO_INSTRUMENTS.map((s) => (
-                    <InstrumentButton
-                      key={s}
-                      symbol={s}
-                      active={!symbolIsCustom && form.symbol === s}
-                      onPress={() => {
-                        setSymbolIsCustom(false);
-                        setForm({ ...form, symbol: s, pnl: pnlEntryMode === "manual" ? form.pnl : "" });
-                      }}
-                      testIDPrefix="journal.trade.edit.instrument"
-                    />
-                  ))}
-                </View>
-                <View style={styles.instrumentGrid}>
-                  <AnimatedPressable
-                    press="listItem"
-                    haptic
-                    onPress={() => {
-                      setSymbolIsCustom(true);
-                      setForm({
-                        ...form,
-                        symbol: (MINI_INSTRUMENTS as readonly string[]).includes(form.symbol)
-                          || (MICRO_INSTRUMENTS as readonly string[]).includes(form.symbol)
-                          ? ""
-                          : form.symbol,
-                      });
-                    }}
-                    testID="journal.trade.edit.instrument.CUSTOM"
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: symbolIsCustom }}
-                    accessibilityLabel={t("customSymbolOption")}
-                    style={[styles.instrumentBtn, symbolIsCustom && styles.instrumentBtnActive]}
-                    contentStyle={{ minHeight: 0, minWidth: 0, justifyContent: "center" }}
+
+                {marketType !== "custom" ? (
+                  <View
+                    style={styles.instrumentGrid}
+                    testID={marketType === "emini" ? "journal.trade.edit.instrument.mini" : "journal.trade.edit.instrument.micro"}
                   >
-                    <Text style={styles.instrumentSymbol} maxFontSizeMultiplier={1.25}>
-                      {t("customSymbolOption")}
-                    </Text>
-                  </AnimatedPressable>
-                </View>
-                {symbolIsCustom ? (
+                    {(marketType === "emini" ? MINI_INSTRUMENTS : MICRO_INSTRUMENTS).map((s) => (
+                      <InstrumentButton
+                        key={s}
+                        symbol={s}
+                        active={!symbolIsCustom && form.symbol === s}
+                        onPress={() => {
+                          setSymbolIsCustom(false);
+                          setForm({ ...form, symbol: s, pnl: pnlEntryMode === "manual" ? form.pnl : "" });
+                        }}
+                        testIDPrefix="journal.trade.edit.instrument"
+                      />
+                    ))}
+                  </View>
+                ) : (
                   <Input
                     testID="journal.trade.edit.instrument"
                     accessibilityLabel="journal.trade.edit.instrument"
@@ -8502,14 +8511,16 @@ function JournalScreen({
                       setForm({ ...form, symbol: normalizeSymbolInput(v) })
                     }
                   />
-                ) : null}
-              </View>
+                )}
 
-              {/* 2. Execution */}
-              <View style={styles.journalDetailSection}>
-                <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
-                  {t("journalDetailExecution")}
-                </Text>
+                <Input
+                  testID="journal.trade.edit.quantity"
+                  accessibilityLabel="journal.trade.edit.quantity"
+                  label={t("contracts")}
+                  keyboardType="number-pad"
+                  value={form.contracts}
+                  onChangeText={(v: string) => setForm({ ...form, contracts: v })}
+                />
                 <Input
                   testID="journal.trade.edit.entry"
                   accessibilityLabel="journal.trade.edit.entry"
@@ -8526,177 +8537,6 @@ function JournalScreen({
                   value={form.exit}
                   onChangeText={(v: string) => setForm({ ...form, exit: v })}
                 />
-                <Input
-                  testID="journal.trade.edit.quantity"
-                  accessibilityLabel="journal.trade.edit.quantity"
-                  label={t("contracts")}
-                  keyboardType="number-pad"
-                  value={form.contracts}
-                  onChangeText={(v: string) => setForm({ ...form, contracts: v })}
-                />
-                <Input
-                  testID="journal.trade.edit.stopLoss"
-                  accessibilityLabel="journal.trade.edit.stopLoss"
-                  label={t("stopLoss")}
-                  keyboardType="decimal-pad"
-                  value={form.stopLoss}
-                  onChangeText={(v: string) => setForm({ ...form, stopLoss: v })}
-                />
-                <Input
-                  testID="journal.trade.edit.takeProfit"
-                  accessibilityLabel="journal.trade.edit.takeProfit"
-                  label={t("takeProfit")}
-                  keyboardType="decimal-pad"
-                  value={form.takeProfit}
-                  onChangeText={(v: string) =>
-                    setForm({ ...form, takeProfit: v })
-                  }
-                />
-              </View>
-
-              {/* 3. Reflection */}
-              <View style={styles.journalDetailSection}>
-                <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
-                  {t("journalDetailReflection")}
-                </Text>
-                <Text style={styles.label}>{t("mood")}</Text>
-                <View style={styles.moodGrid}>
-                  {MOODS.map((m) => (
-                    <Pressable
-                      key={m.key}
-                      onPress={() => {
-                        runYdlMotionHaptic("Selection");
-                        setForm({ ...form, mood: m.key });
-                      }}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: form.mood === m.key }}
-                      style={[
-                        styles.moodBtn,
-                        form.mood === m.key && styles.optionActive,
-                      ]}
-                    >
-                      <Text style={styles.moodEmoji}>{m.emoji}</Text>
-                      <Text style={styles.moodText}>{moodLabel(m.key, lang).replace(`${m.emoji} `, "")}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <Input
-                  testID="journal.trade.edit.notes"
-                  accessibilityLabel="journal.trade.edit.notes"
-                  label={t("notes")}
-                  value={form.notes}
-                  onChangeText={(v: string) => setForm({ ...form, notes: v.slice(0, MAX_NOTES_LENGTH) })}
-                  multiline
-                />
-                <View style={styles.journalMediaSection}>
-                  <PremiumCard tone="purple" compact style={styles.journalMediaCard} contentStyle={styles.journalMediaCardContent}>
-                    <View style={styles.journalMediaCardHeader}>
-                      <Mic size={15} color={C.purple} strokeWidth={2.2} />
-                      <Text style={styles.journalMediaCardTitle}>{t("voiceNote")}</Text>
-                    </View>
-                    {!form.voiceUri && !recorderState.isRecording ? (
-                      <Text style={styles.journalMediaStatus}>{t("noAudio")}</Text>
-                    ) : null}
-                    <Pressable
-                      style={[
-                        styles.journalVoiceBtn,
-                        styles.purpleAction,
-                        recorderState.isRecording && styles.journalVoiceRecording,
-                        form.voiceUri && !recorderState.isRecording && styles.journalVoiceDone,
-                      ]}
-                      onPress={pickAudio}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        recorderState.isRecording
-                          ? t("journalFormRecording")
-                          : form.voiceUri
-                            ? t("journalFormVoiceAdded")
-                            : t("journalFormRecordVoiceNote")
-                      }
-                    >
-                      <Mic
-                        size={16}
-                        color={
-                          recorderState.isRecording
-                            ? C.red
-                            : form.voiceUri
-                              ? C.purple
-                              : C.text
-                        }
-                        strokeWidth={2.2}
-                      />
-                      <Text
-                        style={[
-                          styles.journalVoiceBtnText,
-                          recorderState.isRecording && { color: C.red },
-                          form.voiceUri && !recorderState.isRecording && { color: C.purple },
-                        ]}
-                      >
-                        {recorderState.isRecording
-                          ? t("journalFormRecording")
-                          : form.voiceUri
-                            ? t("journalFormVoiceAdded")
-                            : t("journalFormRecordVoiceNote")}
-                      </Text>
-                    </Pressable>
-                    <Text style={styles.journalMediaHint}>
-                      {recorderState.isRecording
-                        ? t("stopRecording")
-                        : form.voiceUri
-                          ? t("journalFormAudioAttached")
-                          : t("journalFormVoiceHint")}
-                    </Text>
-                    {form.voiceUri ? (
-                      <Pressable
-                        style={styles.journalOpenAudioLink}
-                        onPress={() => Linking.openURL(form.voiceUri)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("openAudio")}
-                      >
-                        <Text style={styles.journalOpenAudioText}>{t("openAudio")}</Text>
-                      </Pressable>
-                    ) : null}
-                  </PremiumCard>
-
-                  <PremiumCard tone="neutral" compact style={styles.journalMediaCard} contentStyle={styles.journalMediaCardContent}>
-                    <Text style={styles.journalMediaCardTitle}>{t("photo")}</Text>
-                    {form.photoUri ? (
-                      <Image source={{ uri: form.photoUri }} style={styles.tradePhoto} />
-                    ) : null}
-                    <View style={styles.journalActionPair}>
-                      <Pressable
-                        style={[styles.journalActionCard, styles.purpleAction]}
-                        onPress={() => pickImage(true)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("journalFormTakeScreenshot")}
-                      >
-                        <Camera size={18} color={C.purple} strokeWidth={2.2} />
-                        <Text style={styles.journalActionCardTitle}>{t("journalFormTakeScreenshot")}</Text>
-                        <Text style={styles.journalActionCardHint}>{t("journalFormCaptureSetup")}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.journalActionCard, styles.purpleAction]}
-                        onPress={() => pickImage(false)}
-                        accessibilityRole="button"
-                        accessibilityLabel={t("journalFormUploadChart")}
-                      >
-                        <ImagePlus size={18} color={C.purple} strokeWidth={2.2} />
-                        <Text style={styles.journalActionCardTitle}>{t("journalFormUploadChart")}</Text>
-                        <Text style={styles.journalActionCardHint}>{t("journalFormImportPhotos")}</Text>
-                      </Pressable>
-                    </View>
-                  </PremiumCard>
-                </View>
-              </View>
-
-              {/* 4. Metadata */}
-              <View style={styles.journalDetailSection}>
-                <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
-                  {t("journalDetailMetadata")}
-                </Text>
-                <Text style={styles.journalDetailMetaDate} maxFontSizeMultiplier={1.3}>
-                  {eventDateLabel(selectedDate)}
-                </Text>
                 <View style={styles.formTwoCol}>
                   <View style={styles.formTwoColItem}>
                     <Input
@@ -8721,36 +8561,173 @@ function JournalScreen({
                     />
                   </View>
                 </View>
-                <Text style={styles.label}>{t("tags")}</Text>
-                <View style={styles.tagChipGrid}>
-                  {COMMON_TRADE_TAGS.map((tag) => {
-                    const currentTags = parseTagsInput(form.tags);
-                    const active = currentTags.includes(tag.toUpperCase());
-                    return (
+                <Text style={styles.journalDetailMetaDate} maxFontSizeMultiplier={1.3}>
+                  {eventDateLabel(selectedDate)}
+                </Text>
+              </View>
+
+              {/* C. Trade Context — Optional (collapsed by default) */}
+              <View style={styles.journalDetailSection} testID="journal.trade.section.context">
+                <Pressable
+                  testID="journal.trade.context.toggle"
+                  onPress={() => {
+                    if (Platform.OS === "ios" && UIManager.setLayoutAnimationEnabledExperimental) {
+                      UIManager.setLayoutAnimationEnabledExperimental(true);
+                    }
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    runYdlMotionHaptic("Selection");
+                    setTradeContextExpanded((v) => !v);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: tradeContextExpanded }}
+                  accessibilityLabel={t("journalFormTradeContext")}
+                  style={styles.row}
+                >
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.journalDetailSectionTitle} maxFontSizeMultiplier={1.2}>
+                      {t("journalFormTradeContext")}
+                    </Text>
+                    {!tradeContextExpanded ? (
+                      <Text style={styles.journalPnlHint} maxFontSizeMultiplier={1.25}>
+                        {t("journalFormTradeContextSummary")}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.optionText}>{tradeContextExpanded ? "−" : "+"}</Text>
+                </Pressable>
+
+                {tradeContextExpanded ? (
+                  <>
+                    <Input
+                      testID="journal.trade.edit.notes"
+                      accessibilityLabel="journal.trade.edit.notes"
+                      label={t("notes")}
+                      value={form.notes}
+                      onChangeText={(v: string) => setForm({ ...form, notes: v.slice(0, MAX_NOTES_LENGTH) })}
+                      multiline
+                    />
+                    <Text style={styles.label}>{t("mood")}</Text>
+                    <View style={styles.moodGrid}>
+                      {MOODS.map((m) => (
+                        <Pressable
+                          key={m.key}
+                          onPress={() => {
+                            runYdlMotionHaptic("Selection");
+                            setForm({ ...form, mood: m.key });
+                          }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: form.mood === m.key }}
+                          style={[styles.moodBtn, form.mood === m.key && styles.optionActive]}
+                        >
+                          <Text style={styles.moodEmoji}>{m.emoji}</Text>
+                          <Text style={styles.moodText}>{moodLabel(m.key, lang).replace(`${m.emoji} `, "")}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Input
+                      testID="journal.trade.edit.stopLoss"
+                      accessibilityLabel="journal.trade.edit.stopLoss"
+                      label={t("stopLoss")}
+                      keyboardType="decimal-pad"
+                      value={form.stopLoss}
+                      onChangeText={(v: string) => setForm({ ...form, stopLoss: v })}
+                    />
+                    <Input
+                      testID="journal.trade.edit.takeProfit"
+                      accessibilityLabel="journal.trade.edit.takeProfit"
+                      label={t("takeProfit")}
+                      keyboardType="decimal-pad"
+                      value={form.takeProfit}
+                      onChangeText={(v: string) => setForm({ ...form, takeProfit: v })}
+                    />
+                    <View style={styles.journalMediaSection}>
                       <Pressable
-                        key={tag}
-                        onPress={() => {
-                          runYdlMotionHaptic("Selection");
-                          const next = active
-                            ? currentTags.filter((item) => item !== tag.toUpperCase())
-                            : [...currentTags, tag.toUpperCase()].slice(0, 8);
-                          setForm({ ...form, tags: tagsToInput(next) });
-                        }}
+                        style={[styles.journalVoiceBtn, recorderState.isRecording && styles.journalVoiceRecording, form.voiceUri && !recorderState.isRecording && styles.journalVoiceDone]}
+                        onPress={pickAudio}
                         accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        style={[styles.tradeTagButton, active && styles.tradeTagButtonActive]}
+                        accessibilityLabel={
+                          recorderState.isRecording
+                            ? t("journalFormRecording")
+                            : form.voiceUri
+                              ? t("journalFormVoiceAdded")
+                              : t("journalFormRecordVoiceNote")
+                        }
                       >
-                        <Text style={[styles.tradeTagButtonText, active && styles.tradeTagButtonTextActive]}>#{tag}</Text>
+                        <Mic
+                          size={16}
+                          color={recorderState.isRecording ? C.red : form.voiceUri ? C.green : C.text}
+                          strokeWidth={2.2}
+                        />
+                        <Text
+                          style={[
+                            styles.journalVoiceBtnText,
+                            recorderState.isRecording && { color: C.red },
+                            form.voiceUri && !recorderState.isRecording && { color: C.green },
+                          ]}
+                        >
+                          {recorderState.isRecording
+                            ? t("journalFormRecording")
+                            : form.voiceUri
+                              ? t("journalFormVoiceAdded")
+                              : t("journalFormRecordVoiceNote")}
+                        </Text>
                       </Pressable>
-                    );
-                  })}
-                </View>
-                <Input
-                  label={t("customTags")}
-                  value={form.tags}
-                  onChangeText={(v: string) => setForm({ ...form, tags: v })}
-                  placeholder="#ORB #APlus #NYOpen"
-                />
+                      {form.photoUri ? (
+                        <Image source={{ uri: form.photoUri }} style={styles.tradePhoto} />
+                      ) : null}
+                      <View style={styles.journalActionPair}>
+                        <Pressable
+                          style={styles.journalActionCard}
+                          onPress={() => pickImage(true)}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("journalFormTakeScreenshot")}
+                        >
+                          <Camera size={18} color={C.green} strokeWidth={2.2} />
+                          <Text style={styles.journalActionCardTitle}>{t("journalFormTakeScreenshot")}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.journalActionCard}
+                          onPress={() => pickImage(false)}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("journalFormUploadChart")}
+                        >
+                          <ImagePlus size={18} color={C.green} strokeWidth={2.2} />
+                          <Text style={styles.journalActionCardTitle}>{t("journalFormUploadChart")}</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                    <Text style={styles.label}>{t("tags")}</Text>
+                    <View style={styles.tagChipGrid}>
+                      {COMMON_TRADE_TAGS.map((tag) => {
+                        const currentTags = parseTagsInput(form.tags);
+                        const active = currentTags.includes(tag.toUpperCase());
+                        return (
+                          <Pressable
+                            key={tag}
+                            onPress={() => {
+                              runYdlMotionHaptic("Selection");
+                              const next = active
+                                ? currentTags.filter((item) => item !== tag.toUpperCase())
+                                : [...currentTags, tag.toUpperCase()].slice(0, 8);
+                              setForm({ ...form, tags: tagsToInput(next) });
+                            }}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                            style={[styles.tradeTagButton, active && styles.tradeTagButtonActive]}
+                          >
+                            <Text style={[styles.tradeTagButtonText, active && styles.tradeTagButtonTextActive]}>#{tag}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Input
+                      label={t("customTags")}
+                      value={form.tags}
+                      onChangeText={(v: string) => setForm({ ...form, tags: v })}
+                      placeholder="#ORB #APlus #NYOpen"
+                    />
+                  </>
+                ) : null}
               </View>
 
               <View style={styles.journalDetailActions}>
@@ -10441,18 +10418,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [isPremium]);
 
   useEffect(() => {
-    const stagingEnv = isPropPassEnvironmentAllowed();
-    const entitledVisible =
-      !!session?.user?.id &&
-      isPremium &&
-      (stagingEnv
-        ? isPropPassEntryVisible(undefined, null, session.user.id)
-        : true);
     // Tab always stays in the dock; only QA force-hide may remove it.
+    // Entitled content is Active Pro → InternalScreen (allowlist gates engine inside).
     const tabPresent = !(qaPropPassPayload?.forceHidePropPassTab);
     if (tab === "propPass" && !tabPresent) setTab("journal");
-    void entitledVisible;
-  }, [isPremium, qaPropPassPayload?.forceHidePropPassTab, session?.user?.id, tab]);
+  }, [qaPropPassPayload?.forceHidePropPassTab, tab]);
 
   const completeProductOnboarding = useCallback(() => {
     setOnboardingCompleted(true);
@@ -10504,12 +10474,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [acquisitionPhase, showStagingQaResetMarkers]);
 
   const propPassTabVisible = !(qaPropPassPayload?.forceHidePropPassTab);
-  const propPassEntitled =
-    !!session?.user?.id &&
-    isPremium &&
-    (isPropPassEnvironmentAllowed()
-      ? isPropPassEntryVisible(undefined, null, session.user.id)
-      : true);
+  // Active Pro → InternalScreen; none → Locked Preview. Staging allowlist does not
+  // gate this swap (Release bundles often omit dynamic EXPO_PUBLIC_* peek env).
+  const propPassEntitled = !!session?.user?.id && isPremium;
   const qaTabIds = [
     "journal",
     ...(propPassTabVisible ? (["propPass"] as const) : []),
