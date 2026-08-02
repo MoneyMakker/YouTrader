@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { simulateWhatIf } from "../src/propPass/tradingOs";
+const input = { account: { contextType: "challenge" as const, accountId: "qa", startingBalanceMinor: 500_000, currentBalanceMinor: 510_000, currentEquityMinor: 510_000, equityHighMinor: 510_000, realizedPnlMinor: 10_000, tradingDay: "2026-08-02", timezone: "America/New_York" }, riskRooms: { dailyLossRemainingMinor: 80_000, maximumLossRemainingMinor: 70_000, drawdownRemainingMinor: 60_000 }, remainingTargetMinor: 40_000, dailyLossLimitMinor: 100_000, drawdownLimitMinor: 100_000, maximumLossLimitMinor: 100_000 };
+const oneLoss = simulateWhatIf({ ...input, scenario: { kind: "next_trade_loss", riskMinor: 20_000 } });
+assert.equal(oneLoss.values.projectedDailyRoomMinor, 60_000);
+assert.equal(oneLoss.values.projectedEquityMinor, 490_000);
+assert.equal(simulateWhatIf({ ...input, scenario: { kind: "two_consecutive_losses", riskMinor: 35_000 } }).status, "stop_trading");
+assert.equal(simulateWhatIf({ ...input, scenario: { kind: "next_trade_win", pnlMinor: 20_000 } }).values.remainingTargetMinor, 20_000);
+assert.equal(simulateWhatIf({ ...input, scenario: { kind: "next_trading_day" } }).values.projectedDailyRoomMinor, 80_000);
+assert.equal(input.riskRooms.dailyLossRemainingMinor, 80_000);
+console.log("prop-pass-what-if-qa: PASS");

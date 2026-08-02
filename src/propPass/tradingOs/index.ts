@@ -5,3 +5,5 @@ export { assessPreTrade } from "./preTrade";
 export type { PreTradeAssessmentInput, PreTradeValues } from "./preTrade";
 export { calculatePositionSize } from "./positionSizing";
 export type { PositionSizingInput, PositionSizingValues } from "./positionSizing";
+export { simulateWhatIf } from "./whatIf";
+export type { WhatIfInput, WhatIfScenario, WhatIfValues } from "./whatIf";
