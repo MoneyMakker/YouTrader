@@ -1,0 +1,12 @@
+{
+  "version": "1.6.1",
+  "build": "115",
+  "gitSha": "bc97e1f",
+  "uploadUtc": "2026-08-02T16:50:03Z",
+  "method": "eas submit --path build/YouTrader-1.6.1-115.ipa --profile production --non-interactive",
+  "easSubmissionUrl": "https://expo.dev/accounts/pdvl/projects/youtrader-pro/submissions/6a559e78-62ef-44a0-b34e-4fc902f74324",
+  "ascTestFlightUrl": "https://appstoreconnect.apple.com/apps/6774799403/testflight/ios",
+  "appleProcessing": "PROCESSING_AT_HANDOFF",
+  "internalTesting": "NOT_ENABLED_YET",
+  "appReview": "NOT_PERFORMED"
+}

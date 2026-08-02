@@ -1,0 +1,33 @@
+{
+  "test": "google-disposable-delete-smoke",
+  "project_ref": "izzrlsgumyabdvlmwlwn",
+  "timestamp_utc": "2026-08-02T15:26:27.827697+00:00",
+  "steps": {
+    "create_admin_user": {
+      "http_status": 200,
+      "user_created": true,
+      "user_id_prefix": "f4f091b7"
+    },
+    "password_sign_in": {
+      "http_status": 200,
+      "got_access_token": true
+    },
+    "delete_account": {
+      "http_status": 200,
+      "ok": true,
+      "response": {
+        "ok": true,
+        "appleRevoked": false,
+        "manualAppleRevocationRequired": false,
+        "note": "App Store subscriptions are not cancelled by account deletion. Manage billing in Apple Subscriptions."
+      }
+    },
+    "admin_get_user": {
+      "http_status": 404,
+      "user_gone": true,
+      "message": "User not found"
+    }
+  },
+  "pass": true,
+  "error": null
+}
