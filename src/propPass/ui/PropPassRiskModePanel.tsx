@@ -289,8 +289,9 @@ function buildInput(
       model.buffers.totalLoss?.remainingMinor ??
       null,
     stopSizePoints: stopOverride != null && stopOverride > 0 ? stopOverride : null,
-    // Point value stays null until instrument config is wired; contracts CTA collects stop first.
-    pointValue: stopOverride != null && stopOverride > 0 ? 5 : null,
+    // Contract sizing remains unavailable until a verified instrument spec is wired.
+    // A stop distance alone must never cause a fabricated point value to be used.
+    pointValue: null,
     userMaxRiskPerTradeMinor: null,
     realizedPnlTodayMinor: null,
     winRate: null,
