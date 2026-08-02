@@ -1,5 +1,6 @@
 export * from "./contracts";
 export * from "./financialMath";
+export * from "./drawdown";
 export { calculateAllowedRisk, validateInstrumentSpec, validateTradingOsInputs } from "./domain";
 export type { DomainValidation } from "./domain";
 export { assessPreTrade } from "./preTrade";
