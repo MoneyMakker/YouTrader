@@ -117,3 +117,8 @@ docs/releases/**/*credential*.txt
 .tools/
 docs/releases/**/qa-artifacts/
 .maestro/.qa-out/
+
+# Xcode local SwiftPM workspace config (often empty / machine-local)
+ios/**/xcshareddata/swiftpm/
+
+.maestro/screenshots/
