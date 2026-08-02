@@ -6,6 +6,7 @@ import { trackPropPassEvent } from "./analytics";
 import { getPropPassGateway, peekPropPassAvailability } from "./gatewayClient";
 import { mapActivationToPropPassUiState } from "./mapUiState";
 import type { PropPassUiState } from "./types";
+import { subscribeToPropPassJournalMutations } from "./journalRefreshBus";
 
 const LOAD_TIMEOUT_MS = 8_000;
 
@@ -178,6 +179,22 @@ export function usePropPassAvailability(input: {
       return;
     }
     refresh();
+  }, [entryVisible, refresh]);
+
+  useEffect(() => {
+    if (!entryVisible) return;
+    let followUp: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeToPropPassJournalMutations(() => {
+      refresh();
+      if (followUp) clearTimeout(followUp);
+      // Cloud persistence and trusted recalculation are asynchronous. This
+      // bounded follow-up avoids permanent polling and manual refresh.
+      followUp = setTimeout(() => refresh(), 1_500);
+    });
+    return () => {
+      unsubscribe();
+      if (followUp) clearTimeout(followUp);
+    };
   }, [entryVisible, refresh]);
 
   const uiState = mapActivationToPropPassUiState({

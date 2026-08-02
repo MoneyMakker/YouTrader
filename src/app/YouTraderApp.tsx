@@ -126,6 +126,7 @@ import { SmartNotificationsSection } from "../notifications/SmartNotificationsSe
 import { SettingsAccountSection } from "../components/settings/SettingsAccountSection";
 import { registerPropPassSupabaseClient } from "../propPass/gatewayClient";
 import { registerPropPassRpcClient } from "../propPass/commandGateway";
+import { publishPropPassJournalMutation } from "../propPass/journalRefreshBus";
 import { hasActivePropPassEntitlement } from "../billing/propPassEntitlement";
 import { YdlTabBar } from "../ydl/shell";
 import { useYdlTheme } from "../ydl/tokens";
@@ -7193,6 +7194,11 @@ function JournalScreen({
       try {
         onTradeDeleted(tradeId);
         setTrades((prev) => prev.filter((x) => x.id !== tradeId));
+        publishPropPassJournalMutation({
+          tradeClientId: tradeId,
+          kind: "deleted",
+          occurredAt: new Date().toISOString(),
+        });
         trackEvent("trade_deleted", { source: "manual" });
         if (editId === tradeId) setModal(false);
         if (!opts?.suppressFeedback) {
@@ -7362,6 +7368,11 @@ function JournalScreen({
       });
       if (!saved.duplicate) {
         await consumeClientRateLimit(action, "journal-local");
+        publishPropPassJournalMutation({
+          tradeClientId: item.id,
+          kind: previousTrade ? "updated" : "created",
+          occurredAt: new Date(item.updatedAt).toISOString(),
+        });
       }
       successHaptic();
       if (!editId) {
