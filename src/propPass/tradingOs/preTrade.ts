@@ -28,6 +28,7 @@ export type PreTradeAssessmentInput = {
   completedTradesToday: number;
   consecutiveLosses: number;
   currentMinuteLocal: number | null;
+  insideAllowedSession: boolean | null;
   killSwitchActive: boolean;
   profitLockReached: boolean;
 };
@@ -179,7 +180,10 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
     hardLimits.push(limit("consecutive_losses", "Consecutive-loss stop", null, true));
     return result("stop_trading", values, ["consecutive_loss_limit_reached"], [], hardLimits, relatedRuleIds);
   }
-  if (!isSessionAllowed(input.currentMinuteLocal, challengeRules?.allowedSessions)) {
+  if (input.insideAllowedSession == null) {
+    return result("needs_input", values, ["trading_session_context_missing"], ["inside_allowed_session"], hardLimits, relatedRuleIds);
+  }
+  if (!input.insideAllowedSession) {
     hardLimits.push(limit("allowed_session", "Allowed trading session", null, true));
     return result("rule_violation", values, ["outside_allowed_session"], [], hardLimits, relatedRuleIds);
   }
@@ -192,14 +196,4 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
 
 function subtractRoom(room: MoneyMinor | null | undefined, plannedRiskMinor: MoneyMinor): MoneyMinor | null {
   return finiteInteger(room) ? moneySubtract(room, plannedRiskMinor) : null;
-}
-
-function isSessionAllowed(currentMinute: number | null, sessions: ChallengeRules["allowedSessions"]): boolean {
-  if (!sessions?.length) return true;
-  if (currentMinute == null || !Number.isInteger(currentMinute) || currentMinute < 0 || currentMinute >= 24 * 60) return false;
-  return sessions.some((session) =>
-    session.startMinuteLocal <= session.endMinuteLocal
-      ? currentMinute >= session.startMinuteLocal && currentMinute <= session.endMinuteLocal
-      : currentMinute >= session.startMinuteLocal || currentMinute <= session.endMinuteLocal,
-  );
 }

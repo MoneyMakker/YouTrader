@@ -24,6 +24,7 @@ import type { LiveRiskMeterValues } from "./riskMeter";
 import type { ChallengeTimelineEvent, PersistedTimelineFact } from "./timeline";
 import type { SafeWithdrawalInput, SafeWithdrawalValues } from "./withdrawal";
 import { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
+import type { TradingTimeContext } from "../../propOs/tradingTime";
 
 export { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
 
@@ -40,12 +41,7 @@ export type PropPassInstrumentVersion = Readonly<{
   specification: InstrumentSpec;
 }>;
 
-export type PropPassTradingDayContext = Readonly<{
-  tradingDayId: string;
-  sessionId: string | null;
-  currentMinuteLocal: number | null;
-  insideAllowedSession: boolean | null;
-}>;
+export type PropPassTradingDayContext = TradingTimeContext;
 
 export type PropPassJournalState = Readonly<{
   appliedTradeIds: string[];

@@ -6,7 +6,9 @@
  */
 export type * from "./types";
 export { sortAccountingEvents, compareAccountingEvents, inputRevision } from "./eventOrder";
-export { tradingDayId, zonedParts } from "./tradingDay";
+export { addLocalDays, tradingDayId, tradingDayIdAtMinute, zonedParts } from "./tradingDay";
+export { calculateTradingTimeContext, TradingTimeError } from "./tradingTime";
+export type { TradingSessionRule, TradingTimeConfiguration, TradingTimeContext, TradingTimeInput } from "./tradingTime";
 export {
   calculateChallenge,
   publicReadinessScore,

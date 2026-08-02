@@ -14,7 +14,7 @@ const base: PreTradeAssessmentInput = {
     direction: "long", stopDistance: 8, stopUnit: "ticks", contracts: 1, setup: "QA", intendedSessionId: null, intendedRiskMinor: null, plannedEntryTime: "2026-08-02T14:30:00Z",
   },
   riskRooms: { dailyLossRemainingMinor: 100_000, maximumLossRemainingMinor: 90_000, drawdownRemainingMinor: 80_000, configuredDailyRiskBudgetMinor: 70_000, configuredPerTradeRiskCapMinor: 60_000 },
-  selectedMode: "balanced", completedTradesToday: 0, consecutiveLosses: 0, currentMinuteLocal: 600, killSwitchActive: false, profitLockReached: false,
+  selectedMode: "balanced", completedTradesToday: 0, consecutiveLosses: 0, currentMinuteLocal: 600, insideAllowedSession: true, killSwitchActive: false, profitLockReached: false,
 };
 
 const safe = assessPreTrade(base);
@@ -28,7 +28,7 @@ assert.equal(assessPreTrade({ ...base, riskRooms: { ...base.riskRooms, dailyLoss
 assert.equal(assessPreTrade({ ...base, killSwitchActive: true }).status, "stop_trading");
 assert.equal(assessPreTrade({ ...base, plan: { ...base.plan, stopDistance: null } }).status, "needs_input");
 assert.equal(assessPreTrade({ ...base, riskRooms: { ...base.riskRooms, drawdownRemainingMinor: null } }).status, "needs_input");
-assert.equal(assessPreTrade({ ...base, challengeRules: { ...base.challengeRules!, allowedSessions: [{ id: "ny", label: "NY", startMinuteLocal: 570, endMinuteLocal: 690 }] }, currentMinuteLocal: 800 }).status, "rule_violation");
+assert.equal(assessPreTrade({ ...base, insideAllowedSession: false }).status, "rule_violation");
 assert.equal(assessPreTrade({ ...base, consecutiveLosses: 2 }).status, "stop_trading");
 
 console.log("prop-pass-pre-trade-qa: PASS");

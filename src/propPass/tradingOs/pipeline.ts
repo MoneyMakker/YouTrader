@@ -55,7 +55,7 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
   }, { rulesAvailable: Boolean(activeRules) }));
 
   const tradingDay = input.tradingDay;
-  if (!tradingDay?.tradingDayId) missingInputs.push("trading_day_context");
+  if (!tradingDay?.tradingDayId || account?.tradingDay !== tradingDay.tradingDayId) missingInputs.push("trading_day_context");
   trace.push(step(3, "trading_day", tradingDay ? "safe_to_take" : "needs_input", null, {
     tradingDayId: tradingDay?.tradingDayId ?? null,
     sessionId: tradingDay?.sessionId ?? null,
@@ -112,6 +112,7 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
       completedTradesToday: input.journal.completedTrades.length,
       consecutiveLosses: consecutiveLosses(input.journal.completedTrades),
       currentMinuteLocal: tradingDay?.currentMinuteLocal ?? null,
+      insideAllowedSession: tradingDay?.insideAllowedSession ?? null,
       killSwitchActive: killSwitch?.values.active ?? true,
       profitLockReached: input.profitLockReached,
     })
@@ -142,8 +143,7 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
     proposed: input.proposedInterventionTrade,
     selectedMode: input.selectedMode,
     safeBufferMinor: allowedRisk.values.safeBudgetMinor,
-    currentMinuteLocal: tradingDay?.currentMinuteLocal ?? null,
-    allowedSessionMinutes: rules?.challengeRules?.allowedSessions?.map((session) => ({ id: session.id, start: session.startMinuteLocal, end: session.endMinuteLocal })),
+    insideAllowedSession: tradingDay?.insideAllowedSession ?? null,
     profitLockReached: input.profitLockReached,
     killSwitchActive: killSwitch?.values.active ?? true,
     recoveryModeActive: liveLifecycle?.values.recovery?.active ?? false,

@@ -22,8 +22,7 @@ export type SmartInterventionInput = {
   proposed: InterventionTradeFact | null;
   selectedMode: TradingRiskMode;
   safeBufferMinor: MoneyMinor | null;
-  currentMinuteLocal: number | null;
-  allowedSessionMinutes?: Array<{ id: string; start: number; end: number }>;
+  insideAllowedSession: boolean | null;
   profitLockReached: boolean;
   killSwitchActive: boolean;
   recoveryModeActive: boolean;
@@ -48,7 +47,7 @@ export function assessSmartInterventions(input: SmartInterventionInput): SmartIn
   if (input.weeklyLossRemainingMinor != null && input.proposed.riskMinor >= input.weeklyLossRemainingMinor) block("weekly_loss", "Weekly loss limit", "The proposed risk can consume the remaining weekly Live buffer.", `Weekly room after a loss: $${formatMoneyMinor(moneyClampNonNegative(moneySubtract(input.weeklyLossRemainingMinor, input.proposed.riskMinor)))}.`, "Do not take this trade.");
   if (input.recoveryModeActive && input.proposed.riskMinor > input.plan.riskPerTradeMinor) block("recovery_mode", "Recovery Mode risk increase", "Recovery Mode does not permit increasing risk above the frozen plan.", `Proposed risk exceeds plan by $${formatMoneyMinor(moneySubtract(input.proposed.riskMinor, input.plan.riskPerTradeMinor))}.`, "Use the plan size or wait.");
   if (input.safeBufferMinor != null && input.proposed.riskMinor > input.safeBufferMinor) block("hard_risk_room", "Hard risk limit", "The proposed risk exceeds the remaining safe buffer.", `Projected buffer after loss: $${formatMoneyMinor(moneySubtract(input.safeBufferMinor, input.proposed.riskMinor))}.`, "Do not take this trade.");
-  if (!isAllowedTime(input.currentMinuteLocal, input.allowedSessionMinutes)) block("allowed_session", "Outside allowed session", "The planned entry is outside the configured session.", "Session compliance would fail.", "Wait for an allowed session.");
+  if (input.insideAllowedSession === false) block("allowed_session", "Outside allowed session", "The planned entry is outside the configured session.", "Session compliance would fail.", "Wait for an allowed session.");
   if (input.selectedMode === "gambler" && (input.safeBufferMinor == null || input.safeBufferMinor < moneyMultiplyInteger(input.plan.riskPerTradeMinor, 2))) block("gambler_buffer", "High Risk buffer insufficient", "Gambler mode requires two planned-risk units of safe buffer.", `Safe buffer: $${formatMoneyMinor(input.safeBufferMinor ?? 0)}.`, "Select Balanced or wait for more buffer.");
   const last = prior.at(-1);
   if (last && last.realizedPnlMinor < 0 && input.proposed.contracts > last.contracts) warn("size_after_loss", "Size increased after a loss", "The proposed position is larger than the last losing trade.", `Contracts: ${last.contracts} → ${input.proposed.contracts}.`, "Return to the frozen plan size.", [last.id]);
@@ -57,4 +56,3 @@ export function assessSmartInterventions(input: SmartInterventionInput): SmartIn
   return interventions;
 }
 function consecutiveLosses(trades: InterventionTradeFact[]): number { let n = 0; for (const trade of [...trades].reverse()) { if (trade.realizedPnlMinor >= 0) break; n += 1; } return n; }
-function isAllowedTime(minute: number | null, sessions: SmartInterventionInput["allowedSessionMinutes"]): boolean { if (!sessions?.length) return true; if (minute == null) return false; return sessions.some((s) => s.start <= s.end ? minute >= s.start && minute <= s.end : minute >= s.start || minute <= s.end); }

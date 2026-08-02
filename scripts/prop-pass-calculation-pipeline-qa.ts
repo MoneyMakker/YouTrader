@@ -48,7 +48,13 @@ const input: PropPassCalculationPipelineInput = {
   accountContext: "challenge",
   activeRules: { versionId: "rule-v1", effectiveAt: "2026-08-02T00:00:00.000Z", challengeRules: rules, liveRules: null },
   instrument: { specificationVersion: "instrument-v1", effectiveAt: "2026-08-02T00:00:00.000Z", specification: instrument },
-  tradingDay: { tradingDayId: "2026-08-02", sessionId: "rth", currentMinuteLocal: 600, insideAllowedSession: true },
+  tradingDay: {
+    tradingDayId: "2026-08-02", sessionId: "rth", sessionStatus: "open", currentMinuteLocal: 600, insideAllowedSession: true,
+    currentTradingDayStartUtc: "2026-08-02T04:00:00.000Z", currentTradingDayEndUtc: "2026-08-03T04:00:00.000Z",
+    currentWeekStartUtc: "2026-07-27T04:00:00.000Z", currentWeekEndUtc: "2026-08-03T04:00:00.000Z", weekStartTradingDayId: "2026-07-27",
+    dailyResetDue: false, weeklyResetDue: false, cutoffReached: false, manualSessionLockActive: false,
+    accountTimezone: "America/New_York", exchangeTimezone: "America/New_York",
+  },
   riskRooms,
   selectedMode: "balanced",
   killSwitch: {
