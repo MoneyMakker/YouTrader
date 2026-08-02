@@ -31,6 +31,7 @@ import type { ComplianceComponentId, RulesComplianceValues } from "./compliance"
 import type { AccountSurvivalValues } from "./survival";
 import type { BreachReplayInput, BreachReplayValues } from "./breachReplay";
 import type { PayoutPlannerValues } from "./payoutPlanner";
+import type { WhatIfInput, WhatIfValues } from "./whatIf";
 import { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
 import type { TradingTimeContext } from "../../propOs/tradingTime";
 
@@ -101,6 +102,7 @@ export type PropPassCalculationPipelineInput = Readonly<{
   compliance?: Readonly<{ components: Partial<Record<ComplianceComponentId, number>> }> | null;
   breachReplay?: BreachReplayInput | null;
   payoutScenarioAmountsMinor?: MoneyMinor[];
+  whatIf?: WhatIfInput | null;
 }>;
 
 export type PropPassCalculationTraceStep = Readonly<{
@@ -165,6 +167,7 @@ export type PropPassCalculationPipelineOutput = Readonly<{
   survival: TradingOsResult<AccountSurvivalValues>;
   breachReplay: TradingOsResult<BreachReplayValues | null>;
   payoutPlanner: TradingOsResult<PayoutPlannerValues>;
+  whatIf: TradingOsResult<WhatIfValues> | null;
   missingInputs: string[];
   calculationTrace: PropPassCalculationTraceStep[];
 }>;

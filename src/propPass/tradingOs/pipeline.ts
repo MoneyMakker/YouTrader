@@ -18,6 +18,7 @@ import { calculateRulesComplianceScore } from "./compliance";
 import { calculateAccountSurvival } from "./survival";
 import { createBreachReplay } from "./breachReplay";
 import { buildPayoutPlanner } from "./payoutPlanner";
+import { simulateWhatIf } from "./whatIf";
 import {
   RISK_MODE_POLICIES,
   type AllowedRiskValues,
@@ -216,6 +217,7 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
     tradingDayId: tradingDay?.tradingDayId ?? null,
     scenarioAmountsMinor: input.payoutScenarioAmountsMinor ?? [50_000, 100_000, 150_000],
   });
+  const whatIf = input.whatIf ? simulateWhatIf(input.whatIf) : null;
   trace.push(step(14, "profit_protection", profitProtection?.status ?? "needs_input", rules?.versionId ?? null, { configured: Boolean(input.profitProtection) }, { active: profitProtection?.values.active ?? null }));
   trace.push(step(15, "scaling", scaling?.status ?? "needs_input", rules?.versionId ?? null, { configured: Boolean(input.scaling) }, { eligible: scaling?.values.eligible ?? null }));
   trace.push(step(16, "position_progression", positionProgression?.status ?? "needs_input", rules?.versionId ?? null, { configured: Boolean(input.progression) }, { stage: positionProgression?.values.stage ?? null }));
@@ -255,6 +257,7 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
     survival,
     breachReplay,
     payoutPlanner,
+    whatIf,
     missingInputs: [...new Set(missingInputs)],
     calculationTrace: trace,
   });

@@ -77,8 +77,30 @@ const claim = await trusted.claimJournalEvent({ userId, accountId, challengeId: 
 assert.equal(claim.kind, "claimed");
 assert.equal(trustedHarness.rpcCalls[0].fn, "prop_os_processor_claim_journal_event");
 
-const state = { calculationVersion: PROP_PASS_CALCULATION_VERSION, status: "safe_to_take" } as Parameters<typeof trusted.completeJournalEvent>[0]["state"];
+const result = (values: unknown) => ({ status: "safe_to_take", values, reasons: [], missingInputs: [], appliedHardLimits: [], relatedRuleIds: [] });
+const state = {
+  calculationVersion: PROP_PASS_CALCULATION_VERSION,
+  status: "safe_to_take",
+  allowedRisk: result({ safeBudgetMinor: 10_000, modeSuggestedRiskMinor: 2_000, allowedRiskMinor: 2_000 }),
+  dailyPlan: result(plan),
+  riskMeter: result({ usedMinor: 0, remainingMinor: 10_000, usedRatio: 0, status: "healthy", enteredDanger: false, statusChanged: false }),
+  interventions: [],
+  journalApplication: { appliedTradeIds: [], duplicateTradeIds: [], latestTradeId: null, persistenceRequired: true },
+  decisionReplay: { verdict: "insufficient_data", reason: "No trade.", mathematicalConsequence: "No inference.", nextAction: "Record a trade.", relatedTradeId: null, relatedRuleId: null, planRiskMinor: 2_000, actualRiskMinor: null, journalTradeId: null },
+  timeline: [],
+  missingInputs: [],
+  calculationTrace: [],
+  survival: result({ hardRoomMinor: 10_000, dailyCapacity: 5, drawdownCapacity: 5, targetDistanceMinor: null, modes: [], prediction: false }),
+  breachReplay: { ...result(null), status: "needs_input" },
+  payoutPlanner: { ...result({ earliestEligibleTradingDay: null, completedMinimumDays: null, remainingMinimumDays: null, recommendedSafePayoutMinor: 0, scenarios: [] }), status: "needs_input" },
+} as unknown as Parameters<typeof trusted.completeJournalEvent>[0]["state"];
 assert.equal(await trusted.completeJournalEvent({ eventKey: `${accountId}:trade-1:1:trade_saved`, resultDigest: "result-digest", stateRevision: 1, lifecycleStatus: "active", calculatedAt: "2026-08-02T15:01:00.000Z", versions: { calculationVersion: PROP_PASS_CALCULATION_VERSION, ruleVersion: "rules-v1", instrumentVersion: "user-mes-v1" }, stateDigest: "state-digest", state }), "applied");
+
+const runtimeRow = { user_id: userId, account_id: accountId, challenge_id: null, state_revision: 1, lifecycle_status: "active", last_processed_event_key: null, calculated_at: "2026-08-02T15:01:00.000Z", calculation_version: PROP_PASS_CALCULATION_VERSION, rule_version: "rules-v1", instrument_version: "user-mes-v1", payload_digest: "runtime-digest", payload: state };
+const runtimeAdapter = createSupabasePropPassPersistenceAdapter({ client: fakeClient({ prop_account_runtime_states: [runtimeRow] }).client, authenticatedUserId: userId });
+assert.equal((await runtimeAdapter.getRuntimeState(accountId))?.payload.calculationVersion, PROP_PASS_CALCULATION_VERSION);
+const invalidRuntimeAdapter = createSupabasePropPassPersistenceAdapter({ client: fakeClient({ prop_account_runtime_states: [{ ...runtimeRow, payload: { calculationVersion: PROP_PASS_CALCULATION_VERSION, status: "safe_to_take" } }] }).client, authenticatedUserId: userId });
+await assert.rejects(() => invalidRuntimeAdapter.getRuntimeState(accountId), (error: unknown) => error instanceof PropPassPersistenceError && error.code === "invalid_row");
 
 await assert.rejects(
   () => trusted.claimJournalEvent({ userId: "other-user", accountId, challengeId: null, eventKey: "bad", eventType: "trade_saved", journalTradeId: null, tradeClientId: "trade-1", tradeRevision: 1, calculationVersion: PROP_PASS_CALCULATION_VERSION, priorEventKey: null, inputDigest: "digest" }),

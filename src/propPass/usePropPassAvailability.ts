@@ -7,6 +7,12 @@ import { getPropPassGateway, peekPropPassAvailability } from "./gatewayClient";
 import { mapActivationToPropPassUiState } from "./mapUiState";
 import type { PropPassUiState } from "./types";
 import { subscribeToPropPassJournalMutations } from "./journalRefreshBus";
+import { supabase } from "../config/appConfig";
+import {
+  createSupabasePropPassPersistenceAdapter,
+  type PersistedRuntimeState,
+  type PropPassPersistenceSupabaseClient,
+} from "./persistence/index";
 
 const LOAD_TIMEOUT_MS = 8_000;
 
@@ -17,6 +23,10 @@ export type PropPassAvailabilityController = {
   selectChallengePreview: (challengeId: string) => void;
   /** Staging-only, non-persistent selection. */
   previewChallengeId: string | null;
+  /** Latest trusted Build 117 pipeline state. Null is an explicit setup state. */
+  runtimeState: PersistedRuntimeState | null;
+  runtimeLoading: boolean;
+  runtimeError: "repository_unavailable" | "invalid_state" | null;
 };
 
 /**
@@ -33,6 +43,9 @@ export function usePropPassAvailability(input: {
   const [result, setResult] = useState<PropOsActivationResult<PropOsActivatedReadModel> | null>(
     null,
   );
+  const [runtimeState, setRuntimeState] = useState<PersistedRuntimeState | null>(null);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<PropPassAvailabilityController["runtimeError"]>(null);
   const seq = useRef(0);
 
   const peek = peekPropPassAvailability(input.userId);
@@ -47,11 +60,15 @@ export function usePropPassAvailability(input: {
     (opts?: { selectedChallengeId?: string | null }) => {
       if (!entryVisible) {
         setResult(null);
+        setRuntimeState(null);
+        setRuntimeError(null);
+        setRuntimeLoading(false);
         setLoading(false);
         return;
       }
       const my = ++seq.current;
       setLoading(true);
+      setRuntimeError(null);
       const started = Date.now();
       const gateway = getPropPassGateway();
       if (!gateway) {
@@ -91,11 +108,38 @@ export function usePropPassAvailability(input: {
           accountId: input.accountId ?? null,
           selectedChallengeId: opts?.selectedChallengeId ?? previewChallengeId,
         })
-        .then((res) => {
+        .then(async (res) => {
           if (seq.current !== my) return;
           clearTimeout(timer);
           setResult(res);
           setLoading(false);
+          const resolvedAccountId = res.data?.readModel.account?.id ?? input.accountId ?? null;
+          if (res.ok && resolvedAccountId && input.userId && supabase) {
+            setRuntimeLoading(true);
+            try {
+              const persistence = createSupabasePropPassPersistenceAdapter({
+                client: supabase as unknown as PropPassPersistenceSupabaseClient,
+                authenticatedUserId: input.userId,
+              });
+              const persisted = await persistence.getRuntimeState(resolvedAccountId);
+              if (seq.current !== my) return;
+              setRuntimeState(persisted);
+              setRuntimeError(null);
+            } catch (error) {
+              if (seq.current !== my) return;
+              setRuntimeState(null);
+              setRuntimeError(
+                error instanceof Error && /invalid|mismatch/i.test(error.message)
+                  ? "invalid_state"
+                  : "repository_unavailable",
+              );
+            } finally {
+              if (seq.current === my) setRuntimeLoading(false);
+            }
+          } else {
+            setRuntimeState(null);
+            setRuntimeLoading(false);
+          }
           const kind = mapActivationToPropPassUiState({
             entryAllowed: entryVisible,
             loading: false,
@@ -152,6 +196,7 @@ export function usePropPassAvailability(input: {
             data: null,
           });
           setLoading(false);
+          setRuntimeLoading(false);
         });
     },
     [
@@ -175,6 +220,9 @@ export function usePropPassAvailability(input: {
   useEffect(() => {
     if (!entryVisible) {
       setResult(null);
+      setRuntimeState(null);
+      setRuntimeError(null);
+      setRuntimeLoading(false);
       setLoading(false);
       return;
     }
@@ -226,6 +274,9 @@ export function usePropPassAvailability(input: {
     uiState: enriched,
     refresh,
     previewChallengeId,
+    runtimeState,
+    runtimeLoading,
+    runtimeError,
     selectChallengePreview: (challengeId: string) => {
       // Staging-only local preview — non-persistent, non-production.
       setPreviewChallengeId(challengeId);

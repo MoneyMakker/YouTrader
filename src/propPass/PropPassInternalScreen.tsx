@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { YdlButton } from "../ydl/components/YdlButton";
@@ -7,26 +7,14 @@ import { YdlText } from "../ydl/components/YdlText";
 import { useYdlTheme } from "../ydl/tokens";
 import { newPropOsClientRequestId } from "../propOs/commands/hash";
 import { trackPropPassEvent } from "./analytics";
-import { BufferHealthSection } from "./BufferHealthSection";
 import { runPropPassCommand } from "./commandGateway";
 import { formatPropMoney } from "./formatMoney";
 import { PropPassOnboardingFlow } from "./PropPassOnboardingFlow";
 import { PropPassAssignmentFlow } from "./PropPassAssignmentFlow";
-import { PerformanceIntelligenceInternalPanel } from "./PerformanceIntelligenceInternalPanel";
 import { usePropPassAvailability } from "./usePropPassAvailability";
 import { PropPassAccountMenu } from "./ui/PropPassAccountMenu";
 import { PropPassAccountSwitcher } from "./ui/PropPassAccountSwitcher";
-import { PropPassChallengeHero } from "./ui/PropPassChallengeHero";
-import { PropPassInsightsCard } from "./ui/PropPassInsightsCard";
-import { PropPassRecentActivity } from "./ui/PropPassRecentActivity";
-import { PropPassDecisionReplay } from "./ui/PropPassDecisionReplay";
-import { PropPassDisciplineStreak } from "./ui/PropPassDisciplineStreak";
-import { PropPassPassProbability } from "./ui/PropPassPassProbability";
-import { PropPassRuleStatus } from "./ui/PropPassRuleStatus";
-import { PropPassSmartIntervention } from "./ui/PropPassSmartIntervention";
-import { PropPassTargetProgress } from "./ui/PropPassTargetProgress";
-import { PropPassTodaysPlan } from "./ui/PropPassTodaysPlan";
-import { PropPassRiskModePanel } from "./ui/PropPassRiskModePanel";
+import { PropPassSessionCockpit } from "./ui/PropPassSessionCockpit";
 import type {
   ChallengeSummary,
   PropPassInsightsPresentation,
@@ -36,12 +24,6 @@ import type {
   PropPassViewModel,
 } from "./types";
 import type { Trade } from "../app/types";
-import {
-  createMemoryIntelligenceStore,
-  createSupabaseIntelligenceReadStore,
-  type MemoryIntelligenceStore,
-} from "../propOs/intelligence";
-import { supabase } from "../config/appConfig";
 import { GENERATED_APP_ENV } from "../config/buildFingerprint.generated";
 import { resolveEntitledPropPassUiState } from "./productState";
 
@@ -59,8 +41,6 @@ type Props = {
   developerMode?: boolean;
   /** Journal trades for assignment (optional; empty → empty assignable list). */
   trades?: Trade[];
-  /** Optional PI memory store for QA injection; falls back to empty in-memory store. */
-  intelligenceStore?: MemoryIntelligenceStore;
   onOpenTrade?: (tradeId: string) => void;
 };
 
@@ -74,10 +54,10 @@ export function PropPassInternalScreen({
   insightsPresentation = "from_model",
   developerMode = typeof __DEV__ !== "undefined" && __DEV__,
   trades = [],
-  intelligenceStore: intelligenceStoreProp,
   onOpenTrade,
 }: Props) {
   const { t } = useTranslation();
+  void developerMode;
   const theme = useYdlTheme("dark");
   const controller = usePropPassAvailability({ userId, accountId });
   const gatewayUiState = uiStateOverride ?? controller.uiState;
@@ -85,17 +65,9 @@ export function PropPassInternalScreen({
     appEnvironment: GENERATED_APP_ENV,
     uiState: gatewayUiState,
   });
-  const fallbackIntelligenceStore = useMemo(() => createMemoryIntelligenceStore(), []);
-  const intelligenceStore = intelligenceStoreProp ?? fallbackIntelligenceStore;
-  const remoteIntelligenceStore = useMemo(() => {
-    if (!userId || !supabase) return null;
-    return createSupabaseIntelligenceReadStore(supabase, userId);
-  }, [userId]);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAssignment, setShowAssignment] = useState(false);
-  const [showIntelligence, setShowIntelligence] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [commandMessage, setCommandMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -138,18 +110,7 @@ export function PropPassInternalScreen({
         </View>
       ) : null}
       <ScrollView contentContainerStyle={styles.body} accessibilityRole="scrollbar">
-        {showIntelligence && userId && uiState.kind === "available" ? (
-          <PerformanceIntelligenceInternalPanel
-            userId={userId}
-            accountId={uiState.model.account.id}
-            challengeId={uiState.model.challenge.id}
-            store={remoteIntelligenceStore ? undefined : intelligenceStore}
-            readStoreOverride={remoteIntelligenceStore ?? undefined}
-            runLocalTrustedCalc={!remoteIntelligenceStore}
-            assignmentRevision={intelligenceStore.assignmentRevision}
-            onClose={() => setShowIntelligence(false)}
-          />
-        ) : showOnboarding && userId ? (
+        {showOnboarding && userId ? (
           <PropPassOnboardingFlow
             userId={userId}
             onCancel={() => setShowOnboarding(false)}
@@ -205,11 +166,8 @@ export function PropPassInternalScreen({
               trackPropPassEvent("prop_pass_assignment_flow_opened", { userId });
               setShowAssignment(true);
             },
-            onOpenIntelligence: () => setShowIntelligence(true),
             showAccountMenu,
             setShowAccountMenu,
-            showHistory,
-            setShowHistory,
             userId: userId ?? null,
             setCommandMessage,
             t,
@@ -226,11 +184,8 @@ export function PropPassInternalScreen({
 type Actions = {
   onStartOnboarding: () => void;
   onStartAssignment: () => void;
-  onOpenIntelligence: () => void;
   showAccountMenu: boolean;
   setShowAccountMenu: (v: boolean) => void;
-  showHistory: boolean;
-  setShowHistory: (v: boolean) => void;
   userId: string | null;
   setCommandMessage: (msg: string | null) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -378,8 +333,6 @@ function renderState(
           userId={actions.userId}
           showAccountMenu={actions.showAccountMenu}
           setShowAccountMenu={actions.setShowAccountMenu}
-          showHistory={actions.showHistory}
-          setShowHistory={actions.setShowHistory}
           todaysPlan={actions.todaysPlan}
           insightsPresentation={actions.insightsPresentation}
           onArchived={() => {
@@ -389,8 +342,10 @@ function renderState(
           onMessage={actions.setCommandMessage}
           onRefresh={() => controller.refresh()}
           onAssignTrades={actions.onStartAssignment}
-          onOpenIntelligence={actions.onOpenIntelligence}
           onOpenTrade={actions.onOpenTrade}
+          runtimeState={controller.runtimeState}
+          runtimeLoading={controller.runtimeLoading}
+          runtimeError={controller.runtimeError}
         />
       );
     default:
@@ -591,67 +546,37 @@ function AvailableView({
   userId,
   showAccountMenu,
   setShowAccountMenu,
-  showHistory,
-  setShowHistory,
   todaysPlan,
   insightsPresentation,
   onArchived,
   onMessage,
   onRefresh,
   onAssignTrades,
-  onOpenIntelligence,
   onOpenTrade,
+  runtimeState,
+  runtimeLoading,
+  runtimeError,
 }: {
   model: PropPassViewModel;
   t: (key: string, opts?: Record<string, unknown>) => string;
   userId: string | null;
   showAccountMenu: boolean;
   setShowAccountMenu: (v: boolean) => void;
-  showHistory: boolean;
-  setShowHistory: (v: boolean) => void;
   todaysPlan: PropPassTodaysPlanView | null;
   insightsPresentation: PropPassInsightsPresentation;
   onArchived: () => void;
   onMessage: (msg: string | null) => void;
   onRefresh: () => void;
   onAssignTrades: () => void;
-  onOpenIntelligence: () => void;
   onOpenTrade?: (tradeId: string) => void;
+  runtimeState: ReturnType<typeof usePropPassAvailability>["runtimeState"];
+  runtimeLoading: boolean;
+  runtimeError: ReturnType<typeof usePropPassAvailability>["runtimeError"];
 }) {
-  const currency =
-    model.progress.profitTarget?.currency ??
-    model.account.accountSize?.currency ??
-    "USD";
-
-  if (showHistory) {
-    return (
-      <View style={styles.available} testID="prop-pass-history-screen">
-        <YdlText role="title">{t("propPass.activity.viewHistory")}</YdlText>
-        {model.historicalAttempts.length === 0 ? (
-          <YdlText role="caption" color="text.secondary">
-            {t("propPass.history.empty")}
-          </YdlText>
-        ) : (
-          model.historicalAttempts.map((h) => (
-            <View key={h.id} style={styles.historyRow}>
-              <YdlText role="bodyEmphasized">{h.startedAt.slice(0, 10)}</YdlText>
-              <YdlText role="caption" color="text.secondary">
-                {t("propPass.activity.row", { status: h.status })}
-              </YdlText>
-            </View>
-          ))
-        )}
-        <YdlText role="caption" color="text.secondary">
-          {t("propPass.assignment.assignedCount", { count: model.assignedTradeCount })}
-        </YdlText>
-        <YdlButton
-          label={t("propPass.account.closeMenu")}
-          variant="secondary"
-          onPress={() => setShowHistory(false)}
-        />
-      </View>
-    );
-  }
+  // Kept as accepted staging fixture inputs for backwards-compatible QA routes;
+  // production recommendations come only from the persisted Build 117 runtime.
+  void todaysPlan;
+  void insightsPresentation;
 
   return (
     <View style={styles.available}>
@@ -676,36 +601,14 @@ function AvailableView({
         onMessage={onMessage}
         onArchived={onArchived}
       />
-      <PropPassChallengeHero model={model} />
-      <PropPassRiskModePanel model={model} currency={currency} />
-      <PropPassTargetProgress model={model} />
-      <BufferHealthSection buffers={model.buffers} currency={currency} />
-      <PropPassTodaysPlan
+      <PropPassSessionCockpit
         model={model}
-        plan={todaysPlan}
-        onReviewUnassigned={onAssignTrades}
-        onEditPlan={onAssignTrades}
-      />
-      <PropPassDisciplineStreak model={model} />
-      <PropPassSmartIntervention model={model} />
-      <PropPassDecisionReplay model={model} onOpenTrade={onOpenTrade} />
-      <PropPassRuleStatus model={model} />
-      <PropPassPassProbability model={model} />
-      <PropPassInsightsCard
-        model={model}
-        insightsMode={insightsPresentation}
-        onOpenDetail={() => {
-          trackPropPassEvent("prop_pass_intelligence_opened", { userId });
-          onOpenIntelligence();
-        }}
-        onRetry={() => {
-          trackPropPassEvent("prop_pass_intelligence_opened", { userId });
-          onOpenIntelligence();
-        }}
-      />
-      <PropPassRecentActivity
-        model={model}
-        onViewHistory={() => setShowHistory(true)}
+        runtime={runtimeState}
+        runtimeLoading={runtimeLoading}
+        runtimeError={runtimeError}
+        onRefresh={onRefresh}
+        onAssignTrades={onAssignTrades}
+        onOpenTrade={onOpenTrade}
       />
     </View>
   );
@@ -722,7 +625,6 @@ const styles = StyleSheet.create({
   body: { gap: 12, paddingBottom: 32, paddingTop: 8 },
   available: { gap: 14 },
   resolverRow: { gap: 6, marginTop: 6 },
-  historyRow: { gap: 2, paddingVertical: 6 },
   skeleton: { gap: 12 },
   skelBlock: {
     borderRadius: 14,

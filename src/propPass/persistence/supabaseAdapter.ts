@@ -1,5 +1,5 @@
 import { hashPropOsCommandPayload } from "../../propOs/commands/hash";
-import type { ChallengeTimelineEvent, InstrumentSpecificationVersion } from "../tradingOs/index";
+import { PROP_PASS_CALCULATION_VERSION, type ChallengeTimelineEvent, type InstrumentSpecificationVersion } from "../tradingOs/index";
 import {
   PropPassPersistenceError,
   type CompleteJournalEvent,
@@ -279,8 +279,10 @@ function parseInstrument(row: Record<string, unknown>): InstrumentSpecificationV
 
 function parseRuntime(row: Record<string, unknown>): PersistedRuntimeState {
   const payload = record(row.payload, "runtime payload");
-  requireText(payload.calculationVersion, "runtime calculation version"); requireText(payload.status, "runtime status");
-  return { accountId: requireText(row.account_id, "account id"), challengeId: optionalText(row.challenge_id), stateRevision: positiveInteger(row.state_revision, "state revision", true), lifecycleStatus: requireText(row.lifecycle_status, "lifecycle status"), lastProcessedEventKey: optionalText(row.last_processed_event_key), calculatedAt: iso(row.calculated_at, "calculated at"), versions: versions(row), payloadDigest: requireText(row.payload_digest, "payload digest"), payload: payload as PersistedRuntimeState["payload"] };
+  validateRuntimePayload(payload);
+  const persistedVersions = versions(row);
+  if (persistedVersions.calculationVersion !== payload.calculationVersion) throw new PropPassPersistenceError("invalid_row", "runtime calculation version metadata mismatch");
+  return { accountId: requireText(row.account_id, "account id"), challengeId: optionalText(row.challenge_id), stateRevision: positiveInteger(row.state_revision, "state revision", true), lifecycleStatus: requireText(row.lifecycle_status, "lifecycle status"), lastProcessedEventKey: optionalText(row.last_processed_event_key), calculatedAt: iso(row.calculated_at, "calculated at"), versions: persistedVersions, payloadDigest: requireText(row.payload_digest, "payload digest"), payload: payload as PersistedRuntimeState["payload"] };
 }
 
 function versions(row: Record<string, unknown>): PersistenceVersions { return { calculationVersion: requireText(row.calculation_version, "calculation version"), ruleVersion: requireText(row.rule_version, "rule version"), instrumentVersion: optionalText(row.instrument_version) }; }
@@ -292,7 +294,7 @@ function validateOverrideForWrite(value: PersistedInterventionOverride): void { 
 function validateTimelineForWrite(value: PersistedTimelineEvent): void { requireText(value.id, "timeline id"); requireText(value.accountId, "account id"); requireText(value.eventKey, "timeline event key"); requireText(value.payload.type, "timeline event type"); iso(value.payload.occurredAt, "timeline occurredAt"); if (value.payload.accountId !== value.accountId) throw new PropPassPersistenceError("invalid_input", "timeline account mismatch"); validateVersions(value.versions); }
 function validateInstrument(value: InstrumentSpecificationVersion): void { requireText(value.symbol, "instrument symbol"); requireText(value.specificationVersion, "instrument version"); requireText(value.exchange, "instrument exchange"); requireText(value.currency, "instrument currency"); iso(value.effectiveFrom, "instrument effectiveFrom"); if (value.effectiveTo) iso(value.effectiveTo, "instrument effectiveTo"); if (!(value.tickSize > 0) || !Number.isSafeInteger(value.tickValueMinor) || value.tickValueMinor <= 0) throw new PropPassPersistenceError("invalid_input", "invalid instrument values"); }
 function validateJournalEvent(value: JournalPersistenceEvent, userId: string): void { if (value.userId !== userId) throw new PropPassPersistenceError("forbidden", "journal event user mismatch"); requireText(value.accountId, "account id"); requireText(value.eventKey, "event key"); requireText(value.tradeClientId, "trade client id"); positiveInteger(value.tradeRevision, "trade revision"); requireText(value.calculationVersion, "calculation version"); requireText(value.inputDigest, "input digest"); }
-function validateCompletion(value: CompleteJournalEvent): void { requireText(value.eventKey, "event key"); requireText(value.resultDigest, "result digest"); positiveInteger(value.stateRevision, "state revision", true); requireText(value.lifecycleStatus, "lifecycle status"); iso(value.calculatedAt, "calculated at"); requireText(value.stateDigest, "state digest"); validateVersions(value.versions); if (value.state.calculationVersion !== value.versions.calculationVersion) throw new PropPassPersistenceError("invalid_input", "runtime calculation version mismatch"); }
+function validateCompletion(value: CompleteJournalEvent): void { requireText(value.eventKey, "event key"); requireText(value.resultDigest, "result digest"); positiveInteger(value.stateRevision, "state revision", true); requireText(value.lifecycleStatus, "lifecycle status"); iso(value.calculatedAt, "calculated at"); requireText(value.stateDigest, "state digest"); validateVersions(value.versions); validateRuntimePayload(record(value.state, "runtime completion payload")); if (value.state.calculationVersion !== value.versions.calculationVersion) throw new PropPassPersistenceError("invalid_input", "runtime calculation version mismatch"); }
 function validateVersions(value: PersistenceVersions): void { requireText(value.calculationVersion, "calculation version"); requireText(value.ruleVersion, "rule version"); }
 function mapInterventionSeverity(value: string): "info" | "warning" | "danger" | "stop" { if (value === "info" || value === "warning") return value; if (value === "pause") return "danger"; if (value === "block") return "stop"; throw new PropPassPersistenceError("invalid_input", "invalid intervention severity"); }
 function requireTrustedMutation(allowed?: boolean): void { if (!allowed) throw new PropPassPersistenceError("forbidden", "Prop Pass mutations require a trusted server processor"); }
@@ -304,3 +306,40 @@ function positiveInteger(value: unknown, label: string, zeroAllowed = false): nu
 function iso(value: unknown, label: string): string { const text = requireText(value, label); if (Number.isNaN(Date.parse(text))) throw new PropPassPersistenceError("invalid_input", `${label} must be an ISO timestamp`); return text; }
 function enumValue<T extends string>(value: unknown, allowed: readonly T[], label: string): T { if (typeof value !== "string" || !allowed.includes(value as T)) throw new PropPassPersistenceError("invalid_row", `${label} is invalid`); return value as T; }
 function repositoryError(error: { message: string; code?: string }): PropPassPersistenceError { if (error.code === "42501" || /permission|row-level security/i.test(error.message)) return new PropPassPersistenceError("forbidden", "Prop Pass persistence request denied"); if (error.code === "23505") return new PropPassPersistenceError("conflict", "Prop Pass persistence identity conflict"); return new PropPassPersistenceError("repository_unavailable", "Prop Pass persistence unavailable"); }
+
+function validateRuntimePayload(payload: Record<string, unknown>): void {
+  if (requireText(payload.calculationVersion, "runtime calculation version") !== PROP_PASS_CALCULATION_VERSION) throw new PropPassPersistenceError("invalid_row", "unsupported runtime calculation version");
+  enumValue(payload.status, ["safe_to_take", "risky", "rule_violation", "stop_trading", "needs_input"], "runtime status");
+  const allowed = resultRecord(payload.allowedRisk, "runtime allowed risk");
+  const allowedValues = record(allowed.values, "runtime allowed risk values");
+  positiveInteger(allowedValues.allowedRiskMinor, "runtime allowed risk", true);
+  resultRecord(payload.dailyPlan, "runtime daily plan");
+  const risk = resultRecord(payload.riskMeter, "runtime risk meter");
+  record(risk.values, "runtime risk meter values");
+  const journal = record(payload.journalApplication, "runtime Journal application");
+  stringArray(journal.appliedTradeIds, "runtime applied trade ids");
+  stringArray(journal.duplicateTradeIds, "runtime duplicate trade ids");
+  if (typeof journal.persistenceRequired !== "boolean") throw new PropPassPersistenceError("invalid_row", "runtime persistence flag required");
+  const replay = record(payload.decisionReplay, "runtime decision replay");
+  requireText(replay.verdict, "runtime replay verdict");
+  requireText(replay.reason, "runtime replay reason");
+  array(payload.interventions, "runtime interventions");
+  array(payload.timeline, "runtime timeline");
+  stringArray(payload.missingInputs, "runtime missing inputs");
+  for (const entry of array(payload.calculationTrace, "runtime calculation trace")) {
+    const step = record(entry, "runtime trace step");
+    positiveInteger(step.order, "runtime trace order");
+    requireText(step.stage, "runtime trace stage");
+    enumValue(step.status, ["safe_to_take", "risky", "rule_violation", "stop_trading", "needs_input"], "runtime trace status");
+    record(step.inputs, "runtime trace inputs");
+    record(step.outputs, "runtime trace outputs");
+    stringArray(step.arithmetic, "runtime trace arithmetic");
+    stringArray(step.rounding, "runtime trace rounding");
+  }
+  resultRecord(payload.survival, "runtime survival");
+  resultRecord(payload.breachReplay, "runtime breach replay");
+  resultRecord(payload.payoutPlanner, "runtime payout planner");
+}
+function resultRecord(value: unknown, label: string): Record<string, unknown> { const row = record(value, label); enumValue(row.status, ["safe_to_take", "risky", "rule_violation", "stop_trading", "needs_input"], `${label} status`); if (!("values" in row)) throw new PropPassPersistenceError("invalid_row", `${label} values required`); stringArray(row.reasons, `${label} reasons`); stringArray(row.missingInputs, `${label} missing inputs`); array(row.appliedHardLimits, `${label} hard limits`); stringArray(row.relatedRuleIds, `${label} related rules`); return row; }
+function array(value: unknown, label: string): unknown[] { if (!Array.isArray(value)) throw new PropPassPersistenceError("invalid_row", `${label}: array expected`); return value; }
+function stringArray(value: unknown, label: string): string[] { const values = array(value, label); if (!values.every((item) => typeof item === "string")) throw new PropPassPersistenceError("invalid_row", `${label}: string array expected`); return values as string[]; }
