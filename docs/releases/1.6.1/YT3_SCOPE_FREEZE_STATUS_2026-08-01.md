@@ -1,6 +1,7 @@
 # YT3 Scope-Freeze Status — 2026-08-01 (updated)
 
-Phase 4F status: **OPEN / NO-GO**
+Phase 4F status: **OPEN / NO-GO for build 115**  
+UI polish acceptance (this run): **GO WITH CONCERNS**
 
 ## Freeze compliance
 
@@ -8,9 +9,8 @@ Phase 4F status: **OPEN / NO-GO**
 - No build uploaded to ASC/TestFlight
 - No Add for Review / Submit for Review
 - Build identity remains **1.6.1 (113)** — **build 115 NOT CREATED**
-- Build 113 / 114 not modified as release artifacts; 116 not created
-- No public listing AI metadata cleanup executed
-- Local CLI link remains staging (`zleojeqkzizeyerhjpur`); production deploys used `--project-ref izzrlsgumyabdvlmwlwn` only
+- Subscription / RevenueCat / StoreKit / auth / account-deletion backend / Apple token lifecycle / production Supabase deploy / Settings cleanup / security remediation **NOT MODIFIED** this UI run
+- Local CLI link remains staging (`zleojeqkzizeyerhjpur`)
 - Deferred backlog: `docs/releases/1.6.1/BACKLOG_ASC_METADATA_CLEANUP.md`
 
 ---
@@ -20,180 +20,137 @@ Phase 4F status: **OPEN / NO-GO**
 | Item | Value |
 |------|-------|
 | Branch | `release/1.6.1-build-115` |
-| Starting commit (this run) | `3e7ae84` |
-| Ending tip (pre-doc) | `7fdcb69` |
+| UI polish start | `7d9d93d` |
+| UI polish end | `8d1d879` |
+| Checkpoint | `checkpoint/yt3-ui-proppass-20260802T004725Z` |
 | Preserved billing | `253ab41` |
-| Preserved account deletion UI | `e91268e` |
-| Preserved security Issue #8 | `c90838c` (from `252a7ae`) |
-| Preserved sticky CTA | `ea084ca` |
-| Checkpoint before Apple delete run | `checkpoint/yt3-apple-delete-20260802T001047Z` |
+| Preserved account deletion | `e91268e` / `7fdcb69` |
+| Preserved security Issue #8 | `c90838c` |
 
-### Commits this run
+### Commits this UI polish run
 
-- `6e5283e` fix(auth): add secure apple token lifecycle
-- `e3c9cb6` fix(account): revoke apple authorization during deletion
-- `7fdcb69` fix(account): support legacy apple deletion fallback
-- (this doc) chore/test: production deploy record + physical UI QA
-
-### Prior cleanup (preserved)
-
-- `3d1c0dc` refactor(settings): clean account, subscription, and More import entry
-- `44363ea` fix(account): harden delete-account edge cleanup path
-- `aca8b91` fix(security): make gitleaks scan tracked source only
-- `3e7ae84` docs(release): update YT3 scope-freeze after settings and gitleaks cleanup
+- `7b4602e` refactor(theme): unify navigation and selected states on lime
+- `2a42c78` refactor(journal): remove calendar header and lime day selection *(includes deterministic Add Trade result + Custom/Micro symbol UX)*
+- `417807a` refactor(stats): consolidate empty insight states
+- `d2d2fce` feat(prop-pass): tighten primary-tab challenge dashboard chrome
+- `8d1d879` test(ui): cover journal stats and theme lime contracts
 
 ---
 
-## Production Supabase
+## 1. Starting / ending commit
 
-| Item | Value |
-|------|-------|
-| Production project name | YouTrader |
-| Production project ref | `izzrlsgumyabdvlmwlwn` |
-| Production host (Release config) | `izzrlsgumyabdvlmwlwn.supabase.co` |
-| CLI account access | yes |
-| Local linked project | staging `zleojeqkzizeyerhjpur` (must not deploy there as prod proof) |
+- Start: `7d9d93d`
+- End: `8d1d879`
 
-### Secrets present (booleans only)
+## 2. Files / components changed
 
-| Secret | Present |
-|--------|---------|
-| `SUPABASE_URL` | true |
-| `SUPABASE_ANON_KEY` | true |
-| `SUPABASE_SERVICE_ROLE_KEY` | true |
-| `APPLE_TEAM_ID` | false |
-| `APPLE_KEY_ID` | false |
-| `APPLE_CLIENT_ID` / `APPLE_BUNDLE_ID` | false |
-| `APPLE_PRIVATE_KEY` | false |
-| `APPLE_TOKEN_ENCRYPTION_KEY` | false |
+- `src/ydl/tokens/color.primitive.ts`, `color.semantic.ts`
+- `src/ydl/shell/YdlTabBar.tsx`
+- `src/app/YouTraderApp.tsx`, `src/app/styles.ts`
+- `src/stats/StatsDashboard.tsx`, `presentation.ts`, `insightsLearning.ts` (new)
+- `src/propPass/PropPassInternalScreen.tsx`
+- `src/i18n/locales/{en,ru,uk,es,fr,de,it}.json`
+- `scripts/ui-polish-qa.ts`, `package.json` (`test:ui-polish`)
 
----
+## 3. Journal header removed
 
-## Deployed Edge Functions (production only)
+Removed permanent Journal title row, header `+ Add Trade`, and visible `Synced` chip from the Journal calendar screen. Sync still runs; only the permanent status chrome is gone.
 
-| Function | Status | Version | verify_jwt | Deploy timestamp (UTC) |
-|----------|--------|---------|------------|------------------------|
-| `delete-account` | ACTIVE | 1 | true | ~2026-08-02T00:13:09Z |
-| `store-apple-auth-token` | ACTIVE | 1 | true | ~2026-08-02T00:13:09Z |
+## 4. New Add Trade entry point
 
-Schema: migration `20260802001141_auth_provider_tokens.sql` applied on production.
+Selected-day detail area:
 
-`auth_provider_tokens` RLS: enabled; `anon_select=false`; `auth_select=false`; `service_select=true`; no client policies.
+- empty day → `No trades for this day` + compact lime `Add Trade`
+- day with trades → secondary compact `Add Trade` above the list  
+`testID=journal-add-trade` preserved.
 
-Commit lineage for deployed function source: `7fdcb69` (post `44363ea` hardening + Apple lifecycle).
+## 5. Calendar visual changes
 
----
+- Selected day: lime border + soft lime fill + lime marker dot
+- Today marker uses lime (not purple)
+- Month picker selected states use lime
+- Day tap always selects first (no immediate modal jump)
 
-## Apple token lifecycle
+## 6. Bottom navigation color behavior
 
-### New Sign in with Apple
+- `action.primary` = lime `#A3FF12`
+- Active label + underline = lime
+- Inactive labels = readable muted gray
+- All five glyphs = lime; inactive opacity ~0.42
+- Purple removed from default tab active styling
+- Tab bar vertical padding tightened for safer centering
 
-1. Native credential supplies `identityToken` + `authorizationCode`.
-2. Existing nonce + Supabase Apple auth unchanged.
-3. `authorizationCode` is not persisted in AsyncStorage / SecureStore / analytics.
-4. Client calls authenticated `store-apple-auth-token` with `{ authorizationCode }` only.
-5. Edge Function verifies JWT user, exchanges code server-side, stores sealed refresh token in `auth_provider_tokens`.
-6. Refresh token never returned to client.
-7. Apple private key / Team ID / Key ID / Client ID read only from Supabase secrets.
+## 7. Dark-mode contrast
 
-### Delete Account (Apple)
+- Primary interactive fill text uses `inkOnLime` (`#0E141D`) on lime surfaces
+- Semantic primary actions no longer use white-on-purple as default selected chrome
+- Selected instrument / month chips: lime soft + lime border + light text on dark surfaces
+- Close control text moved off purple to primary light text
+- Remaining risk: device screenshot pipeline flaky this session — contrast verified in tokens/contracts + typecheck export
 
-1. Load server-side Apple refresh token for JWT user only.
-2. Generate Apple client secret server-side; revoke with Apple.
-3. Treat success / already-revoked as success.
-4. Delete provider token row; delete user-owned rows; delete auth user.
-5. Client clears local state via `onSignOut`; does not claim App Store subscription cancelled.
+## 8. Stats duplicate states removed
 
-### Legacy Apple fallback
+`getInsightsLearningState` consolidates insufficient Recent Trend / Radar / Best Edge / Biggest Leak into one `stats-insights-learning` card with real `count of required` progress. Core metrics remain visible when trades exist. Filter chips: horizontal scroll, `numberOfLines={1}`, lime selected.
 
-When no usable stored refresh token **or** Apple secrets missing:
+## 9. Add Trade result logic
 
-- Account deletion still proceeds.
-- Response includes `manualAppleRevocationRequired: true`.
-- UI shows manual Apps Using Apple ID guidance + action.
-- User is signed out (not left authenticated).
+**Before:** Profit/Loss toggle could show Loss selected with green `+$0.00`.  
+**After:** Manual Profit/Loss toggle removed. Result card derives from entry/exit/contracts/direction when instrument known:
 
-Automatic revoke for **new** Apple logins remains incomplete until production Apple secrets are set.
+- missing execution → neutral “Enter execution details”
+- positive → solid lime card + dark text
+- negative → solid red card + white text
+- zero → neutral card  
+Custom/unknown symbols still allow signed manual P&L input.
 
----
+## 10. Symbol selection
 
-## Production smoke tests
+**Before:** Custom Symbol field always mirrored the selected preset. Micro section labeled “Contracts”. Purple selected cards.  
+**After:** E-mini + Micro sections; explicit Custom option; custom field only when Custom selected; selected preset = lime; `microContracts` = “Micro contracts”.
 
-| # | Case | Result |
-|---|------|--------|
-| 1 | Unauthenticated delete | PASS HTTP 401 |
-| 2 | Invalid token delete | PASS HTTP 401 |
-| 3 | Unauthenticated / invalid `store-apple-auth-token` | PASS HTTP 401 |
-| 4 | Email disposable delete | **NOT RUN** (needs dedicated disposable accounts) |
-| 5 | Google disposable delete | **NOT RUN** |
-| 6 | Apple with stored refresh token | **BLOCKED** (Apple secrets missing → store returns `stored:false`) |
-| 7 | Apple legacy without token | **NOT RUN** (code path implemented; live disposable Apple account pending) |
-| 8 | Repeated delete | **NOT RUN** |
-| 9 | Service-role absent from client export | PASS (no `SUPABASE_SERVICE_ROLE_KEY=` literal; lone `service_role` substr = Expo notifications string) |
-| 10 | Other users unchanged | **NOT RUN** (depends on 4–8) |
+## 11–14. Prop Pass
 
-Do **not** delete App Review or real customer accounts during remaining smoke.
+Hierarchy retained from existing operational components: ChallengeHero, TargetProgress, BufferHealth, insights/plan/activity, onboarding/assignment flows. This run tightened primary-tab header density and bottom padding; did **not** invent fake probability. Missing real challenge data still surfaces existing setup/readiness states. Full Smart Intervention / Decision Replay redesign beyond existing cards remains data-bound to Prop OS model (not fabricated).
 
----
+Blocked without real challenge data: live Buffer/Target numbers, probability timeline, deterministic Smart Intervention examples.
 
-## Manual physical UI QA (Settings cleanup)
+## 15. Physical screenshots
 
-Device: physical iPhone (`iPhone 4S` / iPhone 15,3). Installed candidate: Release-Staging **1.6.1 (113)** with Settings cleanup (fingerprint `YT_BUILD_FP_v1:3e7ae84:113:Release-Staging`). Maestro iOS driver still cannot build — not treated as product blocker. HID tap service unavailable on this iOS; AX press ineffective for RN views.
+Attempted RS **113** install of post-polish build. Developer screenshot service failed intermittently (`Apple removed this service` / tunneld). Evidence directory prepared (gitignored):
 
-Evidence (gitignored, may contain staging emails — **do not commit / do not upload to ASC**):
+`docs/releases/1.6.1/phase4f-screenshots/physical/ui-polish-20260802/`
 
-`docs/releases/1.6.1/phase4f-screenshots/physical/settings-cleanup-uiqa-20260802/`
+Treat as **ENVIRONMENT_BLOCKER** for pixel proof; UI contracts covered by `npm run test:ui-polish` + code review.
+
+## 16. Automated gates
 
 | Check | Result |
 |-------|--------|
-| Settings order Account → Subscription → Notifications → Language → Legal → Support → Version | PASS (AX + screenshot) |
-| Email one-line + provider Email | PASS (AX; email redacted in reports) |
-| Password Status absent | PASS |
-| Cloud Sync / Last Sync / Sync Now absent | PASS |
-| Import Trades absent from Settings | PASS |
-| Import Trades present in More | PASS |
-| Seven languages EN/RU/ES/FR/IT/UK/DE | PASS |
-| Legal / Support rows present | PASS |
-| Version 1.6.1 (113) visible | PASS |
-| No permanent startup loader / no black foreground after unlock | PASS (Journal main after returning-allow) |
-| Active Pro: no redundant PRO pills | N/A this session (staging allow user showed **No active subscription**; PRO badges on locked groups expected) |
-| Subscription from CustomerInfo | PASS shape (`YouTrader Pro` / no active / View Plans) |
-| Sign Out / Delete Account fully visible (not behind tab bar) | **PARTIAL** — controls live in Account details; root Settings AX confirms Account row; deep Account sheet not opened (no reliable tap injector) |
-| Apple/Google password controls absent | PASS for Email session (password controls email-only by code); Apple/Google live matrix not re-run this session |
+| npm ci | PASS |
+| typecheck | PASS |
+| translations:check | PASS |
+| test:ui-polish | PASS |
+| test:email-password | PASS |
+| test:revenuecat-mobile-identity | PASS |
+| release:stability | PASS |
+| security:check | PASS |
+| security:audit | PASS high/critical=0; **3 moderate** Storybook/valibot |
+| security:gitleaks | PASS findings=0 |
+| security:semgrep | PASS findings=0 |
+| expo-doctor | 16/18 pre-existing |
+| expo export `/tmp/youtrader-ui-proppass-qa` | PASS |
+| test:revenuecat-entitlement | **FAIL** identical pre-existing Deno harness (subscription code untouched) |
+| Build number | **113** |
+| Aikido MCP | unavailable (invalid token) |
 
----
+## 17. New regressions
 
-## Automated gates
+None identified in automated gates. Physical screenshot gap is tooling, not an app black-screen regression (app launched via `devicectl`).
 
-| Check | Result |
-|-------|--------|
-| `npm ci` | PASS |
-| `npm ls --all` | PASS |
-| `npm run typecheck` | PASS |
-| `npm run translations:check` | PASS |
-| `npm run test:email-password` | PASS (6) |
-| `npm run test:revenuecat-mobile-identity` | PASS (13) |
-| `npm run test:revenuecat-entitlement` | **FAIL** — pre-existing `Deno is not defined` in `revenueCatEntitlement.ts` under Node runner (not modified this run; subscription lifecycle untouched) |
-| `npm run test:release-readiness` | PASS (via `release:stability` suite) |
-| `npm run release:stability` | PASS |
-| `npm run security:check` | PASS |
-| `npm run security:audit` | PASS high/critical=0; **3 moderate** Storybook/valibot (reported separately) |
-| `npm run security:gitleaks` | PASS findings=0 (tracked source only) |
-| `npm run security:semgrep` | PASS findings=0 |
-| `npx expo-doctor` | 16/18 — pre-existing config/CNG advisories; **no Expo/RN upgrade** |
-| `npx expo export --platform ios --output-dir /tmp/yt115-prebuild-final` | PASS |
-| Aikido MCP scan | **NOT AVAILABLE** (auth token invalid) |
-| Configured build number | **113** |
+## 18. Verdicts
 
----
-
-## Remaining blockers (ordered)
-
-1. Set production Apple secrets (`APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID`, `APPLE_PRIVATE_KEY`, preferred `APPLE_TOKEN_ENCRYPTION_KEY`) then redeploy/verify `store-apple-auth-token` stores refresh tokens.
-2. Complete authenticated production smoke with **dedicated disposable** Email / Google / Apple accounts (never App Review / real customers).
-3. Finish Account-details physical proof for Sign Out / Delete Account visibility (manual owner taps acceptable).
-4. Resolve or waive `test:revenuecat-entitlement` Deno/Node harness mismatch **without** changing subscription lifecycle behavior unless explicitly authorized.
-5. Only then authorize bump to build **115**.
+- **UI polish acceptance:** GO WITH CONCERNS (screenshot evidence incomplete; Prop Pass polish incremental)
+- **Authorize build 115 / release:** **NO-GO** (prior blockers remain: Apple secrets, disposable account deletion smoke, entitlement harness, etc.)
 
 ---
 
@@ -203,13 +160,12 @@ Evidence (gitignored, may contain staging emails — **do not commit / do not up
 Public version: 1.6.1
 Configured build number: 113
 Build 115: NOT CREATED
+Subscription lifecycle: NOT MODIFIED
 No build was uploaded
 No App Store screenshots were changed
 No App Store metadata was changed
 Nothing was submitted for review
 No public release occurred
 ```
-
-**Decision: NO-GO** for authorizing build 115.
 
 Waiting for explicit authorization before setting build number to 115 or creating build 115.
