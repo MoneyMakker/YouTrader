@@ -231,6 +231,7 @@ function resolveDailyPlan(input: PropPassCalculationPipelineInput) {
     liveRules: input.activeRules?.liveRules ?? null,
     riskRooms: input.riskRooms,
     selectedMode: input.selectedMode,
+    instrumentSpecificationVersion: input.instrument?.specificationVersion ?? null,
   });
 }
 

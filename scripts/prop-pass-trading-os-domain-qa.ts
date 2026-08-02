@@ -24,10 +24,16 @@ const instrument: InstrumentSpec = {
   symbol: "QA-MICRO",
   name: "QA micro instrument",
   category: "futures",
+  exchange: "QA",
+  currency: "USD",
   tickSize: 0.25,
   tickValueMinor: 125,
   pointValueMinor: 500,
+  roundTripCommissionMinor: 0,
+  defaultSlippageTicks: 0,
+  maximumSupportedContracts: null,
   source: "user_configured",
+  verifiedAt: "2026-08-02T00:00:00.000Z",
 };
 
 const valid = validateTradingOsInputs({ account, challengeRules: { id: "r", effectiveDate: "2026-08-02", templateVersion: "qa" } });

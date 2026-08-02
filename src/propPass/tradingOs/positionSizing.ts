@@ -47,15 +47,17 @@ export function calculatePositionSize(input: PositionSizingInput): TradingOsResu
   }
   if (!Number.isFinite(input.plan.stopDistance) || input.plan.stopDistance <= 0) return response("needs_input", blank, ["invalid_stop_distance"], []);
   if (!Number.isSafeInteger(input.allowedRiskMinor) || input.allowedRiskMinor < 0) return response("needs_input", blank, ["invalid_allowed_risk"], []);
-  if (validation.reasons.length) return response("needs_input", blank, reasons, missingInputs);
+  if (validation.missingInputs.length || validation.reasons.length) {
+    return response("needs_input", blank, reasons, missingInputs);
+  }
 
   const stopTicks = input.plan.stopUnit === "ticks" ? input.plan.stopDistance : decimalRatioToNumber(input.plan.stopDistance, instrument.tickSize);
   if (!Number.isFinite(stopTicks) || stopTicks <= 0) return response("needs_input", blank, ["invalid_stop_ticks"], []);
   const base = input.plan.stopUnit === "ticks"
     ? moneyMultiplyDecimal(instrument.tickValueMinor, input.plan.stopDistance, "ceil")
     : moneyMultiplyDecimalRatio(instrument.tickValueMinor, input.plan.stopDistance, instrument.tickSize, "ceil");
-  const slippage = moneyMultiplyDecimal(instrument.tickValueMinor, instrument.defaultSlippageTicks ?? 0, "ceil");
-  const commission = instrument.roundTripCommissionMinor ?? 0;
+  const slippage = moneyMultiplyDecimal(instrument.tickValueMinor, instrument.defaultSlippageTicks!, "ceil");
+  const commission = instrument.roundTripCommissionMinor!;
   const total = moneyAdd(base, slippage, commission);
   if (!Number.isSafeInteger(total) || total <= 0) return response("needs_input", blank, ["invalid_loss_per_contract"], []);
   const cap = minPositive(input.propMaximumContracts, input.modeMaximumContracts, instrument.maximumSupportedContracts);

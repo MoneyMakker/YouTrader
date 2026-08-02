@@ -36,11 +36,16 @@ const instrument = {
   symbol: "QA-MICRO",
   name: "QA micro instrument",
   category: "futures" as const,
+  exchange: "QA",
+  currency: "USD",
   tickSize: 0.25,
   tickValueMinor: 125,
   pointValueMinor: 500,
   maximumSupportedContracts: 10,
+  roundTripCommissionMinor: 0,
+  defaultSlippageTicks: 0,
   source: "user_configured" as const,
+  verifiedAt: "2026-08-02T00:00:00.000Z",
 };
 
 const input: PropPassCalculationPipelineInput = {

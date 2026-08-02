@@ -10,7 +10,7 @@ const base: PreTradeAssessmentInput = {
   challengeRules: { id: "challenge-rules", effectiveDate: "2026-08-02", templateVersion: "qa", maximumContracts: 4, stopAfterLosses: 2 },
   liveRules: null,
   plan: {
-    instrument: { symbol: "QA", name: "QA", category: "futures", tickSize: 0.25, tickValueMinor: 125, pointValueMinor: 500, roundTripCommissionMinor: 100, defaultSlippageTicks: 1, source: "user_configured" },
+    instrument: { symbol: "QA", name: "QA", category: "futures", exchange: "QA", currency: "USD", tickSize: 0.25, tickValueMinor: 125, pointValueMinor: 500, roundTripCommissionMinor: 100, defaultSlippageTicks: 1, maximumSupportedContracts: null, source: "user_configured", verifiedAt: "2026-08-02T00:00:00.000Z" },
     direction: "long", stopDistance: 8, stopUnit: "ticks", contracts: 1, setup: "QA", intendedSessionId: null, intendedRiskMinor: null, plannedEntryTime: "2026-08-02T14:30:00Z",
   },
   riskRooms: { dailyLossRemainingMinor: 100_000, maximumLossRemainingMinor: 90_000, drawdownRemainingMinor: 80_000, configuredDailyRiskBudgetMinor: 70_000, configuredPerTradeRiskCapMinor: 60_000 },

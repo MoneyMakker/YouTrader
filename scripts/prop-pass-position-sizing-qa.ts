@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { calculatePositionSize } from "../src/propPass/tradingOs";
 
-const plan = { instrument: { symbol: "QA", name: "QA", category: "futures" as const, tickSize: 0.25, tickValueMinor: 125, pointValueMinor: 500, roundTripCommissionMinor: 100, defaultSlippageTicks: 1, maximumSupportedContracts: 5, source: "user_configured" as const }, stopDistance: 3, stopUnit: "points" as const };
+const plan = { instrument: { symbol: "QA", name: "QA", category: "futures" as const, exchange: "QA", currency: "USD", tickSize: 0.25, tickValueMinor: 125, pointValueMinor: 500, roundTripCommissionMinor: 100, defaultSlippageTicks: 1, maximumSupportedContracts: 5, source: "user_configured" as const, verifiedAt: "2026-08-02T00:00:00.000Z" }, stopDistance: 3, stopUnit: "points" as const };
 const sized = calculatePositionSize({ plan, allowedRiskMinor: 17_500, propMaximumContracts: 3 });
 assert.equal(sized.values.stopTicks, 12);
 assert.equal(sized.values.totalLossPerContractMinor, 1_725);

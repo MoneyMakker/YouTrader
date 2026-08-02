@@ -76,11 +76,17 @@ export function validateInstrumentSpec(spec: InstrumentSpec | null): DomainValid
   const reasons: string[] = [];
   if (!spec.symbol) missingInputs.push("instrument_symbol");
   if (!spec.name) missingInputs.push("instrument_name");
+  if (!spec.exchange) missingInputs.push("instrument_exchange");
+  if (!spec.currency) missingInputs.push("instrument_currency");
+  if (!spec.verifiedAt) missingInputs.push("instrument_verification_timestamp");
+  else if (Number.isNaN(Date.parse(spec.verifiedAt))) reasons.push("invalid_instrument_verification_timestamp");
   if (!Number.isFinite(spec.tickSize) || spec.tickSize <= 0) reasons.push("invalid_tick_size");
   if (!isPositiveInteger(spec.tickValueMinor)) reasons.push("invalid_tick_value");
   if (!isPositiveInteger(spec.pointValueMinor)) reasons.push("invalid_point_value");
-  if (spec.roundTripCommissionMinor != null && !isMinor(spec.roundTripCommissionMinor)) reasons.push("invalid_commission");
-  if (spec.defaultSlippageTicks != null && (!Number.isFinite(spec.defaultSlippageTicks) || spec.defaultSlippageTicks < 0)) {
+  if (spec.roundTripCommissionMinor == null) missingInputs.push("instrument_round_trip_commission");
+  else if (!isMinor(spec.roundTripCommissionMinor) || spec.roundTripCommissionMinor < 0) reasons.push("invalid_commission");
+  if (spec.defaultSlippageTicks == null) missingInputs.push("instrument_default_slippage_ticks");
+  else if (!Number.isFinite(spec.defaultSlippageTicks) || spec.defaultSlippageTicks < 0) {
     reasons.push("invalid_slippage");
   }
   if (spec.maximumSupportedContracts != null && !isPositiveInteger(spec.maximumSupportedContracts)) {

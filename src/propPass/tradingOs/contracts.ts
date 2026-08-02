@@ -112,15 +112,17 @@ export type InstrumentSpec = {
   symbol: string;
   name: string;
   category: "futures";
+  exchange: string;
+  currency: string;
   tickSize: number;
   tickValueMinor: MoneyMinor;
   pointValueMinor: MoneyMinor;
-  roundTripCommissionMinor?: MoneyMinor;
-  defaultSlippageTicks?: number;
-  maximumSupportedContracts?: number;
+  roundTripCommissionMinor: MoneyMinor | null;
+  defaultSlippageTicks: number | null;
+  maximumSupportedContracts: number | null;
   /** The config source must be visible to rule editors; never infer a spec. */
   source: "user_configured" | "verified_catalogue";
-  verifiedAt?: string;
+  verifiedAt: string;
 };
 
 export type TradePlanInput = {

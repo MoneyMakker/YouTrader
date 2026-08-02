@@ -13,6 +13,7 @@ export type DailyPlanInput = {
   selectedMode: TradingRiskMode;
   preferredInstrument: string | null;
   intendedSessionId: string | null;
+  instrumentSpecificationVersion: string | null;
   recentLossStreak: number;
 };
 
@@ -31,6 +32,7 @@ export type DailyTradingPlanSnapshot = Readonly<{
   profitLockMinor: MoneyMinor | null;
   preferredInstrument: string | null;
   allowedSessionId: string | null;
+  instrumentSpecificationVersion: string | null;
   hardLimitSnapshot: Readonly<RiskRooms>;
 }>;
 
@@ -66,6 +68,7 @@ export function createDailyTradingPlan(input: DailyPlanInput): TradingOsResult<D
     profitLockMinor: account.contextType === "challenge" ? input.challengeRules?.profitLockMinor ?? null : input.liveRules?.profitProtectionThresholdMinor ?? null,
     preferredInstrument: input.preferredInstrument ?? account.preferredInstrument ?? null,
     allowedSessionId: input.intendedSessionId,
+    instrumentSpecificationVersion: input.instrumentSpecificationVersion,
     hardLimitSnapshot: Object.freeze({ ...input.riskRooms }),
   });
   return response("safe_to_take", snapshot, [], []);
