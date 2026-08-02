@@ -1,7 +1,6 @@
 # YT3 Scope-Freeze Status — 2026-08-01 (updated)
 
-Phase 4F status: **OPEN / NO-GO for build 115**  
-UI polish acceptance (this run): **GO WITH CONCERNS**
+Phase 4F status: **OPEN / NO-GO for authorizing build 115**
 
 ## Freeze compliance
 
@@ -9,148 +8,183 @@ UI polish acceptance (this run): **GO WITH CONCERNS**
 - No build uploaded to ASC/TestFlight
 - No Add for Review / Submit for Review
 - Build identity remains **1.6.1 (113)** — **build 115 NOT CREATED**
-- Subscription / RevenueCat / StoreKit / auth / account-deletion backend / Apple token lifecycle / production Supabase deploy / Settings cleanup / security remediation **NOT MODIFIED** this UI run
-- Local CLI link remains staging (`zleojeqkzizeyerhjpur`)
-- Deferred backlog: `docs/releases/1.6.1/BACKLOG_ASC_METADATA_CLEANUP.md`
+- Subscription / RevenueCat / StoreKit product IDs / trial / Settings IA / Gitleaks remediation / dependency versions **NOT MODIFIED** this run (entitlement **harness only**)
+- Local CLI link remains staging (`zleojeqkzizeyerhjpur`); production secrets/functions use `--project-ref izzrlsgumyabdvlmwlwn`
 
 ---
 
-## Branch / commits
+## 1. Starting / ending HEAD
 
 | Item | Value |
 |------|-------|
 | Branch | `release/1.6.1-build-115` |
-| UI polish start | `7d9d93d` |
-| UI polish end | `8d1d879` |
-| Checkpoint | `checkpoint/yt3-ui-proppass-20260802T004725Z` |
-| Preserved billing | `253ab41` |
-| Preserved account deletion | `e91268e` / `7fdcb69` |
-| Preserved security Issue #8 | `c90838c` |
+| Start (this run) | `4daad2a` |
+| End | `87c0780` (+ docs commit below) |
+| `4daad2a` preserved | **YES** (ancestor of HEAD) |
+| `c9b7b52` preserved | **YES** |
+| Checkpoint | `checkpoint/yt3-pre115-blockers-20260802T043804Z` |
+| Build number | **113** |
 
-### Commits this UI polish run
+### Commits this run
 
-- `7b4602e` refactor(theme): unify navigation and selected states on lime
-- `2a42c78` refactor(journal): remove calendar header and lime day selection *(includes deterministic Add Trade result + Custom/Micro symbol UX)*
-- `417807a` refactor(stats): consolidate empty insight states
-- `d2d2fce` feat(prop-pass): tighten primary-tab challenge dashboard chrome
-- `8d1d879` test(ui): cover journal stats and theme lime contracts
+- `a73b40f` feat(prop-pass): complete challenge dashboard and terminal states
+- `87c0780` test(security): isolate entitlement QA from Deno Edge runtime
+- (this doc) docs(release): pre-115 blocker status
+
+Prior UI polish (preserved): `7b4602e` … `4daad2a`
 
 ---
 
-## 1. Starting / ending commit
+## 2–5. Prop Pass lifecycle and data sources
 
-- Start: `7d9d93d`
-- End: `8d1d879`
+| State | Trigger | Data source | UI | Physical QA |
+|-------|---------|-------------|----|-------------|
+| A No challenge | `no_account` / empty setup | Prop OS account read model | Setup CTA / onboarding | **PENDING_USER** |
+| B Insufficient data | assigned trades &lt; thresholds / no readiness score | assignments + snapshot | Hero building + readiness “Not enough data” | **PENDING_USER** |
+| C Active sufficient | gate `available` + snapshot | rule snapshot + engine snapshot | Full dashboard modules | **PENDING_USER** |
+| D Passed | `no_active_challenge` + latest historical `passed`/`funded` | historicalAttempts + optional snapshot | Terminal passed card + start another | **PENDING_USER** |
+| E Failed/breached | latest historical `breached`/`abandoned` | historicalAttempts + breachReasons | Terminal failed card + review/start | **PENDING_USER** |
 
-## 2. Files / components changed
+### Active challenge modules
 
-- `src/ydl/tokens/color.primitive.ts`, `color.semantic.ts`
-- `src/ydl/shell/YdlTabBar.tsx`
-- `src/app/YouTraderApp.tsx`, `src/app/styles.ts`
-- `src/stats/StatsDashboard.tsx`, `presentation.ts`, `insightsLearning.ts` (new)
-- `src/propPass/PropPassInternalScreen.tsx`
-- `src/i18n/locales/{en,ru,uk,es,fr,de,it}.json`
-- `scripts/ui-polish-qa.ts`, `package.json` (`test:ui-polish`)
+| Module | Source | Fake data? |
+|--------|--------|------------|
+| Challenge header | account + challenge records | No |
+| Target Progress | snapshot buffers `target_distance` + rule profit target | No |
+| Buffer Health | snapshot buffers daily/drawdown | No |
+| Discipline Streak | `tradingStats` from engine snapshot | No (zeros / missing → not enough data) |
+| Rule Status | rule snapshot + buffers + daysTraded | No |
+| Smart Intervention | buffer warn/hard or breachReasons only | No (hidden when healthy) |
+| Decision Replay | breachReasons[0].tradeId when present | No (hidden otherwise) |
+| Pass Probability | **Not invented.** Card shows **Readiness** score only when assigned≥5 and score present; else “Not enough data / need 5 trades” | No fake % |
+| Timeline | historicalAttempts list only (no fabricated curve) | No fake curve |
 
-## 3. Journal header removed
+### Remaining Prop Pass blockers / placeholders
 
-Removed permanent Journal title row, header `+ Add Trade`, and visible `Synced` chip from the Journal calendar screen. Sync still runs; only the permanent status chrome is gone.
+- Edit challenge rules after create: still immutable (by design)
+- Start new attempt on same account: uses onboarding CTA (resetOfChallengeId domain exists; dedicated retry UI minimal)
+- Day-level streak history only after engine snapshot includes `tradingStats` (new calc; existing DB snapshots until recalc may omit it → UI shows not enough data)
+- Manual physical capture of each lifecycle state: **PENDING_USER**
+- Production Prop OS mutations remain staging/allowlist gated as before
 
-## 4. New Add Trade entry point
+---
 
-Selected-day detail area:
+## 6. Manual physical UI QA
 
-- empty day → `No trades for this day` + compact lime `Add Trade`
-- day with trades → secondary compact `Add Trade` above the list  
-`testID=journal-add-trade` preserved.
+Automated pymobiledevice3 screenshots remain ENVIRONMENT_BLOCKER.
 
-## 5. Calendar visual changes
+Checklist prepared (gitignored):
 
-- Selected day: lime border + soft lime fill + lime marker dot
-- Today marker uses lime (not purple)
-- Month picker selected states use lime
-- Day tap always selects first (no immediate modal jump)
+`docs/releases/1.6.1/phase4f-screenshots/physical/pre115-manual-20260802/MANUAL_QA_CHECKLIST.md`
 
-## 6. Bottom navigation color behavior
+**Result:** screenshots **NOT YET CAPTURED** by device owner this run. Prior UI polish contracts covered by `test:ui-polish` / code review.
 
-- `action.primary` = lime `#A3FF12`
-- Active label + underline = lime
-- Inactive labels = readable muted gray
-- All five glyphs = lime; inactive opacity ~0.42
-- Purple removed from default tab active styling
-- Tab bar vertical padding tightened for safer centering
+**Owner action:** open installed RS 113 build, take iOS system screenshots into that folder, check the boxes.
 
-## 7. Dark-mode contrast
+---
 
-- Primary interactive fill text uses `inkOnLime` (`#0E141D`) on lime surfaces
-- Semantic primary actions no longer use white-on-purple as default selected chrome
-- Selected instrument / month chips: lime soft + lime border + light text on dark surfaces
-- Close control text moved off purple to primary light text
-- Remaining risk: device screenshot pipeline flaky this session — contrast verified in tokens/contracts + typecheck export
+## 7. Apple production secret readiness
 
-## 8. Stats duplicate states removed
+Project: YouTrader / `izzrlsgumyabdvlmwlwn`
 
-`getInsightsLearningState` consolidates insufficient Recent Trend / Radar / Best Edge / Biggest Leak into one `stats-insights-learning` card with real `count of required` progress. Core metrics remain visible when trades exist. Filter chips: horizontal scroll, `numberOfLines={1}`, lime selected.
+Present (names only): core Supabase + RevenueCat + AI keys (unchanged).
 
-## 9. Add Trade result logic
+**Missing required Apple server secrets:**
 
-**Before:** Profit/Loss toggle could show Loss selected with green `+$0.00`.  
-**After:** Manual Profit/Loss toggle removed. Result card derives from entry/exit/contracts/direction when instrument known:
+- `APPLE_TEAM_ID`
+- `APPLE_KEY_ID`
+- `APPLE_CLIENT_ID` (or `APPLE_BUNDLE_ID`)
+- `APPLE_PRIVATE_KEY`
+- `APPLE_TOKEN_ENCRYPTION_KEY` (required for stored-token path)
 
-- missing execution → neutral “Enter execution details”
-- positive → solid lime card + dark text
-- negative → solid red card + white text
-- zero → neutral card  
-Custom/unknown symbols still allow signed manual P&L input.
+**Apple automatic revocation: BLOCKED**
 
-## 10. Symbol selection
+Local commands (placeholders only — do not paste values in chat):
 
-**Before:** Custom Symbol field always mirrored the selected preset. Micro section labeled “Contracts”. Purple selected cards.  
-**After:** E-mini + Micro sections; explicit Custom option; custom field only when Custom selected; selected preset = lime; `microContracts` = “Micro contracts”.
+```bash
+supabase secrets set \
+  APPLE_TEAM_ID=YOUR_TEAM_ID \
+  APPLE_KEY_ID=YOUR_KEY_ID \
+  APPLE_CLIENT_ID=com.youtrader.pro \
+  APPLE_PRIVATE_KEY="YOUR_P8_PEM" \
+  APPLE_TOKEN_ENCRYPTION_KEY=YOUR_ENCRYPTION_KEY \
+  --project-ref izzrlsgumyabdvlmwlwn
 
-## 11–14. Prop Pass
+supabase functions deploy store-apple-auth-token --project-ref izzrlsgumyabdvlmwlwn
+supabase functions deploy delete-account --project-ref izzrlsgumyabdvlmwlwn
+```
 
-Hierarchy retained from existing operational components: ChallengeHero, TargetProgress, BufferHealth, insights/plan/activity, onboarding/assignment flows. This run tightened primary-tab header density and bottom padding; did **not** invent fake probability. Missing real challenge data still surfaces existing setup/readiness states. Full Smart Intervention / Decision Replay redesign beyond existing cards remains data-bound to Prop OS model (not fabricated).
+No redeploy performed this run (secrets incomplete).
 
-Blocked without real challenge data: live Buffer/Target numbers, probability timeline, deterministic Smart Intervention examples.
+---
 
-## 15. Physical screenshots
+## 8. Disposable account deletion smoke
 
-Attempted RS **113** install of post-polish build. Developer screenshot service failed intermittently (`Apple removed this service` / tunneld). Evidence directory prepared (gitignored):
+| Case | Result |
+|------|--------|
+| Unauthenticated → 401 | **PASS** (`UNAUTHORIZED_NO_AUTH_HEADER`) |
+| Invalid token → 401 | **PASS** (`UNAUTHORIZED_LEGACY_JWT`) |
+| Email disposable delete | **NOT RUN** (no disposable credentials provided) |
+| Google disposable delete | **NOT RUN** |
+| Apple + stored refresh token | **NOT RUN** + Apple secrets BLOCKED |
+| Legacy Apple without token | **NOT RUN** |
+| Cross-user delete denied | **NOT RUN** |
+| Repeated deletion safe | **NOT RUN** |
+| Service-role / Apple secrets absent from client export | **PASS** (only Expo notifications `service_role` substring false positive; no JWT/key) |
+| Other user records untouched | **NOT RUN** |
 
-`docs/releases/1.6.1/phase4f-screenshots/physical/ui-polish-20260802/`
+---
 
-Treat as **ENVIRONMENT_BLOCKER** for pixel proof; UI contracts covered by `npm run test:ui-polish` + code review.
+## 9. Entitlement harness
 
-## 16. Automated gates
+| Item | Value |
+|------|-------|
+| Command | `npm run test:revenuecat-entitlement` → `node --experimental-strip-types scripts/security/revenuecat-entitlement-qa.mjs` |
+| Prior failure | `ReferenceError: Deno is not defined` in production Edge module under Node |
+| Fix | Behavioral tests use `scripts/security/fixtures/revenueCatEntitlement.harness.ts` (DI); static checks still read production Edge + client files |
+| Production subscription module | **NOT MODIFIED** |
+| Result | **PASS** |
+
+---
+
+## 10. Automated gates
 
 | Check | Result |
 |-------|--------|
 | npm ci | PASS |
 | typecheck | PASS |
 | translations:check | PASS |
-| test:ui-polish | PASS |
+| test:ui-polish / prop-pass-lifecycle | PASS |
 | test:email-password | PASS |
 | test:revenuecat-mobile-identity | PASS |
+| test:revenuecat-entitlement | **PASS** |
 | release:stability | PASS |
 | security:check | PASS |
-| security:audit | PASS high/critical=0; **3 moderate** Storybook/valibot |
+| security:audit | 0 high / 0 critical; **3 moderate** Storybook/valibot |
 | security:gitleaks | PASS findings=0 |
 | security:semgrep | PASS findings=0 |
 | expo-doctor | 16/18 pre-existing |
-| expo export `/tmp/youtrader-ui-proppass-qa` | PASS |
-| test:revenuecat-entitlement | **FAIL** identical pre-existing Deno harness (subscription code untouched) |
+| expo export `/tmp/youtrader-pre115-final` | PASS |
 | Build number | **113** |
-| Aikido MCP | unavailable (invalid token) |
 
-## 17. New regressions
+---
 
-None identified in automated gates. Physical screenshot gap is tooling, not an app black-screen regression (app launched via `devicectl`).
+## 11. Exact remaining blockers (build 115)
 
-## 18. Verdicts
+1. **Apple production secrets missing** → automatic Apple revoke BLOCKED
+2. **Disposable Email/Google/Apple deletion smokes not executed**
+3. **Manual physical UI screenshot matrix not completed by owner**
+4. Prop Pass: existing snapshots need recalc to populate new `tradingStats` fields
 
-- **UI polish acceptance:** GO WITH CONCERNS (screenshot evidence incomplete; Prop Pass polish incremental)
-- **Authorize build 115 / release:** **NO-GO** (prior blockers remain: Apple secrets, disposable account deletion smoke, entitlement harness, etc.)
+Non-blockers closed this run: entitlement Deno harness; Prop Pass module completeness (deterministic, no fake %).
+
+---
+
+## 12. Final recommendation for authorizing build 115
+
+**NO**
+
+Do not authorize build 115 until Apple secrets are set, disposable deletion smokes pass (or explicit PO waiver), and manual physical UI checklist is completed.
 
 ---
 
@@ -160,7 +194,7 @@ None identified in automated gates. Physical screenshot gap is tooling, not an a
 Public version: 1.6.1
 Configured build number: 113
 Build 115: NOT CREATED
-Subscription lifecycle: NOT MODIFIED
+Subscription lifecycle: NOT MODIFIED unless explicitly documented
 No build was uploaded
 No App Store screenshots were changed
 No App Store metadata was changed
