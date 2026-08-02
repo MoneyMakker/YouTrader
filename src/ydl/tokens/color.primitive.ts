@@ -32,9 +32,12 @@ export const ydlPrimitiveColor = {
   accent400: "#B026FF",
   accentSoft: "rgba(176,38,255,0.12)",
   accentPressed: "#9A1FE0",
-  // Positive / green
+  // Positive / green (primary interactive accent for YouTrader 1.6.1+)
   green400: "#A3FF12",
   greenSoft: "rgba(163,255,18,0.13)",
+  greenPressed: "#8ACC0E",
+  /** Dark ink on lime surfaces — keep contrast ≥ 4.5:1 on green400. */
+  inkOnLime: "#0E141D",
   // Negative / red
   red400: "#FF3B5F",
   redSoft: "rgba(255,59,95,0.11)",

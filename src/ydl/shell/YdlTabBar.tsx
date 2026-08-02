@@ -34,8 +34,8 @@ export function YdlTabBar<T extends string>({
 }: Props<T>) {
   const theme = useYdlTheme("dark");
   const insets = useSafeAreaInsets();
-  const accent = theme.colors.action.primary;
-  const muted = theme.colors.text.tertiary;
+  const accent = theme.colors.action.primary; // lime
+  const inactiveLabel = theme.colors.text.secondary;
 
   return (
     <View
@@ -46,7 +46,8 @@ export function YdlTabBar<T extends string>({
         {
           backgroundColor: theme.colors.background.primary,
           borderTopColor: theme.colors.border.subtle,
-          paddingBottom: Math.max(8, insets.bottom),
+          paddingBottom: Math.max(6, Math.min(insets.bottom, 14)),
+          paddingTop: 8,
         },
         style,
       ]}
@@ -79,7 +80,7 @@ export function YdlTabBar<T extends string>({
             <YdlText
               role="caption"
               numberOfLines={1}
-              style={[styles.label, { color: active ? accent : muted }]}
+              style={[styles.label, { color: active ? accent : inactiveLabel }]}
             >
               {tab.label}
             </YdlText>
@@ -102,16 +103,16 @@ export function YdlTabBar<T extends string>({
 const styles = StyleSheet.create({
   bar: {
     flexDirection: "row",
-    minHeight: 72,
+    alignItems: "center",
+    minHeight: 64,
     paddingHorizontal: 4,
-    paddingTop: 9,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   tab: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "flex-start",
-    paddingTop: 4,
+    justifyContent: "center",
+    paddingTop: 2,
     paddingHorizontal: 1,
     minWidth: 0,
     minHeight: YDL_MIN_TOUCH_TARGET,
