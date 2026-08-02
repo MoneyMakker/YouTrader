@@ -97,8 +97,8 @@ export function PropPassInternalScreen({
       style={[styles.root, { backgroundColor: theme.colors.background.primary }]}
       testID={presentation === "tab" ? "prop-pass-primary-screen" : "prop-pass-internal-screen"}
     >
-      <View style={styles.header}>
-        <YdlText role="title">
+      <View style={[styles.header, presentation === "tab" && styles.tabHeader]}>
+        <YdlText role={presentation === "tab" ? "label" : "title"}>
           {t(presentation === "tab" ? "propPass.productTitle" : "propPass.title")}
         </YdlText>
         {presentation === "modal" && onClose ? (
@@ -113,11 +113,7 @@ export function PropPassInternalScreen({
         <YdlText role="caption" color="text.secondary">
           {t("propPass.internalBanner")}
         </YdlText>
-      ) : (
-        <YdlText role="caption" color="text.secondary">
-          {t("propPass.productBanner")}
-        </YdlText>
-      )}
+      ) : null}
       {commandMessage ? (
         <View accessibilityLiveRegion="polite">
           <YdlText role="caption" color="text.secondary">
@@ -556,7 +552,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  body: { gap: 12, paddingBottom: 40, paddingTop: 8 },
+  tabHeader: { minHeight: 32, alignItems: "center" },
+  body: { gap: 12, paddingBottom: 32, paddingTop: 8 },
   available: { gap: 14 },
   resolverRow: { gap: 6, marginTop: 6 },
   historyRow: { gap: 2, paddingVertical: 6 },
