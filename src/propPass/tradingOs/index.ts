@@ -41,3 +41,5 @@ export { evaluateKillSwitch } from "./killSwitch";
 export type { KillSwitchConfiguration, KillSwitchInput, KillSwitchValues } from "./killSwitch";
 export { evaluateChallengeLifecycle } from "./challenge";
 export type { ChallengeBreachFact, ChallengeLifecycleInput, ChallengeLifecycleState, ChallengeLifecycleValues } from "./challenge";
+export { evaluateLiveAccount } from "./liveAccount";
+export type { LiveAccountIntegrationInput, LiveAccountIntegrationValues, LiveAccountState } from "./liveAccount";
