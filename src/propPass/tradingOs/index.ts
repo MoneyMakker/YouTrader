@@ -37,3 +37,5 @@ export { evaluatePositionSizeProgression } from "./progression";
 export type { PositionSizeStage, PositionSizeProgressionInput, PositionSizeProgressionValues, PositionSizeTransition } from "./progression";
 export { evaluateProfitProtection } from "./profitProtection";
 export type { ProfitProtectionInput, ProfitProtectionValues } from "./profitProtection";
+export { evaluateKillSwitch } from "./killSwitch";
+export type { KillSwitchConfiguration, KillSwitchInput, KillSwitchValues } from "./killSwitch";

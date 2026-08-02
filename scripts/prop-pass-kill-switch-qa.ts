@@ -1,0 +1,9 @@
+import assert from "node:assert/strict";
+import { evaluateKillSwitch } from "../src/propPass/tradingOs";
+const configuration = { maximumDailyLossMinor: 50_000, maximumWeeklyLossMinor: 100_000, maximumTradeCount: 3, consecutiveLossLimit: 2, cutoffMinuteLocal: 900, stopAfterProfitLock: true, resetStrategy: "next_trading_day" as const };
+const base = { configuration, currentDailyLossMinor: 20_000, currentWeeklyLossMinor: 20_000, currentTradeCount: 1, consecutiveLosses: 0, currentMinuteLocal: 600, profitLockStopActive: false, manualSessionLockRequested: false, manualSessionLockConfirmed: false };
+assert.equal(evaluateKillSwitch(base).status, "safe_to_take");
+const lossStop = evaluateKillSwitch({ ...base, currentDailyLossMinor: 50_000 }); assert.equal(lossStop.status, "stop_trading"); assert.equal(lossStop.values.recommendedContracts, 0); assert.equal(lossStop.values.gamblerDisabled, true); assert.ok(lossStop.values.triggerIds.includes("daily_loss"));
+const unconfirmed = evaluateKillSwitch({ ...base, manualSessionLockRequested: true }); assert.equal(unconfirmed.values.active, false); assert.equal(unconfirmed.values.manualConfirmationRequired, true);
+const manual = evaluateKillSwitch({ ...base, manualSessionLockRequested: true, manualSessionLockConfirmed: true }); assert.equal(manual.status, "stop_trading"); assert.ok(manual.values.triggerIds.includes("manual_session_lock"));
+const missing = evaluateKillSwitch({ ...base, currentWeeklyLossMinor: null }); assert.equal(missing.status, "stop_trading", "configured but unavailable hard-limit input fails closed");
