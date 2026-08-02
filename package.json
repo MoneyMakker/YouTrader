@@ -52,6 +52,7 @@
     "prepare:release": "node scripts/release-command-center/run.mjs release",
     "test:local-ai-cache": "npx tsx scripts/local-ai-cache-qa.ts",
     "test:revenge-trading": "npx tsx scripts/revenge-trading-qa.ts",
+    "test:ui-polish": "node --experimental-strip-types --experimental-transform-types scripts/ui-polish-qa.ts",
     "test:ui-infra-phase3": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase3-qa.ts",
     "test:ui-infra-phase4": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase4-qa.ts",
     "test:ui-infra-phase5": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase5-qa.ts",
