@@ -1,135 +1,175 @@
 # YT3 Scope-Freeze Status — 2026-08-01 (updated)
 
-Phase 4F status: **OPEN / NO-GO** (implementation advanced; physical build 115 + Restore Behavior confirmation still required)
+Phase 4F status: **OPEN / NO-GO**
 
 ## Freeze compliance
 
 - No App Store screenshots deleted/replaced/uploaded
 - No build uploaded to ASC/TestFlight
 - No Add for Review / Submit for Review
-- Build 115 not created yet (CURRENT_PROJECT_VERSION remains **113** until gates pass)
-- Build 113 / 114 not modified as release artifacts
+- Build identity remains **1.6.1 (113)** until final gates + physical matrix; **115 not created as release artifact this cleanup run**
+- Build 113 / 114 not modified as release artifacts; 116 not created
 - No public listing AI metadata cleanup executed
-- Production Supabase schema untouched (delete-account function added in repo; **not deployed** this run)
+- Production Supabase schema untouched; `delete-account` **not deployed to production** (CLI linked to staging; no prod access token)
 - Deferred backlog: `docs/releases/1.6.1/BACKLOG_ASC_METADATA_CLEANUP.md`
 
 ---
 
-## Integration checkpoint (this run)
+## Branch / commits
 
 | Item | Value |
 |------|-------|
-| Starting worktree | `/Users/valentynborovyk/Projects/youtrader-final` |
-| Starting branch / commit | `fix/yt3-autonomous-recovery` @ `ea084ca` (preserved) |
-| Checkpoint branch | `checkpoint/yt3-phase4f-wip-20260801-ea084ca` @ `96fc790` |
-| Release branch | `release/1.6.1-build-115` |
-| Security Issue #8 | Cherry-picked as `c90838c` (content of `252a7ae`; high/critical audit = 0) |
-| Billing commit | `253ab41` fix(billing): complete purchase-to-auth entitlement lifecycle |
-| Account commit | `e91268e` fix(account): add secure account deletion lifecycle |
+| Branch | `release/1.6.1-build-115` |
+| Tip (this cleanup) | `aca8b91` (+ settings / delete-account / gitleaks commits) |
+| Preserved billing | `253ab41` |
+| Preserved account deletion UI | `e91268e` |
+| Preserved security Issue #8 | `c90838c` (from `252a7ae`) |
+| Preserved sticky CTA | `ea084ca` |
+| Checkpoint before cleanup | `checkpoint/yt3-settings-pre-cleanup-20260801T235221Z` + stash `checkpoint/settings-cleanup-20260801T235221Z` |
 
-Dirty WIP preserved via checkpoint + `artifacts/checkpoints/20260801-yt3-115/` (local).
+### Commits this cleanup
+
+- `3d1c0dc` refactor(settings): clean account, subscription, and More import entry
+- `44363ea` fix(account): harden delete-account edge cleanup path
+- `aca8b91` fix(security): make gitleaks scan tracked source only
 
 ---
-
-## Identifiers (unchanged)
-
-| Item | Value |
-|------|-------|
-| Entitlement | `YouTrader Pro` (`EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID` / `REVENUECAT_ENTITLEMENT_ID`) |
-| Offering | `default` (`ofrngbb124c8022`) |
-| Weekly | `$rc_weekly` → `youtrader_pro_weekly` |
-| Monthly | `$rc_monthly` → `youtrader_pro_monthly` |
-| Yearly | `$rc_annual` → `youtrader_pro_yearly__` |
-| react-native-purchases | lock `9.15.2` |
-| SDK key source | `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` (`appl_` present) |
-| App scheme | `youtrader` |
 
 ## RevenueCat Restore Behavior
 
-**BLOCKED — dashboard confirmation required**
+**CONFIRMED (owner)**
 
-MCP App Store app metadata does not expose Project Settings → Restore Behavior.
-Required for purchase-before-login when an identified App User ID already exists:
-
-1. Open RevenueCat → Project **YouTrader** → **Project settings → General**
-2. Confirm Restore Behavior is **Transfer to new App User ID** (not Block Restore)
-3. Reply with the exact selected value
-
-Until confirmed, final GO for build 115 is withheld.
-
-Note: anonymous → `Purchases.logIn(uuid)` aliases anonymous customers per RC docs; the app also runs **one** post-login `restorePurchases` fallback when pre-auth entitlement is lost after login.
+| Setting | Value |
+|---------|-------|
+| Production | Transfer to new App User ID |
+| Sandbox override | Transfer to new App User ID |
 
 ---
 
-## Implemented this run (code)
+## Settings cleanup (Tasks 1–5)
 
-### Purchase → auth → identity → tabs
+### Final Settings hierarchy
 
-1. `RevenueCatIdentitySynchronizer` ported to `src/billing/` and wired in `YouTraderApp`
-2. `Purchases.logIn` only via synchronizer with Supabase UUID (rejects email)
-3. Waits for `revenueCatReady` before identity sync (fixes configure race)
-4. In-memory `preAuthEntitledRef` + `decidePostLoginEntitlementReconcile` → one restore fallback
-5. Anonymous restore (Path A) → entitlement → mandatory auth (no premature “Pro unlocked” alert)
-6. Authenticated restore (Path B) → identity sync first → restore
-7. Acquisition routing: authenticated without entitlement → **main** (4 tabs); Prop Pass only when `isPremium`
-8. Trial copy gated by `checkTrialOrIntroductoryPriceEligibility` (unknown → no trial claim; weekly never)
+```text
+Account → (details)
+Subscription
+Notifications
+Language
+Legal
+Support
+App Version
+```
 
-### Account deletion
+### Removed from Account
 
-- Settings → Delete Account confirmation
-- `supabase/functions/delete-account` (service-role server delete)
-- Apple Subscriptions deep link
-- **Deploy of Edge Function still required** before live deletion works
+- Password Status / masked bullets
+- Cloud Sync card / “Synced across all devices”
+- Last Sync / Sync now button
+
+### Moved
+
+- Import Trades → **More** (with Calendar / Calculator / News / Reports)
+
+### Account provider behavior
+
+- Compact Account row: email (single-line middle truncate + a11y full email) + provider (Email / Apple / Google) + chevron
+- Details: identity, Sign Out, Delete Account
+- Change email / Change password: **email provider only** (flows already complete)
+- Apple / Google: no password controls / no fake password UI
+
+### Subscription card data sources
+
+- `CustomerInfo.entitlements.active[YouTrader Pro]`
+- product id → Weekly / Monthly / Yearly
+- `willRenew` → `Renews <date>` else `Expires <date>`
+- `priceString` from matching `PurchasesStoreProduct` when available
+- `managementURL` for Manage Subscription (Apple subscriptions URL fallback)
+- Restore Purchases **only** when not entitled
+- Stale expiration triggers CustomerInfo refresh
+
+### Pro presentation
+
+- Active Pro: no PRO pills on notification rows
+- Non-entitled: single restrained PRO badge on pro-only groups
 
 ---
 
-## Static verification
+## Delete Account (Task 6)
+
+| Check | Status |
+|-------|--------|
+| Session JWT required; user id from `auth.getUser()` only | PASS (code) |
+| No arbitrary user id in body | PASS |
+| Service role only in Edge Function env | PASS |
+| Confirmation explains App Store not cancelled | PASS |
+| Local cleanup via existing `onSignOut` | PASS |
+| Apple token revocation | **NOT IMPLEMENTED** (authorizationCode not persisted) — document limitation |
+| Deploy to **production** | **BLOCKED** — `supabase/.temp/project-ref` = staging; no `SUPABASE_ACCESS_TOKEN` / CLI token for production |
+
+---
+
+## Gitleaks (Task 7)
+
+| Item | Result |
+|------|--------|
+| Root cause of 396 / ~15.5GB | `gitleaks detect --no-git --source .` walked entire worktree including `build/` (~35GB) |
+| Fix | `scripts/security-gitleaks-tracked.sh` + `npm run security:gitleaks` uses tracked snapshot (~6.8MB / 1314 files) |
+| Tracked findings before allowlist | 2 × `generic-api-key` on AsyncStorage key constants (`yt-acquisition-guest-v1`, `yt-qa-news-fault-v1`) — **FALSE_POSITIVE_WITH_EVIDENCE** |
+| Narrow allowlist | those two key strings only in `.gitleaks.toml` |
+| Final gate | **PASS** (0 findings) |
+| `security:audit` | **PASS** high/critical = 0 (3 moderate Storybook) |
+
+---
+
+## Automated gates (Task 8) — this cleanup
 
 | Check | Result |
 |-------|--------|
-| `tsc --noEmit` | PASS |
-| `security:audit` (high+) | PASS (0 high/critical; 3 moderate Storybook valibot only) |
-| `security:check` | PASS |
-| `translations:check` | PASS |
-| `test:email-password` | PASS |
-| `test:revenuecat-mobile-identity` | PASS (13 scenarios) |
-| acquisition / reconcile / paywallPlanCopy / routing selftests | PASS |
-| `test:revenuecat-entitlement` | FAIL env (`Deno is not defined` in shared helper under Node) — pre-existing runner limitation on this tree |
-| Expo Doctor | pre-existing app.json / CNG / expo patch findings only (not re-run as blocking) |
+| typecheck | PASS (earlier this run) |
+| translations:check | PASS |
+| test:email-password | PASS |
+| test:revenuecat-mobile-identity | PASS (13) |
+| settingsCleanupContract | PASS |
+| settingsSubscriptionPresentation | PASS |
+| security:gitleaks | PASS |
+| security:audit | PASS (0 high/critical) |
+| expo export ios | (in progress / see evidence) |
+| test:revenuecat-entitlement | known Deno runner limitation |
+| npm ci / full suite | not all scripts completed in this pass — continue before build 115 |
 
 ---
 
-## Physical QA / Build 115
+## Physical UI / Build 115 / purchase matrix (Tasks 9–10)
 
 | Item | Status |
 |------|--------|
-| Build number bump to 115 | **NOT DONE** (gates incomplete) |
-| Physical install of 115 | **NOT DONE** |
-| Weekly / Monthly / Yearly live purchase matrix | **NOT DONE** |
-| Email / Apple / Google post-purchase auth | **NOT DONE** |
-| Cold launch without Metro on device | **NOT DONE** |
+| Physical Settings UI screenshots after cleanup | **NOT DONE** (Maestro iPhoneOS driver build still broken) |
+| Build 115 creation | **NOT CREATED** |
+| Weekly / Monthly / Yearly × Email / Apple / Google | **NOT RUN** |
+| Anonymous / authenticated restore live | **NOT RUN** |
 
 ---
 
 ## Remaining blockers (ordered)
 
-1. **Confirm RevenueCat Restore Behavior** in dashboard (exact value).
-2. Deploy `delete-account` Edge Function to the production Supabase project (human/CI deploy).
-3. After (1): set version/build to **1.6.1 (115)**, build Release (production scheme, not Release-Staging), install on physical iPhone.
-4. Run purchase matrix A/B/C with fresh sandbox testers + auth providers + navigation screenshots.
-5. Monthly 3-day ASC window starts **2026-08-02** — re-verify Apple payment sheet says 3 days (not 1 week).
+1. Deploy `delete-account` to **production** Supabase (link/project + credentials).
+2. Physical Settings UI verification on device after cleanup.
+3. Create production Release **1.6.1 (115)** only after (1)–(2) + automated gates.
+4. Complete live purchase→auth matrix on build 115.
+5. Optional: Apple Sign in token revocation if product requires it for App Store account deletion compliance.
 
 ---
 
 ## Confirmations
 
-- Public version target remains **1.6.1**
-- Final local build number **115** not created yet
-- Build **113** not modified as the release artifact
-- Build **114** not reused
-- Build **116** not created
-- No TestFlight / ASC upload
-- No App Store screenshots / listing changes
-- Nothing added for review / submitted / published
+```text
+Public version: 1.6.1
+Build number: NOT CREATED (still 113 in configs)
+No build was uploaded
+No App Store screenshots were changed
+No App Store metadata was changed
+Nothing was added or submitted for review
+No public release occurred
+```
 
-**Decision: NO-GO for build 115 until Restore Behavior is confirmed and physical purchase→auth→logIn matrix passes.**
+**Decision: NO-GO**
