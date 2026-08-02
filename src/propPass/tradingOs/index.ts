@@ -25,3 +25,5 @@ export { compareRiskModes } from "./modes";
 export type { ModeComparison } from "./modes";
 export { calculateLiveEngine } from "./live";
 export type { LiveEngineInput, LiveEngineValues } from "./live";
+export { calculateCapitalPreservationScore, CAPITAL_PRESERVATION_WEIGHTS } from "./preservation";
+export type { CapitalPreservationInput, CapitalPreservationValues, PreservationComponentId } from "./preservation";
