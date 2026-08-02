@@ -1,4 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  createServiceClient,
+  deleteAppleRefreshToken,
+  loadAppleRefreshTokenSealed,
+  openRefreshToken,
+  readAppleSecretConfig,
+  revokeAppleRefreshToken,
+} from "../_shared/appleAuthTokens.ts";
 
 const defaultAllowedOrigins = ["https://youtrader.app", "https://www.youtrader.app"];
 
@@ -23,10 +31,16 @@ function corsHeadersFor(req?: Request) {
   };
 }
 
+function userHasAppleIdentity(user: { identities?: Array<{ provider?: string }> | null }): boolean {
+  return (user.identities || []).some((i) => String(i.provider || "").toLowerCase() === "apple");
+}
+
 /**
  * Deletes the authenticated Supabase user and applicable user-owned rows.
  * Requires Authorization: Bearer <user access token>.
+ * Never accepts a client-supplied user_id as authority.
  * Never returns service-role material to the client.
+ * Does not cancel App Store subscriptions.
  */
 Deno.serve(async (req) => {
   const cors = corsHeadersFor(req);
@@ -58,6 +72,13 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Ignore body for authority — JWT only. Body may exist but must not supply user_id.
+  try {
+    await req.json();
+  } catch {
+    // empty body is fine
+  }
+
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -70,35 +91,76 @@ Deno.serve(async (req) => {
   }
 
   const userId = userData.user.id;
-  const admin = createClient(supabaseUrl, serviceKey);
+  const isAppleUser = userHasAppleIdentity(userData.user);
+  const admin = createServiceClient();
 
-  // Best-effort cleanup of known user-owned tables (RLS-bypass via service role).
+  let appleRevoked = false;
+  let manualAppleRevocationRequired = false;
+
+  if (isAppleUser) {
+    const sealed = await loadAppleRefreshTokenSealed(admin, userId);
+    const cfg = readAppleSecretConfig();
+    if (sealed && cfg) {
+      const refresh = await openRefreshToken(sealed, cfg.encryptionKey);
+      if (refresh) {
+        const result = await revokeAppleRefreshToken(cfg, refresh);
+        appleRevoked = result === "revoked" || result === "already_revoked";
+        if (!appleRevoked) {
+          manualAppleRevocationRequired = true;
+        }
+      } else {
+        manualAppleRevocationRequired = true;
+      }
+    } else {
+      // Legacy Apple accounts or missing Apple secrets — do not block deletion.
+      manualAppleRevocationRequired = true;
+    }
+    await deleteAppleRefreshToken(admin, userId);
+  }
+
+  // Best-effort cleanup of known user-owned production tables.
   const tables = [
     "trade_journal",
+    "trades",
     "user_subscriptions",
+    "user_app_state",
+    "user_firm_settings",
+    "risk_snapshots",
+    "upload_files",
     "security_events",
     "idempotency_keys",
     "request_limits",
+    "ai_analysis_usage",
+    "ai_usage_events",
+    "achievement_share_usage",
+    "ai_quota_lifecycle",
+    "account_deletion_requests",
+    "auth_provider_tokens",
   ];
   for (const table of tables) {
     const { error: tableError } = await admin.from(table).delete().eq("user_id", userId);
     if (tableError) {
-      // Best-effort: missing tables or RLS-adjacent failures must not block auth deletion.
       console.warn(`delete-account: cleanup skipped for ${table}`);
     }
   }
 
   const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
   if (deleteError) {
-    return new Response(JSON.stringify({ error: "delete_failed" }), {
-      status: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
+    // Idempotent-ish: if user already gone, treat as success.
+    const msg = String(deleteError.message || "").toLowerCase();
+    if (!msg.includes("not found") && !msg.includes("user not found")) {
+      return new Response(JSON.stringify({ error: "delete_failed" }), {
+        status: 500,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
   }
 
   return new Response(
     JSON.stringify({
       ok: true,
+      appleRevoked,
+      manualAppleRevocationRequired,
       note: "App Store subscriptions are not cancelled by account deletion. Manage billing in Apple Subscriptions.",
     }),
     { status: 200, headers: { ...cors, "Content-Type": "application/json" } },
