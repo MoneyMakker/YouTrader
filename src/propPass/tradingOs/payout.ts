@@ -1,4 +1,5 @@
 import type { MoneyMinor, TradingOsResult } from "./contracts";
+import { moneyClampNonNegative, moneyMax, moneyMin, moneySubtract } from "./financialMath";
 
 export type PayoutReadinessInput = {
   currentEquityMinor: MoneyMinor | null; startingBalanceMinor: MoneyMinor | null; eligibleProfitMinor: MoneyMinor | null;
@@ -13,16 +14,16 @@ export function calculatePayoutReadiness(input: PayoutReadinessInput): TradingOs
   const values = [input.currentEquityMinor, input.eligibleProfitMinor, input.completedTradingDays, input.minimumTradingDays, input.consistencyPassed, input.payoutThresholdMinor, input.maximumLossFloorMinor, input.postPayoutReserveMinor];
   const missingInputs = required.filter((_, index) => values[index] == null);
   if (missingInputs.length) return response("needs_input", blank, ["set_payout_rules"], [...missingInputs]);
-  const floor = Math.max(input.maximumLossFloorMinor!, input.trailingDrawdownFloorMinor ?? input.maximumLossFloorMinor!);
-  const availableAboveFloor = input.currentEquityMinor! - floor;
-  const reserveSafe = Math.max(0, availableAboveFloor - input.postPayoutReserveMinor!);
+  const floor = moneyMax(input.maximumLossFloorMinor!, input.trailingDrawdownFloorMinor ?? input.maximumLossFloorMinor!);
+  const availableAboveFloor = moneySubtract(input.currentEquityMinor!, floor);
+  const reserveSafe = moneyClampNonNegative(moneySubtract(availableAboveFloor, input.postPayoutReserveMinor!));
   const blockers: string[] = [];
   if (input.completedTradingDays! < input.minimumTradingDays!) blockers.push("minimum_trading_days");
   if (!input.consistencyPassed) blockers.push("consistency_rule");
   if (input.eligibleProfitMinor! < input.payoutThresholdMinor!) blockers.push("payout_threshold");
   if (reserveSafe <= 0) blockers.push("safety_reserve");
-  const recommended = blockers.length ? 0 : Math.max(0, Math.min(input.eligibleProfitMinor!, reserveSafe));
-  const valuesOut: PayoutReadinessValues = { ...blank, safetyFloorMinor: floor, safetyBufferAfterPayoutMinor: availableAboveFloor - recommended, recommendedMaximumPayoutMinor: recommended, blockers };
+  const recommended = blockers.length ? 0 : moneyClampNonNegative(moneyMin(input.eligibleProfitMinor!, reserveSafe));
+  const valuesOut: PayoutReadinessValues = { ...blank, safetyFloorMinor: floor, safetyBufferAfterPayoutMinor: moneySubtract(availableAboveFloor, recommended), recommendedMaximumPayoutMinor: recommended, blockers };
   return response(blockers.length ? "risky" : "safe_to_take", valuesOut, blockers, []);
 }
 function response(status: TradingOsResult<PayoutReadinessValues>["status"], values: PayoutReadinessValues, reasons: string[], missingInputs: string[]): TradingOsResult<PayoutReadinessValues> { return { values, status, reasons, missingInputs, appliedHardLimits: [], relatedRuleIds: [] }; }

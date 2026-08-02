@@ -1,4 +1,5 @@
 import type { MoneyMinor, TradingOsResult, TradingRiskMode } from "./contracts";
+import { moneyApplyBasisPointsFloor, moneyClampNonNegative, moneySubtract } from "./financialMath";
 
 export type ProfitProtectionInput = {
   dailyRealizedPnlMinor: MoneyMinor | null;
@@ -35,8 +36,8 @@ export function evaluateProfitProtection(input: ProfitProtectionInput): TradingO
   if (!trigger) return result("safe_to_take", emptyValues(), [], []);
   const peak = trigger === "weekly" ? input.weeklyPeakProfitMinor! : input.dailyPeakProfitMinor!;
   const current = trigger === "weekly" ? input.weeklyRealizedPnlMinor! : input.dailyRealizedPnlMinor!;
-  const maximumAllowedGivebackMinor = Math.floor(peak * input.maximumGivebackBps! / 10_000);
-  const protectedAmountMinor = Math.max(0, peak - maximumAllowedGivebackMinor);
+  const maximumAllowedGivebackMinor = moneyApplyBasisPointsFloor(peak, input.maximumGivebackBps!);
+  const protectedAmountMinor = moneyClampNonNegative(moneySubtract(peak, maximumAllowedGivebackMinor));
   const givebackBreached = current < protectedAmountMinor;
   const enforcement = givebackBreached || input.stopAfterProfitLock ? "stop_trading" : "reduce_risk";
   return result(enforcement === "stop_trading" ? "stop_trading" : "safe_to_take", { active: true, protectedAmountMinor, maximumAllowedGivebackMinor, enforcement, reducedRiskBps: enforcement === "reduce_risk" ? input.reducedRiskBps! : 0, forcedRiskMode: enforcement === "reduce_risk" && input.switchToCalmWhenProtected ? "calm" : null, trigger, reason: givebackBreached ? `Realized ${trigger} profit is below the protected floor.` : input.stopAfterProfitLock ? `The configured ${trigger} profit lock stops additional trades.` : `The configured ${trigger} profit lock reduces risk.` }, enforcement === "stop_trading" ? ["profit_protection_stop"] : ["profit_protection_active"], []);

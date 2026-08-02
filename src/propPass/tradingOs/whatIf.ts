@@ -1,4 +1,5 @@
 import type { AccountContext, MoneyMinor, RiskHealth, RiskRooms, TradingOsResult } from "./contracts";
+import { moneyAdd, moneyClampNonNegative, moneyMultiplyInteger, moneySubtract, ratioScaledFloor } from "./financialMath";
 
 export type WhatIfScenario =
   | { kind: "next_trade_loss"; riskMinor: MoneyMinor }
@@ -43,13 +44,13 @@ export function simulateWhatIf(input: WhatIfInput): TradingOsResult<WhatIfValues
   const delta = scenarioDelta(input.scenario);
   if (delta == null) return response("needs_input", blank, ["invalid_scenario_amount"], []);
   const dailyDelta = input.scenario.kind === "next_trading_day" ? 0 : Math.min(delta, 0);
-  const daily = input.scenario.kind === "next_trading_day" ? rooms.dailyLossRemainingMinor : rooms.dailyLossRemainingMinor + dailyDelta;
-  const drawdown = rooms.drawdownRemainingMinor + delta;
-  const maximum = rooms.maximumLossRemainingMinor + delta;
-  const weekly = rooms.weeklyLossRemainingMinor == null ? null : rooms.weeklyLossRemainingMinor + Math.min(delta, 0);
-  const projectedEquityMinor = input.account.currentEquityMinor + delta;
-  const projectedBalanceMinor = input.account.currentBalanceMinor + delta;
-  const remainingTargetMinor = input.remainingTargetMinor == null ? null : Math.max(0, input.remainingTargetMinor - Math.max(delta, 0));
+  const daily = input.scenario.kind === "next_trading_day" ? rooms.dailyLossRemainingMinor : moneyAdd(rooms.dailyLossRemainingMinor, dailyDelta);
+  const drawdown = moneyAdd(rooms.drawdownRemainingMinor, delta);
+  const maximum = moneyAdd(rooms.maximumLossRemainingMinor, delta);
+  const weekly = rooms.weeklyLossRemainingMinor == null ? null : moneyAdd(rooms.weeklyLossRemainingMinor, Math.min(delta, 0));
+  const projectedEquityMinor = moneyAdd(input.account.currentEquityMinor, delta);
+  const projectedBalanceMinor = moneyAdd(input.account.currentBalanceMinor, delta);
+  const remainingTargetMinor = input.remainingTargetMinor == null ? null : moneyClampNonNegative(moneySubtract(input.remainingTargetMinor, Math.max(delta, 0)));
   const health = healthFor({ daily, drawdown, maximum, weekly }, input);
   const anotherTradePermitted = [daily, drawdown, maximum, weekly].every((room) => room == null || room > 0);
   return response(
@@ -62,7 +63,7 @@ export function simulateWhatIf(input: WhatIfInput): TradingOsResult<WhatIfValues
 function scenarioDelta(scenario: WhatIfScenario): MoneyMinor | null {
   switch (scenario.kind) {
     case "next_trade_loss": return validAmount(scenario.riskMinor) ? -scenario.riskMinor : null;
-    case "two_consecutive_losses": return validAmount(scenario.riskMinor) ? -2 * scenario.riskMinor : null;
+    case "two_consecutive_losses": return validAmount(scenario.riskMinor) ? moneyMultiplyInteger(scenario.riskMinor, -2) : null;
     case "extra_trade": return validAmount(scenario.riskMinor) ? -scenario.riskMinor : null;
     case "next_trade_win": return validAmount(scenario.pnlMinor) ? scenario.pnlMinor : null;
     case "hypothetical_payout": return validAmount(scenario.amountMinor) ? -scenario.amountMinor : null;
@@ -78,5 +79,5 @@ function healthFor(rooms: { daily: MoneyMinor; drawdown: MoneyMinor; maximum: Mo
   const smallest = ratios.length ? Math.min(...ratios) : 1;
   return smallest < .25 ? "danger" : smallest < .5 ? "watch" : "healthy";
 }
-function ratio(room: MoneyMinor | null, limit: MoneyMinor | null | undefined): number | null { return room != null && isMinor(limit) && limit > 0 ? Math.max(0, room / limit) : null; }
+function ratio(room: MoneyMinor | null, limit: MoneyMinor | null | undefined): number | null { return room != null && isMinor(limit) && limit > 0 ? Math.max(0, ratioScaledFloor(room, limit, 1_000_000) / 1_000_000) : null; }
 function response(status: TradingOsResult<WhatIfValues>["status"], values: WhatIfValues, reasons: string[], missingInputs: string[]): TradingOsResult<WhatIfValues> { return { values, status, reasons, missingInputs, appliedHardLimits: [], relatedRuleIds: [] }; }

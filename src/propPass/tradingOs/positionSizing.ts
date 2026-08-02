@@ -1,5 +1,14 @@
 import { validateInstrumentSpec } from "./domain";
 import type { MoneyMinor, TradePlanInput, TradingOsResult } from "./contracts";
+import {
+  contractFloor,
+  decimalRatioToNumber,
+  moneyAdd,
+  moneyMultiplyDecimal,
+  moneyMultiplyDecimalRatio,
+  moneyMultiplyInteger,
+  moneySubtract,
+} from "./financialMath";
 
 export type PositionSizingInput = {
   plan: Pick<TradePlanInput, "instrument" | "stopDistance" | "stopUnit">;
@@ -40,20 +49,22 @@ export function calculatePositionSize(input: PositionSizingInput): TradingOsResu
   if (!Number.isSafeInteger(input.allowedRiskMinor) || input.allowedRiskMinor < 0) return response("needs_input", blank, ["invalid_allowed_risk"], []);
   if (validation.reasons.length) return response("needs_input", blank, reasons, missingInputs);
 
-  const stopTicks = input.plan.stopUnit === "ticks" ? input.plan.stopDistance : input.plan.stopDistance / instrument.tickSize;
+  const stopTicks = input.plan.stopUnit === "ticks" ? input.plan.stopDistance : decimalRatioToNumber(input.plan.stopDistance, instrument.tickSize);
   if (!Number.isFinite(stopTicks) || stopTicks <= 0) return response("needs_input", blank, ["invalid_stop_ticks"], []);
-  const base = Math.ceil(stopTicks * instrument.tickValueMinor);
-  const slippage = Math.ceil((instrument.defaultSlippageTicks ?? 0) * instrument.tickValueMinor);
+  const base = input.plan.stopUnit === "ticks"
+    ? moneyMultiplyDecimal(instrument.tickValueMinor, input.plan.stopDistance, "ceil")
+    : moneyMultiplyDecimalRatio(instrument.tickValueMinor, input.plan.stopDistance, instrument.tickSize, "ceil");
+  const slippage = moneyMultiplyDecimal(instrument.tickValueMinor, instrument.defaultSlippageTicks ?? 0, "ceil");
   const commission = instrument.roundTripCommissionMinor ?? 0;
-  const total = base + slippage + commission;
+  const total = moneyAdd(base, slippage, commission);
   if (!Number.isSafeInteger(total) || total <= 0) return response("needs_input", blank, ["invalid_loss_per_contract"], []);
   const cap = minPositive(input.propMaximumContracts, input.modeMaximumContracts, instrument.maximumSupportedContracts);
-  const uncapped = Math.floor(input.allowedRiskMinor / total);
+  const uncapped = contractFloor(input.allowedRiskMinor, total);
   const contracts = cap == null ? uncapped : Math.min(uncapped, cap);
-  const actualRiskMinor = contracts * total;
+  const actualRiskMinor = moneyMultiplyInteger(total, contracts);
   return response(
     contracts === 0 ? "risky" : "safe_to_take",
-    { stopTicks, baseLossPerContractMinor: base, slippageLossPerContractMinor: slippage, commissionPerContractMinor: commission, totalLossPerContractMinor: total, recommendedContracts: contracts, actualRiskMinor, unusedRiskMinor: input.allowedRiskMinor - actualRiskMinor },
+    { stopTicks, baseLossPerContractMinor: base, slippageLossPerContractMinor: slippage, commissionPerContractMinor: commission, totalLossPerContractMinor: total, recommendedContracts: contracts, actualRiskMinor, unusedRiskMinor: moneySubtract(input.allowedRiskMinor, actualRiskMinor) },
     contracts === 0 ? ["minimum_position_exceeds_current_risk_limit"] : [], [],
   );
 }

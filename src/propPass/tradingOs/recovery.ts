@@ -1,4 +1,5 @@
 import type { MoneyMinor, TradingOsResult } from "./contracts";
+import { moneyApplyBasisPointsFloor, moneySubtract, ratioBasisPointsFloor } from "./financialMath";
 
 export type RecoveryModeInput = {
   currentEquityMinor: MoneyMinor | null;
@@ -31,10 +32,11 @@ export function evaluateRecoveryMode(input: RecoveryModeInput): TradingOsResult<
   const empty = emptyValues();
   if (missingInputs.length > 0 || !isValid(input)) return result("needs_input", empty, ["recovery_setup_missing_or_invalid"], missingInputs.length ? missingInputs : ["recovery_configuration"]);
 
-  const belowEquityHighBps = Math.max(0, Math.floor(((input.equityHighMinor! - input.currentEquityMinor!) * 10_000) / Math.max(1, input.equityHighMinor!)));
+  const drawdownMinor = Math.max(0, moneySubtract(input.equityHighMinor!, input.currentEquityMinor!));
+  const belowEquityHighBps = ratioBasisPointsFloor(drawdownMinor, Math.max(1, input.equityHighMinor!));
   const active = belowEquityHighBps >= input.activationDrawdownBps!;
-  const reducedRiskPerTradeMinor = active ? Math.floor(input.normalRiskPerTradeMinor! * input.recoveryRiskBps! / 10_000) : input.normalRiskPerTradeMinor!;
-  const reducedMaximumContracts = active ? Math.floor(input.normalMaximumContracts! * input.recoveryRiskBps! / 10_000) : input.normalMaximumContracts!;
+  const reducedRiskPerTradeMinor = active ? moneyApplyBasisPointsFloor(input.normalRiskPerTradeMinor!, input.recoveryRiskBps!) : input.normalRiskPerTradeMinor!;
+  const reducedMaximumContracts = active ? moneyApplyBasisPointsFloor(input.normalMaximumContracts!, input.recoveryRiskBps!) : input.normalMaximumContracts!;
   const completed = input.completedCompliantProfitableSessions!;
   const required = input.minimumCompliantProfitableSessions!;
   return result("safe_to_take", {

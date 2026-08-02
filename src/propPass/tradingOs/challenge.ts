@@ -1,4 +1,5 @@
 import type { AccountContext, ChallengeRules, MoneyMinor, RiskRooms, TradingOsResult } from "./contracts";
+import { moneyClampNonNegative, moneySubtract, ratioBasisPointsFloor } from "./financialMath";
 
 export type ChallengeBreachFact = { ruleId: string; tradeId: string | null; occurredAt: string; plannedRiskMinor: MoneyMinor | null; actualRiskMinor: MoneyMinor | null; bufferBeforeMinor: MoneyMinor | null; bufferAfterMinor: MoneyMinor | null; };
 export type ChallengeLifecycleInput = {
@@ -42,11 +43,11 @@ export function evaluateChallengeLifecycle(input: ChallengeLifecycleInput): Trad
   if (input.appliedJournalTradeIds && new Set(input.appliedJournalTradeIds).size !== input.appliedJournalTradeIds.length) missingInputs.push("challenge_duplicate_journal_trade_id");
   if (missingInputs.length) return result("needs_input", empty(), ["challenge_state_requires_recorded_inputs"], missingInputs);
 
-  const profit = account!.currentBalanceMinor - account!.startingBalanceMinor;
+  const profit = moneySubtract(account!.currentBalanceMinor, account!.startingBalanceMinor);
   const target = rules!.profitTargetMinor!;
-  const targetProgressBps = Math.max(0, Math.floor(profit * 10_000 / Math.max(1, target)));
+  const targetProgressBps = moneyClampNonNegative(ratioBasisPointsFloor(profit, Math.max(1, target)));
   const tradeIds = [...input.appliedJournalTradeIds!].sort();
-  const values: ChallengeLifecycleValues = { state: "active", targetProgressBps, profitRemainingMinor: Math.max(0, target - profit), completedTradingDays: input.completedTradingDays!, requiredTradingDays: rules!.minimumTradingDays!, dailyLossRoomMinor: rooms!.dailyLossRemainingMinor!, maximumLossRoomMinor: rooms!.maximumLossRemainingMinor!, drawdownRoomMinor: rooms!.drawdownRemainingMinor!, appliedJournalTradeIds: tradeIds, recalculationKey: tradeIds.join(":"), breach: input.breach };
+  const values: ChallengeLifecycleValues = { state: "active", targetProgressBps, profitRemainingMinor: moneyClampNonNegative(moneySubtract(target, profit)), completedTradingDays: input.completedTradingDays!, requiredTradingDays: rules!.minimumTradingDays!, dailyLossRoomMinor: rooms!.dailyLossRemainingMinor!, maximumLossRoomMinor: rooms!.maximumLossRemainingMinor!, drawdownRoomMinor: rooms!.drawdownRemainingMinor!, appliedJournalTradeIds: tradeIds, recalculationKey: tradeIds.join(":"), breach: input.breach };
   if (input.archivedAt) values.state = "archived";
   else if (input.fundedAt) values.state = "funded";
   else if (input.breach) values.state = "breached";

@@ -11,6 +11,7 @@ import type {
   TradePlanInput,
   TradingContextType,
 } from "./contracts";
+import { moneyApplyBasisPointsFloor, moneyMin } from "./financialMath";
 
 export type DomainValidation = { missingInputs: string[]; reasons: string[] };
 
@@ -113,12 +114,12 @@ export function calculateAllowedRisk(
   }
 
   const knownRooms = hardLimitEntries.map(([, value]) => value).filter(finiteNonNegative);
-  const safeBudgetMinor = knownRooms.length === hardLimitEntries.length ? Math.min(...knownRooms) : null;
+  const safeBudgetMinor = knownRooms.length === hardLimitEntries.length ? moneyMin(...knownRooms) : null;
   const modeSuggestedRiskMinor =
-    safeBudgetMinor == null ? null : Math.floor((safeBudgetMinor * policy.defaultAllocationBps) / 10_000);
+    safeBudgetMinor == null ? null : moneyApplyBasisPointsFloor(safeBudgetMinor, policy.defaultAllocationBps);
   const allowedRiskMinor = safeBudgetMinor == null || safeBudgetMinor <= 0 || modeSuggestedRiskMinor == null
     ? 0
-    : Math.min(modeSuggestedRiskMinor, safeBudgetMinor);
+    : moneyMin(modeSuggestedRiskMinor, safeBudgetMinor);
 
   return {
     values: { safeBudgetMinor, modeSuggestedRiskMinor, allowedRiskMinor },

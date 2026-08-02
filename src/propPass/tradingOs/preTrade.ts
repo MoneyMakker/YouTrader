@@ -16,6 +16,7 @@ import type {
 } from "./contracts";
 import { RISK_MODE_POLICIES } from "./contracts";
 import { calculatePositionSize } from "./positionSizing";
+import { contractFloor, moneyMultiplyInteger, moneySubtract } from "./financialMath";
 
 export type PreTradeAssessmentInput = {
   account: AccountContext | null;
@@ -95,7 +96,7 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
   const lossPerContractMinor = loss.value;
   const totalPlannedRiskMinor =
     lossPerContractMinor != null && finiteInteger(contracts) && contracts > 0
-      ? lossPerContractMinor * contracts
+      ? moneyMultiplyInteger(lossPerContractMinor, contracts)
       : null;
 
   const emptyValues: PreTradeValues = {
@@ -139,7 +140,7 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
   const weeklyAfter = context === "live" ? subtractRoom(input.riskRooms.weeklyLossRemainingMinor ?? null, totalPlannedRiskMinor) : null;
   const recommendedContracts =
     lossPerContractMinor > 0 && allowed.values.allowedRiskMinor != null
-      ? Math.max(0, Math.floor(allowed.values.allowedRiskMinor / lossPerContractMinor))
+      ? Math.max(0, contractFloor(allowed.values.allowedRiskMinor, lossPerContractMinor))
       : null;
   const values: PreTradeValues = {
     ...emptyValues,
@@ -190,7 +191,7 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
 }
 
 function subtractRoom(room: MoneyMinor | null | undefined, plannedRiskMinor: MoneyMinor): MoneyMinor | null {
-  return finiteInteger(room) ? room - plannedRiskMinor : null;
+  return finiteInteger(room) ? moneySubtract(room, plannedRiskMinor) : null;
 }
 
 function isSessionAllowed(currentMinute: number | null, sessions: ChallengeRules["allowedSessions"]): boolean {

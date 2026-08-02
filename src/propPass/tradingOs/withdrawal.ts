@@ -1,4 +1,5 @@
 import type { MoneyMinor, TradingOsResult } from "./contracts";
+import { moneyClampNonNegative, moneyMax, moneyMin, moneySubtract } from "./financialMath";
 
 export type SafeWithdrawalInput = {
   currentEquityMinor: MoneyMinor | null;
@@ -32,17 +33,17 @@ export function calculateMaximumSafeWithdrawal(input: SafeWithdrawalInput): Trad
   const missingInputs = required.filter((field) => input[field] == null).map((field) => `withdrawal_${field}`);
   const empty = emptyValues(input);
   if (missingInputs.length || !valid(input)) return result("needs_input", empty, ["withdrawal_setup_missing_or_invalid"], missingInputs.length ? missingInputs : ["withdrawal_configuration"]);
-  const safetyFloorMinor = Math.max(input.staticLossFloorMinor!, input.trailingDrawdownFloorMinor!);
-  const reserveMinor = Math.max(input.postWithdrawalReserveMinor!, input.dailyRiskReserveMinor!, input.weeklyRiskReserveMinor!, input.recoveryModeActive ? input.recoverySafetyReserveMinor! : 0);
-  const availableAboveFloor = Math.max(0, input.currentEquityMinor! - safetyFloorMinor - reserveMinor);
+  const safetyFloorMinor = moneyMax(input.staticLossFloorMinor!, input.trailingDrawdownFloorMinor!);
+  const reserveMinor = moneyMax(input.postWithdrawalReserveMinor!, input.dailyRiskReserveMinor!, input.weeklyRiskReserveMinor!, input.recoveryModeActive ? input.recoverySafetyReserveMinor! : 0);
+  const availableAboveFloor = moneyClampNonNegative(moneySubtract(moneySubtract(input.currentEquityMinor!, safetyFloorMinor), reserveMinor));
   const blockers: string[] = [];
   if (input.recoveryModeActive) blockers.push("recovery_mode_active");
   if (input.realizedEligibleProfitMinor! <= 0) blockers.push("no_realized_eligible_profit");
   if (availableAboveFloor <= 0) blockers.push("safety_floor_or_reserve_not_met");
-  const recommendedMaximumWithdrawalMinor = blockers.length ? 0 : Math.min(input.realizedEligibleProfitMinor!, availableAboveFloor);
-  const resultingEquityMinor = input.currentEquityMinor! - recommendedMaximumWithdrawalMinor;
-  const resultingBufferMinor = resultingEquityMinor - safetyFloorMinor - reserveMinor;
-  return result("safe_to_take", { readiness: recommendedMaximumWithdrawalMinor > 0 ? "ready" : "blocked", eligibleAmountMinor: Math.max(0, input.realizedEligibleProfitMinor!), safetyFloorMinor, reserveMinor, recommendedMaximumWithdrawalMinor, resultingEquityMinor, resultingBufferMinor, priorWithdrawalsMinor: input.priorWithdrawalsMinor!, blockers }, blockers, []);
+  const recommendedMaximumWithdrawalMinor = blockers.length ? 0 : moneyMin(input.realizedEligibleProfitMinor!, availableAboveFloor);
+  const resultingEquityMinor = moneySubtract(input.currentEquityMinor!, recommendedMaximumWithdrawalMinor);
+  const resultingBufferMinor = moneySubtract(moneySubtract(resultingEquityMinor, safetyFloorMinor), reserveMinor);
+  return result("safe_to_take", { readiness: recommendedMaximumWithdrawalMinor > 0 ? "ready" : "blocked", eligibleAmountMinor: moneyClampNonNegative(input.realizedEligibleProfitMinor!), safetyFloorMinor, reserveMinor, recommendedMaximumWithdrawalMinor, resultingEquityMinor, resultingBufferMinor, priorWithdrawalsMinor: input.priorWithdrawalsMinor!, blockers }, blockers, []);
 }
 
 function valid(input: SafeWithdrawalInput): boolean { return [input.currentEquityMinor, input.equityHighMinor, input.realizedEligibleProfitMinor, input.staticLossFloorMinor, input.trailingDrawdownFloorMinor, input.postWithdrawalReserveMinor, input.dailyRiskReserveMinor, input.weeklyRiskReserveMinor, input.recoverySafetyReserveMinor, input.priorWithdrawalsMinor].every((value) => value! >= 0); }

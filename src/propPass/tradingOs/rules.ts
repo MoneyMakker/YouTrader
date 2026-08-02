@@ -1,4 +1,5 @@
 import type { ChallengeRules, LiveRiskRules, MoneyMinor } from "./contracts";
+import { moneyMax, moneySubtract } from "./financialMath";
 
 export type EditableRuleTemplate = Readonly<{
   id: string;
@@ -33,5 +34,5 @@ export function duplicateEditableRuleTemplate(template: EditableRuleTemplate, ne
 }
 
 export function payoutSafetyFloor(currentEquityMinor: MoneyMinor, maximumLossFloorMinor: MoneyMinor, postPayoutReserveMinor: MoneyMinor): MoneyMinor {
-  return Math.max(maximumLossFloorMinor, currentEquityMinor - postPayoutReserveMinor);
+  return moneyMax(maximumLossFloorMinor, moneySubtract(currentEquityMinor, postPayoutReserveMinor));
 }

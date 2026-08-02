@@ -1,4 +1,5 @@
 import type { MoneyMinor, TradingOsResult } from "./contracts";
+import { moneyAdd, moneyMin } from "./financialMath";
 
 export type ScalingRecommendationInput = {
   currentRiskPerTradeMinor: MoneyMinor | null;
@@ -49,10 +50,10 @@ export function recommendScaling(input: ScalingRecommendationInput): TradingOsRe
   if (input.recoveryModeActive) blockers.push("recovery_mode_active");
   if (input.killSwitchActive) blockers.push("kill_switch_active");
   const passedCriteria = blockers.length ? [] : ["equity_high_requirement_met", "profitable_sessions_requirement_met", "drawdown_within_threshold", "preservation_score_requirement_met", "position_size_stable", "weekly_risk_room_available", "recovery_mode_inactive", "kill_switch_inactive"];
-  const eligible = blockers.length === 0 && input.currentContracts! < input.maximumAllowedContracts! && input.currentRiskPerTradeMinor! < Math.min(input.maximumAllowedRiskPerTradeMinor!, input.userMaximumRiskPerTradeMinor!);
+  const eligible = blockers.length === 0 && input.currentContracts! < input.maximumAllowedContracts! && input.currentRiskPerTradeMinor! < moneyMin(input.maximumAllowedRiskPerTradeMinor!, input.userMaximumRiskPerTradeMinor!);
   if (!eligible && blockers.length === 0) blockers.push("already_at_configured_hard_cap");
-  const riskCap = Math.min(input.maximumAllowedRiskPerTradeMinor!, input.userMaximumRiskPerTradeMinor!);
-  const recommendedNextRiskPerTradeMinor = eligible ? Math.min(riskCap, input.currentRiskPerTradeMinor! + input.riskStepMinor!) : input.currentRiskPerTradeMinor!;
+  const riskCap = moneyMin(input.maximumAllowedRiskPerTradeMinor!, input.userMaximumRiskPerTradeMinor!);
+  const recommendedNextRiskPerTradeMinor = eligible ? moneyMin(riskCap, moneyAdd(input.currentRiskPerTradeMinor!, input.riskStepMinor!)) : input.currentRiskPerTradeMinor!;
   const recommendedNextContracts = eligible ? Math.min(input.maximumAllowedContracts!, input.currentContracts! + 1) : input.currentContracts!;
   return result("safe_to_take", { eligible, currentRiskPerTradeMinor: input.currentRiskPerTradeMinor!, currentContracts: input.currentContracts!, recommendedNextRiskPerTradeMinor, recommendedNextContracts, maximumAllowedRiskPerTradeMinor: riskCap, maximumAllowedContracts: input.maximumAllowedContracts!, passedCriteria, blockers, earliestSafeReassessment: eligible ? "After the next completed, rule-compliant session." : reassessment(input) }, blockers, []);
 }

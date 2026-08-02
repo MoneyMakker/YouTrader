@@ -1,4 +1,5 @@
 import type { MoneyMinor, RiskHealth, TradingOsResult } from "./contracts";
+import { moneyClampNonNegative, moneySubtract, ratioScaledFloor } from "./financialMath";
 
 export type LiveRiskMeterInput = {
   dailyRiskBudgetMinor: MoneyMinor | null;
@@ -20,8 +21,8 @@ export function calculateLiveRiskMeter(input: LiveRiskMeterInput): TradingOsResu
   const blank: LiveRiskMeterValues = { usedMinor: null, remainingMinor: null, usedRatio: null, status: null, enteredDanger: false, statusChanged: false };
   if (!isMinor(input.dailyRiskBudgetMinor) || input.dailyRiskBudgetMinor <= 0) return response("needs_input", blank, ["invalid_daily_risk_budget"], ["daily_risk_budget"]);
   if (!isMinor(input.dailyRiskUsedMinor) || input.dailyRiskUsedMinor < 0) return response("needs_input", blank, ["invalid_daily_risk_used"], ["daily_risk_used"]);
-  const remainingMinor = Math.max(0, input.dailyRiskBudgetMinor - input.dailyRiskUsedMinor);
-  const usedRatio = input.dailyRiskUsedMinor / input.dailyRiskBudgetMinor;
+  const remainingMinor = moneyClampNonNegative(moneySubtract(input.dailyRiskBudgetMinor, input.dailyRiskUsedMinor));
+  const usedRatio = ratioScaledFloor(input.dailyRiskUsedMinor, input.dailyRiskBudgetMinor, 1_000_000) / 1_000_000;
   const status: RiskHealth = input.hardStopActive || usedRatio >= 1 ? "stop_trading" : usedRatio >= .75 ? "danger" : usedRatio >= .5 ? "watch" : "healthy";
   const statusChanged = input.previousStatus != null && input.previousStatus !== status;
   return response(status === "stop_trading" ? "stop_trading" : status === "danger" ? "risky" : "safe_to_take", { usedMinor: input.dailyRiskUsedMinor, remainingMinor, usedRatio, status, enteredDanger: status === "danger" && input.previousStatus !== "danger", statusChanged }, [], []);
