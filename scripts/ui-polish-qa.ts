@@ -47,6 +47,8 @@ function getInsightsLearningState(input: {
   assert.ok(journalSlice.includes('testID="journal-add-trade"'), "Add Trade reachable via day UI");
   assert.ok(journalSlice.includes("journal-day-empty"), "Empty day state present");
   assert.ok(journalSlice.includes("styles.daySelected"), "Selected day style used");
+  assert.ok(journalSlice.includes("setDayPanelOpen(true)"), "Selected day opens action panel");
+  assert.ok(journalSlice.includes("journal-day-panel"), "Day panel test id present");
 }
 
 {
@@ -95,6 +97,8 @@ function getInsightsLearningState(input: {
   assert.ok(dash.includes("numberOfLines={1}"), "chip labels single line");
   assert.ok(dash.includes("stats-insights-learning"), "consolidated learning card");
   assert.ok(dash.includes("getInsightsLearningState"), "uses learning helper");
+  assert.ok(dash.includes("StatsRadarCard"), "Performance Radar visual card");
+  assert.ok(dash.includes("StatsHeatmapCard"), "Trading Heatmap visual card");
 }
 
 {
@@ -102,8 +106,8 @@ function getInsightsLearningState(input: {
   const outcomeStart = app.indexOf("journalFormTradeResult");
   const outcomeEnd = app.indexOf("journalDetailExecution", outcomeStart);
   const formSlice = app.slice(outcomeStart, outcomeEnd);
-  assert.equal(formSlice.includes("pnl.plus"), false, "manual Profit toggle removed");
-  assert.equal(formSlice.includes("pnl.minus"), false, "manual Loss toggle removed");
+  assert.ok(formSlice.includes("journal.trade.edit.pnl.mode"), "Calculate/Manual selector present");
+  assert.ok(formSlice.includes("journal.trade.edit.pnl.manual"), "Manual amount field present");
   assert.ok(formSlice.includes("pnlPreview === 0") || formSlice.includes("journalDetailResultBoxNeutral"), "zero/neutral styling path");
   assert.ok(formSlice.includes("symbolIsCustom"), "custom symbol mode");
   assert.ok(formSlice.includes("customSymbolOption"), "Custom option present");

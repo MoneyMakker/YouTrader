@@ -22,6 +22,7 @@
     "scripts/prop-os-accounts-pg-store.ts",
     "scripts/prop-os-no-replay-alias-qa.ts",
     "scripts/entitlement-startup-routing-qa.ts",
+    "scripts/qa/regression-restore-pre115.selftest.ts",
     "supabase/functions",
     "ios",
     "android",

@@ -20,23 +20,41 @@ assert.ok(
   "Calendar must not appear in the bottom dock",
 );
 
-// Eligible order: journal → optional propPass → stats → settings → more
+// Dock order: journal → propPass (always, unless QA hide) → stats → settings → more
 const tabsBlockMatch = appSrc.match(
   /const tabs: \{ id: Tab; label: string \}\[\] = \[([\s\S]*?)\];/,
 );
 assert.ok(tabsBlockMatch, "tabs array must exist");
 const tabsBlock = tabsBlockMatch![1];
 assert.ok(tabsBlock.includes('{ id: "journal"'), "Journal must be first dock tab");
-assert.ok(tabsBlock.includes("propPassTabVisible"), "Prop Pass must be gated by eligibility");
+assert.ok(tabsBlock.includes("propPassTabVisible"), "Prop Pass visibility flag remains");
+assert.ok(tabsBlock.includes('{ id: "propPass"'), "Prop Pass must be a dock tab");
 assert.ok(tabsBlock.includes('{ id: "stats"'), "Stats must be a dock tab");
 assert.ok(tabsBlock.includes('{ id: "settings"'), "Settings must be in dock tabs");
 assert.ok(tabsBlock.includes('{ id: "more"'), "More must be a dock tab");
 
+assert.ok(
+  appSrc.includes("PropPassLockedPreview"),
+  "Non-entitled Prop Pass must render locked preview",
+);
+assert.ok(
+  /propPassTabVisible\s*=\s*!\(qaPropPassPayload\?\.forceHidePropPassTab\)/.test(appSrc) ||
+    appSrc.includes("propPassTabVisible = !(qaPropPassPayload?.forceHidePropPassTab)"),
+  "Prop Pass tab visibility must not require isPremium",
+);
+
 const journalIdx = tabsBlock.indexOf('{ id: "journal"');
+const propPassIdx = tabsBlock.indexOf('{ id: "propPass"');
 const statsIdx = tabsBlock.indexOf('{ id: "stats"');
 const settingsIdx = tabsBlock.indexOf('{ id: "settings"');
 const moreIdx = tabsBlock.indexOf('{ id: "more"');
-assert.ok(journalIdx < statsIdx && statsIdx < settingsIdx && settingsIdx < moreIdx, "Dock order must be Journal → Stats → Settings → More");
+assert.ok(
+  journalIdx < propPassIdx &&
+    propPassIdx < statsIdx &&
+    statsIdx < settingsIdx &&
+    settingsIdx < moreIdx,
+  "Dock order must be Journal → Prop Pass → Stats → Settings → More",
+);
 
 // Settings selected state must not remap to More
 assert.ok(
