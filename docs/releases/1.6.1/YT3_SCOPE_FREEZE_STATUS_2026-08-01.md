@@ -19,7 +19,7 @@ Phase 4F status: **OPEN / NO-GO for authorizing build 115**
 |------|-------|
 | Branch | `release/1.6.1-build-115` |
 | Start (this run) | `4daad2a` |
-| End | `87c0780` (+ docs commit below) |
+| End | `50dadbf` |
 | `4daad2a` preserved | **YES** (ancestor of HEAD) |
 | `c9b7b52` preserved | **YES** |
 | Checkpoint | `checkpoint/yt3-pre115-blockers-20260802T043804Z` |
@@ -29,7 +29,7 @@ Phase 4F status: **OPEN / NO-GO for authorizing build 115**
 
 - `a73b40f` feat(prop-pass): complete challenge dashboard and terminal states
 - `87c0780` test(security): isolate entitlement QA from Deno Edge runtime
-- (this doc) docs(release): pre-115 blocker status
+- `524f990` docs(release): record pre-115 Prop Pass and blocker status
 
 Prior UI polish (preserved): `7b4602e` … `4daad2a`
 
