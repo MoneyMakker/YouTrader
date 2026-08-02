@@ -564,9 +564,10 @@ contributes focused tests and documentation before its successor starts.
 PPOS-117-14 through PPOS-117-17 have focused commits and deterministic QA.
 PPOS-117-13 remains open for persisted product wiring. PPOS-117-18 has
 context-correct funded Live presentation work underway. PPOS-117-19 includes
-an additive, static-QA migration; local/staging SQL execution remains required.
+an additive, staging-verified migration; its transaction RLS proof creates and
+rolls back only synthetic users/rows. Production deployment remains pending.
 PPOS-117-20 has the consolidated deterministic gate but remains open until
-persistence integration and live RLS verification complete.
+persistence wiring and final regression verification complete.
 
 ## Deferred scope
 
