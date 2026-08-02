@@ -31,3 +31,5 @@ export { evaluateRecoveryMode } from "./recovery";
 export type { RecoveryModeInput, RecoveryModeValues } from "./recovery";
 export { recommendScaling } from "./scaling";
 export type { ScalingRecommendationInput, ScalingRecommendationValues } from "./scaling";
+export { calculateMaximumSafeWithdrawal } from "./withdrawal";
+export type { SafeWithdrawalInput, SafeWithdrawalValues } from "./withdrawal";
