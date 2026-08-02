@@ -17,3 +17,5 @@ export { duplicateEditableRuleTemplate, payoutSafetyFloor, validateEditableRuleT
 export type { EditableRuleTemplate, RuleValidation } from "./rules";
 export { calculatePayoutReadiness } from "./payout";
 export type { PayoutReadinessInput, PayoutReadinessValues } from "./payout";
+export { buildChallengeTimeline } from "./timeline";
+export type { ChallengeTimelineEvent, PersistedTimelineFact, TimelineEventType } from "./timeline";
