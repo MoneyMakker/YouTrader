@@ -1,6 +1,5 @@
 import {
   calculateAllowedRisk,
-  validateInstrumentSpec,
   validateTradingOsInputs,
 } from "./domain";
 import type {
@@ -16,6 +15,7 @@ import type {
   TradingRiskMode,
 } from "./contracts";
 import { RISK_MODE_POLICIES } from "./contracts";
+import { calculatePositionSize } from "./positionSizing";
 
 export type PreTradeAssessmentInput = {
   account: AccountContext | null;
@@ -51,28 +51,8 @@ function finiteInteger(value: number | null | undefined): value is number {
 }
 
 function calculateLossPerContract(plan: TradePlanInput): { value: MoneyMinor | null; missingInputs: string[]; reasons: string[] } {
-  const instrument = plan.instrument;
-  const validation = validateInstrumentSpec(instrument);
-  const missingInputs = [...validation.missingInputs];
-  const reasons = [...validation.reasons];
-  if (!instrument || plan.stopDistance == null || !plan.stopUnit) {
-    if (plan.stopDistance == null) missingInputs.push("stop_distance");
-    if (!plan.stopUnit) missingInputs.push("stop_unit");
-    return { value: null, missingInputs: [...new Set(missingInputs)], reasons };
-  }
-  if (!Number.isFinite(plan.stopDistance) || plan.stopDistance <= 0) {
-    return { value: null, missingInputs, reasons: [...reasons, "invalid_stop_distance"] };
-  }
-  if (validation.reasons.length) return { value: null, missingInputs, reasons };
-
-  const stopTicks = plan.stopUnit === "ticks" ? plan.stopDistance : plan.stopDistance / instrument.tickSize;
-  if (!Number.isFinite(stopTicks) || stopTicks <= 0) {
-    return { value: null, missingInputs, reasons: [...reasons, "invalid_stop_ticks"] };
-  }
-  const slippageTicks = instrument.defaultSlippageTicks ?? 0;
-  const commission = instrument.roundTripCommissionMinor ?? 0;
-  const total = Math.ceil(stopTicks * instrument.tickValueMinor + slippageTicks * instrument.tickValueMinor + commission);
-  return { value: Number.isSafeInteger(total) && total > 0 ? total : null, missingInputs, reasons };
+  const sized = calculatePositionSize({ plan, allowedRiskMinor: Number.MAX_SAFE_INTEGER });
+  return { value: sized.values.totalLossPerContractMinor, missingInputs: sized.missingInputs, reasons: sized.reasons };
 }
 
 function result(

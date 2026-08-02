@@ -94,6 +94,7 @@
     "test:prop-pass-production-contract": "npx tsx scripts/qa/propPassProductionContract.selftest.ts",
     "test:prop-pass-trading-os-domain": "npx tsx scripts/prop-pass-trading-os-domain-qa.ts",
     "test:prop-pass-pre-trade": "npx tsx scripts/prop-pass-pre-trade-qa.ts",
+    "test:prop-pass-position-sizing": "npx tsx scripts/prop-pass-position-sizing-qa.ts",
     "test:calendar-month-picker-contrast": "npx tsx scripts/qa/calendarMonthPickerContrast.selftest.ts",
     "test:revenuecat-mobile-identity": "npx tsx scripts/revenuecat-mobile-identity-qa.ts",
     "test:revenuecat-entitlement": "node --experimental-strip-types scripts/security/revenuecat-entitlement-qa.mjs"
