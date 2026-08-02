@@ -5,7 +5,8 @@ const baseSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/
 const hardeningSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802223818_prop_pass_build117_persistence_hardening.sql"), "utf8");
 const journalSyncSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802225538_prop_pass_journal_automatic_sync.sql"), "utf8");
 const pipelineV2Sql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802232311_prop_pass_pipeline_v2_runtime.sql"), "utf8");
-const sql = `${baseSql}\n${hardeningSql}\n${journalSyncSql}\n${pipelineV2Sql}`;
+const runtimeQueueSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802233700_prop_pass_runtime_processing_queue.sql"), "utf8");
+const sql = `${baseSql}\n${hardeningSql}\n${journalSyncSql}\n${pipelineV2Sql}\n${runtimeQueueSql}`;
 const tables = ["prop_daily_plan_snapshots", "prop_pre_trade_assessments", "prop_rule_templates", "prop_intervention_events", "prop_timeline_events", "prop_live_risk_settings", "prop_payout_withdrawal_settings", "prop_kill_switch_settings", "prop_position_size_progressions", "prop_recovery_mode_states"];
 for (const table of tables) assert.match(sql, new RegExp(`'${table}'`), `${table} must be RLS-scoped`);
 assert.match(sql, /enable row level security/); assert.match(sql, /force row level security/); assert.match(sql, /to authenticated using \(user_id = \(select auth\.uid\(\)\)\)/);
@@ -33,3 +34,8 @@ assert.match(pipelineV2Sql, /build117\.pipeline\.v2/);
 assert.match(pipelineV2Sql, /before insert on public\.prop_processed_journal_events/);
 assert.match(pipelineV2Sql, /revoke all on function public\.prop_pass_stamp_current_calculation_version\(\)/);
 assert.doesNotMatch(pipelineV2Sql, /delete from|drop table|provider_token|identity_token|authorization_code/i);
+assert.match(runtimeQueueSql, /prop_os_processor_claim_pending_journal_events/);
+assert.match(runtimeQueueSql, /for update skip locked/);
+assert.match(runtimeQueueSql, /from public, anon, authenticated/);
+assert.match(runtimeQueueSql, /'pending', null/);
+assert.doesNotMatch(runtimeQueueSql, /grant execute[\s\S]*to authenticated/);

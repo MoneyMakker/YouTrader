@@ -235,9 +235,17 @@ export function usePropPassAvailability(input: {
     const unsubscribe = subscribeToPropPassJournalMutations(() => {
       refresh();
       if (followUp) clearTimeout(followUp);
-      // Cloud persistence and trusted recalculation are asynchronous. This
-      // bounded follow-up avoids permanent polling and manual refresh.
-      followUp = setTimeout(() => refresh(), 1_500);
+      // The app only wakes the authenticated server worker. It cannot provide
+      // a result payload or write Prop Pass runtime tables directly.
+      const processing = supabase
+        ? supabase.functions.invoke("prop-pass-runtime-processor", {
+            body: { op: "process_pending" },
+          })
+        : Promise.resolve();
+      void processing.finally(() => {
+        // Bounded follow-up avoids permanent polling and refresh duplication.
+        followUp = setTimeout(() => refresh(), 1_500);
+      });
     });
     return () => {
       unsubscribe();
