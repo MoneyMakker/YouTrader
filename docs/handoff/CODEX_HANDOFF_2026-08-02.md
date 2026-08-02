@@ -111,3 +111,44 @@ Release status: `docs/releases/1.6.1/YT3_SCOPE_FREEZE_STATUS_2026-08-01.md`
 | Security scans on cleanup commit | PASS (see latest cleanup commit notes) |
 | Build 116 absent / not created in cleanup | PASS |
 | No App Store / TestFlight action in cleanup | PASS |
+
+## POST-115 CODEX WORK
+
+### Branch and base
+
+- Working branch: `codex/yt3-post115-polish`
+- Starting release commit: `99e66c7`
+- Product code commit: `92261e5` (`fix(prop-pass): honor production entitlement states`)
+- Immutable binary tag: `testflight-1.6.1-115` → `2c6cd5b` (unchanged)
+- Build configuration remains `1.6.1 (115)`; this work did not archive, upload, submit, or alter App Store metadata.
+
+### Verified defect and production contract
+
+Root cause of the P0 screen was a split product/gateway decision: the tab was visible and the user was entitled, but `usePropPassAvailability` still used the dormant, staging-only Prop OS activation/allowlist to determine whether it could load. The production fingerprint (`GENERATED_APP_ENV="production"`) resolved that gateway to `activation_off`, which rendered the normal `Prop Pass unavailable` state.
+
+The fix separates those concerns:
+
+- Prop Pass product access is driven directly by active RevenueCat `CustomerInfo` entitlement `YouTrader Pro`.
+- CustomerInfo updates, foreground refresh, Settings focus, Prop Pass focus, and Restore Purchases keep that state live.
+- A non-entitled signed-in user sees the locked preview. An entitled user with an available read model sees the dashboard. An entitled production user whose dormant read gateway has no configured account enters account setup rather than an unavailable screen. Gateway/network failure remains recoverable; unsupported/integrity states remain explicit.
+- Staging-only deep-link fixtures and remote gateway eligibility remain staging-only. No production QA bypass was added.
+
+### Focused UI and gate corrections
+
+- Fixed the Month Picker's unselected month text to use the semantic high-contrast text token; year labels now use the same token. Selected state remains the existing lime-tinted material.
+- The Stats learning card now lists the deterministic threshold for each pending feature, so Performance Radar reports its own 5-trade threshold independently of Recent Trend's 6-trade threshold.
+- `release:stability` now verifies the immutable 1.6.1 (115) metadata instead of stale build 113 expectations. It does not alter native metadata.
+
+### Verification
+
+Local checks passed: typecheck, translations, email/password QA, RevenueCat identity QA, entitlement QA, Prop Pass production contract, Prop Pass lifecycle/presentation, final Add Trade contract, Month Picker contrast, Stats threshold QA, release stability, security check, audit (0 high/critical; 3 moderate), Gitleaks, Semgrep (0 blocking), and iOS export at `/tmp/youtrader-codex-post115`.
+
+`expo-doctor` remains the documented 16/18 non-blocking result: static/dynamic app-config synchronization and native-folder/prebuild notices. Physical QA was not performed in this worktree and requires a separately authorized local build/device session.
+
+### Apple stored:true / revoke
+
+Code inspection confirms the native identity token, authorization-code exchange, server-only encrypted token storage, and revoke/delete paths remain in place. The live production proof remains **BLOCKED** until an operator performs Sign in with Apple using a disposable Apple identity on a production-pointing iOS build and completes any Apple system authentication/2FA. Do not use an owner, customer, or App Review identity; see `docs/releases/1.6.1/evidence/deletion-smoke-20260802/APPLE_STORED_TRUE_OPERATOR.md`.
+
+### Next release action
+
+A new iOS build is required to deliver this code to TestFlight, but **build 116 is not authorized**. Do not create, archive, upload, submit, or otherwise modify TestFlight build 115.
