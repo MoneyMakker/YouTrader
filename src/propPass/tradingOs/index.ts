@@ -35,3 +35,5 @@ export { calculateMaximumSafeWithdrawal } from "./withdrawal";
 export type { SafeWithdrawalInput, SafeWithdrawalValues } from "./withdrawal";
 export { evaluatePositionSizeProgression } from "./progression";
 export type { PositionSizeStage, PositionSizeProgressionInput, PositionSizeProgressionValues, PositionSizeTransition } from "./progression";
+export { evaluateProfitProtection } from "./profitProtection";
+export type { ProfitProtectionInput, ProfitProtectionValues } from "./profitProtection";
