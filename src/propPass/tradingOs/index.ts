@@ -21,3 +21,5 @@ export { buildChallengeTimeline } from "./timeline";
 export type { ChallengeTimelineEvent, PersistedTimelineFact, TimelineEventType } from "./timeline";
 export { createDecisionReplay } from "./replay";
 export type { DecisionReplay, DecisionReplayInput, DecisionVerdict } from "./replay";
+export { compareRiskModes } from "./modes";
+export type { ModeComparison } from "./modes";
