@@ -93,6 +93,10 @@ function buildWeekdayHeatmap(
   assert.ok(empty.every((c) => c.count === 0 && c.pnl === 0), "empty cells stay neutral zero");
   const heatSrc = read("src/stats/tradingHeatmap.ts");
   assert.ok(heatSrc.includes("HEATMAP_COMPARE_MIN"), "comparable-trade threshold defined");
+  assert.ok(
+    heatSrc.includes("day.slice(0, 2)") && heatSrc.includes("${hour}"),
+    "dayHour labels use ultra-short Fr14 form (no clipping)",
+  );
   assert.ok(heatSrc.includes("buildVisualHeatmap"), "visual merge helper present");
   assert.ok(heatSrc.includes("emptyCell"), "scaffold empties stay zero");
   assert.equal(1 < HEATMAP_COMPARE_MIN, true);

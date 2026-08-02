@@ -42,12 +42,12 @@ function cellKey(trade: Trade, mode: HeatmapMode): string {
     const setup = String((trade as { setup?: string; setupTag?: string }).setup || (trade as { setupTag?: string }).setupTag || "").trim();
     return setup || "Unlabeled";
   }
-  // dayHour
+  // dayHour — ultra-short labels (Fr14) so compact tiles never ellipsize.
   const d = String(trade.date || "");
   const day = d ? WEEKDAYS[new Date(`${d}T12:00:00Z`).getUTCDay()] || "—" : "—";
   const hour = tradeHour(trade);
-  if (hour == null) return `${day} · —`;
-  return `${day} ${String(hour).padStart(2, "0")}:00`;
+  if (hour == null) return `${day.slice(0, 2)}—`;
+  return `${day.slice(0, 2)}${hour}`;
 }
 
 export const HEATMAP_COMPARE_MIN = 4;
@@ -88,7 +88,7 @@ export function scaffoldHeatmapKeys(mode: HeatmapMode): string[] {
   if (mode === "session") return ["New York AM", "New York PM", "Other session"];
   if (mode === "dayHour") {
     return WEEKDAYS.flatMap((day) =>
-      [9, 10, 11, 12, 13, 14, 15].map((hour) => `${day} ${String(hour).padStart(2, "0")}:00`),
+      [9, 10, 11, 12, 13, 14, 15].map((hour) => `${day.slice(0, 2)}${hour}`),
     );
   }
   if (mode === "instrument") return ["MES", "MNQ", "ES", "NQ", "M2K", "MYM"];

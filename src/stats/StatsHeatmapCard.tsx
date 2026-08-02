@@ -35,6 +35,18 @@ function heatColor(cell: HeatmapCell, maxAbs: number): string {
   return "rgba(255,255,255,0.06)";
 }
 
+/** Compact P&L for dense day×hour cells — avoids ellipsis on small tiles. */
+function formatCompactHeatMoney(value: number): string {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  const abs = Math.abs(value);
+  if (abs >= 1000) {
+    const k = abs / 1000;
+    const digits = k >= 10 ? 0 : 1;
+    return `${sign}$${k.toFixed(digits)}k`;
+  }
+  return `${sign}$${Math.round(abs)}`;
+}
+
 export function StatsHeatmapCard({ trades }: Props) {
   const theme = useYdlTheme("dark");
   const [mode, setMode] = useState<HeatmapMode>("weekday");
@@ -128,7 +140,11 @@ export function StatsHeatmapCard({ trades }: Props) {
               {cell.label}
             </YdlText>
             <YdlText role="caption" numberOfLines={1}>
-              {cell.count ? formatStatsMoney(cell.pnl) : "—"}
+              {cell.count
+                ? compact
+                  ? formatCompactHeatMoney(cell.pnl)
+                  : formatStatsMoney(cell.pnl)
+                : "—"}
             </YdlText>
           </Pressable>
         ))}
@@ -178,7 +194,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   gridCompact: {
-    gap: 4,
+    // Keep 7 dayHour columns without percentage+gap overflow (overflow was clipping labels).
+    gap: 3,
   },
   cell: {
     width: "31%",
@@ -188,9 +205,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   cellCompact: {
-    width: "13.5%",
-    minHeight: 44,
-    padding: 4,
+    width: "13%",
+    minHeight: 56,
+    paddingHorizontal: 2,
+    paddingVertical: 5,
+    alignItems: "center",
   },
   legend: {
     flexDirection: "row",
