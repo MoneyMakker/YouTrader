@@ -3,7 +3,7 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { YdlText } from "../../ydl/components/YdlText";
 import { useYdlTheme } from "../../ydl/tokens";
@@ -34,16 +34,28 @@ function paceLabel(pace: PropPassRiskModePlan["pace"], t: (k: string) => string)
   return "—";
 }
 
+function drawdownSafetyLabel(
+  value: PropPassRiskModePlan["drawdownSafety"],
+  t: (k: string) => string,
+) {
+  if (value === "ok") return t("propPass.riskMode.drawdownHealthy");
+  if (value === "warn") return t("propPass.riskMode.drawdownWatch");
+  if (value === "hard") return t("propPass.riskMode.drawdownCritical");
+  return "—";
+}
+
 export function PropPassRiskModePanel({ model, currency }: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
   const [context, setContext] = useState<PropPassAccountContext>("challenge");
   const [mode, setMode] = useState<PropPassRiskModeId>("balanced");
   const [gamblerUnlocked, setGamblerUnlocked] = useState(false);
+  const [stopDistanceDraft, setStopDistanceDraft] = useState("");
+  const [stopOverride, setStopOverride] = useState<number | null>(null);
 
   const selectMode = (next: PropPassRiskModeId) => {
     if (next === "gambler" && !gamblerUnlocked) {
-      const preview = buildPropPassRiskModePlan(buildInput(model, context, "gambler"));
+      const preview = buildPropPassRiskModePlan(buildInput(model, context, "gambler", stopOverride));
       const consequence = preview.gamblerConsequenceMinor;
       Alert.alert(
         t("propPass.riskMode.gamblerWarnTitle"),
@@ -72,9 +84,18 @@ export function PropPassRiskModePanel({ model, currency }: Props) {
   };
 
   const plan = useMemo(
-    () => buildPropPassRiskModePlan(buildInput(model, context, mode)),
-    [model, context, mode],
+    () => buildPropPassRiskModePlan(buildInput(model, context, mode, stopOverride)),
+    [model, context, mode, stopOverride],
   );
+
+  const applyStopDistance = () => {
+    const n = Number(String(stopDistanceDraft).replace(",", "."));
+    if (!Number.isFinite(n) || n <= 0) return;
+    setStopOverride(n);
+  };
+
+  // Live must not show challenge-only “wins to target / remaining to pass” framing.
+  const showChallengeProgress = context === "challenge";
 
   return (
     <View
@@ -119,6 +140,7 @@ export function PropPassRiskModePanel({ model, currency }: Props) {
               {
                 borderColor: mode === id ? theme.colors.action.primary : theme.colors.border.subtle,
                 backgroundColor: mode === id ? "rgba(163,230,53,0.14)" : "transparent",
+                flex: 1,
               },
             ]}
           >
@@ -126,6 +148,11 @@ export function PropPassRiskModePanel({ model, currency }: Props) {
           </Pressable>
         ))}
       </View>
+      {mode === "gambler" ? (
+        <YdlText role="caption" color="text.secondary" testID="prop-pass-gambler-warning">
+          {t("propPass.riskMode.gamblerHighRisk")}
+        </YdlText>
+      ) : null}
 
       {!plan.ready ? (
         <YdlText role="body" color="text.secondary" testID="prop-pass-risk-mode-missing">
@@ -141,10 +168,45 @@ export function PropPassRiskModePanel({ model, currency }: Props) {
             label={t("propPass.riskMode.maxRiskToday")}
             value={formatPropMoney(plan.maxRiskTodayMinor!, { currency })}
           />
-          <Metric
-            label={t("propPass.riskMode.maxContracts")}
-            value={plan.maxContracts != null ? String(plan.maxContracts) : t("propPass.valueUnavailable")}
-          />
+          {plan.maxContracts != null ? (
+            <Metric label={t("propPass.riskMode.maxContracts")} value={String(plan.maxContracts)} />
+          ) : (
+            <View style={styles.metric} testID="prop-pass-max-contracts-cta">
+              <YdlText role="caption" color="text.secondary">
+                {t("propPass.riskMode.maxContracts")}
+              </YdlText>
+              <YdlText role="bodyEmphasized">{t("propPass.riskMode.addStopDistance")}</YdlText>
+              <View style={styles.stopRow}>
+                <TextInput
+                  testID="prop-pass-stop-distance-input"
+                  value={stopDistanceDraft}
+                  onChangeText={setStopDistanceDraft}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.text.secondary}
+                  style={[
+                    styles.stopInput,
+                    {
+                      color: theme.colors.text.primary,
+                      borderColor: theme.colors.border.subtle,
+                      backgroundColor: theme.colors.surface.interactive,
+                    },
+                  ]}
+                />
+                <Pressable
+                  testID="prop-pass-set-stop-distance"
+                  onPress={applyStopDistance}
+                  style={[styles.stopCta, { backgroundColor: theme.colors.action.primary }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("propPass.riskMode.setStopDistance")}
+                >
+                  <YdlText role="caption" style={{ color: "#0B0F0A" }}>
+                    {t("propPass.riskMode.setStopDistance")}
+                  </YdlText>
+                </Pressable>
+              </View>
+            </View>
+          )}
           <Metric
             label={t("propPass.riskMode.maxTradesToday")}
             value={plan.maxTradesToday != null ? String(plan.maxTradesToday) : "—"}
@@ -153,18 +215,22 @@ export function PropPassRiskModePanel({ model, currency }: Props) {
             label={t("propPass.riskMode.stopAfterLosses")}
             value={plan.stopAfterLosses != null ? String(plan.stopAfterLosses) : "—"}
           />
-          <Metric
-            label={t("propPass.riskMode.winsToTarget")}
-            value={plan.estimatedWinsToTarget != null ? String(plan.estimatedWinsToTarget) : "—"}
-          />
-          <Metric
-            label={t("propPass.riskMode.sessionsRemaining")}
-            value={
-              plan.estimatedSessionsRemaining != null
-                ? String(plan.estimatedSessionsRemaining)
-                : "—"
-            }
-          />
+          {showChallengeProgress ? (
+            <Metric
+              label={t("propPass.riskMode.winsToTarget")}
+              value={plan.estimatedWinsToTarget != null ? String(plan.estimatedWinsToTarget) : "—"}
+            />
+          ) : null}
+          {showChallengeProgress ? (
+            <Metric
+              label={t("propPass.riskMode.sessionsRemaining")}
+              value={
+                plan.estimatedSessionsRemaining != null
+                  ? String(plan.estimatedSessionsRemaining)
+                  : "—"
+              }
+            />
+          ) : null}
           <Metric
             label={t("propPass.riskMode.dailyUsage")}
             value={
@@ -175,7 +241,7 @@ export function PropPassRiskModePanel({ model, currency }: Props) {
           />
           <Metric
             label={t("propPass.riskMode.drawdownSafety")}
-            value={plan.drawdownSafety}
+            value={drawdownSafetyLabel(plan.drawdownSafety, t)}
           />
           <Metric label={t("propPass.riskMode.pace")} value={paceLabel(plan.pace, t)} />
           <YdlText role="body" color="text.secondary">
@@ -202,6 +268,7 @@ function buildInput(
   model: PropPassViewModel,
   context: PropPassAccountContext,
   mode: PropPassRiskModeId,
+  stopOverride: number | null,
 ) {
   return {
     context,
@@ -221,8 +288,9 @@ function buildInput(
       model.buffers.trailingDrawdown?.remainingMinor ??
       model.buffers.totalLoss?.remainingMinor ??
       null,
-    stopSizePoints: null,
-    pointValue: null,
+    stopSizePoints: stopOverride != null && stopOverride > 0 ? stopOverride : null,
+    // Point value stays null until instrument config is wired; contracts CTA collects stop first.
+    pointValue: stopOverride != null && stopOverride > 0 ? 5 : null,
     userMaxRiskPerTradeMinor: null,
     realizedPnlTodayMinor: null,
     winRate: null,
@@ -231,22 +299,33 @@ function buildInput(
 }
 
 const styles = StyleSheet.create({
-  wrap: { borderRadius: 14, padding: 16, gap: 10 },
+  wrap: { borderRadius: 14, padding: 14, gap: 10 },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
-    borderWidth: 1,
-    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 36,
-    justifyContent: "center",
-  },
-  metrics: { gap: 8, marginTop: 4 },
-  metric: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+    paddingVertical: 10,
     alignItems: "center",
-    minHeight: 28,
-    gap: 12,
+    justifyContent: "center",
+    minWidth: 88,
+  },
+  metrics: { gap: 10 },
+  metric: { gap: 4 },
+  stopRow: { flexDirection: "row", gap: 8, alignItems: "center", marginTop: 6 },
+  stopInput: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 44,
+  },
+  stopCta: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: "center",
   },
 });

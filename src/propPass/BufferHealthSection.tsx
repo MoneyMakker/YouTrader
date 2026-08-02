@@ -65,7 +65,19 @@ export function BufferHealthSection({ buffers, currency = "USD" }: Props) {
       labelKey: "propPass.buffer.totalLoss",
       explainKey: "propPass.buffer.explain.totalLoss",
     },
-  ];
+  ].filter((item, _index, all) => {
+    // Avoid duplicated identical trailing/total cards when they resolve to the same rule/value.
+    if (item.key !== "max") return true;
+    const trailing = all.find((x) => x.key === "trailing")?.buffer;
+    const total = item.buffer;
+    if (!trailing || !total) return true;
+    return !(
+      trailing.limitMinor != null &&
+      total.limitMinor != null &&
+      trailing.limitMinor === total.limitMinor &&
+      trailing.remainingMinor === total.remainingMinor
+    );
+  });
 
   return (
     <View

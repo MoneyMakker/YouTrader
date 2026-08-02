@@ -1,4 +1,5 @@
 import React from "react";
+import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { YdlButton } from "../../ydl/components/YdlButton";
 import { YdlCard } from "../../ydl/components/YdlCard";
@@ -16,11 +17,11 @@ export function PropPassDecisionReplay({
   const breach = model.breachReasons[0];
   if (!breach) {
     return (
-      <YdlCard testID="prop-pass-decision-replay">
+      <View testID="prop-pass-decision-replay" style={{ paddingVertical: 4 }}>
         <YdlText role="caption" color="text.secondary">
           {t("propPass.replay.none")}
         </YdlText>
-      </YdlCard>
+      </View>
     );
   }
   return (
