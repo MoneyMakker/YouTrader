@@ -24,6 +24,12 @@ function isValidSessionValue(value: string): boolean {
   }
 }
 
+/** PKCE verifier is transient opaque text, not a persisted JSON session. */
+function isValidStoredValue(key: string, value: string): boolean {
+  if (key.endsWith("-code-verifier")) return value.length > 0;
+  return isValidSessionValue(value);
+}
+
 /**
  * Auth storage backed by the platform secure store with a one-time, fail-safe
  * migration from the historical AsyncStorage key. Never remove the legacy
@@ -59,7 +65,7 @@ export function createMigratingSessionStorage(
           return null;
         }
         if (secureValue != null) {
-          if (isValidSessionValue(secureValue)) return secureValue;
+          if (isValidStoredValue(key, secureValue)) return secureValue;
           try { await secureStore.removeItem(key); } catch { /* best effort */ }
           return null;
         }
@@ -76,7 +82,7 @@ export function createMigratingSessionStorage(
         } catch {
           return null;
         }
-        if (legacyValue == null || !isValidSessionValue(legacyValue)) return null;
+        if (legacyValue == null || !isValidStoredValue(key, legacyValue)) return null;
 
         try {
           await secureStore.setItem(key, legacyValue);
