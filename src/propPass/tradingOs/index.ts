@@ -11,3 +11,5 @@ export { createDailyTradingPlan } from "./dailyPlan";
 export type { DailyPlanInput, DailyTradingPlanSnapshot } from "./dailyPlan";
 export { calculateLiveRiskMeter } from "./riskMeter";
 export type { LiveRiskMeterInput, LiveRiskMeterValues } from "./riskMeter";
+export { assessSmartInterventions } from "./interventions";
+export type { SmartIntervention, SmartInterventionInput, InterventionTradeFact } from "./interventions";
