@@ -35,3 +35,4 @@ export {
 } from "./commandGateway";
 export { newPropOsClientRequestId } from "../propOs/commands/hash";
 export * from "./tradingOs";
+export * from "./persistence";
