@@ -1571,16 +1571,56 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   journalDetailResultBoxGreen: {
-    backgroundColor: C.green,
     borderColor: C.green,
   },
   journalDetailResultBoxRed: {
-    backgroundColor: C.red,
     borderColor: C.red,
   },
   journalDetailResultBoxNeutral: {
     backgroundColor: C.card2,
     borderColor: C.border,
+  },
+  journalSignedPnlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: ydlSpace.sm,
+    backgroundColor: C.card2,
+    borderColor: C.border,
+    borderWidth: 1,
+    borderRadius: ydlRadius.card,
+    paddingVertical: ydlSpace.sm,
+    paddingHorizontal: ydlSpace.md,
+    minHeight: 56,
+  },
+  journalSignedPnlSign: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(163,255,18,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.45)",
+  },
+  journalSignedPnlSignLoss: {
+    backgroundColor: "rgba(255,59,95,0.12)",
+    borderColor: "rgba(255,59,95,0.45)",
+  },
+  journalSignedPnlSignText: {
+    ...ydlTypography.headline,
+    fontWeight: "800",
+  },
+  journalSignedPnlCurrency: {
+    ...ydlTypography.headline,
+    color: C.sub,
+    fontWeight: "700",
+  },
+  journalSignedPnlInput: {
+    flex: 1,
+    marginBottom: 0,
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    paddingHorizontal: 0,
   },
   journalDetailResultDisplay: {
     ...ydlTypography.metric,
