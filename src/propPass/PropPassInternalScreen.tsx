@@ -26,6 +26,7 @@ import { PropPassRuleStatus } from "./ui/PropPassRuleStatus";
 import { PropPassSmartIntervention } from "./ui/PropPassSmartIntervention";
 import { PropPassTargetProgress } from "./ui/PropPassTargetProgress";
 import { PropPassTodaysPlan } from "./ui/PropPassTodaysPlan";
+import { PropPassRiskModePanel } from "./ui/PropPassRiskModePanel";
 import type {
   ChallengeSummary,
   PropPassInsightsPresentation,
@@ -670,19 +671,20 @@ function AvailableView({
         onArchived={onArchived}
       />
       <PropPassChallengeHero model={model} />
+      <PropPassRiskModePanel model={model} currency={currency} />
       <PropPassTargetProgress model={model} />
       <BufferHealthSection buffers={model.buffers} currency={currency} />
-      <PropPassPassProbability model={model} />
-      <PropPassDisciplineStreak model={model} />
-      <PropPassSmartIntervention model={model} />
-      <PropPassDecisionReplay model={model} onOpenTrade={onOpenTrade} />
-      <PropPassRuleStatus model={model} />
       <PropPassTodaysPlan
         model={model}
         plan={todaysPlan}
         onReviewUnassigned={onAssignTrades}
         onEditPlan={onAssignTrades}
       />
+      <PropPassDisciplineStreak model={model} />
+      <PropPassSmartIntervention model={model} />
+      <PropPassDecisionReplay model={model} onOpenTrade={onOpenTrade} />
+      <PropPassRuleStatus model={model} />
+      <PropPassPassProbability model={model} />
       <PropPassInsightsCard
         model={model}
         insightsMode={insightsPresentation}

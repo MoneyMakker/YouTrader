@@ -4,6 +4,7 @@ import type {
   PropPassUiState,
   PropPassViewModel,
 } from "../propPass/types";
+import { isStagingQaResetAllowed } from "./stagingQaResetGates";
 
 export type StagingPropPassQaMode =
   | "none"
@@ -67,8 +68,10 @@ export function isStagingPropPassQaAllowed(
     ? (process.env as Record<string, string | undefined>)
     : {},
 ): boolean {
-  const appEnv = (env.EXPO_PUBLIC_APP_ENV || env.APP_ENV || "").toLowerCase();
-  return appEnv === "staging" || appEnv === "development";
+  // Align with journal/email QA gates: honor generated fingerprint + staging aliases.
+  return isStagingQaResetAllowed(env, {
+    devFallback: typeof __DEV__ !== "undefined" && __DEV__,
+  });
 }
 
 export function parseStagingPropPassQaUrl(url: string): StagingPropPassQaMode | null {

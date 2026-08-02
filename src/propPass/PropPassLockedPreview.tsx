@@ -10,12 +10,13 @@ import { YdlButton } from "../ydl/components/YdlButton";
 import { YdlText } from "../ydl/components/YdlText";
 import { useYdlTheme } from "../ydl/tokens";
 
-const PREVIEW_CAPABILITIES = [
-  "Target Progress",
-  "Daily Loss Buffer",
-  "Drawdown Protection",
-  "Discipline Streak",
-  "Smart Intervention",
+const PREVIEW_CAPABILITY_KEYS = [
+  "propPass.locked.cap.target",
+  "propPass.locked.cap.daily",
+  "propPass.locked.cap.drawdown",
+  "propPass.locked.cap.modes",
+  "propPass.locked.cap.streak",
+  "propPass.locked.cap.intervention",
 ] as const;
 
 type Props = {
@@ -44,6 +45,9 @@ export function PropPassLockedPreview({ onViewPlans, onRestore, restoreBusy }: P
         <YdlText role="body" color="text.secondary">
           {t("propPass.lockedBody")}
         </YdlText>
+        <YdlText role="body" color="text.secondary">
+          {t("propPass.locked.challengeLiveHint")}
+        </YdlText>
         <YdlText role="caption" color="text.secondary" accessibilityLabel={t("propPass.lockedIndicator")}>
           {t("propPass.lockedIndicator")}
         </YdlText>
@@ -51,10 +55,10 @@ export function PropPassLockedPreview({ onViewPlans, onRestore, restoreBusy }: P
 
       <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]} testID="prop-pass-locked-capabilities">
         <YdlText role="label">{t("propPass.lockedPreviewLabel")}</YdlText>
-        {PREVIEW_CAPABILITIES.map((label) => (
-          <View key={label} style={styles.capabilityRow}>
+        {PREVIEW_CAPABILITY_KEYS.map((key) => (
+          <View key={key} style={styles.capabilityRow}>
             <View style={[styles.dot, { backgroundColor: theme.colors.action.primary }]} />
-            <YdlText role="body">{label}</YdlText>
+            <YdlText role="body">{t(key)}</YdlText>
           </View>
         ))}
       </View>
@@ -62,12 +66,14 @@ export function PropPassLockedPreview({ onViewPlans, onRestore, restoreBusy }: P
       <YdlButton
         label={t("propPass.unlockCta")}
         onPress={onViewPlans}
+        fullWidth
         testID="prop-pass-unlock"
       />
       <YdlButton
         label={t("viewPlans")}
         variant="secondary"
         onPress={onViewPlans}
+        fullWidth
         testID="prop-pass-view-plans"
       />
       <YdlButton
@@ -75,6 +81,7 @@ export function PropPassLockedPreview({ onViewPlans, onRestore, restoreBusy }: P
         variant="secondary"
         onPress={onRestore}
         disabled={!!restoreBusy}
+        fullWidth
         testID="prop-pass-restore"
       />
     </ScrollView>
