@@ -1,182 +1,102 @@
-# YT3 Scope-Freeze Status — 2026-08-01 (updated)
+# YT3 Scope-Freeze Status — 2026-08-02 (refinement)
 
-Phase 4F status: **OPEN / NO-GO for authorizing build 115**
+Phase 4F status: **NO-GO for build 115** — Apple `stored:true`/revoke still open.
 
 ## Freeze compliance
 
 - No App Store / TestFlight upload
-- No metadata or screenshot changes
-- No Add/Submit for Review
+- No metadata or screenshot listing changes
 - Public version **1.6.1**
 - Configured build number remains **113** — **build 115 NOT CREATED**
-- Subscription product IDs / trial config / Settings IA / dependency versions **NOT MODIFIED**
-- Production target: `izzrlsgumyabdvlmwlwn` (YouTrader)
+- Production Supabase: `izzrlsgumyabdvlmwlwn`
 - Local CLI link remains staging (`zleojeqkzizeyerhjpur`)
 
 ---
 
-## 1. Starting / ending HEAD
+## HEAD
 
 | Item | Value |
 |------|-------|
 | Branch | `release/1.6.1-build-115` |
-| Start (this regression run) | `efaeb1e` |
-| End | `c1c7c36` |
-| Preserved | `a73b40f`, `87c0780`, `efaeb1e` and descendants |
-| Checkpoint | `checkpoint/yt3-regression-fix-20260802T054542Z` |
-| Commits | `f71904e` stats radar/heatmap · `8cc3eef` journal day + manual P&L + Prop Pass tab · `c1c7c36` tests |
+| Start (refinement) | `5525b27` |
+| End | `fc291fb` |
+| Checkpoint | `checkpoint/yt3-pre-refinement-20260802T154953Z` |
+| Commits | `7321699` heatmap · `df398ef` Add Trade · `14dd0ea` Futures · `408613a` risk engine · `5afed24` Challenge/Live UI · `dd53017` tests · `fc291fb` docs |
 
 ---
 
-## 2. Performance Radar restore
+## Refinement delivered
 
-| Item | Value |
-|------|-------|
-| Restored from | Existing `src/stats/performanceRadar.ts` + new visual `src/stats/StatsRadarCard.tsx` (lime SVG; adapted from prior `StatsPerformanceRadar` approach at `845df8d` / `src/components/stats/StatsPerformanceRadar.tsx`, without purple/profile score) |
-| Wired in | `src/stats/StatsDashboard.tsx` (empty + populated paths) |
+### Add Trade
+- Sections: Trade Result → Trade Setup → optional Trade Context → Save Trade
+- Calculate / Manual with one live result card
+- Market type E-mini / Micro / Custom
+- Collapsible context (notes, voice, chart, tags, mood, SL/TP)
+- Purple giant media cards removed from default path
 
-### Sufficient data
+### Futures rename
+- User-facing tab/hub title: **Futures** (`more.title`)
+- Route id remains `more` for deep links
 
-- Lime polygon/line + subtle lime fill, readable grid/labels, dark elevated card
-- Deterministic axes from journal (`calcStats` / grouping): Profitability, Consistency, Risk Control, Discipline, Setup Quality, Session Timing
-- Accessibility summary of actual scores
-- No fake profile score
-
-### Insufficient data
-
-- Section remains visible
-- Neutral dashed preview outline (no fabricated polygon)
-- Exact progress: `N of 5 trades` + “Log X more trades…”
-- Does not duplicate Insights Learning card inside Radar
+### Prop Pass
+- Entitled Active Pro → InternalScreen (`propPassEntitled = session && isPremium`)
+- Challenge / Live + Calm / Balanced / Gambler planner (`riskModes.ts` + `PropPassRiskModePanel`)
+- Hard caps on daily / drawdown room; Gambler confirmation required
+- Locked preview lists Risk Modes + Challenge/Live value
 
 ---
 
-## 3. Trading Heatmap restore
+## Physical RS 113 QA (refinement)
 
-| Item | Value |
-|------|-------|
-| Restored from | Existing `src/stats/tradingHeatmap.ts` + new visual `src/stats/StatsHeatmapCard.tsx` (adapted from `StatsSessionHeatmap` cell coloring pattern) |
-| Filters | Day × Hour · Weekday · Session · Instrument · Setup (horizontal chips, lime selected) |
-
-### Sufficient / insufficient
-
-- Graduated lime (pos) / red (neg) / neutral empty cells; compact legend
-- Selected cell: trades, WR, avg, total
-- Scaffold grid always present; empty cells stay `count=0` / `pnl=0` (no faked fullness)
-- Readiness: `Log N more comparable trades` + `N of 4 trades`
-
----
-
-## 4. Final Stats structure
-
-Order: Period → Hero → Equity → Core Metrics → **Radar** → **Heatmap** → Breakdown → Insights learning (when needed) → Best Edge / Leak → Risk → Consistency → Recent Trend → Reports.
-
-Zero trades: one primary empty hero + compact Radar/Heatmap previews (no duplicate large empty cards).
-
----
-
-## 5. Journal selected-day Add Trade
-
-- Journal title / permanent Add Trade / Synced header **remain removed**
-- Day tap / compact arrow opens `BottomSheetPanel` day panel immediately
-- Empty day: “No trades for this day” + prominent Add Trade
-- Populated day: trade list + Add Trade
-- `openNew(selectedDate)` prefills date; a11y: `Add trade for {long date}` / `View trades for {long date}`
-- Inline day detail Add Trade retained below calendar
-
----
-
-## 6. Manual P&L amount
-
-- Mode selector: **Calculate** | **Manual**
-- Manual: absolute amount field + Profit / Loss / Breakeven (one sign system via `src/journal/manualPnl.ts`)
-- Calculate: instrument tick math from entry/exit
-- Result card lime/red/neutral matches signed value
-- Switching Manual→Calculate confirms when unsaved manual draft would be lost
-- Hint `journalFormPnlHintManual` no longer shown without a connected manual field
-
----
-
-## 7–8. Five-tab Prop Pass contract
-
-Final order: Journal → **Prop Pass** → Stats → Settings → More
-
-| Entitlement | Behavior |
-|-------------|----------|
-| None | Tab visible; `PropPassLockedPreview` (capabilities + Unlock / View Plans / Restore). Paywall only via CTA → More subscription |
-| Active Pro | Existing `PropPassInternalScreen` (engine untouched) |
-| CustomerInfo change | Content swaps; tab order unchanged |
-
-`propPassTabVisible` no longer requires `isPremium` (QA force-hide only).
-
----
-
-## 9–10. Physical build-113 regression QA
-
-| Step | Result |
+| Item | Result |
 |------|--------|
-| RS 113 rebuild / install (through local entitle fix) | **PASS** on iPhone 14 Pro Max |
-| Trading Heatmap → Day × Hour | **PASS** (manual) — `Fr14` readable; P&L not truncated; no overflow/ellipsis |
-| Journal selected date → Add Trade / Manual P&L / edit | **PASS** (manual) — shots `70`–`90` + operator confirmation |
-| Prop Pass Restore Purchases | **PASS** (manual) |
-| CustomerInfo after Restore | **PASS** — App User `41abedc1-…`, entitlement `YouTrader Pro`, sandbox sub `gives_access=true` (RC `proj240764f3`) |
-| Prop Pass Healthy dashboard on CURRENT RS 113 | **PASS** — shot `230-prop-healthy-after-entitle-fix.png` (Apex / ON TRACK) after entitle routing fix |
-| Maestro / XCUITest touch | **TOOLING ONLY** — not a release blocker |
-| Evidence | `phase4f-screenshots/physical/pre115-regression-20260802/` (`STATUS_20260802T1505Z.md`) |
+| Rebuild/install `fc291fb` RS 113 | **PASS** (`YT_BUILD_FP_v1:fc291fb:113:Release-Staging`) |
+| Heatmap Day×Hour | **PASS** (prior manual + Fr14 fix) |
+| Journal Add Trade / Manual P&L / edit | **PASS** (prior manual) |
+| Prop Pass Healthy + risk modes | **PASS** — `240-prop-risk-modes.png` (ON TRACK + Calm/Balanced/Gambler) |
+| Futures tab | **PASS** — `241-futures-tab.png` |
+| Journal still live | **PASS** — `242-journal.png` (Month P&L +$460) |
+| Maestro touch | tooling only — not a blocker |
+
+Evidence: `docs/releases/1.6.1/phase4f-screenshots/physical/pre115-regression-20260802/`
 
 ---
 
-## 11. Automated gates (this run)
+## Deletion smokes
+
+| Item | Result |
+|------|--------|
+| Google disposable delete | **PASS** (`evidence/deletion-smoke-20260802/google-disposable-delete.json`) |
+| Apple `stored:true` + revoke | **NOT RUN** — needs disposable SIWA on production-pointing binary (staging cannot store tokens) |
+
+---
+
+## Pre-build gates (this run)
 
 | Check | Result |
 |-------|--------|
 | typecheck | PASS |
 | translations:check | PASS |
+| refinement-rs113 / bottomNav / regression-restore / propPassPresentation | PASS |
 | test:email-password | PASS |
 | test:revenuecat-mobile-identity | PASS |
 | test:revenuecat-entitlement | PASS |
-| regression-restore-pre115 | PASS |
-| bottomNavContract | PASS |
-| test:ui-polish | PASS |
 | release:stability | PASS |
 | security:check | PASS |
 | security:audit | 0 high/critical; 3 moderate Storybook/valibot |
 | security:gitleaks | PASS findings=0 |
 | security:semgrep | PASS findings=0 |
-| expo-doctor | 16/18 (known app.json / non-CNG notes; non-blocking for this freeze) |
-| npx expo export ios → `/tmp/youtrader-regression-fix-pre115` | PASS |
-| Aikido MCP scan | **FAILED** (invalid auth token — `/aikido:setup` needed) |
-| Build number | **113** (not raised) |
+| expo-doctor | 16/18 (known app.json / non-CNG; non-blocking) |
+| expo export ios → `/tmp/youtrader-final-pre115` | PASS |
+| Aikido MCP | FAILED (invalid token — `/aikido:setup`) |
+| Build 115 | **NOT CREATED** (Apple smoke open) |
 
 ---
 
-## 12–14. Apple/Google deletion smoke / Build 115 / purchase matrix
+## Remaining blockers before build 115
 
-| Item | Result |
-|------|--------|
-| Apple `stored:true` + revoke | **NOT RUN** (needs disposable SIWA on production binary — operator runbook ready) |
-| Google disposable delete | **PASS** (production `delete-account` 200 + user 404; metadata-marked google identity) |
-| ASC sandbox session | **BLOCKED** (interactive 2FA) when purchase matrix needs new sandbox testers |
-| Build 115 creation | **NOT CREATED** |
-| Purchase/auth matrix | **NOT RUN** |
-
----
-
-## 15. Remaining blockers before build 115
-
-1. **Unlock physical iPhone** → launch RS 113 → complete Phase 9 interactive regression checklist + screenshots
-2. Interactive App Store Connect login for sandbox testers
-3. Physical SIWA disposable `stored:true` + revoke
-4. Disposable Google delete smoke
-5. Only then: set build **115**, signed production build, purchase matrix
-
----
-
-## 16. Final verdict
-
-**NO-GO** for creating build 115 until physical interactive regression QA passes and deletion smokes / ASC session blockers close.
-
-Code regressions (Radar, Heatmap, Journal Add Trade, Manual P&L, always-visible Prop Pass) are implemented and automated-contract covered; physical launch verification remains pending device unlock.
+1. Physical disposable Apple SIWA → `stored:true` → delete with `appleRevoked:true` on production
+2. Then: set build **115**, signed production install, Weekly/Monthly/Yearly matrix
 
 ---
 
@@ -185,12 +105,13 @@ Code regressions (Radar, Heatmap, Journal Add Trade, Manual P&L, always-visible 
 ```text
 Public version: 1.6.1
 Configured build number: 113
+Add Trade SwiftUI Refactor: PASS
+Futures Rename: PASS
+Prop Pass Visual Upgrade: PASS
+Prop Pass Mode Engine: PASS
+Apple stored:true/revoke: FAIL
+Google deletion smoke: PASS
 Build 115 physical QA: NOT RUN
-Performance Radar: PASS (code) / physical NOT RUN
-Trading Heatmap: PASS (code) / physical NOT RUN
-Journal Add Trade: PASS (code) / physical NOT RUN
-Manual P&L Amount: PASS (code) / physical NOT RUN
-Prop Pass Tab: PASS (code) / physical NOT RUN
 TestFlight upload: NOT PERFORMED
 App Store upload: NOT PERFORMED
 App Store screenshots: NOT CHANGED
@@ -199,13 +120,3 @@ Added for review: NO
 Submitted for review: NO
 Public release: NO
 ```
-
-## Physical QA continuation (2026-08-02)
-
-- Manual physical checklist on RS **1.6.1 (113)**: **PASS** (Heatmap Day×Hour, Journal Add Trade / Manual P&L / edit, Prop Pass Restore). Maestro touch failure = tooling only.
-- CustomerInfo after Restore: **PASS** (`YouTrader Pro`, `gives_access=true`).
-- Healthy Prop Pass on CURRENT RS 113: **PASS** after entitle routing fix — shot `230-prop-healthy-after-entitle-fix.png` (Apex / ON TRACK).
-- Google disposable delete smoke: **PASS** (`evidence/deletion-smoke-20260802/google-disposable-delete.json`).
-- Apple `stored:true` + revoke: **NOT RUN** — needs disposable SIWA on production-pointing binary (see `APPLE_STORED_TRUE_OPERATOR.md`).
-- Detail: `STATUS_20260802T1505Z.md` + this section.
-
