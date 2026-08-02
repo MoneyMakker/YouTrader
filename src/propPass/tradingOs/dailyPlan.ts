@@ -1,5 +1,6 @@
 import { RISK_MODE_POLICIES, type AccountContext, type ChallengeRules, type LiveRiskRules, type MoneyMinor, type RiskRooms, type TradingOsResult, type TradingRiskMode } from "./contracts";
 import { calculateAllowedRisk } from "./domain";
+import { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
 
 export type DailyPlanInput = {
   snapshotId: string;
@@ -15,6 +16,7 @@ export type DailyPlanInput = {
 };
 
 export type DailyTradingPlanSnapshot = Readonly<{
+  calculationVersion: typeof PROP_PASS_CALCULATION_VERSION;
   id: string;
   generatedAt: string;
   accountId: string;
@@ -49,6 +51,7 @@ export function createDailyTradingPlan(input: DailyPlanInput): TradingOsResult<D
     ? input.liveRules.maximumTrades
     : Math.max(1, Math.floor(maximumRiskTodayMinor / allowed.values.allowedRiskMinor));
   const snapshot: DailyTradingPlanSnapshot = Object.freeze({
+    calculationVersion: PROP_PASS_CALCULATION_VERSION,
     id: input.snapshotId,
     generatedAt: input.generatedAt,
     accountId: account.accountId,

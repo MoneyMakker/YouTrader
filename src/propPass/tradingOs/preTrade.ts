@@ -159,14 +159,13 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
     hardLimits.push(limit("profit_lock", "Profit lock", 0, true));
     return result("stop_trading", values, ["profit_lock_reached"], [], hardLimits, relatedRuleIds);
   }
-  if (allowed.values.allowedRiskMinor <= 0 || [dailyAfter, maximumAfter, drawdownAfter, weeklyAfter].some((room) => room != null && room <= 0)) {
-    return result("stop_trading", values, ["no_remaining_hard_loss_room"], [], hardLimits, relatedRuleIds);
-  }
-
   const maximumContracts = challengeRules?.maximumContracts ?? input.plan.instrument?.maximumSupportedContracts ?? null;
   if (maximumContracts != null && contracts > maximumContracts) {
     hardLimits.push(limit("contract_limit", "Maximum contracts", null, true));
     return result("rule_violation", values, ["contract_limit_exceeded"], [], hardLimits, relatedRuleIds);
+  }
+  if (allowed.values.allowedRiskMinor <= 0 || [dailyAfter, maximumAfter, drawdownAfter, weeklyAfter].some((room) => room != null && room <= 0)) {
+    return result("stop_trading", values, ["no_remaining_hard_loss_room"], [], hardLimits, relatedRuleIds);
   }
 
   const maxTrades = context === "live" ? liveRules?.maximumTrades : undefined;

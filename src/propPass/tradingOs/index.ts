@@ -43,3 +43,18 @@ export { evaluateChallengeLifecycle } from "./challenge";
 export type { ChallengeBreachFact, ChallengeLifecycleInput, ChallengeLifecycleState, ChallengeLifecycleValues } from "./challenge";
 export { evaluateLiveAccount } from "./liveAccount";
 export type { LiveAccountIntegrationInput, LiveAccountIntegrationValues, LiveAccountState } from "./liveAccount";
+export { calculatePropPassState } from "./pipeline";
+export { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
+export type {
+  PropPassActiveRuleVersion,
+  PropPassCalculationPipelineInput,
+  PropPassCalculationPipelineOutput,
+  PropPassCalculationTraceStep,
+  PropPassChallengeFacts,
+  PropPassDailyPlanDraft,
+  PropPassInstrumentVersion,
+  PropPassJournalApplication,
+  PropPassJournalState,
+  PropPassLiveFacts,
+  PropPassTradingDayContext,
+} from "./pipelineContracts";
