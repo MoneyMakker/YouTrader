@@ -115,11 +115,14 @@ Final order: Journal → **Prop Pass** → Stats → Settings → More
 
 | Step | Result |
 |------|--------|
-| RS 113 rebuild from `c1c7c36` | **PASS** (`build_ok`, fingerprint `YT_BUILD_FP_v1:c1c7c36:113:Release-Staging`) |
-| Install on physical iPhone 14 Pro Max | **PASS** |
-| `physical-device-tool verify113` | **PASS** |
-| Launch + interactive checklist (Radar/Heatmap/Journal/Manual P&L/5 tabs) | **BLOCKED** — device **Locked** (`SBMainWorkspace` denied launch) |
-| Screenshots | **NOT RUN** (need unlock; store in gitignored `phase4f-screenshots/physical/pre115-regression-20260802/`) |
+| RS 113 rebuild / install (through local entitle fix) | **PASS** on iPhone 14 Pro Max |
+| Trading Heatmap → Day × Hour | **PASS** (manual) — `Fr14` readable; P&L not truncated; no overflow/ellipsis |
+| Journal selected date → Add Trade / Manual P&L / edit | **PASS** (manual) — shots `70`–`90` + operator confirmation |
+| Prop Pass Restore Purchases | **PASS** (manual) |
+| CustomerInfo after Restore | **PASS** — App User `41abedc1-…`, entitlement `YouTrader Pro`, sandbox sub `gives_access=true` (RC `proj240764f3`) |
+| Prop Pass Healthy dashboard on CURRENT RS 113 | **PASS** — shot `230-prop-healthy-after-entitle-fix.png` (Apex / ON TRACK) after entitle routing fix |
+| Maestro / XCUITest touch | **TOOLING ONLY** — not a release blocker |
+| Evidence | `phase4f-screenshots/physical/pre115-regression-20260802/` (`STATUS_20260802T1505Z.md`) |
 
 ---
 
@@ -151,9 +154,9 @@ Final order: Journal → **Prop Pass** → Stats → Settings → More
 
 | Item | Result |
 |------|--------|
-| Apple `stored:true` + revoke | **NOT RUN** |
-| Google disposable delete | **NOT RUN** |
-| ASC sandbox session | **BLOCKED** (interactive 2FA) |
+| Apple `stored:true` + revoke | **NOT RUN** (needs disposable SIWA on production binary — operator runbook ready) |
+| Google disposable delete | **PASS** (production `delete-account` 200 + user 404; metadata-marked google identity) |
+| ASC sandbox session | **BLOCKED** (interactive 2FA) when purchase matrix needs new sandbox testers |
 | Build 115 creation | **NOT CREATED** |
 | Purchase/auth matrix | **NOT RUN** |
 
@@ -196,3 +199,13 @@ Added for review: NO
 Submitted for review: NO
 Public release: NO
 ```
+
+## Physical QA continuation (2026-08-02)
+
+- Manual physical checklist on RS **1.6.1 (113)**: **PASS** (Heatmap Day×Hour, Journal Add Trade / Manual P&L / edit, Prop Pass Restore). Maestro touch failure = tooling only.
+- CustomerInfo after Restore: **PASS** (`YouTrader Pro`, `gives_access=true`).
+- Healthy Prop Pass on CURRENT RS 113: **PASS** after entitle routing fix — shot `230-prop-healthy-after-entitle-fix.png` (Apex / ON TRACK).
+- Google disposable delete smoke: **PASS** (`evidence/deletion-smoke-20260802/google-disposable-delete.json`).
+- Apple `stored:true` + revoke: **NOT RUN** — needs disposable SIWA on production-pointing binary (see `APPLE_STORED_TRUE_OPERATOR.md`).
+- Detail: `STATUS_20260802T1505Z.md` + this section.
+
