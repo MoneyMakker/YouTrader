@@ -18,7 +18,10 @@ import {
   userFacingAuthError,
 } from "../auth/authErrors";
 import { processAuthDeepLink } from "../auth/authDeepLinkCoordinator";
-import { openSubscriptionManagement } from "../auth/accountDeletion";
+import {
+  openSubscriptionManagement,
+  storeAppleAuthTokenAfterSignIn,
+} from "../auth/accountDeletion";
 import { ChangeEmailModal } from "../auth/ChangeEmailModal";
 import { ChangePasswordModal } from "../auth/ChangePasswordModal";
 import {
@@ -11551,6 +11554,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             },
           });
         }
+        // Authorization code is exchanged server-side only; never persist locally.
+        void storeAppleAuthTokenAfterSignIn(credential.authorizationCode);
         trackEvent("signup_completed", { provider });
         return;
       }
