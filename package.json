@@ -112,6 +112,7 @@
     "test:prop-pass-progression": "npx tsx scripts/prop-pass-progression-qa.ts",
     "test:prop-pass-profit-protection": "npx tsx scripts/prop-pass-profit-protection-qa.ts",
     "test:prop-pass-kill-switch": "npx tsx scripts/prop-pass-kill-switch-qa.ts",
+    "test:prop-pass-challenge-integration": "npx tsx scripts/prop-pass-challenge-integration-qa.ts",
     "test:calendar-month-picker-contrast": "npx tsx scripts/qa/calendarMonthPickerContrast.selftest.ts",
     "test:revenuecat-mobile-identity": "npx tsx scripts/revenuecat-mobile-identity-qa.ts",
     "test:revenuecat-entitlement": "node --experimental-strip-types scripts/security/revenuecat-entitlement-qa.mjs"

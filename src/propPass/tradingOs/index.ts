@@ -17,7 +17,7 @@ export { duplicateEditableRuleTemplate, payoutSafetyFloor, validateEditableRuleT
 export type { EditableRuleTemplate, RuleValidation } from "./rules";
 export { calculatePayoutReadiness } from "./payout";
 export type { PayoutReadinessInput, PayoutReadinessValues } from "./payout";
-export { buildChallengeTimeline } from "./timeline";
+export { buildChallengeTimeline, timelineEventKey } from "./timeline";
 export type { ChallengeTimelineEvent, PersistedTimelineFact, TimelineEventType } from "./timeline";
 export { createDecisionReplay } from "./replay";
 export type { DecisionReplay, DecisionReplayInput, DecisionVerdict } from "./replay";
@@ -39,3 +39,5 @@ export { evaluateProfitProtection } from "./profitProtection";
 export type { ProfitProtectionInput, ProfitProtectionValues } from "./profitProtection";
 export { evaluateKillSwitch } from "./killSwitch";
 export type { KillSwitchConfiguration, KillSwitchInput, KillSwitchValues } from "./killSwitch";
+export { evaluateChallengeLifecycle } from "./challenge";
+export type { ChallengeBreachFact, ChallengeLifecycleInput, ChallengeLifecycleState, ChallengeLifecycleValues } from "./challenge";

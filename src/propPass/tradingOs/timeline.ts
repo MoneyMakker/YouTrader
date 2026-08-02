@@ -5,8 +5,11 @@ export type PersistedTimelineFact = { type: TimelineEventType; occurredAt: strin
 export type ChallengeTimelineEvent = PersistedTimelineFact & { explanation: string; actionableImprovement?: string };
 /** Converts only stored facts into a concise deterministic timeline. */
 export function buildChallengeTimeline(facts: PersistedTimelineFact[]): ChallengeTimelineEvent[] {
-  return [...facts].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).map((fact) => ({ ...fact, explanation: explanation(fact), actionableImprovement: fact.type === "breached" ? improvement(fact) : undefined }));
+  const seen = new Set<string>();
+  return [...facts].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).filter((fact) => { const key = timelineEventKey(fact); if (seen.has(key)) return false; seen.add(key); return true; }).map((fact) => ({ ...fact, explanation: explanation(fact), actionableImprovement: fact.type === "breached" ? improvement(fact) : undefined }));
 }
+/** Stable key lets storage adapters use an idempotency constraint for refresh-safe event writes. */
+export function timelineEventKey(fact: PersistedTimelineFact): string { return [fact.accountId, fact.type, fact.occurredAt, fact.tradeId ?? "", fact.ruleId ?? ""].join(":"); }
 function explanation(fact: PersistedTimelineFact): string {
   if (fact.type === "breached") return `Rule ${fact.ruleId ?? "unknown"} was breached at this recorded event.`;
   if (fact.type === "rule_override") return `A recorded rule override was applied to ${fact.ruleId ?? "the selected rule"}.`;
