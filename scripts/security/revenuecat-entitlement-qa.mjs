@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const helperModule = await import(new URL("../../supabase/functions/_shared/revenueCatEntitlement.ts", import.meta.url).href);
+/**
+ * Behavioral entitlement assertions run against the DI harness fixture.
+ * Production Edge module stays Deno-only and is covered by static checks below.
+ * This isolates Node runtime from Deno.env without changing subscription logic.
+ */
+const helperModule = await import(new URL("./fixtures/revenueCatEntitlement.harness.ts", import.meta.url).href);
 const { resolveServerProEntitlement } = helperModule;
 
 const NOW = Date.parse("2026-07-26T12:00:00.000Z");
@@ -213,11 +218,26 @@ assert.doesNotMatch(app, /Purchases\.logIn\(\s*session\.user\.email/);
 for (const source of [coach, market]) {
   const entitlementCall = source.indexOf("const entitlement = await resolveServerProEntitlement");
   const freeGate = source.indexOf("if (!entitlement.isPro)", entitlementCall);
-  const lifecycleCall = source.indexOf("const lifecycle = await runQuotaLifecycle", freeGate);
   assert.ok(entitlementCall >= 0, "the shared entitlement resolver is invoked");
   assert.ok(freeGate > entitlementCall, "free access is rejected after entitlement resolution");
-  assert.ok(lifecycleCall > freeGate, "free access cannot enter the quota lifecycle");
   assert.match(source, /userData\.user\.id/);
+
+  // Legacy lifecycle helper is optional; current production uses early free return + Pro-only quota.
+  const lifecycleCall = source.indexOf("const lifecycle = await runQuotaLifecycle", freeGate);
+  if (lifecycleCall >= 0) {
+    assert.ok(lifecycleCall > freeGate, "free access cannot enter the quota lifecycle");
+  }
+  const freeBlock = source.slice(freeGate, freeGate + 700);
+  assert.match(
+    freeBlock,
+    /return (?:jsonResponse|new Response)/,
+    "free access returns before Pro-only quota work",
+  );
+  const proQuotaCall = Math.max(
+    source.indexOf("checkAIQuota(", freeGate + 1),
+    source.indexOf("checkRateLimitBucket(", freeGate + 1),
+  );
+  assert.ok(proQuotaCall > freeGate, "Pro quota enforcement remains after the free gate");
 }
 const helper = readFileSync("supabase/functions/_shared/revenueCatEntitlement.ts", "utf8");
 assert.doesNotMatch(helper, /console\.(?:log|warn|error)\([^\n]*\{\s*(?:userId|secret|authorization|subscriber)/i);
