@@ -20,83 +20,110 @@ Phase 4F status: **OPEN / NO-GO for authorizing build 115**
 | Item | Value |
 |------|-------|
 | Branch | `release/1.6.1-build-115` |
-| Start | `9533ba4` |
-| End | `00b8ee6`
-| Preserved | `a73b40f`, `87c0780`, UI polish chain |
-| Checkpoint | `checkpoint/yt3-pre115-auth-20260802T051530Z` |
+| Start (this regression run) | `efaeb1e` |
+| End | `c1c7c36` |
+| Preserved | `a73b40f`, `87c0780`, `efaeb1e` and descendants |
+| Checkpoint | `checkpoint/yt3-regression-fix-20260802T054542Z` |
+| Commits | `f71904e` stats radar/heatmap · `8cc3eef` journal day + manual P&L + Prop Pass tab · `c1c7c36` tests |
 
 ---
 
-## 2–6. Apple configuration (verified)
+## 2. Performance Radar restore
 
 | Item | Value |
 |------|-------|
-| Bundle ID | `com.youtrader.pro` |
-| Team ID | `L6M4U8G8RC` (Xcode + Apple Developer membership) |
-| App ID | YouTrader / `com.youtrader.pro` (Sign In with Apple enabled, primary) |
-| Client ID for token endpoint | `com.youtrader.pro` (`APPLE_CLIENT_ID` preferred; `APPLE_BUNDLE_ID` fallback) |
-| Services ID | Not used for native path |
-| SIWA key | **NEW** created: name `YouTrader Sign in with Apple Production`, Key ID `VBCK****28` (full Key ID recorded only in secure vault metadata) |
-| Existing APNs key | Left untouched (`9MY9Y52Z55` Expo Push) |
-| Private key storage | Outside repo: `~/.youtrader-secure/apple-siwa-production/` (mode 700/600) |
-| Encryption key | Generated via `openssl rand -hex 32`; SHA-256 → AES-GCM per `appleAuthTokens.ts` |
+| Restored from | Existing `src/stats/performanceRadar.ts` + new visual `src/stats/StatsRadarCard.tsx` (lime SVG; adapted from prior `StatsPerformanceRadar` approach at `845df8d` / `src/components/stats/StatsPerformanceRadar.tsx`, without purple/profile score) |
+| Wired in | `src/stats/StatsDashboard.tsx` (empty + populated paths) |
 
-### Production secret names (values never recorded)
+### Sufficient data
 
-| Secret | present |
-|--------|---------|
-| APPLE_TEAM_ID | true |
-| APPLE_KEY_ID | true |
-| APPLE_CLIENT_ID | true |
-| APPLE_BUNDLE_ID | true |
-| APPLE_PRIVATE_KEY | true |
-| APPLE_TOKEN_ENCRYPTION_KEY | true |
+- Lime polygon/line + subtle lime fill, readable grid/labels, dark elevated card
+- Deterministic axes from journal (`calcStats` / grouping): Profitability, Consistency, Risk Control, Discipline, Setup Quality, Session Timing
+- Accessibility summary of actual scores
+- No fake profile score
 
-Runtime probe: `store-apple-auth-token` with invalid code → `stored:false`, `reason:exchange_failed` (**not** `apple_secrets_missing`) → **PASS**
+### Insufficient data
+
+- Section remains visible
+- Neutral dashed preview outline (no fabricated polygon)
+- Exact progress: `N of 5 trades` + “Log X more trades…”
+- Does not duplicate Insights Learning card inside Radar
 
 ---
 
-## 7–8. Edge Functions
+## 3. Trading Heatmap restore
 
-| Function | version | status | verify_jwt | project |
-|----------|---------|--------|------------|---------|
-| store-apple-auth-token | **3** | ACTIVE | true | izzrlsgumyabdvlmwlwn |
-| delete-account | **3** | ACTIVE | true | izzrlsgumyabdvlmwlwn |
+| Item | Value |
+|------|-------|
+| Restored from | Existing `src/stats/tradingHeatmap.ts` + new visual `src/stats/StatsHeatmapCard.tsx` (adapted from `StatsSessionHeatmap` cell coloring pattern) |
+| Filters | Day × Hour · Weekday · Session · Instrument · Setup (horizontal chips, lime selected) |
 
-Deployed this run after secrets set.
+### Sufficient / insufficient
+
+- Graduated lime (pos) / red (neg) / neutral empty cells; compact legend
+- Selected cell: trades, WR, avg, total
+- Scaffold grid always present; empty cells stay `count=0` / `pnl=0` (no faked fullness)
+- Readiness: `Log N more comparable trades` + `N of 4 trades`
 
 ---
 
-## 9–14. Deletion / Apple smoke matrix
+## 4. Final Stats structure
 
-| Case | Result |
+Order: Period → Hero → Equity → Core Metrics → **Radar** → **Heatmap** → Breakdown → Insights learning (when needed) → Best Edge / Leak → Risk → Consistency → Recent Trend → Reports.
+
+Zero trades: one primary empty hero + compact Radar/Heatmap previews (no duplicate large empty cards).
+
+---
+
+## 5. Journal selected-day Add Trade
+
+- Journal title / permanent Add Trade / Synced header **remain removed**
+- Day tap / compact arrow opens `BottomSheetPanel` day panel immediately
+- Empty day: “No trades for this day” + prominent Add Trade
+- Populated day: trade list + Add Trade
+- `openNew(selectedDate)` prefills date; a11y: `Add trade for {long date}` / `View trades for {long date}`
+- Inline day detail Add Trade retained below calendar
+
+---
+
+## 6. Manual P&L amount
+
+- Mode selector: **Calculate** | **Manual**
+- Manual: absolute amount field + Profit / Loss / Breakeven (one sign system via `src/journal/manualPnl.ts`)
+- Calculate: instrument tick math from entry/exit
+- Result card lime/red/neutral matches signed value
+- Switching Manual→Calculate confirms when unsaved manual draft would be lost
+- Hint `journalFormPnlHintManual` no longer shown without a connected manual field
+
+---
+
+## 7–8. Five-tab Prop Pass contract
+
+Final order: Journal → **Prop Pass** → Stats → Settings → More
+
+| Entitlement | Behavior |
+|-------------|----------|
+| None | Tab visible; `PropPassLockedPreview` (capabilities + Unlock / View Plans / Restore). Paywall only via CTA → More subscription |
+| Active Pro | Existing `PropPassInternalScreen` (engine untouched) |
+| CustomerInfo change | Content swaps; tab order unchanged |
+
+`propPassTabVisible` no longer requires `isPremium` (QA force-hide only).
+
+---
+
+## 9–10. Physical build-113 regression QA
+
+| Step | Result |
 |------|--------|
-| No Authorization → 401 | **PASS** |
-| Invalid JWT → 401 | **PASS** |
-| Cross-user body `user_id` ignored (JWT subject deleted; victim remains) | **PASS** |
-| Disposable Email delete | **PASS** (ok=true, user 404) |
-| Repeat delete after delete | **PASS** (401 unauthorized — safe) |
-| RLS client SELECT `auth_provider_tokens` | **PASS** (403) |
-| store-apple secrets loaded | **PASS** (exchange_failed) |
-| Legacy Apple without refresh token → delete + `manualAppleRevocationRequired=true` | **PASS** (identity inserted via controlled SQL; disposable only) |
-| Apple `stored:true` with real authorizationCode | **NOT RUN** (requires physical SIWA disposable account) |
-| Apple revoke with stored refresh token | **NOT RUN** (depends on stored:true) |
-| Google disposable delete | **NOT RUN** (ASC/Google session + dedicated QA identity pending) |
-| Client export secrets | Prior scan: Expo notifications `service_role` false positive only |
+| RS 113 rebuild from `c1c7c36` | **PASS** (`build_ok`, fingerprint `YT_BUILD_FP_v1:c1c7c36:113:Release-Staging`) |
+| Install on physical iPhone 14 Pro Max | **PASS** |
+| `physical-device-tool verify113` | **PASS** |
+| Launch + interactive checklist (Radar/Heatmap/Journal/Manual P&L/5 tabs) | **BLOCKED** — device **Locked** (`SBMainWorkspace` denied launch) |
+| Screenshots | **NOT RUN** (need unlock; store in gitignored `phase4f-screenshots/physical/pre115-regression-20260802/`) |
 
 ---
 
-## 15. Pre-build physical UI QA
-
-- Device: connected iPhone 14 Pro Max (`6FCFF771-…`)
-- Installed/launched current **RS 113** build
-- Checklist: `docs/releases/1.6.1/phase4f-screenshots/physical/pre115-manual-20260802/MANUAL_QA_CHECKLIST.md`
-- Device screenshots: **PENDING_USER** (Side Button + Volume Up → save into that folder)
-- pymobiledevice3 capture remains ENVIRONMENT_BLOCKER
-
----
-
-## 16. Pre-build automated gates (this run)
+## 11. Automated gates (this run)
 
 | Check | Result |
 |-------|--------|
@@ -105,41 +132,48 @@ Deployed this run after secrets set.
 | test:email-password | PASS |
 | test:revenuecat-mobile-identity | PASS |
 | test:revenuecat-entitlement | PASS |
-| test:prop-pass-lifecycle | PASS |
+| regression-restore-pre115 | PASS |
+| bottomNavContract | PASS |
+| test:ui-polish | PASS |
 | release:stability | PASS |
 | security:check | PASS |
 | security:audit | 0 high/critical; 3 moderate Storybook/valibot |
 | security:gitleaks | PASS findings=0 |
 | security:semgrep | PASS findings=0 |
+| expo-doctor | 16/18 (known app.json / non-CNG notes; non-blocking for this freeze) |
+| npx expo export ios → `/tmp/youtrader-regression-fix-pre115` | PASS |
+| Aikido MCP scan | **FAILED** (invalid auth token — `/aikido:setup` needed) |
 | Build number | **113** (not raised) |
 
 ---
 
-## 17–26. Build 115 / purchase matrix
+## 12–14. Apple/Google deletion smoke / Build 115 / purchase matrix
 
 | Item | Result |
 |------|--------|
-| Build 115 creation | **NOT CREATED** (pre-build requirements incomplete) |
-| Archive | NOT CREATED |
-| Weekly→Email / Monthly→Apple / Yearly→Google | **NOT RUN** |
-| Restore / reinstall / tab matrix | **NOT RUN** |
-| App Store Connect sandbox testers | **BLOCKED** — ASC login session expired (`authResult=FAILED`); needs interactive Apple Account sign-in + 2FA |
+| Apple `stored:true` + revoke | **NOT RUN** |
+| Google disposable delete | **NOT RUN** |
+| ASC sandbox session | **BLOCKED** (interactive 2FA) |
+| Build 115 creation | **NOT CREATED** |
+| Purchase/auth matrix | **NOT RUN** |
 
 ---
 
-## 27. Remaining blockers before build 115
+## 15. Remaining blockers before build 115
 
-1. **Interactive App Store Connect login** (browser) for sandbox testers + purchase matrix
-2. **Physical SIWA disposable account** → `store-apple-auth-token` `stored:true` → delete revoke PASS
-3. **Disposable Google delete smoke**
-4. **Manual physical UI screenshot checklist completion**
-5. Only then: set build number **115**, signed Release archive, install, purchase matrix
+1. **Unlock physical iPhone** → launch RS 113 → complete Phase 9 interactive regression checklist + screenshots
+2. Interactive App Store Connect login for sandbox testers
+3. Physical SIWA disposable `stored:true` + revoke
+4. Disposable Google delete smoke
+5. Only then: set build **115**, signed production build, purchase matrix
 
 ---
 
-## 28. Final verdict
+## 16. Final verdict
 
-**NO-GO** for creating/authorizing build 115 until blockers above are closed.
+**NO-GO** for creating build 115 until physical interactive regression QA passes and deletion smokes / ASC session blockers close.
+
+Code regressions (Radar, Heatmap, Journal Add Trade, Manual P&L, always-visible Prop Pass) are implemented and automated-contract covered; physical launch verification remains pending device unlock.
 
 ---
 
@@ -148,8 +182,12 @@ Deployed this run after secrets set.
 ```text
 Public version: 1.6.1
 Configured build number: 113
-Build 115: NOT CREATED
 Build 115 physical QA: NOT RUN
+Performance Radar: PASS (code) / physical NOT RUN
+Trading Heatmap: PASS (code) / physical NOT RUN
+Journal Add Trade: PASS (code) / physical NOT RUN
+Manual P&L Amount: PASS (code) / physical NOT RUN
+Prop Pass Tab: PASS (code) / physical NOT RUN
 TestFlight upload: NOT PERFORMED
 App Store upload: NOT PERFORMED
 App Store screenshots: NOT CHANGED
