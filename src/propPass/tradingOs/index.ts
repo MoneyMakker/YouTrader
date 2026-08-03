@@ -57,6 +57,7 @@ export { buildPayoutPlanner } from "./payoutPlanner";
 export type { PayoutPlannerValues, PayoutPlanScenario } from "./payoutPlanner";
 export { buildDailyRiskCalendar } from "./riskCalendar";
 export type { DailyRiskCalendarDay, DailyRiskCalendarFact } from "./riskCalendar";
+export { calendarFactFromPipelineOutput } from "./calendarFactFromPipeline";
 export { PROP_PASS_CALCULATION_VERSION } from "./calculationVersion";
 export type {
   PropPassActiveRuleVersion,

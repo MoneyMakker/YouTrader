@@ -581,10 +581,10 @@ persistence wiring and final regression verification complete.
 8. Complete Challenge lifecycle integration — DONE in domain/runtime tests; final device proof remains pending.
 9. Session Cockpit — IN PROGRESS; persisted primary cockpit exists and final device/accessibility review remains.
 10. Full production UI — IN PROGRESS.
-11. Challenge Autopilot Setup — READY.
+11. Challenge Autopilot Setup — DONE (wizard + QA included in `test:prop-pass-trading-os`).
 12. Multi-Account Command Center — READY.
 13. Breach Replay — DONE in deterministic domain output; production interaction QA remains.
-14. Daily Risk Calendar — IN PROGRESS; persisted-day model exists and full calendar interaction remains.
+14. Daily Risk Calendar — DONE for current persisted-day cockpit mapping via `buildDailyRiskCalendar`; multi-day history interaction remains.
 15. Rules Compliance Score — DONE in deterministic domain output; production interaction QA remains.
 16. Account Survival Forecast — DONE as static capacity, never probability; production interaction QA remains.
 17. Payout Planner — DONE in deterministic domain output; production interaction QA remains.

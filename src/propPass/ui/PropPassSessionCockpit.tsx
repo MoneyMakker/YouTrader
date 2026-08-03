@@ -11,7 +11,7 @@ import { runYdlHaptic } from "../../ydl/haptics";
 import { YdlAnimatedNumber, YdlFade } from "../../ydl/motion";
 import { useYdlTheme } from "../../ydl/tokens";
 import type { PersistedRuntimeState } from "../persistence/index";
-import { compareRiskModes, type PropPassCalculationPipelineOutput } from "../tradingOs/index";
+import { compareRiskModes, buildDailyRiskCalendar, calendarFactFromPipelineOutput, type PropPassCalculationPipelineOutput } from "../tradingOs/index";
 import type { PropPassViewModel } from "../types";
 import { PropPassLiveSettingsEditor, PropPassSessionLockControl } from "./PropPassLiveSettingsEditor";
 
@@ -109,9 +109,51 @@ function Panel({ id, output, runtime, currency, context, onClose, onRefresh, onA
   if (id === "replay") { const replay = output.decisionReplay; return <Detail title="Decision Replay" close={close}><StatusChip status={replay.verdict} fallback="Insufficient data" /><YdlText role="bodyEmphasized">{replay.reason}</YdlText><YdlText role="body" color="text.secondary">{replay.mathematicalConsequence}</YdlText><YdlText role="body">Next: {replay.nextAction}</YdlText>{replay.relatedTradeId && onOpenTrade ? <YdlButton label="Open Journal Trade" variant="secondary" onPress={() => onOpenTrade(replay.relatedTradeId!)} /> : null}</Detail>; }
   if (id === "live_health") { const live = output.liveLifecycle?.values; return <Detail title={context === "live" ? "Capital Preservation" : "Account Command Center"} close={close}>{context === "live" ? <><Rows rows={[["State", title(live?.state ?? "needs_input")], ["Preservation score", scoreLabel(live?.preservation?.score ?? null)], ["Recovery Mode", live?.recovery?.active == null ? "Needs input" : live.recovery.active ? "Active" : "Normal"], ["Kill Switch", live?.killSwitch?.active == null ? "Needs input" : live.killSwitch.active ? "Stop Trading" : "Clear"], ["Weekly loss room", money(live?.weeklyLossRoomMinor ?? null, currency)], ["Next improvement", live?.preservation?.primaryImprovementAction ?? "Complete risk setup"]]} /></> : <><Rows rows={[["Selected account", runtime.accountId], ["Lifecycle", title(output.challengeLifecycle?.values.state ?? "needs_input")], ["Risk state", title(output.riskMeter.values.status ?? "needs_input")], ["Next action", output.interventions[0]?.recommendedAction ?? "Keep this account inside plan"]]} /><YdlText role="caption" color="text.secondary">Limits remain isolated per account; no values are merged.</YdlText></>}</Detail>; }
   if (id === "survival") return <Detail title="Account Survival Capacity" close={close}><YdlText role="caption" color="text.secondary">Static scenario capacity, not a prediction or passage probability.</YdlText><Rows rows={output.survival.values.modes.map((mode) => [title(mode.mode), mode.maximumRiskLossesRemaining == null ? "Needs input" : `${mode.maximumRiskLossesRemaining} maximum-risk losses`])} /><Rows rows={[["Hard room", money(output.survival.values.hardRoomMinor, currency)], ["Daily capacity", value(output.survival.values.dailyCapacity)], ["Drawdown capacity", value(output.survival.values.drawdownCapacity)]]} /></Detail>;
-  if (id === "calendar") return <Detail title="Daily Risk Calendar" close={close}><Rows rows={[["Current trading day", plan?.tradingDay ?? "Needs plan"], ["Risk used", money(output.riskMeter.values.usedMinor, currency)], ["Risk remaining", money(output.riskMeter.values.remainingMinor, currency)], ["State", title(output.riskMeter.values.status ?? "needs_input")], ["Trades", String(output.journalApplication.appliedTradeIds.length)]]} /><YdlText role="caption" color="text.secondary">Only persisted daily snapshots are displayed. Missing historical days are never backfilled.</YdlText></Detail>;
+  if (id === "calendar") {
+    const fact = calendarFactFromPipelineOutput(output);
+    const days = fact ? buildDailyRiskCalendar([fact]) : [];
+    return (
+      <Detail title="Daily Risk Calendar" close={close}>
+        {days.length ? days.map((day) => (
+          <YdlCard key={day.tradingDayId} testID={`prop-pass-calendar-day-${day.tradingDayId}`}>
+            <View style={styles.heroTop}>
+              <YdlText role="bodyEmphasized">{day.tradingDayId}</YdlText>
+              <YdlChip label={title(day.semanticState)} />
+            </View>
+            <Rows rows={[
+              ["Risk used", money(day.riskUsedMinor, currency)],
+              ["Risk remaining", money(day.riskRemainingMinor, currency)],
+              ["Health", title(day.health ?? "needs_input")],
+              ["Trades", String(day.tradeIds.length)],
+              ["Interventions", String(day.interventions.length)],
+              ["Markers", day.markers.length ? day.markers.map(title).join(", ") : "None"],
+            ]} />
+          </YdlCard>
+        )) : <Unavailable label="No persisted trading-day snapshot is available. Missing historical days are never backfilled." />}
+        <YdlText role="caption" color="text.secondary">Only persisted daily snapshots are displayed. Missing historical days are never backfilled.</YdlText>
+      </Detail>
+    );
+  }
   if (id === "breach") { const breach = output.breachReplay.values; return <Detail title="Breach Replay" close={close}>{breach ? <><YdlText role="bodyEmphasized">Account failed here</YdlText><Rows rows={[["Trade", breach.triggeringTradeId], ["Rule", breach.ruleId], ["Buffer before", money(breach.bufferBeforeMinor, currency)], ["Planned risk", money(breach.plannedRiskMinor, currency)], ["Actual risk", money(breach.actualRiskMinor, currency)], ["Breach amount", money(breach.breachAmountMinor, currency)], ["Recommended contracts", String(breach.counterfactual.contracts)], ["Projected remaining buffer", money(breach.counterfactual.projectedRemainingBufferMinor, currency)]]} /><YdlText role="caption" color="text.secondary">The counterfactual changes size only. It does not change the recorded market outcome.</YdlText></> : <Unavailable label="No complete persisted breach fact is available; no replay is invented." />}</Detail>; }
-  if (id === "session_lock") { const kill = output.liveLifecycle?.values.killSwitch; return <Detail title="Personal Kill Switch & Session Lock" close={close}><Rows rows={[["State", kill?.active ? "Stop Trading" : "Ready"], ["Recommended risk", money(kill?.recommendedRiskMinor ?? output.allowedRisk.values.allowedRiskMinor, currency)], ["Recommended contracts", String(kill?.recommendedContracts ?? output.contractSize?.values.recommendedContracts ?? 0)], ["Gambler", kill?.gamblerDisabled ? "Disabled" : "Hard limits active"], ["Reset", kill?.resetInstruction ?? "Use configured session/day boundary"]]} />{kill?.exactTriggers.map((trigger) => <YdlText key={trigger} role="body" color="text.secondary">• {trigger}</YdlText>)}<YdlText role="caption" color="text.secondary">Manual lock requires deliberate server-confirmed activation. It cannot be unlocked from this summary or bypassed by a risk mode.</YdlText><PropPassSessionLockControl accountId={runtime.accountId} active={Boolean(kill?.active)} onActivated={onRefresh} /></Detail>; }
+  if (id === "session_lock") {
+    const kill = output.liveLifecycle?.values.killSwitch;
+    const lockTrigger = kill?.exactTriggers.find((trigger) => /manual session lock/i.test(trigger)) ?? null;
+    return (
+      <Detail title="Personal Kill Switch & Session Lock" close={close}>
+        <Rows rows={[
+          ["State", kill?.active ? "Stop Trading" : "Ready"],
+          ["Recommended risk", money(kill?.recommendedRiskMinor ?? output.allowedRisk.values.allowedRiskMinor, currency)],
+          ["Recommended contracts", String(kill?.recommendedContracts ?? output.contractSize?.values.recommendedContracts ?? 0)],
+          ["Gambler", kill?.gamblerDisabled ? "Disabled" : "Hard limits active"],
+          ["Manual lock", lockTrigger ? "Server-confirmed" : kill?.manualConfirmationRequired ? "Confirmation required" : "Not active"],
+          ["Reset", kill?.resetInstruction ?? "Use configured session/day boundary"],
+        ]} />
+        {kill?.exactTriggers.map((trigger) => <YdlText key={trigger} role="body" color="text.secondary">• {trigger}</YdlText>)}
+        <YdlText role="caption" color="text.secondary">Manual lock requires deliberate server-confirmed activation with a recorded reason and bounded review expiry. It cannot be unlocked from this summary or bypassed by a risk mode.</YdlText>
+        <PropPassSessionLockControl accountId={runtime.accountId} active={Boolean(kill?.active)} onActivated={onRefresh} />
+      </Detail>
+    );
+  }
   return <Detail title="Prop Pass" close={close}><YdlButton label="Assign Journal Trades" onPress={onAssignTrades} /></Detail>;
 }
 
