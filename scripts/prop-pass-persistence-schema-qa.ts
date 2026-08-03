@@ -6,7 +6,8 @@ const hardeningSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrat
 const journalSyncSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802225538_prop_pass_journal_automatic_sync.sql"), "utf8");
 const pipelineV2Sql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802232311_prop_pass_pipeline_v2_runtime.sql"), "utf8");
 const runtimeQueueSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802233700_prop_pass_runtime_processing_queue.sql"), "utf8");
-const sql = `${baseSql}\n${hardeningSql}\n${journalSyncSql}\n${pipelineV2Sql}\n${runtimeQueueSql}`;
+const settingsQueueSql = fs.readFileSync(path.resolve(__dirname, "../supabase/migrations/20260802235500_prop_pass_settings_recalculation_events.sql"), "utf8");
+const sql = `${baseSql}\n${hardeningSql}\n${journalSyncSql}\n${pipelineV2Sql}\n${runtimeQueueSql}\n${settingsQueueSql}`;
 const tables = ["prop_daily_plan_snapshots", "prop_pre_trade_assessments", "prop_rule_templates", "prop_intervention_events", "prop_timeline_events", "prop_live_risk_settings", "prop_payout_withdrawal_settings", "prop_kill_switch_settings", "prop_position_size_progressions", "prop_recovery_mode_states"];
 for (const table of tables) assert.match(sql, new RegExp(`'${table}'`), `${table} must be RLS-scoped`);
 assert.match(sql, /enable row level security/); assert.match(sql, /force row level security/); assert.match(sql, /to authenticated using \(user_id = \(select auth\.uid\(\)\)\)/);
@@ -39,3 +40,7 @@ assert.match(runtimeQueueSql, /for update skip locked/);
 assert.match(runtimeQueueSql, /from public, anon, authenticated/);
 assert.match(runtimeQueueSql, /'pending', null/);
 assert.doesNotMatch(runtimeQueueSql, /grant execute[\s\S]*to authenticated/);
+assert.match(settingsQueueSql, /'settings_changed'/);
+assert.match(settingsQueueSql, /prop_os_processor_queue_settings_recalculation/);
+assert.match(settingsQueueSql, /from public, anon, authenticated/);
+assert.doesNotMatch(settingsQueueSql, /grant execute[\s\S]*to authenticated/);

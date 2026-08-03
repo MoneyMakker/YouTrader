@@ -33,6 +33,8 @@ const { data: priorRuntime } = await admin
   .eq("user_id", expectedUserId)
   .eq("account_id", challenge.account_id)
   .maybeSingle();
+const { data: priorKillSettings } = await admin.from("prop_kill_switch_settings").select("*").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).maybeSingle();
+const startedAt = new Date().toISOString();
 const suffix = randomUUID();
 const eventKey = `${challenge.account_id}:runtime-worker-qa:${suffix}`;
 try {
@@ -73,9 +75,29 @@ try {
   assert.ok(event?.result_digest);
   assert.equal(runtime?.calculation_version, "build117.pipeline.v2");
   assert.equal((runtime?.payload as { calculationVersion?: string } | null)?.calculationVersion, "build117.pipeline.v2");
+  const lockResponse = await fetch(`${url}/functions/v1/prop-pass-runtime-processor`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${signed.data.session.access_token}`, apikey: anonKey, "content-type": "application/json" },
+    body: JSON.stringify({ op: "activate_session_lock", accountId: challenge.account_id, confirm: true }),
+  });
+  const lockBody = await lockResponse.json() as { kind?: string; report?: { failed?: number } };
+  assert.equal(lockResponse.status, 200);
+  assert.equal(lockBody.kind, "success");
+  assert.equal(lockBody.report?.failed, 0);
+  const [{ data: lockedSettings }, { data: lockedRuntime }] = await Promise.all([
+    admin.from("prop_kill_switch_settings").select("payload").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).single(),
+    admin.from("prop_account_runtime_states").select("payload").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).single(),
+  ]);
+  assert.equal((lockedSettings?.payload as { manualSessionLockConfirmed?: boolean } | null)?.manualSessionLockConfirmed, true);
+  assert.equal((lockedRuntime?.payload as { status?: string } | null)?.status, "stop_trading");
   console.log("prop-pass-runtime-processor-staging: PASS");
 } finally {
   await admin.from("prop_processed_journal_events").delete().eq("user_id", expectedUserId).eq("event_key", eventKey);
+  const { data: settingsEvents } = await admin.from("prop_processed_journal_events").select("id").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).eq("event_type", "settings_changed").gte("created_at", startedAt);
+  const settingsIds = (settingsEvents ?? []).map((row) => row.id);
+  if (settingsIds.length) await admin.from("prop_processed_journal_events").delete().in("id", settingsIds);
+  if (priorKillSettings) await admin.from("prop_kill_switch_settings").upsert(priorKillSettings, { onConflict: "user_id,account_id" });
+  else await admin.from("prop_kill_switch_settings").delete().eq("user_id", expectedUserId).eq("account_id", challenge.account_id);
   if (priorRuntime) {
     await admin.from("prop_account_runtime_states").upsert(priorRuntime, { onConflict: "user_id,account_id" });
   } else {

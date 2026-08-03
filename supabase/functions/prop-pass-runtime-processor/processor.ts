@@ -18,7 +18,7 @@ type RuntimeBundle = {
   selectedMode: "calm" | "balanced" | "gambler" | null;
   currentDailyPlan: Record<string, unknown> | null;
   persistedTimelineFacts: Record<string, unknown>[];
-  killSwitchConfiguration: Record<string, unknown> | null;
+  killSwitchSettings: Record<string, unknown> | null;
   liveRiskSettings: Record<string, unknown> | null;
   recoveryState: Record<string, unknown> | null;
 };
@@ -29,6 +29,54 @@ export type RuntimeProcessorReport = Readonly<{
   alreadyApplied: number;
   failed: number;
 }>;
+
+export async function saveLiveRiskSettings(
+  client: SupabaseClient,
+  userId: string,
+  input: unknown,
+): Promise<RuntimeProcessorReport> {
+  const body = requiredObject(input, "settings_body");
+  const accountId = requiredText(body.accountId, "account_id");
+  const settings = validateLiveSettings(body.settings);
+  const challengeId = await activeChallengeId(client, userId, accountId);
+  const updated = await client.from("prop_live_risk_settings").upsert({
+    user_id: userId, account_id: accountId, payload: settings, updated_at: settings.configuredAt,
+  }, { onConflict: "user_id,account_id" });
+  if (updated.error) throw new Error(`live_settings_write_failed:${updated.error.code ?? "unknown"}`);
+  await queueSettingsRecalculation(client, userId, accountId, challengeId, "live_risk", settings);
+  return processPendingRuntimeEvents(client, userId, 4);
+}
+
+export async function setManualSessionLock(
+  client: SupabaseClient,
+  userId: string,
+  input: unknown,
+): Promise<RuntimeProcessorReport> {
+  const body = requiredObject(input, "session_lock_body");
+  const accountId = requiredText(body.accountId, "account_id");
+  if (body.confirm !== true) throw new Error("manual_session_lock_confirmation_required");
+  const challengeId = await activeChallengeId(client, userId, accountId);
+  const current = await client.from("prop_kill_switch_settings").select("payload").eq("user_id", userId).eq("account_id", accountId).maybeSingle();
+  if (current.error) throw new Error(`kill_switch_read_failed:${current.error.code ?? "unknown"}`);
+  const prior = objectOrNull(current.data?.payload);
+  const configuration = objectOrNull(prior?.configuration) ?? {
+    maximumDailyLossMinor: null, maximumWeeklyLossMinor: null,
+    maximumTradeCount: null, consecutiveLossLimit: null, cutoffMinuteLocal: null,
+    stopAfterProfitLock: false, resetStrategy: "next_trading_day",
+  };
+  validateKillSwitchConfiguration(configuration);
+  const now = new Date().toISOString();
+  const settings = {
+    configuration, configuredAt: now, manualSessionLockRequested: true,
+    manualSessionLockConfirmed: true, manualSessionLockActivatedAt: now,
+  };
+  const updated = await client.from("prop_kill_switch_settings").upsert({
+    user_id: userId, account_id: accountId, payload: settings, updated_at: now,
+  }, { onConflict: "user_id,account_id" });
+  if (updated.error) throw new Error(`kill_switch_write_failed:${updated.error.code ?? "unknown"}`);
+  await queueSettingsRecalculation(client, userId, accountId, challengeId, "manual_lock", settings);
+  return processPendingRuntimeEvents(client, userId, 4);
+}
 
 export async function processPendingRuntimeEvents(
   client: SupabaseClient,
@@ -135,7 +183,7 @@ async function loadBundle(
     selectedMode: mode(livePayload?.selectedMode),
     currentDailyPlan: objectOrNull(plans[0]?.payload),
     persistedTimelineFacts: timeline.map((row) => objectOrNull(row.payload)).filter((row): row is Record<string, unknown> => Boolean(row)),
-    killSwitchConfiguration: objectOrNull(objectOrNull(killSettings?.payload)?.configuration),
+    killSwitchSettings: objectOrNull(killSettings?.payload),
     liveRiskSettings: livePayload,
     recoveryState: recoveryState
       ? { state: objectOrNull(recoveryState.payload), updatedAt: recoveryState.updated_at }
@@ -176,3 +224,46 @@ function hashPropOsCommandPayload(commandType: string, body: unknown): string {
   return out;
 }
 function stableStringify(value: unknown): string { if (value === null || typeof value !== "object") return JSON.stringify(value); if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`; const object = value as Record<string, unknown>; return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`).join(",")}}`; }
+
+async function activeChallengeId(client: SupabaseClient, userId: string, accountId: string): Promise<string> {
+  const account = await client.from("prop_accounts").select("id").eq("user_id", userId).eq("id", accountId).maybeSingle();
+  if (account.error || !account.data) throw new Error("account_forbidden_or_missing");
+  const challenge = await client.from("prop_challenges").select("id").eq("user_id", userId).eq("account_id", accountId).in("status", ["active", "at_risk", "passed", "funded"]).order("started_at", { ascending: false }).limit(1).maybeSingle();
+  if (challenge.error || !challenge.data?.id) throw new Error("active_challenge_required");
+  return String(challenge.data.id);
+}
+async function queueSettingsRecalculation(client: SupabaseClient, userId: string, accountId: string, challengeId: string, kind: string, payload: unknown): Promise<void> {
+  const digest = hashPropOsCommandPayload(`prop_pass_${kind}_settings`, payload);
+  const eventKey = `${accountId}:settings:${kind}:${digest}`;
+  const queued = await client.rpc("prop_os_processor_queue_settings_recalculation", { p_user_id: userId, p_account_id: accountId, p_challenge_id: challengeId, p_event_key: eventKey, p_input_digest: digest });
+  if (queued.error || (queued.data as { kind?: string } | null)?.kind !== "success") throw new Error(`settings_queue_failed:${queued.error?.code ?? "rejected"}`);
+}
+function validateLiveSettings(value: unknown): Record<string, unknown> {
+  const settings = requiredObject(value, "live_settings");
+  const rules = requiredObject(settings.rules, "live_rules");
+  for (const field of ["dailyRiskBudgetMinor", "weeklyLossLimitMinor", "maximumDrawdownMinor", "perTradeRiskCapMinor"] as const) nonNegativeInteger(rules[field], field);
+  positiveInteger(rules.maximumTrades, "maximumTrades");
+  positiveInteger(rules.consecutiveLossLimit, "consecutiveLossLimit");
+  const threshold = nonNegativeInteger(rules.recoveryModeThresholdBps, "recoveryModeThresholdBps");
+  if (threshold > 10_000) throw new Error("recoveryModeThresholdBps_invalid");
+  if (!requiredText(rules.id, "live_rule_id")) throw new Error("live_rule_id_invalid");
+  if (settings.selectedMode !== "calm" && settings.selectedMode !== "balanced" && settings.selectedMode !== "gambler") throw new Error("selected_mode_invalid");
+  if (settings.weekStartsOn !== 0 && settings.weekStartsOn !== 1) throw new Error("week_start_invalid");
+  nonNegativeInteger(settings.normalRiskPerTradeMinor, "normalRiskPerTradeMinor");
+  positiveInteger(settings.normalMaximumContracts, "normalMaximumContracts");
+  const recovery = nonNegativeInteger(settings.recoveryRiskBps, "recoveryRiskBps");
+  if (recovery > 10_000) throw new Error("recoveryRiskBps_invalid");
+  if (positiveInteger(settings.minimumCompliantProfitableSessions, "minimumCompliantProfitableSessions") < 2) throw new Error("minimumCompliantProfitableSessions_invalid");
+  const configuredAt = requiredText(settings.configuredAt, "configuredAt");
+  if (Number.isNaN(Date.parse(configuredAt))) throw new Error("configuredAt_invalid");
+  return settings;
+}
+function validateKillSwitchConfiguration(value: Record<string, unknown>): void {
+  for (const field of ["maximumDailyLossMinor", "maximumWeeklyLossMinor", "maximumTradeCount", "consecutiveLossLimit", "cutoffMinuteLocal"] as const) if (value[field] != null) nonNegativeInteger(value[field], field);
+  if (value.stopAfterProfitLock != null && typeof value.stopAfterProfitLock !== "boolean") throw new Error("stopAfterProfitLock_invalid");
+  if (value.resetStrategy !== "next_trading_day" && value.resetStrategy !== "next_session") throw new Error("resetStrategy_invalid");
+}
+function requiredObject(value: unknown, label: string): Record<string, unknown> { const result = objectOrNull(value); if (!result) throw new Error(`${label}_invalid`); return result; }
+function requiredText(value: unknown, label: string): string { if (typeof value !== "string" || !value.trim()) throw new Error(`${label}_invalid`); return value.trim(); }
+function nonNegativeInteger(value: unknown, label: string): number { if (!Number.isSafeInteger(value) || Number(value) < 0) throw new Error(`${label}_invalid`); return Number(value); }
+function positiveInteger(value: unknown, label: string): number { const number = nonNegativeInteger(value, label); if (number < 1) throw new Error(`${label}_invalid`); return number; }

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.75.0";
-import { processPendingRuntimeEvents } from "./processor.ts";
+import { processPendingRuntimeEvents, saveLiveRiskSettings, setManualSessionLock } from "./processor.ts";
 
 function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -18,9 +18,15 @@ Deno.serve(async (req) => {
   const { data: auth, error: authError } = await admin.auth.getUser(token);
   if (authError || !auth.user) return json({ kind: "unauthorized" }, 401);
   const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object" || (body as { op?: unknown }).op !== "process_pending") return json({ kind: "invalid_body" }, 400);
+  if (!body || typeof body !== "object") return json({ kind: "invalid_body" }, 400);
+  const op = (body as { op?: unknown }).op;
+  if (op !== "process_pending" && op !== "save_live_settings" && op !== "activate_session_lock") return json({ kind: "invalid_body" }, 400);
   try {
-    const report = await processPendingRuntimeEvents(admin, auth.user.id, 4);
+    const report = op === "save_live_settings"
+      ? await saveLiveRiskSettings(admin, auth.user.id, body)
+      : op === "activate_session_lock"
+        ? await setManualSessionLock(admin, auth.user.id, body)
+        : await processPendingRuntimeEvents(admin, auth.user.id, 4);
     return json({ kind: "success", report });
   } catch (error) {
     console.error("prop-pass-runtime-processor", error instanceof Error ? error.message : "unknown_error");

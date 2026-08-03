@@ -9,7 +9,7 @@ const base = {
   challengeRow: { id: challenge, user_id: user, account_id: account, phase: "evaluation", status: "active", rule_set_version: "qa-rules", starting_balance_minor: 5_000_000, started_at: "2026-08-01T12:00:00.000Z", ended_at: null, reset_of_challenge_id: null, breach_locked: false, schema_version: "prop-os-schema-v0" },
   ruleSnapshotRow: { id: "rules", user_id: user, challenge_id: challenge, rule_set_version: "qa-rules", snapshot: { version: "qa-rules", firmKey: "custom", currency: "USD", firmTimezone: "America/Chicago", tradingDayRolloverHour: 17, profitTargetMinor: 300_000, dailyLossLimitMinor: 100_000, dailyLossBasis: "realized_only", dailyLossPolicyVersion: "daily-loss-v0", drawdown: { kind: "static", amountMinor: 200_000 }, minimumTradingDays: 2 }, template_key: null, template_version_at_capture: null, captured_at: "2026-08-01T12:00:00.000Z", schema_version: "prop-os-schema-v0" },
   executions: [{ id: "exec-a", user_id: user, challenge_id: challenge, account_id: account, trade_client_id: "trade-a", occurred_at: "2026-08-01T15:00:00.000Z", broker_sequence: null, realized_pnl_minor: -20_000, fees_minor: 0, contracts: 2, voided: false, corrects_event_id: null, source: "journal_sync", schema_version: "prop-os-schema-v0" }],
-  accountEvents: [], asOfUtc: "2026-08-02T16:00:00.000Z", selectedMode: "balanced" as const, currentDailyPlan: null, persistedTimelineFacts: [], killSwitchConfiguration: null, liveRiskSettings: null, recoveryState: null,
+  accountEvents: [], asOfUtc: "2026-08-02T16:00:00.000Z", selectedMode: "balanced" as const, currentDailyPlan: null, persistedTimelineFacts: [], killSwitchSettings: null, liveRiskSettings: null, recoveryState: null,
 };
 const result = rebuildPropPassRuntime(base);
 assert.equal(result.output.calculationVersion, "build117.pipeline.v2");
@@ -39,4 +39,8 @@ assert.equal(live.output.hardRiskRooms?.weeklyLossRemainingMinor, 80_000);
 assert.equal(live.output.hardRiskRooms?.drawdownRemainingMinor, 180_000);
 assert.equal(live.output.liveLifecycle?.values.recovery?.active, true, "Recovery Mode uses Live settings and real drawdown");
 assert.equal(live.output.liveLifecycle?.values.preservation?.score, null, "Preservation score is withheld without all compliance components");
+const locked = rebuildPropPassRuntime({ ...base, killSwitchSettings: { configuredAt: base.asOfUtc, manualSessionLockRequested: true, manualSessionLockConfirmed: true, manualSessionLockActivatedAt: base.asOfUtc, configuration: { maximumDailyLossMinor: null, maximumWeeklyLossMinor: null, maximumTradeCount: null, consecutiveLossLimit: null, cutoffMinuteLocal: null, stopAfterProfitLock: false, resetStrategy: "next_trading_day" } } });
+assert.equal(locked.output.status, "stop_trading");
+assert.equal(locked.output.allowedRisk.values.allowedRiskMinor > 0, true, "account room remains recorded separately from the personal lock");
+assert.equal(locked.output.riskMeter.values.status, "stop_trading");
 console.log("prop-pass-runtime-rebuild-qa: PASS");

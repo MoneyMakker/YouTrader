@@ -113,7 +113,13 @@ export type PropPassLiveRiskSettings = Readonly<{
   minimumCompliantProfitableSessions?: number;
 }>;
 export type PropPassPayoutWithdrawalSettings = Readonly<{ payout: PayoutReadinessInput | null; withdrawal: SafeWithdrawalInput | null; configuredAt: string }>;
-export type PropPassKillSwitchSettings = Readonly<{ configuration: KillSwitchConfiguration; configuredAt: string }>;
+export type PropPassKillSwitchSettings = Readonly<{
+  configuration: KillSwitchConfiguration;
+  configuredAt: string;
+  manualSessionLockRequested?: boolean;
+  manualSessionLockConfirmed?: boolean;
+  manualSessionLockActivatedAt?: string | null;
+}>;
 export type PropPassRecoveryState = Readonly<{ state: RecoveryModeValues; updatedAt: string }>;
 
 export type PersistedRuntimeState = Readonly<{
@@ -133,7 +139,7 @@ export type JournalPersistenceEvent = Readonly<{
   accountId: string;
   challengeId: string | null;
   eventKey: string;
-  eventType: "trade_saved" | "trade_edited" | "trade_deleted" | "trade_assigned" | "trade_unassigned";
+  eventType: "trade_saved" | "trade_edited" | "trade_deleted" | "trade_assigned" | "trade_unassigned" | "settings_changed";
   journalTradeId: string | null;
   tradeClientId: string;
   tradeRevision: number;

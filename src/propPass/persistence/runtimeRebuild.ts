@@ -25,7 +25,7 @@ import {
   type RiskRooms,
   type TradingRiskMode,
 } from "../tradingOs/index";
-import type { PropPassLiveRiskSettings, PropPassRecoveryState } from "./contracts";
+import type { PropPassKillSwitchSettings, PropPassLiveRiskSettings, PropPassRecoveryState } from "./contracts";
 
 export type PropPassRuntimeRebuildBundle = Readonly<{
   accountRow: AccountRow;
@@ -37,7 +37,7 @@ export type PropPassRuntimeRebuildBundle = Readonly<{
   selectedMode: TradingRiskMode | null;
   currentDailyPlan: DailyTradingPlanSnapshot | null;
   persistedTimelineFacts: PersistedTimelineFact[];
-  killSwitchConfiguration: KillSwitchConfiguration | null;
+  killSwitchSettings: PropPassKillSwitchSettings | null;
   liveRiskSettings: PropPassLiveRiskSettings | null;
   recoveryState: PropPassRecoveryState | null;
 }>;
@@ -93,7 +93,7 @@ export function rebuildPropPassRuntime(
     .filter((row) => !row.voided && row.challenge_id === challenge.id && row.trade_client_id)
     .sort((left, right) => right.occurred_at.localeCompare(left.occurred_at))[0] ?? null;
   const breach = mapBreach(engine, riskRooms);
-  const killSwitch = buildKillSwitchInput(bundle.killSwitchConfiguration, bundle.executions, engine.accountState.dayPnlMinor);
+  const killSwitch = buildKillSwitchInput(bundle.killSwitchSettings, bundle.executions, engine.accountState.dayPnlMinor);
   const currentEquity = engine.accountState.equityMinor;
   const output = calculatePropPassState({
     account: {
@@ -290,7 +290,7 @@ function startOfWeek(day: string, weekStartsOn: 0 | 1): string {
 export const PROP_PASS_RUNTIME_CALCULATION_VERSION = PROP_PASS_CALCULATION_VERSION;
 
 function buildKillSwitchInput(
-  configuration: KillSwitchConfiguration | null,
+  settings: PropPassKillSwitchSettings | null,
   executions: ExecutionRow[],
   dayPnlMinor: number,
 ): KillSwitchInput {
@@ -298,7 +298,7 @@ function buildKillSwitchInput(
   let lossStreak = 0;
   for (const row of [...active].reverse()) { if ((row.realized_pnl_minor ?? 0) >= 0) break; lossStreak += 1; }
   return {
-    configuration: configuration ?? {
+    configuration: settings?.configuration ?? {
       maximumDailyLossMinor: null,
       maximumWeeklyLossMinor: null,
       maximumTradeCount: null,
@@ -313,7 +313,7 @@ function buildKillSwitchInput(
     consecutiveLosses: lossStreak,
     currentMinuteLocal: null,
     profitLockStopActive: false,
-    manualSessionLockRequested: false,
-    manualSessionLockConfirmed: false,
+    manualSessionLockRequested: settings?.manualSessionLockRequested ?? false,
+    manualSessionLockConfirmed: settings?.manualSessionLockConfirmed ?? false,
   };
 }
