@@ -569,6 +569,43 @@ rolls back only synthetic users/rows. Production deployment remains pending.
 PPOS-117-20 has the consolidated deterministic gate but remains open until
 persistence wiring and final regression verification complete.
 
+**Build 117 execution reconciliation (2026-08-03, HEAD `ca50db0`):**
+
+1. Real persistence adapters — DONE in source; production deployment remains under item 22.
+2. Unified calculation pipeline verification — DONE (`build117.pipeline.v2`).
+3. Fixed-precision financial math — DONE.
+4. Trading-day and timezone engine — DONE.
+5. Complete drawdown variants — DONE.
+6. Versioned instrument registry — DONE.
+7. Journal ↔ Prop Pass automatic synchronization — DONE in source and deterministic tests; remote release proof remains pending.
+8. Complete Challenge lifecycle integration — DONE in domain/runtime tests; final device proof remains pending.
+9. Session Cockpit — IN PROGRESS; persisted primary cockpit exists and final device/accessibility review remains.
+10. Full production UI — IN PROGRESS.
+11. Challenge Autopilot Setup — READY.
+12. Multi-Account Command Center — READY.
+13. Breach Replay — DONE in deterministic domain output; production interaction QA remains.
+14. Daily Risk Calendar — IN PROGRESS; persisted-day model exists and full calendar interaction remains.
+15. Rules Compliance Score — DONE in deterministic domain output; production interaction QA remains.
+16. Account Survival Forecast — DONE as static capacity, never probability; production interaction QA remains.
+17. Payout Planner — DONE in deterministic domain output; production interaction QA remains.
+18. Session Lock review workflow — IN PROGRESS; server-confirmed reason and bounded review expiry are implemented.
+19. Explainable calculations — DONE in pipeline trace and cockpit detail routes.
+20. Property/invariant tests — DONE in source (29 invariants, 13,000 generated assertions).
+21. Final persistence schema and RLS — IN PROGRESS; staging migration/RLS evidence exists, final reconciliation remains.
+22. Production migration — READY after final schema and staging gates.
+23. Final automated release gates — READY after final source.
+24. Physical-device QA — BLOCKED on final signed candidate and device interaction.
+25. Apple stored:true and revoke — BLOCKED on disposable Apple identity/system confirmation.
+26. Subscription/authentication matrix — BLOCKED on StoreKit/system confirmations.
+27. Final archive 1.6.1 (117) — BLOCKED on items 23–26.
+28. TestFlight processing and internal testing — BLOCKED on item 27 and App Store Connect processing.
+29. Exact source tag — BLOCKED on successful TestFlight processing.
+30. Final documentation and clean handoff — BLOCKED on items 22–29.
+
+This reconciliation does not reopen completed deterministic engines and does
+not mark release-only evidence as passed before it runs against the final
+source. Build 116 remains immutable; build 118 is not authorized.
+
 ## Deferred scope
 
 The following are intentionally not backlog tasks for the current 2.0 critical
