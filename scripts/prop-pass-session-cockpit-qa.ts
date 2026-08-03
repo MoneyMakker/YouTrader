@@ -4,6 +4,7 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
 const cockpit = fs.readFileSync(path.join(root, "src/propPass/ui/PropPassSessionCockpit.tsx"), "utf8");
+const liveSettings = fs.readFileSync(path.join(root, "src/propPass/ui/PropPassLiveSettingsEditor.tsx"), "utf8");
 const screen = fs.readFileSync(path.join(root, "src/propPass/PropPassInternalScreen.tsx"), "utf8");
 const availability = fs.readFileSync(path.join(root, "src/propPass/usePropPassAvailability.ts"), "utf8");
 
@@ -22,5 +23,14 @@ assert.match(screen, /<PropPassSessionCockpit/);
 assert.doesNotMatch(screen, /<PropPassPassProbability/);
 assert.match(availability, /getRuntimeState\(resolvedAccountId\)/);
 assert.match(availability, /runtimeError/);
+assert.match(liveSettings, /op: "save_live_settings"/);
+assert.match(liveSettings, /op: "activate_session_lock"/);
+assert.match(liveSettings, /confirm: true/);
+assert.match(liveSettings, /minimumCompliantProfitableSessions/);
+assert.match(liveSettings, /Recovery requires at least two compliant profitable sessions/);
+assert.match(liveSettings, /Your prior saved rules remain active/);
+assert.doesNotMatch(liveSettings, /#[A-Fa-f0-9]{6}/, "Live settings must use semantic theme tokens");
+assert.match(screen, /automaticallyAdjustKeyboardInsets/);
+assert.match(screen, /keyboardShouldPersistTaps="handled"/);
 
 console.log("prop-pass-session-cockpit-qa: PASS");

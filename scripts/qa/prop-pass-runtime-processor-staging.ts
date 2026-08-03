@@ -34,6 +34,7 @@ const { data: priorRuntime } = await admin
   .eq("account_id", challenge.account_id)
   .maybeSingle();
 const { data: priorKillSettings } = await admin.from("prop_kill_switch_settings").select("*").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).maybeSingle();
+const { data: priorLiveSettings } = await admin.from("prop_live_risk_settings").select("*").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).maybeSingle();
 const startedAt = new Date().toISOString();
 const suffix = randomUUID();
 const eventKey = `${challenge.account_id}:runtime-worker-qa:${suffix}`;
@@ -75,6 +76,27 @@ try {
   assert.ok(event?.result_digest);
   assert.equal(runtime?.calculation_version, "build117.pipeline.v2");
   assert.equal((runtime?.payload as { calculationVersion?: string } | null)?.calculationVersion, "build117.pipeline.v2");
+  const configuredAt = new Date().toISOString();
+  const settingsResponse = await fetch(`${url}/functions/v1/prop-pass-runtime-processor`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${signed.data.session.access_token}`, apikey: anonKey, "content-type": "application/json" },
+    body: JSON.stringify({
+      op: "save_live_settings",
+      accountId: challenge.account_id,
+      settings: {
+        rules: { id: "qa.live.rules", dailyRiskBudgetMinor: 50000, weeklyLossLimitMinor: 150000, maximumDrawdownMinor: 250000, perTradeRiskCapMinor: 25000, maximumTrades: 5, consecutiveLossLimit: 2, recoveryModeThresholdBps: 500 },
+        configuredAt, selectedMode: "balanced", weekStartsOn: 1,
+        normalRiskPerTradeMinor: 20000, normalMaximumContracts: 4,
+        recoveryRiskBps: 5000, minimumCompliantProfitableSessions: 3,
+      },
+    }),
+  });
+  const settingsBody = await settingsResponse.json() as { kind?: string; report?: { failed?: number } };
+  assert.equal(settingsResponse.status, 200);
+  assert.equal(settingsBody.kind, "success");
+  assert.equal(settingsBody.report?.failed, 0);
+  const { data: savedSettings } = await admin.from("prop_live_risk_settings").select("payload").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).single();
+  assert.equal((savedSettings?.payload as { selectedMode?: string } | null)?.selectedMode, "balanced");
   const lockResponse = await fetch(`${url}/functions/v1/prop-pass-runtime-processor`, {
     method: "POST",
     headers: { Authorization: `Bearer ${signed.data.session.access_token}`, apikey: anonKey, "content-type": "application/json" },
@@ -98,6 +120,8 @@ try {
   if (settingsIds.length) await admin.from("prop_processed_journal_events").delete().in("id", settingsIds);
   if (priorKillSettings) await admin.from("prop_kill_switch_settings").upsert(priorKillSettings, { onConflict: "user_id,account_id" });
   else await admin.from("prop_kill_switch_settings").delete().eq("user_id", expectedUserId).eq("account_id", challenge.account_id);
+  if (priorLiveSettings) await admin.from("prop_live_risk_settings").upsert(priorLiveSettings, { onConflict: "user_id,account_id" });
+  else await admin.from("prop_live_risk_settings").delete().eq("user_id", expectedUserId).eq("account_id", challenge.account_id);
   if (priorRuntime) {
     await admin.from("prop_account_runtime_states").upsert(priorRuntime, { onConflict: "user_id,account_id" });
   } else {

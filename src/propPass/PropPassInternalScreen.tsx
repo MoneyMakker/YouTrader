@@ -109,7 +109,13 @@ export function PropPassInternalScreen({
           </YdlText>
         </View>
       ) : null}
-      <ScrollView contentContainerStyle={styles.body} accessibilityRole="scrollbar">
+      <ScrollView
+        contentContainerStyle={styles.body}
+        accessibilityRole="scrollbar"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets
+      >
         {showOnboarding && userId ? (
           <PropPassOnboardingFlow
             userId={userId}
