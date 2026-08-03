@@ -138,6 +138,9 @@ function Panel({ id, output, runtime, currency, context, onClose, onRefresh, onA
   if (id === "session_lock") {
     const kill = output.liveLifecycle?.values.killSwitch;
     const lockTrigger = kill?.exactTriggers.find((trigger) => /manual session lock/i.test(trigger)) ?? null;
+    const lockReviewRows: Array<[string, string]> = [];
+    if (kill?.manualSessionLockReason) lockReviewRows.push(["Lock reason", kill.manualSessionLockReason]);
+    if (kill?.manualSessionLockExpiresAt) lockReviewRows.push(["Review expires", formatReviewExpiry(kill.manualSessionLockExpiresAt)]);
     return (
       <Detail title="Personal Kill Switch & Session Lock" close={close}>
         <Rows rows={[
@@ -146,6 +149,7 @@ function Panel({ id, output, runtime, currency, context, onClose, onRefresh, onA
           ["Recommended contracts", String(kill?.recommendedContracts ?? output.contractSize?.values.recommendedContracts ?? 0)],
           ["Gambler", kill?.gamblerDisabled ? "Disabled" : "Hard limits active"],
           ["Manual lock", lockTrigger ? "Server-confirmed" : kill?.manualConfirmationRequired ? "Confirmation required" : "Not active"],
+          ...lockReviewRows,
           ["Reset", kill?.resetInstruction ?? "Use configured session/day boundary"],
         ]} />
         {kill?.exactTriggers.map((trigger) => <YdlText key={trigger} role="body" color="text.secondary">• {trigger}</YdlText>)}
@@ -173,6 +177,11 @@ function money(minor: number | null | undefined, currency: string): string { if 
 function value(input: number | null | undefined): string { return input == null ? "Needs input" : String(input); }
 function title(value: string): string { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function scoreLabel(score: number | null): string { return score == null ? "Needs input" : `${score} / 100`; }
+function formatReviewExpiry(iso: string): string {
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return iso;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(parsed));
+}
 function setupAction(code: string): string { return `Set ${title(code).toLowerCase()} in account risk settings.`; }
 
 const styles = StyleSheet.create({ stack: { gap: 12 }, hero: { gap: 14 }, heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, flex: { flex: 1 }, display: { fontSize: 34, fontWeight: "700", fontVariant: ["tabular-nums"] }, progressTrack: { height: 8, borderRadius: 999, overflow: "hidden" }, progressFill: { height: 8, borderRadius: 999 }, metricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, metric: { width: "47%", gap: 3 }, warning: { borderRadius: 12, padding: 12, gap: 4 }, riskStrip: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }, actions: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, action: { width: "48%", minHeight: 94, justifyContent: "space-between" }, row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12, paddingVertical: 3 }, value: { maxWidth: "58%", textAlign: "right" }, trace: { gap: 3, paddingTop: 6 } });

@@ -5,5 +5,12 @@ const base = { configuration, currentDailyLossMinor: 20_000, currentWeeklyLossMi
 assert.equal(evaluateKillSwitch(base).status, "safe_to_take");
 const lossStop = evaluateKillSwitch({ ...base, currentDailyLossMinor: 50_000 }); assert.equal(lossStop.status, "stop_trading"); assert.equal(lossStop.values.recommendedContracts, 0); assert.equal(lossStop.values.gamblerDisabled, true); assert.ok(lossStop.values.triggerIds.includes("daily_loss"));
 const unconfirmed = evaluateKillSwitch({ ...base, manualSessionLockRequested: true }); assert.equal(unconfirmed.values.active, false); assert.equal(unconfirmed.values.manualConfirmationRequired, true);
-const manual = evaluateKillSwitch({ ...base, manualSessionLockRequested: true, manualSessionLockConfirmed: true }); assert.equal(manual.status, "stop_trading"); assert.ok(manual.values.triggerIds.includes("manual_session_lock"));
+const manual = evaluateKillSwitch({ ...base, manualSessionLockRequested: true, manualSessionLockConfirmed: true, manualSessionLockReason: "Tilt after two losses", manualSessionLockExpiresAt: "2026-08-03T20:00:00.000Z" });
+assert.equal(manual.status, "stop_trading");
+assert.ok(manual.values.triggerIds.includes("manual_session_lock"));
+assert.equal(manual.values.manualSessionLockReason, "Tilt after two losses");
+assert.equal(manual.values.manualSessionLockExpiresAt, "2026-08-03T20:00:00.000Z");
+const unconfirmedReview = evaluateKillSwitch({ ...base, manualSessionLockRequested: true, manualSessionLockReason: "Should stay hidden", manualSessionLockExpiresAt: "2026-08-03T20:00:00.000Z" });
+assert.equal(unconfirmedReview.values.manualSessionLockReason, null);
+assert.equal(unconfirmedReview.values.manualSessionLockExpiresAt, null);
 const missing = evaluateKillSwitch({ ...base, currentWeeklyLossMinor: null }); assert.equal(missing.status, "stop_trading", "configured but unavailable hard-limit input fails closed");

@@ -53,6 +53,7 @@
     "prepare:release": "node scripts/release-command-center/run.mjs release",
     "test:local-ai-cache": "npx tsx scripts/local-ai-cache-qa.ts",
     "test:explicit-logout-routing": "npx tsx scripts/qa/explicitLogoutRouting.selftest.ts",
+    "test:session-lock-review-surfacing": "npx tsx scripts/qa/sessionLockReviewSurfacing.selftest.ts",
     "test:revenge-trading": "npx tsx scripts/revenge-trading-qa.ts",
     "test:ui-polish": "node --experimental-strip-types --experimental-transform-types scripts/ui-polish-qa.ts",
     "test:ui-infra-phase3": "node --experimental-strip-types --experimental-transform-types scripts/ui-infra-phase3-qa.ts",

@@ -39,10 +39,33 @@ assert.equal(live.output.hardRiskRooms?.weeklyLossRemainingMinor, 80_000);
 assert.equal(live.output.hardRiskRooms?.drawdownRemainingMinor, 180_000);
 assert.equal(live.output.liveLifecycle?.values.recovery?.active, true, "Recovery Mode uses Live settings and real drawdown");
 assert.equal(live.output.liveLifecycle?.values.preservation?.score, null, "Preservation score is withheld without all compliance components");
-const locked = rebuildPropPassRuntime({ ...base, killSwitchSettings: { configuredAt: base.asOfUtc, manualSessionLockRequested: true, manualSessionLockConfirmed: true, manualSessionLockActivatedAt: base.asOfUtc, configuration: { maximumDailyLossMinor: null, maximumWeeklyLossMinor: null, maximumTradeCount: null, consecutiveLossLimit: null, cutoffMinuteLocal: null, stopAfterProfitLock: false, resetStrategy: "next_trading_day" } } });
+const lockedLive = rebuildPropPassRuntime({
+  ...base,
+  challengeRow: { ...base.challengeRow, phase: "funded", status: "funded" },
+  liveRiskSettings: {
+    configuredAt: base.asOfUtc, selectedMode: "calm", weekStartsOn: 1,
+    normalRiskPerTradeMinor: 10_000, normalMaximumContracts: 2,
+    recoveryRiskBps: 5_000, minimumCompliantProfitableSessions: 3,
+    rules: { id: "live-v1", dailyRiskBudgetMinor: 50_000, weeklyLossLimitMinor: 100_000, maximumDrawdownMinor: 200_000, perTradeRiskCapMinor: 20_000, maximumTrades: 4, consecutiveLossLimit: 2, recoveryModeThresholdBps: 30 },
+  },
+  recoveryState: { state: { active: false, belowEquityHighBps: 0, normalRiskPerTradeMinor: 10_000, reducedRiskPerTradeMinor: 10_000, normalMaximumContracts: 2, reducedMaximumContracts: 2, activationReason: null, exitCriteria: [], exitProgress: { completedCompliantProfitableSessions: 1, requiredCompliantProfitableSessions: 3 }, scalingDisabled: false, gamblerDisabled: false }, updatedAt: base.asOfUtc },
+  killSwitchSettings: {
+    configuredAt: base.asOfUtc,
+    manualSessionLockRequested: true,
+    manualSessionLockConfirmed: true,
+    manualSessionLockActivatedAt: base.asOfUtc,
+    manualSessionLockReason: "Need a break after tilt",
+    manualSessionLockExpiresAt: "2026-08-03T20:00:00.000Z",
+    configuration: { maximumDailyLossMinor: null, maximumWeeklyLossMinor: null, maximumTradeCount: null, consecutiveLossLimit: null, cutoffMinuteLocal: null, stopAfterProfitLock: false, resetStrategy: "next_trading_day" },
+  },
+});
+assert.equal(lockedLive.output.liveLifecycle?.values.killSwitch?.manualSessionLockReason, "Need a break after tilt");
+assert.equal(lockedLive.output.liveLifecycle?.values.killSwitch?.manualSessionLockExpiresAt, "2026-08-03T20:00:00.000Z");
+const locked = rebuildPropPassRuntime({ ...base, killSwitchSettings: { configuredAt: base.asOfUtc, manualSessionLockRequested: true, manualSessionLockConfirmed: true, manualSessionLockActivatedAt: base.asOfUtc, manualSessionLockReason: "Need a break after tilt", manualSessionLockExpiresAt: "2026-08-03T20:00:00.000Z", configuration: { maximumDailyLossMinor: null, maximumWeeklyLossMinor: null, maximumTradeCount: null, consecutiveLossLimit: null, cutoffMinuteLocal: null, stopAfterProfitLock: false, resetStrategy: "next_trading_day" } } });
 assert.equal(locked.output.status, "stop_trading");
 assert.equal(locked.output.allowedRisk.values.allowedRiskMinor > 0, true, "account room remains recorded separately from the personal lock");
 assert.equal(locked.output.riskMeter.values.status, "stop_trading");
+assert.equal(locked.output.liveLifecycle, null, "challenge context does not populate live lifecycle");
 const expiredLock = rebuildPropPassRuntime({ ...base, killSwitchSettings: { configuredAt: base.asOfUtc, manualSessionLockRequested: true, manualSessionLockConfirmed: true, manualSessionLockActivatedAt: "2026-08-01T12:00:00.000Z", manualSessionLockExpiresAt: "2026-08-02T15:59:59.000Z", configuration: { maximumDailyLossMinor: null, maximumWeeklyLossMinor: null, maximumTradeCount: null, consecutiveLossLimit: null, cutoffMinuteLocal: null, stopAfterProfitLock: false, resetStrategy: "next_trading_day" } } });
 assert.notEqual(expiredLock.output.status, "stop_trading", "expired manual lock no longer blocks the next reviewed session");
 console.log("prop-pass-runtime-rebuild-qa: PASS");

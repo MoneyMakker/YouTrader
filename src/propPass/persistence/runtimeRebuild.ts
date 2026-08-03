@@ -328,5 +328,7 @@ function buildKillSwitchInput(
     profitLockStopActive: false,
     manualSessionLockRequested: manualLockActive,
     manualSessionLockConfirmed: manualLockActive,
+    manualSessionLockReason: manualLockActive ? settings?.manualSessionLockReason ?? null : null,
+    manualSessionLockExpiresAt: manualLockActive ? settings?.manualSessionLockExpiresAt ?? null : null,
   };
 }

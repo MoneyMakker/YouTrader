@@ -8,7 +8,7 @@ const liveSettings = fs.readFileSync(path.join(root, "src/propPass/ui/PropPassLi
 const screen = fs.readFileSync(path.join(root, "src/propPass/PropPassInternalScreen.tsx"), "utf8");
 const availability = fs.readFileSync(path.join(root, "src/propPass/usePropPassAvailability.ts"), "utf8");
 
-for (const required of ["Check Next Trade", "Today’s Plan", "Contract Calculator", "What-If Simulator", "Risk Rules", "Payout Planner", "Safe Withdrawal", "Timeline", "Decision Replay", "Capital Preservation", "Survival Capacity", "Daily Risk Calendar", "Breach Replay", "Session Lock", "buildDailyRiskCalendar", "calendarFactFromPipelineOutput", "prop-pass-calendar-day-", "Manual lock"]) assert.match(cockpit, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `Cockpit route missing: ${required}`);
+for (const required of ["Check Next Trade", "Today’s Plan", "Contract Calculator", "What-If Simulator", "Risk Rules", "Payout Planner", "Safe Withdrawal", "Timeline", "Decision Replay", "Capital Preservation", "Survival Capacity", "Daily Risk Calendar", "Breach Replay", "Session Lock", "buildDailyRiskCalendar", "calendarFactFromPipelineOutput", "prop-pass-calendar-day-", "Manual lock", "Lock reason", "Review expires", "formatReviewExpiry"]) assert.match(cockpit, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `Cockpit route missing: ${required}`);
 for (const required of ["Daily risk used", "Daily risk remaining", "Weekly loss room", "Drawdown room", "Trades used / allowed", "Risk mode"]) assert.ok(cockpit.includes(required), `Cockpit metric missing: ${required}`);
 assert.match(cockpit, /useYdlReduceMotion/);
 assert.match(cockpit, /withTiming/);

@@ -19,8 +19,21 @@ export type KillSwitchInput = {
   profitLockStopActive: boolean | null;
   manualSessionLockRequested: boolean;
   manualSessionLockConfirmed: boolean;
+  manualSessionLockReason?: string | null;
+  manualSessionLockExpiresAt?: string | null;
 };
-export type KillSwitchValues = { active: boolean; triggerIds: string[]; exactTriggers: string[]; recommendedRiskMinor: MoneyMinor; recommendedContracts: number; gamblerDisabled: boolean; manualConfirmationRequired: boolean; resetInstruction: string | null; };
+export type KillSwitchValues = {
+  active: boolean;
+  triggerIds: string[];
+  exactTriggers: string[];
+  recommendedRiskMinor: MoneyMinor;
+  recommendedContracts: number;
+  gamblerDisabled: boolean;
+  manualConfirmationRequired: boolean;
+  resetInstruction: string | null;
+  manualSessionLockReason: string | null;
+  manualSessionLockExpiresAt: string | null;
+};
 
 export function evaluateKillSwitch(input: KillSwitchInput): TradingOsResult<KillSwitchValues> {
   const config = input.configuration;
@@ -32,7 +45,7 @@ export function evaluateKillSwitch(input: KillSwitchInput): TradingOsResult<Kill
   if (config.cutoffMinuteLocal != null && input.currentMinuteLocal == null) missingInputs.push("kill_switch_current_minute");
   if (config.stopAfterProfitLock && input.profitLockStopActive == null) missingInputs.push("kill_switch_profit_lock_state");
   if (!validConfiguration(config)) missingInputs.push("kill_switch_configuration");
-  if (missingInputs.length) return result("stop_trading", stopped(["kill_switch_setup_incomplete"], input.manualSessionLockRequested && !input.manualSessionLockConfirmed, config.resetStrategy), ["kill_switch_setup_incomplete"], missingInputs);
+  if (missingInputs.length) return result("stop_trading", stopped(["kill_switch_setup_incomplete"], input.manualSessionLockRequested && !input.manualSessionLockConfirmed, config.resetStrategy, ["kill_switch_setup_incomplete"], input), ["kill_switch_setup_incomplete"], missingInputs);
   const triggers: Array<[string, string]> = [];
   if (config.maximumDailyLossMinor != null && input.currentDailyLossMinor! >= config.maximumDailyLossMinor) triggers.push(["daily_loss", "Configured maximum daily loss reached."]);
   if (config.maximumWeeklyLossMinor != null && input.currentWeeklyLossMinor! >= config.maximumWeeklyLossMinor) triggers.push(["weekly_loss", "Configured maximum weekly loss reached."]);
@@ -42,11 +55,19 @@ export function evaluateKillSwitch(input: KillSwitchInput): TradingOsResult<Kill
   if (config.stopAfterProfitLock && input.profitLockStopActive) triggers.push(["profit_lock", "Configured profit-lock stop is active."]);
   if (input.manualSessionLockConfirmed) triggers.push(["manual_session_lock", "Manual session lock was explicitly confirmed."]);
   const manualConfirmationRequired = input.manualSessionLockRequested && !input.manualSessionLockConfirmed;
-  if (!triggers.length) return result("safe_to_take", { active: false, triggerIds: [], exactTriggers: [], recommendedRiskMinor: 0, recommendedContracts: 0, gamblerDisabled: false, manualConfirmationRequired, resetInstruction: resetInstruction(config.resetStrategy) }, manualConfirmationRequired ? ["manual_lock_confirmation_required"] : [], []);
-  return result("stop_trading", stopped(triggers.map(([id]) => id), manualConfirmationRequired, config.resetStrategy, triggers.map(([, label]) => label)), triggers.map(([id]) => id), []);
+  if (!triggers.length) return result("safe_to_take", { active: false, triggerIds: [], exactTriggers: [], recommendedRiskMinor: 0, recommendedContracts: 0, gamblerDisabled: false, manualConfirmationRequired, resetInstruction: resetInstruction(config.resetStrategy), ...sessionLockReview(input) }, manualConfirmationRequired ? ["manual_lock_confirmation_required"] : [], []);
+  return result("stop_trading", stopped(triggers.map(([id]) => id), manualConfirmationRequired, config.resetStrategy, triggers.map(([, label]) => label), input), triggers.map(([id]) => id), []);
 }
 
 function validConfiguration(config: KillSwitchConfiguration): boolean { return config.resetStrategy != null && [config.maximumDailyLossMinor, config.maximumWeeklyLossMinor].every((value) => value == null || value >= 0) && [config.maximumTradeCount, config.consecutiveLossLimit].every((value) => value == null || (Number.isInteger(value) && value >= 0)) && (config.cutoffMinuteLocal == null || (Number.isInteger(config.cutoffMinuteLocal) && config.cutoffMinuteLocal >= 0 && config.cutoffMinuteLocal < 1_440)); }
-function stopped(ids: string[], manualConfirmationRequired: boolean, resetStrategy: KillSwitchConfiguration["resetStrategy"], labels: string[] = ids): KillSwitchValues { return { active: true, triggerIds: ids, exactTriggers: labels, recommendedRiskMinor: 0, recommendedContracts: 0, gamblerDisabled: true, manualConfirmationRequired, resetInstruction: resetInstruction(resetStrategy) }; }
+function sessionLockReview(input: KillSwitchInput): Pick<KillSwitchValues, "manualSessionLockReason" | "manualSessionLockExpiresAt"> {
+  return {
+    manualSessionLockReason: input.manualSessionLockConfirmed ? input.manualSessionLockReason ?? null : null,
+    manualSessionLockExpiresAt: input.manualSessionLockConfirmed ? input.manualSessionLockExpiresAt ?? null : null,
+  };
+}
+function stopped(ids: string[], manualConfirmationRequired: boolean, resetStrategy: KillSwitchConfiguration["resetStrategy"], labels: string[] = ids, input?: KillSwitchInput): KillSwitchValues {
+  return { active: true, triggerIds: ids, exactTriggers: labels, recommendedRiskMinor: 0, recommendedContracts: 0, gamblerDisabled: true, manualConfirmationRequired, resetInstruction: resetInstruction(resetStrategy), ...(input ? sessionLockReview(input) : { manualSessionLockReason: null, manualSessionLockExpiresAt: null }) };
+}
 function resetInstruction(strategy: KillSwitchConfiguration["resetStrategy"]): string | null { return strategy === "next_trading_day" ? "Resets at the next configured trading day." : strategy === "next_session" ? "Resets at the next configured trading session." : null; }
 function result(status: TradingOsResult<KillSwitchValues>["status"], values: KillSwitchValues, reasons: string[], missingInputs: string[]): TradingOsResult<KillSwitchValues> { return { values, status, reasons, missingInputs, appliedHardLimits: [], relatedRuleIds: ["kill_switch"] }; }
