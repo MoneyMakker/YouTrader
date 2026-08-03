@@ -86,11 +86,15 @@ export function createSupabasePropPassPersistenceAdapter(input: {
       return (await select("prop_instrument_spec_versions", { account_id: accountId, symbol: symbol.trim().toUpperCase() }, "effective_from")).map(parseInstrument);
     },
 
+    async listRuntimeStates() {
+      return (await select("prop_account_runtime_states", {}, "calculated_at")).map(parsePersistedRuntimeState);
+    },
+
     async getRuntimeState(accountId) {
       requireText(accountId, "account id");
       const rows = await select("prop_account_runtime_states", { account_id: accountId });
       if (rows.length > 1) throw new PropPassPersistenceError("invalid_row", "multiple runtime states for account");
-      return rows[0] ? parseRuntime(rows[0]) : null;
+      return rows[0] ? parsePersistedRuntimeState(rows[0]) : null;
     },
 
     async appendDailyPlan(plan) {
@@ -277,7 +281,7 @@ function parseInstrument(row: Record<string, unknown>): InstrumentSpecificationV
   return payload as InstrumentSpecificationVersion;
 }
 
-function parseRuntime(row: Record<string, unknown>): PersistedRuntimeState {
+export function parsePersistedRuntimeState(row: Record<string, unknown>): PersistedRuntimeState {
   const payload = record(row.payload, "runtime payload");
   validateRuntimePayload(payload);
   const persistedVersions = versions(row);

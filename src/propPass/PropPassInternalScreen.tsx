@@ -14,6 +14,7 @@ import { PropPassAssignmentFlow } from "./PropPassAssignmentFlow";
 import { usePropPassAvailability } from "./usePropPassAvailability";
 import { PropPassAccountMenu } from "./ui/PropPassAccountMenu";
 import { PropPassAccountSwitcher } from "./ui/PropPassAccountSwitcher";
+import { PropPassMultiAccountCommandCenter } from "./ui/PropPassMultiAccountCommandCenter";
 import { PropPassSessionCockpit } from "./ui/PropPassSessionCockpit";
 import type {
   ChallengeSummary,
@@ -616,6 +617,12 @@ function AvailableView({
         onAssignTrades={onAssignTrades}
         onOpenTrade={onOpenTrade}
       />
+      {userId ? (
+        <PropPassMultiAccountCommandCenter
+          userId={userId}
+          selectedAccountId={model.account.id}
+        />
+      ) : null}
     </View>
   );
 }

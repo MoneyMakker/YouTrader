@@ -172,6 +172,7 @@ export interface PropPassPersistenceReadAdapter {
   listDailyPlans(accountId: string): Promise<PersistedDailyPlan[]>;
   listTimeline(accountId: string): Promise<ChallengeTimelineEvent[]>;
   listInstrumentVersions(accountId: string, symbol: string): Promise<InstrumentSpecificationVersion[]>;
+  listRuntimeStates(): Promise<PersistedRuntimeState[]>;
   getRuntimeState(accountId: string): Promise<PersistedRuntimeState | null>;
 }
 
