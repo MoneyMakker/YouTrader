@@ -23,12 +23,22 @@ const USER_SCOPED_PREFIXES = [
   "locked-insight-dismissed:",
 ];
 
+/** Device-local Prop Pass / risk preferences cleared on explicit logout. */
+const PROP_PASS_LOCAL_KEYS = [
+  "prop-risk-mode-v1",
+  "prop-risk-mode-v2",
+  "prop-risk-template-v1",
+  "prop-risk-alerts-v1",
+  "prop-risk-alert-notification-id-v1",
+];
+
 /**
  * Pure matcher used by logout cleanup.
  * Never use substring includes for userId — that can delete unrelated keys.
  */
 export function shouldClearLocalUserCacheKey(key: string, userId?: string | null): boolean {
   if (key === GUEST_TRADES_STORAGE_KEY) return true;
+  if (PROP_PASS_LOCAL_KEYS.includes(key)) return true;
   if (!userId) {
     return USER_SCOPED_PREFIXES.some((prefix) => key.startsWith(prefix));
   }
@@ -36,6 +46,9 @@ export function shouldClearLocalUserCacheKey(key: string, userId?: string | null
   if (key === `user-preferences-v1:${userId}` || key.startsWith(`user-preferences-v1:${userId}:`)) {
     return true;
   }
+  if (key.startsWith(`usage:share-cards:${userId}`)) return true;
+  if (key.startsWith(`usage:pdf-previews:${userId}`)) return true;
+  if (key.startsWith(`achievement-share-usage:${userId}`)) return true;
   return isLocalAiCacheKeyForUser(key, userId);
 }
 

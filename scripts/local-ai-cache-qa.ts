@@ -71,8 +71,9 @@ section("shouldClearLocalUserCacheKey never uses over-broad userId includes");
   assert.equal(shouldClearLocalUserCacheKey(decoy, userA), false);
   assert.equal(shouldClearLocalUserCacheKey(trades, userA), true);
   assert.equal(shouldClearLocalUserCacheKey(prefs, userA), true);
-  // Usage keys stay (HEAD behavior); Epic 1 only adds precise AI cache clearing.
-  assert.equal(shouldClearLocalUserCacheKey(usage, userA), false);
+  // User-scoped usage counters clear on logout to prevent account crossover.
+  assert.equal(shouldClearLocalUserCacheKey(usage, userA), true);
+  assert.equal(shouldClearLocalUserCacheKey(`usage:share-cards:user-B:2026-07`, userA), false);
 
   assert.equal(shouldClearLocalUserCacheKey(aiMine, null), true);
   assert.equal(shouldClearLocalUserCacheKey(decoy, null), false);

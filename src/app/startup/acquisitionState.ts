@@ -4,6 +4,9 @@
  * Paid funnel:
  * onboarding → paywall (purchase/restore) → auth → main
  *
+ * Explicit logout:
+ * LOGGING_OUT (suppress paywall) → AUTH_REQUIRED (auth chooser) → login → CustomerInfo → main/paywall
+ *
  * Anonymous users never enter the tab shell.
  * Authenticated + entitled → five-tab main.
  * Authenticated + not entitled → five-tab main (Prop Pass shows locked preview).
@@ -20,6 +23,8 @@ export type AcquisitionPhase =
 /** Explicit release gate states mapped from acquisition + billing readiness. */
 export type ReleaseGateState =
   | "STARTUP_LOADING"
+  | "LOGGING_OUT"
+  | "AUTH_REQUIRED"
   | "BILLING_UNAVAILABLE"
   | "ANONYMOUS_NOT_ENTITLED"
   | "ANONYMOUS_ENTITLED_REQUIRES_AUTH"
@@ -43,6 +48,14 @@ export type AcquisitionInput = {
   billingUnavailable?: boolean;
   /** Optional: identity sync failed after auth (retryable). */
   identitySyncFailed?: boolean;
+  /** Central in-flight explicit logout — suppresses paywall flash. */
+  loggingOut?: boolean;
+  /**
+   * Sticky AUTH_REQUIRED after explicit logout (persisted).
+   * Forces the production auth chooser; never routes to acquisition paywall
+   * until the next successful login clears it.
+   */
+  explicitAuthRequired?: boolean;
 };
 
 /**
@@ -50,16 +63,21 @@ export type AcquisitionInput = {
  *
  * Rules:
  * - Not hydrated → loading
+ * - Explicit logout in flight → loading (never paywall)
  * - Onboarding incomplete (anonymous) → onboarding
+ * - Explicit AUTH_REQUIRED (post-logout) → auth
  * - Anonymous + no entitlement → paywall (wait RevenueCat ready)
  * - Anonymous + entitlement → auth (mandatory post-purchase/restore)
  * - Authenticated → main (tab count depends on isPremium; never permanent paywall gate)
  */
 export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPhase {
   if (!input.hydrated) return "loading";
+  if (input.loggingOut) return "loading";
 
   if (!input.hasSession) {
     if (!input.onboardingCompleted) return "onboarding";
+    // Explicit logout root — auth chooser, never acquisition paywall.
+    if (input.explicitAuthRequired) return "auth";
     if (!input.isPremium) {
       if (!input.revenueCatReady) return "loading";
       return "paywall";
@@ -73,12 +91,14 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
 }
 
 export function resolveReleaseGateState(input: AcquisitionInput): ReleaseGateState {
+  if (input.loggingOut) return "LOGGING_OUT";
   if (input.billingUnavailable && !input.hasSession) return "BILLING_UNAVAILABLE";
   if (input.identitySyncFailed && input.hasSession) return "RECOVERABLE_ERROR";
 
   const phase = resolveAcquisitionPhase(input);
   if (phase === "loading") return "STARTUP_LOADING";
   if (phase === "auth") {
+    if (input.explicitAuthRequired) return "AUTH_REQUIRED";
     if (input.authBusy) return "AUTHENTICATING";
     return "ANONYMOUS_ENTITLED_REQUIRES_AUTH";
   }
@@ -94,6 +114,8 @@ export function resolveReleaseGateState(input: AcquisitionInput): ReleaseGateSta
 
 export const ACQUISITION_ONBOARDING_KEY = "yt-acquisition-onboarding-v1";
 export const ACQUISITION_PAYWALL_DEVICE_KEY = "yt-acquisition-paywall-device-v1";
+/** Sticky AUTH_REQUIRED after explicit logout — survives app restart. */
+export const ACQUISITION_AUTH_REQUIRED_KEY = "yt-acquisition-auth-required-v1";
 /** @deprecated Guest access removed — key ignored; kept to clear legacy installs. */
 export const ACQUISITION_GUEST_KEY = "yt-acquisition-guest-v1";
 

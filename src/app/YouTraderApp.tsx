@@ -170,6 +170,7 @@ import { FirstLaunchFunnel } from "./startup/FirstLaunchFunnel";
 import { AcquisitionPaywall } from "./startup/AcquisitionPaywall";
 import { buildSettingsSubscriptionPresentation } from "./startup/settingsSubscriptionPresentation";
 import {
+  ACQUISITION_AUTH_REQUIRED_KEY,
   ACQUISITION_GUEST_KEY,
   ACQUISITION_ONBOARDING_KEY,
   ACQUISITION_PAYWALL_DEVICE_KEY,
@@ -181,6 +182,11 @@ import {
   decidePostLoginEntitlementReconcile,
   isActiveEntitlement,
 } from "../billing/entitlementReconcile";
+import {
+  beginExplicitLogoutGuard,
+  endExplicitLogoutGuard,
+  shouldCallRevenueCatLogOut,
+} from "../auth/explicitLogout";
 import { MoreScreen, type MoreDestination } from "./MoreScreen";
 import { SubscriptionScreen } from "./SubscriptionScreen";
 import { StatsDashboard } from "../stats/StatsDashboard";
@@ -10299,6 +10305,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [acquisitionHydrated, setAcquisitionHydrated] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [paywallCompleted, setPaywallCompleted] = useState(false);
+  /** In-flight explicit logout — suppresses acquisition paywall flash. */
+  const [loggingOut, setLoggingOut] = useState(false);
+  /** Sticky AUTH_REQUIRED after Settings → Log Out (persisted across restart). */
+  const [explicitAuthRequired, setExplicitAuthRequired] = useState(false);
+  const signingOutRef = useRef(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<"off" | "syncing" | "synced" | "error">("off");
   const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in and upgrade to Pro to sync your journal.");
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
@@ -10354,15 +10365,17 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     let cancelled = false;
     void (async () => {
       try {
-        const [onboarding, devicePaywall, legacyPaywall] = await Promise.all([
+        const [onboarding, devicePaywall, legacyPaywall, authRequiredFlag] = await Promise.all([
           AsyncStorage.getItem(ACQUISITION_ONBOARDING_KEY),
           AsyncStorage.getItem(ACQUISITION_PAYWALL_DEVICE_KEY),
           AsyncStorage.getItem(POST_AUTH_PAYWALL_SEEN_KEY),
+          AsyncStorage.getItem(ACQUISITION_AUTH_REQUIRED_KEY),
         ]);
         // Clear legacy guest flag — free/guest access is removed.
         void AsyncStorage.removeItem(ACQUISITION_GUEST_KEY);
         let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
         let onboardingDone = onboarding === "1";
+        let authRequiredSticky = authRequiredFlag === "1";
         const userId = session?.user?.id;
         if (userId) {
           const userPaywall = await AsyncStorage.getItem(acquisitionPaywallUserKey(userId));
@@ -10372,10 +10385,16 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             onboardingDone = true;
             void AsyncStorage.setItem(ACQUISITION_ONBOARDING_KEY, "1");
           }
+          // Successful session clears sticky AUTH_REQUIRED from a prior logout.
+          if (authRequiredSticky) {
+            authRequiredSticky = false;
+            void AsyncStorage.removeItem(ACQUISITION_AUTH_REQUIRED_KEY);
+          }
         }
         if (cancelled) return;
         setOnboardingCompleted(onboardingDone);
         setPaywallCompleted(paywallDone);
+        setExplicitAuthRequired(authRequiredSticky);
         setAcquisitionHydrated(true);
       } catch {
         if (!cancelled) {
@@ -10389,6 +10408,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       cancelled = true;
     };
   }, [authHydrated, isPremium, session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    if (!explicitAuthRequired) return;
+    setExplicitAuthRequired(false);
+    void AsyncStorage.removeItem(ACQUISITION_AUTH_REQUIRED_KEY);
+  }, [explicitAuthRequired, session?.user?.id]);
 
   useEffect(() => {
     if (isPremium) setPaywallCompleted(true);
@@ -10426,6 +10452,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     hasSession: !!session?.user,
     isPremium,
     revenueCatReady: !revenueCatConfigured || revenueCatReady,
+    loggingOut,
+    explicitAuthRequired,
   });
 
   useEffect(() => {
@@ -11756,59 +11784,78 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   const signOut = useCallback(async () => {
     if (!supabase) return;
+    if (!beginExplicitLogoutGuard(signingOutRef)) return;
     const userId = session?.user.id || null;
+    // Enter LOGGING_OUT before clearing session so acquisition cannot flash paywall.
+    setLoggingOut(true);
+    setExplicitAuthRequired(true);
+    void AsyncStorage.setItem(ACQUISITION_AUTH_REQUIRED_KEY, "1");
     try {
-      const { clearPendingOAuthClientState } = await import("../auth/clearPendingOAuth");
-      // App-owned pending OAuth only — production-safe, no full QA wipe.
-      await clearPendingOAuthClientState();
-    } catch {
-      // non-fatal
-    }
-    await signOutGoogleNative();
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      logger.error(error, { feature: "supabase", action: "sign_out" });
-      Alert.alert(t("signOutFailed"), t("signOutFailedBody"));
-      return;
-    }
-    await clearLocalUserCache(userId);
-    resetAnalyticsUser();
-    setMonitoringUser(null);
-    serverEntitlementActiveRef.current = false;
-    preAuthEntitledRef.current = false;
-    postLoginRestoreAttemptedRef.current = false;
-    setIdentitySyncFailed(false);
-    revenueCatIdentityRef.current.reset();
-    if (purchasesConfigured.current) {
       try {
-        const anonymous = await Purchases.isAnonymous();
-        if (!anonymous) {
-          const customerInfo = await Purchases.logOut();
-          applyCustomerInfo(customerInfo, "signOut");
-        } else {
+        const { clearPendingOAuthClientState } = await import("../auth/clearPendingOAuth");
+        // App-owned pending OAuth only — production-safe, no full QA wipe.
+        await clearPendingOAuthClientState();
+      } catch {
+        // non-fatal
+      }
+      await signOutGoogleNative();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        logger.error(error, { feature: "supabase", action: "sign_out" });
+        Alert.alert(t("signOutFailed"), t("signOutFailedBody"));
+        // Recoverable Supabase error — stay signed in; do not leave AUTH_REQUIRED sticky.
+        setExplicitAuthRequired(false);
+        void AsyncStorage.removeItem(ACQUISITION_AUTH_REQUIRED_KEY);
+        return;
+      }
+      // Force navigation root off authenticated shell immediately.
+      setSession(null);
+      await clearLocalUserCache(userId);
+      resetAnalyticsUser();
+      setMonitoringUser(null);
+      serverEntitlementActiveRef.current = false;
+      preAuthEntitledRef.current = false;
+      postLoginRestoreAttemptedRef.current = false;
+      setIdentitySyncFailed(false);
+      revenueCatIdentityRef.current.reset();
+      // RevenueCat logOut once when required. Does not cancel App Store subscription / StoreKit receipt.
+      if (purchasesConfigured.current) {
+        try {
+          const anonymous = await Purchases.isAnonymous();
+          if (shouldCallRevenueCatLogOut({ purchasesConfigured: true, isAnonymous: anonymous })) {
+            const nextInfo = await Purchases.logOut();
+            applyCustomerInfo(nextInfo, "signOut");
+          } else {
+            customerInfoRef.current = null;
+            setCustomerInfo(null);
+            setProAccess(emptyProAccessState());
+          }
+        } catch (logoutError) {
+          logger.warn("RevenueCat logOut failed during sign out", {
+            feature: "revenuecat",
+            action: "log_out",
+            error: logoutError instanceof Error ? logoutError.message : String(logoutError),
+          });
           customerInfoRef.current = null;
           setCustomerInfo(null);
           setProAccess(emptyProAccessState());
         }
-      } catch (logoutError) {
-        logger.warn("RevenueCat logOut failed during sign out", {
-          feature: "revenuecat",
-          action: "log_out",
-          error: logoutError instanceof Error ? logoutError.message : String(logoutError),
-        });
+      } else {
         customerInfoRef.current = null;
         setCustomerInfo(null);
         setProAccess(emptyProAccessState());
       }
-    } else {
-      customerInfoRef.current = null;
-      setCustomerInfo(null);
-      setProAccess(emptyProAccessState());
+      setTrades([]);
+      setTradesHydrated(true);
+      setCloudSyncStatus("off");
+      setCloudSyncMessage("Sign in and upgrade to Pro to sync your journal.");
+      setLastCloudSyncAt(null);
+      setQaPropPassPayload(null);
+      setTab("journal");
+    } finally {
+      setLoggingOut(false);
+      endExplicitLogoutGuard(signingOutRef);
     }
-    setTrades([]);
-    setTradesHydrated(true);
-    setCloudSyncStatus("off");
-    setLastCloudSyncAt(null);
   }, [applyCustomerInfo, session?.user.id]);
 
   const refreshCurrentEntitlements = useCallback(async (reason: string, retryDelays = ENTITLEMENT_RETRY_DELAYS_MS) => {

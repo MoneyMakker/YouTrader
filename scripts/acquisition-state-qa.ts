@@ -43,11 +43,34 @@ function run() {
     resolveAcquisitionPhase(
       base({
         onboardingCompleted: true,
-        paywallCompleted: false,
+        paywallCompleted: true,
         isPremium: true,
       }),
     ),
     "auth",
+  );
+  // Explicit logout sticky AUTH_REQUIRED — never paywall even without entitlement
+  assert.equal(
+    resolveAcquisitionPhase(
+      base({
+        onboardingCompleted: true,
+        hasSession: false,
+        isPremium: false,
+        explicitAuthRequired: true,
+      }),
+    ),
+    "auth",
+  );
+  assert.equal(
+    resolveAcquisitionPhase(
+      base({
+        onboardingCompleted: true,
+        hasSession: false,
+        isPremium: false,
+        loggingOut: true,
+      }),
+    ),
+    "loading",
   );
   assert.equal(
     resolveAcquisitionPhase(
