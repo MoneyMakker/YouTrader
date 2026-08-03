@@ -125,10 +125,17 @@ export function PropPassLiveSettingsEditor({ accountId, onSaved }: { accountId: 
 
 export function PropPassSessionLockControl({ accountId, active, onActivated }: { accountId: string; active: boolean; onActivated: () => void }) {
   const [activating, setActivating] = useState(false);
+  const [reason, setReason] = useState("");
+  const [durationHours, setDurationHours] = useState<2 | 24>(2);
   const activate = () => {
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) {
+      Alert.alert("Reason required", "Record why this session is being locked before confirming.");
+      return;
+    }
     Alert.alert(
       "Lock this trading session?",
-      "This sets recommended risk and contracts to zero. It cannot be bypassed by Calm, Balanced, Gambler, or Continue Anyway. Reset follows your configured session or trading-day boundary.",
+      `Reason: ${normalizedReason}\n\nThis sets recommended risk and contracts to zero until the selected review time. It cannot be bypassed by Calm, Balanced, Gambler, or Continue Anyway.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -138,7 +145,13 @@ export function PropPassSessionLockControl({ accountId, active, onActivated }: {
             if (!supabase) return;
             setActivating(true);
             const result = await supabase.functions.invoke("prop-pass-runtime-processor", {
-              body: { op: "activate_session_lock", accountId, confirm: true },
+              body: {
+                op: "activate_session_lock",
+                accountId,
+                confirm: true,
+                reason: normalizedReason,
+                expiresAt: new Date(Date.now() + durationHours * 60 * 60 * 1_000).toISOString(),
+              },
             });
             setActivating(false);
             const body = result.data as { kind?: unknown; report?: { failed?: unknown } } | null;
@@ -153,7 +166,17 @@ export function PropPassSessionLockControl({ accountId, active, onActivated }: {
       ],
     );
   };
-  return <YdlButton label={active ? "Stop Trading active" : "Lock this session"} variant="destructive" fullWidth disabled={active} loading={activating} onPress={activate} testID="prop-pass-activate-session-lock" />;
+  if (active) return <YdlButton label="Stop Trading active" variant="destructive" fullWidth disabled onPress={activate} testID="prop-pass-activate-session-lock" />;
+  return (
+    <View style={styles.stack}>
+      <LiveSettingsField label="Session Lock reason" value={reason} onChange={setReason} />
+      <View style={styles.choiceRow} accessibilityRole="radiogroup">
+        <YdlButton label="Review in 2 hours" size="small" variant={durationHours === 2 ? "primary" : "secondary"} onPress={() => setDurationHours(2)} />
+        <YdlButton label="Review in 24 hours" size="small" variant={durationHours === 24 ? "primary" : "secondary"} onPress={() => setDurationHours(24)} />
+      </View>
+      <YdlButton label="Lock this session" variant="destructive" fullWidth disabled={!reason.trim()} loading={activating} onPress={activate} testID="prop-pass-activate-session-lock" />
+    </View>
+  );
 }
 
 function LiveSettingsField({ label, suffix, value, integer = false, onChange }: { label: string; suffix?: string; value: string; integer?: boolean; onChange: (value: string) => void }) {

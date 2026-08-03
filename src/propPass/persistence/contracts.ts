@@ -119,6 +119,8 @@ export type PropPassKillSwitchSettings = Readonly<{
   manualSessionLockRequested?: boolean;
   manualSessionLockConfirmed?: boolean;
   manualSessionLockActivatedAt?: string | null;
+  manualSessionLockReason?: string | null;
+  manualSessionLockExpiresAt?: string | null;
 }>;
 export type PropPassRecoveryState = Readonly<{ state: RecoveryModeValues; updatedAt: string }>;
 

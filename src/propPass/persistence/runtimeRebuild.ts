@@ -93,7 +93,7 @@ export function rebuildPropPassRuntime(
     .filter((row) => !row.voided && row.challenge_id === challenge.id && row.trade_client_id)
     .sort((left, right) => right.occurred_at.localeCompare(left.occurred_at))[0] ?? null;
   const breach = mapBreach(engine, riskRooms);
-  const killSwitch = buildKillSwitchInput(bundle.killSwitchSettings, bundle.executions, engine.accountState.dayPnlMinor);
+  const killSwitch = buildKillSwitchInput(bundle.killSwitchSettings, bundle.executions, engine.accountState.dayPnlMinor, bundle.asOfUtc);
   const currentEquity = engine.accountState.equityMinor;
   const output = calculatePropPassState({
     account: {
@@ -293,10 +293,23 @@ function buildKillSwitchInput(
   settings: PropPassKillSwitchSettings | null,
   executions: ExecutionRow[],
   dayPnlMinor: number,
+  asOfUtc: string,
 ): KillSwitchInput {
   const active = executions.filter((row) => !row.voided && row.realized_pnl_minor != null).sort((left, right) => left.occurred_at.localeCompare(right.occurred_at));
   let lossStreak = 0;
   for (const row of [...active].reverse()) { if ((row.realized_pnl_minor ?? 0) >= 0) break; lossStreak += 1; }
+  const lockExpiresAt = settings?.manualSessionLockExpiresAt;
+  const lockExpiresAtMs = lockExpiresAt == null ? null : Date.parse(lockExpiresAt);
+  const asOfMs = Date.parse(asOfUtc);
+  const manualLockActive = Boolean(
+    settings?.manualSessionLockConfirmed
+    && (
+      lockExpiresAtMs == null
+      || Number.isNaN(lockExpiresAtMs)
+      || Number.isNaN(asOfMs)
+      || asOfMs < lockExpiresAtMs
+    ),
+  );
   return {
     configuration: settings?.configuration ?? {
       maximumDailyLossMinor: null,
@@ -313,7 +326,7 @@ function buildKillSwitchInput(
     consecutiveLosses: lossStreak,
     currentMinuteLocal: null,
     profitLockStopActive: false,
-    manualSessionLockRequested: settings?.manualSessionLockRequested ?? false,
-    manualSessionLockConfirmed: settings?.manualSessionLockConfirmed ?? false,
+    manualSessionLockRequested: manualLockActive,
+    manualSessionLockConfirmed: manualLockActive,
   };
 }

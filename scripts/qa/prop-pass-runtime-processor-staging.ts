@@ -100,7 +100,13 @@ try {
   const lockResponse = await fetch(`${url}/functions/v1/prop-pass-runtime-processor`, {
     method: "POST",
     headers: { Authorization: `Bearer ${signed.data.session.access_token}`, apikey: anonKey, "content-type": "application/json" },
-    body: JSON.stringify({ op: "activate_session_lock", accountId: challenge.account_id, confirm: true }),
+    body: JSON.stringify({
+      op: "activate_session_lock",
+      accountId: challenge.account_id,
+      confirm: true,
+      reason: "Disposable staging QA lock verification",
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1_000).toISOString(),
+    }),
   });
   const lockBody = await lockResponse.json() as { kind?: string; report?: { failed?: number } };
   assert.equal(lockResponse.status, 200);
@@ -111,6 +117,8 @@ try {
     admin.from("prop_account_runtime_states").select("payload").eq("user_id", expectedUserId).eq("account_id", challenge.account_id).single(),
   ]);
   assert.equal((lockedSettings?.payload as { manualSessionLockConfirmed?: boolean } | null)?.manualSessionLockConfirmed, true);
+  assert.equal((lockedSettings?.payload as { manualSessionLockReason?: string } | null)?.manualSessionLockReason, "Disposable staging QA lock verification");
+  assert.ok((lockedSettings?.payload as { manualSessionLockExpiresAt?: string } | null)?.manualSessionLockExpiresAt);
   assert.equal((lockedRuntime?.payload as { status?: string } | null)?.status, "stop_trading");
   console.log("prop-pass-runtime-processor-staging: PASS");
 } finally {

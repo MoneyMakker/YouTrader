@@ -55,6 +55,14 @@ export async function setManualSessionLock(
   const body = requiredObject(input, "session_lock_body");
   const accountId = requiredText(body.accountId, "account_id");
   if (body.confirm !== true) throw new Error("manual_session_lock_confirmation_required");
+  const reason = requiredText(body.reason, "manual_session_lock_reason");
+  if (reason.length > 240) throw new Error("manual_session_lock_reason_invalid");
+  const expiresAt = requiredText(body.expiresAt, "manual_session_lock_expires_at");
+  const expiresAtMs = Date.parse(expiresAt);
+  const nowMs = Date.now();
+  if (Number.isNaN(expiresAtMs) || expiresAtMs <= nowMs || expiresAtMs > nowMs + 48 * 60 * 60 * 1_000) {
+    throw new Error("manual_session_lock_expires_at_invalid");
+  }
   const challengeId = await activeChallengeId(client, userId, accountId);
   const current = await client.from("prop_kill_switch_settings").select("payload").eq("user_id", userId).eq("account_id", accountId).maybeSingle();
   if (current.error) throw new Error(`kill_switch_read_failed:${current.error.code ?? "unknown"}`);
@@ -69,6 +77,7 @@ export async function setManualSessionLock(
   const settings = {
     configuration, configuredAt: now, manualSessionLockRequested: true,
     manualSessionLockConfirmed: true, manualSessionLockActivatedAt: now,
+    manualSessionLockReason: reason, manualSessionLockExpiresAt: new Date(expiresAtMs).toISOString(),
   };
   const updated = await client.from("prop_kill_switch_settings").upsert({
     user_id: userId, account_id: accountId, payload: settings, updated_at: now,
@@ -256,7 +265,25 @@ function validateLiveSettings(value: unknown): Record<string, unknown> {
   if (positiveInteger(settings.minimumCompliantProfitableSessions, "minimumCompliantProfitableSessions") < 2) throw new Error("minimumCompliantProfitableSessions_invalid");
   const configuredAt = requiredText(settings.configuredAt, "configuredAt");
   if (Number.isNaN(Date.parse(configuredAt))) throw new Error("configuredAt_invalid");
-  return settings;
+  return {
+    rules: {
+      id: requiredText(rules.id, "live_rule_id"),
+      dailyRiskBudgetMinor: Number(rules.dailyRiskBudgetMinor),
+      weeklyLossLimitMinor: Number(rules.weeklyLossLimitMinor),
+      maximumDrawdownMinor: Number(rules.maximumDrawdownMinor),
+      perTradeRiskCapMinor: Number(rules.perTradeRiskCapMinor),
+      maximumTrades: Number(rules.maximumTrades),
+      consecutiveLossLimit: Number(rules.consecutiveLossLimit),
+      recoveryModeThresholdBps: threshold,
+    },
+    configuredAt,
+    selectedMode: settings.selectedMode,
+    weekStartsOn: settings.weekStartsOn,
+    normalRiskPerTradeMinor: Number(settings.normalRiskPerTradeMinor),
+    normalMaximumContracts: Number(settings.normalMaximumContracts),
+    recoveryRiskBps: recovery,
+    minimumCompliantProfitableSessions: Number(settings.minimumCompliantProfitableSessions),
+  };
 }
 function validateKillSwitchConfiguration(value: Record<string, unknown>): void {
   for (const field of ["maximumDailyLossMinor", "maximumWeeklyLossMinor", "maximumTradeCount", "consecutiveLossLimit", "cutoffMinuteLocal"] as const) if (value[field] != null) nonNegativeInteger(value[field], field);

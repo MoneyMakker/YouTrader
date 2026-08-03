@@ -43,4 +43,6 @@ const locked = rebuildPropPassRuntime({ ...base, killSwitchSettings: { configure
 assert.equal(locked.output.status, "stop_trading");
 assert.equal(locked.output.allowedRisk.values.allowedRiskMinor > 0, true, "account room remains recorded separately from the personal lock");
 assert.equal(locked.output.riskMeter.values.status, "stop_trading");
+const expiredLock = rebuildPropPassRuntime({ ...base, killSwitchSettings: { configuredAt: base.asOfUtc, manualSessionLockRequested: true, manualSessionLockConfirmed: true, manualSessionLockActivatedAt: "2026-08-01T12:00:00.000Z", manualSessionLockExpiresAt: "2026-08-02T15:59:59.000Z", configuration: { maximumDailyLossMinor: null, maximumWeeklyLossMinor: null, maximumTradeCount: null, consecutiveLossLimit: null, cutoffMinuteLocal: null, stopAfterProfitLock: false, resetStrategy: "next_trading_day" } } });
+assert.notEqual(expiredLock.output.status, "stop_trading", "expired manual lock no longer blocks the next reviewed session");
 console.log("prop-pass-runtime-rebuild-qa: PASS");
