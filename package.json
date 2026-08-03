@@ -124,6 +124,7 @@
     "test:prop-pass-journal-sync": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-journal-sync-qa.ts",
     "test:prop-pass-advanced-product": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-advanced-product-qa.ts",
     "test:prop-pass-session-cockpit": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-session-cockpit-qa.ts",
+    "test:prop-pass-challenge-autopilot-setup": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-challenge-autopilot-setup-qa.ts",
     "test:prop-pass-multi-account-command-center": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-multi-account-command-center-qa.ts",
     "test:prop-pass-runtime-rebuild": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-runtime-rebuild-qa.ts",
     "test:prop-pass-runtime-processor": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-runtime-processor-qa.ts",

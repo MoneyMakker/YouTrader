@@ -1,97 +1,152 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, TextInput, View, StyleSheet } from "react-native";
+import {
+  AccessibilityInfo,
+  StyleSheet,
+  TextInput,
+  View,
+  type KeyboardTypeOptions,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { YdlButton } from "../ydl/components/YdlButton";
 import { YdlCard } from "../ydl/components/YdlCard";
+import { YdlChip } from "../ydl/components/YdlChip";
 import { YdlText } from "../ydl/components/YdlText";
-import { useYdlTheme } from "../ydl/tokens";
+import { useYdlTheme, ydlLayout, ydlSpace, ydlTypographyRoles } from "../ydl/tokens";
 import {
-  buildRuleConfirmationSummary,
   listPropOsInternalTemplates,
   type PropOsRuleTemplate,
-  type RuleConfirmationSummary,
 } from "../propOs/templates/index";
 import type { PropOsCommandState } from "../propOs/commands/types";
 import { newPropOsClientRequestId } from "../propOs/commands/hash";
 import { runPropPassCommand } from "./commandGateway";
 import { trackPropPassEvent } from "./analytics";
+import {
+  AUTOPILOT_NEEDS_INPUT_FIELDS,
+  AUTOPILOT_PERSISTED_FIELDS,
+  buildAutopilotRuleSnapshot,
+  draftFromTemplate,
+  minorToMajorText,
+  parseMajorToMinor,
+  type AutopilotAccountType,
+  type AutopilotRiskMode,
+  type AutopilotRuleDraft,
+} from "./challengeAutopilotSetup";
 
-type Step =
-  | "form"
-  | "template"
-  | "confirm"
-  | "submitting"
-  | "success"
-  | "error";
-
+type WizardStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type FlowState = "editing" | "submitting" | "success" | "error";
 type Props = {
   userId: string;
   onCompleted: (accountId: string) => void;
   onCancel: () => void;
 };
 
-function majorToMinor(raw: string): number | null {
-  const n = Number(String(raw).replace(/,/g, "").trim());
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100);
-}
+const STEP_KEYS = [
+  "accountType",
+  "accountDetails",
+  "objective",
+  "lossRules",
+  "tradingLimits",
+  "payout",
+  "riskMode",
+  "review",
+] as const;
 
-/**
- * Internal/staging onboarding: account → template → confirm rules → challenge.
- */
 export function PropPassOnboardingFlow({ userId, onCompleted, onCancel }: Props) {
   const { t } = useTranslation();
-  const theme = useYdlTheme();
-  const [step, setStep] = useState<Step>("form");
-  const [label, setLabel] = useState("");
-  const [sizeMajor, setSizeMajor] = useState("50000");
-  const [phase, setPhase] = useState<"evaluation" | "funded">("evaluation");
-  const [template, setTemplate] = useState<PropOsRuleTemplate | null>(null);
-  const [summary, setSummary] = useState<RuleConfirmationSummary | null>(null);
-  const [commandState, setCommandState] = useState<PropOsCommandState<unknown>>({
-    kind: "idle",
-  });
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const labelRef = useRef<TextInput>(null);
-  const requestIds = useRef({ account: newPropOsClientRequestId(), challenge: newPropOsClientRequestId() });
-
+  const theme = useYdlTheme("dark");
   const templates = useMemo(() => listPropOsInternalTemplates(), []);
+  const firstTemplate = templates[0]!;
+  const firstSize = firstTemplate.supportedAccountSizesMinor[0]!;
+  const initialDraft = draftFromTemplate(firstTemplate, firstSize)!;
+  const [wizardStep, setWizardStep] = useState<WizardStep>(0);
+  const [flowState, setFlowState] = useState<FlowState>("editing");
+  const [accountType, setAccountType] = useState<AutopilotAccountType>("challenge");
+  const [label, setLabel] = useState("");
+  const [accountSize, setAccountSize] = useState(minorToMajorText(firstSize));
+  const [template, setTemplate] = useState<PropOsRuleTemplate>(firstTemplate);
+  const [ruleDraft, setRuleDraft] = useState<AutopilotRuleDraft>(initialDraft);
+  const [preferredInstrument, setPreferredInstrument] = useState("");
+  const [consistency, setConsistency] = useState("");
+  const [allowedSession, setAllowedSession] = useState("");
+  const [stopAfterLosses, setStopAfterLosses] = useState("");
+  const [cutoff, setCutoff] = useState("");
+  const [payoutThreshold, setPayoutThreshold] = useState("");
+  const [payoutMinimumDays, setPayoutMinimumDays] = useState("");
+  const [reserve, setReserve] = useState("");
+  const [riskMode, setRiskMode] = useState<AutopilotRiskMode>("balanced");
+  const [commandState, setCommandState] = useState<PropOsCommandState<unknown>>({ kind: "idle" });
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const firstInputRef = useRef<TextInput>(null);
+  const requestIds = useRef({
+    account: newPropOsClientRequestId(),
+    challenge: newPropOsClientRequestId(),
+  });
 
   useEffect(() => {
     trackPropPassEvent("prop_pass_onboarding_opened", { userId });
   }, [userId]);
 
   useEffect(() => {
-    if (commandState.kind === "validation_error") {
-      labelRef.current?.focus();
-      void AccessibilityInfo.announceForAccessibility(
-        t("propPass.onboarding.validationFocus"),
-      );
-    }
-  }, [commandState, t]);
+    if (flowState !== "editing") return;
+    void AccessibilityInfo.announceForAccessibility(
+      t("propPass.autopilot.stepAnnouncement", {
+        current: wizardStep + 1,
+        total: STEP_KEYS.length,
+        title: t(`propPass.autopilot.step.${STEP_KEYS[wizardStep]}`),
+      }),
+    );
+  }, [flowState, t, wizardStep]);
 
-  async function submitAccountAndChallenge(confirmed: RuleConfirmationSummary) {
-    setStep("submitting");
+  const updateRule = <K extends keyof AutopilotRuleDraft>(
+    key: K,
+    value: AutopilotRuleDraft[K],
+  ) => setRuleDraft((current) => ({ ...current, [key]: value }));
+
+  const selectTemplate = (next: PropOsRuleTemplate) => {
+    const currentSize = parseMajorToMinor(accountSize);
+    const supportedSize =
+      currentSize != null && next.supportedAccountSizesMinor.includes(currentSize)
+        ? currentSize
+        : next.supportedAccountSizesMinor[0]!;
+    const nextDraft = draftFromTemplate(next, supportedSize);
+    if (!nextDraft) return;
+    setTemplate(next);
+    setAccountSize(minorToMajorText(supportedSize));
+    setRuleDraft(nextDraft);
+    trackPropPassEvent("prop_pass_template_selected", { userId, kind: next.templateId });
+  };
+
+  const validationKey = (): string | null => {
+    if (wizardStep === 1 && !label.trim()) return "propPass.autopilot.error.name";
+    if (wizardStep === 1 && parseMajorToMinor(accountSize) == null) {
+      return "propPass.autopilot.error.balance";
+    }
+    if (wizardStep >= 2) {
+      const result = buildAutopilotRuleSnapshot({ template, accountSize, draft: ruleDraft });
+      if (!result.ok) return "propPass.autopilot.error.rules";
+    }
+    return null;
+  };
+
+  const next = () => {
+    const errorKey = validationKey();
+    if (errorKey) {
+      void AccessibilityInfo.announceForAccessibility(t(errorKey));
+      firstInputRef.current?.focus();
+      return;
+    }
+    setWizardStep((Math.min(7, wizardStep + 1)) as WizardStep);
+  };
+
+  async function submit() {
+    const built = buildAutopilotRuleSnapshot({ template, accountSize, draft: ruleDraft });
+    if (!built.ok || !label.trim() || accountType === "live") {
+      void AccessibilityInfo.announceForAccessibility(t("propPass.autopilot.error.rules"));
+      return;
+    }
+    setFlowState("submitting");
     setCommandState({ kind: "submitting" });
-
-    const sizeMinor = majorToMinor(sizeMajor);
-    if (sizeMinor == null) {
-      setCommandState({
-        kind: "validation_error",
-        fieldErrors: { accountSizeMinor: "invalid" },
-      });
-      setStep("error");
-      return;
-    }
-    if (!label.trim()) {
-      setCommandState({
-        kind: "validation_error",
-        fieldErrors: { label: "required" },
-      });
-      setStep("error");
-      return;
-    }
-
+    const phase = accountType === "challenge" ? "evaluation" : "funded";
     const accRes = await runPropPassCommand(
       requestIds.current.account,
       userId,
@@ -99,29 +154,22 @@ export function PropPassOnboardingFlow({ userId, onCompleted, onCancel }: Props)
         svc.createPropAccount({
           clientRequestId: requestIds.current.account,
           label: label.trim(),
-          firmKey: confirmed.ruleSnapshot.firmKey,
-          accountSizeMinor: sizeMinor,
-          currency: confirmed.currency,
-          firmTimezone: confirmed.ruleSnapshot.firmTimezone,
+          firmKey: template.firmKey,
+          accountSizeMinor: built.accountSizeMinor,
+          currency: template.currency,
+          firmTimezone: built.ruleSnapshot.firmTimezone,
           phaseHint: phase,
         }),
       "prop_pass_account_create_succeeded",
     );
-
     if (accRes.kind !== "success") {
-      trackPropPassEvent("prop_pass_account_create_failed", {
-        userId,
-        kind: accRes.kind,
-      });
       setCommandState(accRes);
-      setStep("error");
+      setFlowState("error");
       requestIds.current.account = newPropOsClientRequestId();
       return;
     }
-
     const createdAccountId = accRes.value.account.id;
     setAccountId(createdAccountId);
-
     const chRes = await runPropPassCommand(
       requestIds.current.challenge,
       userId,
@@ -129,25 +177,19 @@ export function PropPassOnboardingFlow({ userId, onCompleted, onCancel }: Props)
         svc.createChallengeAttempt({
           clientRequestId: requestIds.current.challenge,
           accountId: createdAccountId,
-          templateId: confirmed.templateId,
-          templateVersion: confirmed.templateVersion,
-          ruleSnapshot: confirmed.ruleSnapshot,
+          templateId: template.templateId,
+          templateVersion: template.version,
+          ruleSnapshot: built.ruleSnapshot,
           phase,
         }),
       "prop_pass_challenge_create_succeeded",
     );
-
     if (chRes.kind !== "success") {
-      trackPropPassEvent("prop_pass_challenge_create_failed", {
-        userId,
-        kind: chRes.kind,
-      });
       setCommandState(chRes);
-      setStep("error");
+      setFlowState("error");
       requestIds.current.challenge = newPropOsClientRequestId();
       return;
     }
-
     await runPropPassCommand(newPropOsClientRequestId(), userId, (svc) =>
       svc.setDefaultAccount({
         clientRequestId: newPropOsClientRequestId(),
@@ -155,225 +197,299 @@ export function PropPassOnboardingFlow({ userId, onCompleted, onCancel }: Props)
       }),
       "prop_pass_default_account_changed",
     );
-
     setCommandState({ kind: "success", value: chRes.value });
-    setStep("success");
+    setFlowState("success");
+  }
+
+  if (flowState === "submitting") {
+    return <LiveCard text={t("propPass.command.submitting")} />;
+  }
+  if (flowState === "success" && accountId) {
+    return (
+      <YdlCard testID="prop-pass-onboarding-success">
+        <YdlText role="title">{t("propPass.autopilot.successTitle")}</YdlText>
+        <YdlText role="body" color="text.secondary">{t("propPass.autopilot.successBody")}</YdlText>
+        <YdlButton label={t("propPass.onboarding.done")} onPress={() => onCompleted(accountId)} />
+      </YdlCard>
+    );
+  }
+  if (flowState === "error") {
+    return (
+      <YdlCard testID="prop-pass-onboarding-error">
+        <YdlText role="title">{t("propPass.command.errorTitle")}</YdlText>
+        <YdlText role="body">{commandError(commandState, t)}</YdlText>
+        <YdlButton label={t("propPass.autopilot.retry")} onPress={() => setFlowState("editing")} />
+      </YdlCard>
+    );
   }
 
   return (
-    <View style={styles.root} testID="prop-pass-onboarding">
-      {step === "form" ? (
-        <YdlCard>
-          <YdlText role="title">{t("propPass.onboarding.title")}</YdlText>
-          <YdlText role="body" color="text.secondary">
-            {t("propPass.onboarding.body")}
-          </YdlText>
-          <YdlText role="caption">{t("propPass.onboarding.label")}</YdlText>
-          <TextInput
-            ref={labelRef}
-            value={label}
-            onChangeText={setLabel}
-            accessibilityLabel={t("propPass.onboarding.label")}
-            style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border.subtle }]}
-            testID="prop-pass-onboarding-label"
+    <View style={{ gap: theme.space[12] }} testID="prop-pass-onboarding">
+      <View style={styles.progressRow} accessibilityRole="progressbar" accessibilityValue={{ min: 1, max: 8, now: wizardStep + 1 }}>
+        {STEP_KEYS.map((key, index) => (
+          <View
+            key={key}
+            style={[
+              styles.progressSegment,
+              {
+                backgroundColor:
+                  index <= wizardStep
+                    ? theme.colors.action.primary
+                    : theme.colors.surface.interactive,
+                borderRadius: theme.radius.chip,
+              },
+            ]}
           />
-          <YdlText role="caption">
-            {t("propPass.onboarding.accountSize", { currency: "USD" })}
-          </YdlText>
-          <TextInput
-            value={sizeMajor}
-            onChangeText={setSizeMajor}
-            keyboardType="decimal-pad"
-            accessibilityLabel={t("propPass.onboarding.accountSizeA11y", {
-              currency: "USD",
-            })}
-            style={[styles.input, { color: theme.colors.text.primary, borderColor: theme.colors.border.subtle }]}
-            testID="prop-pass-onboarding-size"
+        ))}
+      </View>
+      <YdlCard>
+        <YdlText role="caption" color="text.secondary">
+          {t("propPass.autopilot.progress", { current: wizardStep + 1, total: 8 })}
+        </YdlText>
+        <YdlText role="title">{t(`propPass.autopilot.step.${STEP_KEYS[wizardStep]}`)}</YdlText>
+        <YdlText role="body" color="text.secondary">
+          {t(`propPass.autopilot.body.${STEP_KEYS[wizardStep]}`)}
+        </YdlText>
+        <View style={{ gap: theme.space[12] }}>{renderStep()}</View>
+      </YdlCard>
+      <View style={[styles.navigation, { gap: theme.space[8] }]}>
+        {wizardStep > 0 ? (
+          <YdlButton
+            label={t("propPass.onboarding.back")}
+            variant="secondary"
+            style={styles.navButton}
+            onPress={() => setWizardStep((wizardStep - 1) as WizardStep)}
           />
-          <View style={styles.row}>
-            <YdlButton
-              label={t("propPass.onboarding.phaseEvaluation")}
-              variant={phase === "evaluation" ? "primary" : "secondary"}
-              onPress={() => setPhase("evaluation")}
-            />
-            <YdlButton
-              label={t("propPass.onboarding.phaseFunded")}
-              variant={phase === "funded" ? "primary" : "secondary"}
-              onPress={() => setPhase("funded")}
-            />
+        ) : (
+          <YdlButton label={t("propPass.onboarding.cancel")} variant="tertiary" style={styles.navButton} onPress={onCancel} />
+        )}
+        {wizardStep < 7 ? (
+          <YdlButton label={t("propPass.autopilot.next")} style={styles.navButton} onPress={next} />
+        ) : (
+          <YdlButton
+            label={t("propPass.autopilot.save")}
+            disabled={accountType === "live"}
+            style={styles.navButton}
+            onPress={() => void submit()}
+            testID="prop-pass-autopilot-save"
+          />
+        )}
+      </View>
+    </View>
+  );
+
+  function renderStep() {
+    if (wizardStep === 0) {
+      return (
+        <>
+          <ChoiceGroup<AutopilotAccountType>
+            values={["challenge", "funded", "live"]}
+            selected={accountType}
+            label={(value) => t(`propPass.autopilot.accountType.${value}`)}
+            onSelect={(value: AutopilotAccountType) => setAccountType(value)}
+          />
+          {accountType === "live" ? (
+            <NeedsInput text={t("propPass.autopilot.liveUnsupported")} />
+          ) : null}
+        </>
+      );
+    }
+    if (wizardStep === 1) {
+      return (
+        <>
+          <Field ref={firstInputRef} label={t("propPass.autopilot.accountName")} value={label} onChange={setLabel} />
+          <Field label={t("propPass.autopilot.startingBalance")} value={accountSize} onChange={setAccountSize} keyboardType="decimal-pad" />
+          <Field label={t("propPass.autopilot.timezone")} value={ruleDraft.timezone} onChange={(value) => updateRule("timezone", value)} autoCapitalize="none" />
+          <Field label={t("propPass.autopilot.preferredInstrument")} value={preferredInstrument} onChange={setPreferredInstrument} unsupported />
+          <YdlText role="label">{t("propPass.autopilot.verifiedTemplate")}</YdlText>
+          <View style={styles.wrapRow}>
+            {templates.map((item) => (
+              <YdlChip
+                key={item.templateId}
+                label={item.displayName}
+                selected={item.templateId === template.templateId}
+                onPress={() => selectTemplate(item)}
+              />
+            ))}
           </View>
-          <YdlButton
-            label={t("propPass.onboarding.continueTemplates")}
-            onPress={() => setStep("template")}
+        </>
+      );
+    }
+    if (wizardStep === 2) {
+      return (
+        <>
+          <Field ref={firstInputRef} label={t("propPass.autopilot.profitTarget")} value={ruleDraft.profitTarget} onChange={(value) => updateRule("profitTarget", value)} keyboardType="decimal-pad" />
+          <Field label={t("propPass.autopilot.minimumDays")} value={ruleDraft.minimumTradingDays} onChange={(value) => updateRule("minimumTradingDays", value)} keyboardType="number-pad" />
+          <Field label={t("propPass.autopilot.consistency")} value={consistency} onChange={setConsistency} unsupported />
+        </>
+      );
+    }
+    if (wizardStep === 3) {
+      return (
+        <>
+          <Field ref={firstInputRef} label={t("propPass.autopilot.dailyLoss")} value={ruleDraft.dailyLossLimit} onChange={(value) => updateRule("dailyLossLimit", value)} keyboardType="decimal-pad" />
+          <Field label={t("propPass.autopilot.maximumLoss")} value={ruleDraft.maximumLossLimit} onChange={(value) => updateRule("maximumLossLimit", value)} keyboardType="decimal-pad" />
+          <ChoiceGroup
+            values={["static", "trailingEndOfDay", "trailingIntraday"] as const}
+            selected={ruleDraft.drawdownKind}
+            label={(value) => t(`propPass.autopilot.drawdown.${value}`)}
+            onSelect={(value) => updateRule("drawdownKind", value)}
           />
-          <YdlButton label={t("propPass.onboarding.cancel")} variant="tertiary" onPress={onCancel} />
-        </YdlCard>
-      ) : null}
+        </>
+      );
+    }
+    if (wizardStep === 4) {
+      return (
+        <>
+          <Field ref={firstInputRef} label={t("propPass.autopilot.allowedSession")} value={allowedSession} onChange={setAllowedSession} unsupported />
+          <Field label={t("propPass.autopilot.maximumContracts")} value={ruleDraft.maximumContracts} onChange={(value) => updateRule("maximumContracts", value)} keyboardType="number-pad" optional />
+          <Field label={t("propPass.autopilot.stopAfterLosses")} value={stopAfterLosses} onChange={setStopAfterLosses} keyboardType="number-pad" unsupported />
+          <Field label={t("propPass.autopilot.cutoff")} value={cutoff} onChange={setCutoff} unsupported />
+        </>
+      );
+    }
+    if (wizardStep === 5) {
+      return (
+        <>
+          <Field ref={firstInputRef} label={t("propPass.autopilot.payoutThreshold")} value={payoutThreshold} onChange={setPayoutThreshold} keyboardType="decimal-pad" unsupported />
+          <Field label={t("propPass.autopilot.payoutMinimumDays")} value={payoutMinimumDays} onChange={setPayoutMinimumDays} keyboardType="number-pad" unsupported />
+          <Field label={t("propPass.autopilot.reserve")} value={reserve} onChange={setReserve} keyboardType="decimal-pad" unsupported />
+        </>
+      );
+    }
+    if (wizardStep === 6) {
+      return (
+        <>
+          <ChoiceGroup<AutopilotRiskMode> values={["calm", "balanced", "gambler"]} selected={riskMode} label={(value) => t(`propPass.riskMode.${value}`)} onSelect={(value) => setRiskMode(value)} />
+          <NeedsInput text={t("propPass.autopilot.modeNeedsInput")} />
+          {riskMode === "gambler" ? <NeedsInput text={t("propPass.autopilot.gamblerWarning")} /> : null}
+        </>
+      );
+    }
+    return (
+      <>
+        <YdlText role="bodyEmphasized">{t("propPass.autopilot.warning")}</YdlText>
+        <ReviewRow label={t("propPass.autopilot.accountTypeLabel")} value={t(`propPass.autopilot.accountType.${accountType}`)} />
+        <ReviewRow label={t("propPass.autopilot.accountName")} value={label || t("propPass.valueUnavailable")} />
+        <ReviewRow label={t("propPass.autopilot.startingBalance")} value={`${accountSize} ${template.currency}`} />
+        <ReviewRow label={t("propPass.autopilot.verifiedTemplate")} value={`${template.displayName} · ${template.version}`} />
+        <YdlText role="label">{t("propPass.autopilot.willSave")}</YdlText>
+        <YdlText role="caption" color="text.secondary">{AUTOPILOT_PERSISTED_FIELDS.map((field) => t(`propPass.autopilot.field.${field}`)).join(" · ")}</YdlText>
+        <YdlText role="label">{t("propPass.autopilot.notSaved")}</YdlText>
+        <YdlText role="caption" color="text.secondary">{AUTOPILOT_NEEDS_INPUT_FIELDS.map((field) => t(`propPass.autopilot.field.${field}`)).join(" · ")}</YdlText>
+        {accountType === "live" ? <NeedsInput text={t("propPass.autopilot.liveSaveBlocked")} /> : null}
+      </>
+    );
+  }
+}
 
-      {step === "template" ? (
-        <YdlCard>
-          <YdlText role="title">{t("propPass.onboarding.chooseTemplate")}</YdlText>
-          <YdlText role="caption" color="text.secondary">
-            {t("propPass.onboarding.templateCoverageNote")}
-          </YdlText>
-          {templates.map((tpl) => (
-            <YdlButton
-              key={tpl.templateId}
-              label={`${tpl.displayName} · ${tpl.version}`}
-              onPress={() => {
-                const sizeMinor = majorToMinor(sizeMajor);
-                if (sizeMinor == null) {
-                  setCommandState({
-                    kind: "validation_error",
-                    fieldErrors: { accountSizeMinor: "invalid" },
-                  });
-                  setStep("error");
-                  return;
-                }
-                try {
-                  const conf = buildRuleConfirmationSummary(tpl, sizeMinor);
-                  setTemplate(tpl);
-                  setSummary(conf);
-                  trackPropPassEvent("prop_pass_template_selected", {
-                    userId,
-                    kind: tpl.templateId,
-                  });
-                  trackPropPassEvent("prop_pass_rule_confirmation_displayed", {
-                    userId,
-                    kind: tpl.templateId,
-                  });
-                  setStep("confirm");
-                } catch {
-                  setCommandState({
-                    kind: "validation_error",
-                    fieldErrors: { accountSizeMinor: "unsupported_for_template" },
-                  });
-                  setStep("error");
-                }
-              }}
-            />
-          ))}
-          <YdlButton
-            label={t("propPass.onboarding.back")}
-            variant="tertiary"
-            onPress={() => setStep("form")}
-          />
-        </YdlCard>
-      ) : null}
+function InputField({
+  label,
+  value,
+  onChange,
+  keyboardType = "default",
+  unsupported = false,
+  optional = false,
+  autoCapitalize = "sentences",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  keyboardType?: KeyboardTypeOptions;
+  unsupported?: boolean;
+  optional?: boolean;
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+}, ref: React.ForwardedRef<TextInput>) {
+  const { t } = useTranslation();
+  const theme = useYdlTheme("dark");
+  return (
+    <View style={{ gap: theme.space[6] }}>
+      <View style={styles.fieldLabel}>
+        <YdlText role="caption" color="text.secondary">{label}</YdlText>
+        {unsupported ? <YdlText role="caption" color="text.secondary">{t("propPass.autopilot.needsInputBadge")}</YdlText> : null}
+      </View>
+      <TextInput
+        ref={ref}
+        value={value}
+        onChangeText={onChange}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        accessibilityLabel={label}
+        placeholder={t(optional ? "propPass.autopilot.optional" : "propPass.autopilot.enterValue")}
+        placeholderTextColor={theme.colors.text.secondary}
+        returnKeyType="done"
+        style={[
+          styles.input,
+          {
+            color: theme.colors.text.primary,
+            backgroundColor: theme.colors.surface.interactive,
+            borderColor: theme.colors.border.subtle,
+            borderRadius: theme.radius.control,
+            paddingHorizontal: theme.space[12],
+            paddingVertical: theme.space[12],
+          },
+        ]}
+      />
+    </View>
+  );
+}
+const Field = React.forwardRef(InputField);
 
-      {step === "confirm" && summary ? (
-        <YdlCard testID="prop-pass-rule-confirmation">
-          <YdlText role="title">{t("propPass.onboarding.confirmTitle")}</YdlText>
-          <YdlText role="body">
-            {t("propPass.onboarding.confirmSize", {
-              value: summary.accountSizeMinor,
-              currency: summary.currency,
-            })}
-          </YdlText>
-          <YdlText role="body">
-            {t("propPass.onboarding.confirmTarget", {
-              value: summary.profitTargetMinor,
-              currency: summary.currency,
-            })}
-          </YdlText>
-          <YdlText role="body">
-            {t("propPass.onboarding.confirmDaily", {
-              value: summary.dailyLossLimitMinor ?? t("propPass.valueUnavailable"),
-              currency: summary.currency,
-            })}
-          </YdlText>
-          <YdlText role="body">
-            {t("propPass.onboarding.confirmDrawdown", {
-              value: summary.drawdownLimitMinor,
-              kind: summary.drawdownKind,
-              timing: summary.drawdownTiming,
-            })}
-          </YdlText>
-          <YdlText role="body">
-            {t("propPass.onboarding.confirmReset", { value: summary.resetBehavior })}
-          </YdlText>
-          <YdlText role="body">
-            {t("propPass.onboarding.confirmMinDays", {
-              value: summary.minimumTradingDays ?? t("propPass.valueUnavailable"),
-            })}
-          </YdlText>
-          <YdlText role="caption" color="text.secondary">
-            {t("propPass.onboarding.confirmUnsupported", {
-              fields: summary.unsupportedFields.join(", ") || "—",
-            })}
-          </YdlText>
-          <YdlText role="caption">
-            {t("propPass.onboarding.confirmVersion", {
-              id: summary.templateId,
-              version: summary.templateVersion,
-            })}
-          </YdlText>
-          <YdlButton
-            label={t("propPass.onboarding.confirmCta")}
-            onPress={() => void submitAccountAndChallenge(summary)}
-          />
-          <YdlButton
-            label={t("propPass.onboarding.back")}
-            variant="tertiary"
-            onPress={() => setStep("template")}
-          />
-        </YdlCard>
-      ) : null}
-
-      {step === "submitting" ? (
-        <View accessibilityLiveRegion="polite">
-          <YdlCard>
-            <YdlText role="body">{t("propPass.command.submitting")}</YdlText>
-          </YdlCard>
-        </View>
-      ) : null}
-
-      {step === "success" && accountId ? (
-        <YdlCard testID="prop-pass-onboarding-success">
-          <YdlText role="title">{t("propPass.onboarding.successTitle")}</YdlText>
-          <YdlText role="body">{t("propPass.onboarding.successBody")}</YdlText>
-          <YdlButton
-            label={t("propPass.onboarding.done")}
-            onPress={() => onCompleted(accountId)}
-          />
-        </YdlCard>
-      ) : null}
-
-      {step === "error" ? (
-        <YdlCard testID="prop-pass-onboarding-error">
-          <YdlText role="title">{t("propPass.command.errorTitle")}</YdlText>
-          <YdlText role="body">
-            {commandState.kind === "validation_error"
-              ? t("propPass.command.validationError")
-              : commandState.kind === "conflict"
-                ? t("propPass.command.conflict", { code: commandState.reasonCode })
-                : commandState.kind === "forbidden"
-                  ? t("propPass.command.forbidden")
-                  : t("propPass.command.unexpected")}
-          </YdlText>
-          <YdlButton
-            label={t("propPass.onboarding.back")}
-            onPress={() => {
-              setStep("form");
-              setCommandState({ kind: "idle" });
-            }}
-          />
-        </YdlCard>
-      ) : null}
-
-      {template ? null : null}
+function ChoiceGroup<T extends string>({ values, selected, label, onSelect }: {
+  values: readonly T[];
+  selected: T;
+  label: (value: T) => string;
+  onSelect: (value: T) => void;
+}) {
+  return (
+    <View style={styles.wrapRow} accessibilityRole="radiogroup">
+      {values.map((value) => (
+        <YdlChip key={value} label={label(value)} selected={selected === value} onPress={() => onSelect(value)} />
+      ))}
     </View>
   );
 }
 
+function NeedsInput({ text }: { text: string }) {
+  return <YdlText role="caption" color="text.secondary">{text}</YdlText>;
+}
+
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.reviewRow}>
+      <YdlText role="caption" color="text.secondary">{label}</YdlText>
+      <YdlText role="bodyEmphasized">{value}</YdlText>
+    </View>
+  );
+}
+
+function LiveCard({ text }: { text: string }) {
+  return (
+    <View accessibilityLiveRegion="polite">
+      <YdlCard><YdlText role="body">{text}</YdlText></YdlCard>
+    </View>
+  );
+}
+
+function commandError(state: PropOsCommandState<unknown>, t: (key: string, options?: Record<string, unknown>) => string) {
+  if (state.kind === "validation_error") return t("propPass.command.validationError");
+  if (state.kind === "conflict") return t("propPass.command.conflict", { code: state.reasonCode });
+  if (state.kind === "forbidden") return t("propPass.command.forbidden");
+  return t("propPass.command.unexpected");
+}
+
 const styles = StyleSheet.create({
-  root: { gap: 12 },
+  progressRow: { flexDirection: "row", gap: ydlSpace[4] },
+  progressSegment: { flex: 1, height: ydlSpace[4] },
+  navigation: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  navButton: { flex: 1 },
+  wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: ydlLayout.chipGap },
+  fieldLabel: { flexDirection: "row", justifyContent: "space-between", gap: ydlSpace[8] },
   input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
+    minHeight: ydlLayout.minTouchTarget,
+    borderWidth: StyleSheet.hairlineWidth,
+    ...ydlTypographyRoles.body,
+    fontVariant: ["tabular-nums"],
   },
-  row: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  reviewRow: { gap: ydlSpace[4] },
 });
