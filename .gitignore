@@ -109,6 +109,7 @@ storybook-static
 **/*PASSWORD_UNIT.txt
 **/*credentials.env
 **/staging-qa-credentials.env
+docs/app-review-auth.local.md
 docs/releases/**/*PASSWORD*
 docs/releases/**/*SECRET*
 docs/releases/**/*credential*.txt
