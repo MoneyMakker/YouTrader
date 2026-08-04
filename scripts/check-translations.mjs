@@ -50,6 +50,25 @@ for (const lang of langs) {
   }
 }
 
+// i18next requires {{var}}; single {var} renders literally (physical Build 117 defect).
+const singleBrace = /(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*)\}(?!\})/g;
+const badInterpolation = [];
+for (const lang of langs) {
+  const loc = JSON.parse(fs.readFileSync(path.join(root, "src/i18n/locales", `${lang}.json`), "utf8"));
+  for (const [key, value] of Object.entries(loc)) {
+    if (typeof value !== "string") continue;
+    singleBrace.lastIndex = 0;
+    if (singleBrace.test(value)) {
+      badInterpolation.push(`${lang}:${key}`);
+    }
+  }
+}
+if (badInterpolation.length) {
+  console.error("Locale strings with single-brace placeholders (must use {{var}}):");
+  for (const entry of badInterpolation.sort()) console.error(`- ${entry}`);
+  process.exit(1);
+}
+
 console.log(
   `Translation check passed: ${enKeys.size} en keys, ${usedKeys.size} used in App.tsx + src/app + src/propPass (${sourceFiles.length} files)`,
 );
