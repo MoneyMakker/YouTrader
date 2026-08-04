@@ -575,7 +575,7 @@ Production deployment remains pending — readiness reconciliation lives in
 consolidated deterministic gate but remains open until persistence wiring and
 final regression verification complete.
 
-**Build 117 execution reconciliation (2026-08-03, HEAD `eccd5e9`):**
+**Build 117 execution reconciliation (2026-08-03, HEAD `727006f`):**
 
 1. Real persistence adapters — DONE in source; production deployment remains under item 22.
 2. Unified calculation pipeline verification — DONE (`build117.pipeline.v2`).
