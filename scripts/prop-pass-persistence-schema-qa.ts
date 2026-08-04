@@ -44,3 +44,20 @@ assert.match(settingsQueueSql, /'settings_changed'/);
 assert.match(settingsQueueSql, /prop_os_processor_queue_settings_recalculation/);
 assert.match(settingsQueueSql, /from public, anon, authenticated/);
 assert.doesNotMatch(settingsQueueSql, /grant execute[\s\S]*to authenticated/);
+
+const rlsProofPath = path.resolve(__dirname, "../supabase/tests/prop_pass_trading_os_persistence_rls.sql");
+assert.equal(fs.existsSync(rlsProofPath), true, "transactional RLS proof SQL must exist");
+const rlsProofSql = fs.readFileSync(rlsProofPath, "utf8");
+assert.match(rlsProofSql, /^\s*begin\s*;/m, "RLS proof must run inside a transaction");
+assert.match(rlsProofSql, /\brollback\s*;\s*$/m, "RLS proof must roll back synthetic fixtures");
+assert.match(rlsProofSql, /set local role authenticated/);
+assert.match(rlsProofSql, /prop_daily_plan_snapshots/);
+assert.match(rlsProofSql, /expected exactly one owner-visible plan/);
+assert.match(rlsProofSql, /expected authenticated direct write to be denied/);
+assert.match(rlsProofSql, /expected provider-token reads to be denied/);
+assert.match(rlsProofSql, /from public\.auth_provider_tokens/, "RLS proof must attempt denied provider-token read");
+assert.doesNotMatch(rlsProofSql, /\bcommit\s*;/i, "RLS proof must not commit synthetic users/rows");
+assert.doesNotMatch(rlsProofSql, /insert\s+into\s+public\.auth_provider_tokens/i);
+assert.doesNotMatch(rlsProofSql, /identity_token|authorization_code/i);
+
+console.log("prop-pass-persistence-schema-qa: PASS");
