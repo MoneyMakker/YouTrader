@@ -1,7 +1,7 @@
 # PPOS-117-19 — Persistence / migration / RLS readiness
 
 **Status:** Staging schema + static gates READY; production apply PENDING explicit PO authorization  
-**Reconciled HEAD:** `eccd5e9` (`feature/prop-pass-trading-os-build117`)  
+**Reconciled HEAD:** `61b6d42` (`feature/prop-pass-trading-os-build117`)  
 **Date:** 2026-08-03
 
 This note reconciles Build 117 additive persistence work. It does **not** authorize production migration apply, Edge deploy, or App Store / external TestFlight.
@@ -47,6 +47,55 @@ This reconciliation does **not** re-run remote staging apply. Re-proof staging o
 5. Edge / processor deploy is a separate gate; do not bundle with silent migration apply.
 6. App identity remains **1.6.1 / build 116** until archive bump to **117** is explicitly authorized later in the epic.
 
+## Rollback and cleanup plan (document only — do not execute without PO)
+
+### Principles
+
+- Prefer **App/config kill-switch first** over database surgery.
+- Prefer **forward-fix** migrations over dropping applied production objects.
+- Never delete user journal rows, `prop_accounts`, or historical append-only events as a “cleanup”.
+- Never leave synthetic RLS-proof users/rows (proof SQL must end in `rollback`).
+- Production drop/alter of Build 117 objects requires a separate PO-authorized ops window.
+
+### Immediate client / edge containment (safe first response)
+
+1. Disable Prop Pass / Prop OS activation path via existing kill-switch / activation mode (`off`) so new reads stop.
+2. Stop processor Edge Functions / cron that claim `prop_processed_journal_events` if they were deployed with this set.
+3. Leave applied tables intact; do not rewrite migration history or force-push tags.
+
+### Staging / local SQL rollback (non-production only)
+
+Use only after kill-switch and only on **non-production**. Order is reverse of apply:
+
+1. Drop journal sync triggers/functions from `20260802225538_*` (`prop_pass_journal_*`, assignment ledger trigger).
+2. Drop pipeline stamp trigger/function from `20260802232311_*`.
+3. Revoke/drop processor claim helpers from `20260802233700_*` / `20260802235500_*` / hardening processor RPCs.
+4. Drop Build 117 tables created by hardening then base persistence (owner-scoped):
+   - hardening: `prop_instrument_spec_versions`, `prop_intervention_overrides`, `prop_decision_replays`, `prop_processed_journal_events`, `prop_account_runtime_states`
+   - base: `prop_daily_plan_snapshots`, `prop_pre_trade_assessments`, `prop_rule_templates`, `prop_intervention_events`, `prop_timeline_events`, `prop_live_risk_settings`, `prop_payout_withdrawal_settings`, `prop_kill_switch_settings`, `prop_position_size_progressions`, `prop_recovery_mode_states`
+5. Drop shared helpers only if unused (`prop_os_enforce_trading_os_owner`, append-only forbid helper).
+6. Re-run `npm run test:prop-pass-persistence-schema` expectations against the **remaining** schema; do not claim PASS if SQL files still expect dropped objects.
+
+Do **not** reverse Prop OS foundation (`20260730*` / `20260731*`) as part of this child task.
+
+### Production rollback posture
+
+If Build 117 migrations were applied to production and a defect appears:
+
+1. Kill-switch / disable processors immediately.
+2. Keep tables and RLS; quarantine writes via processor stop + client off.
+3. Ship a **new additive** forward-fix migration (PO-approved) rather than DROP TABLE in place.
+4. DROP TABLE on production is last resort, PO-only, with backup verification and restore drill evidence.
+
+### Cleanup after failed or aborted apply
+
+| Situation | Cleanup |
+|---|---|
+| Migration partially applied on staging | Fix forward or reverse-drop only the new objects listed above; re-apply cleanly |
+| RLS proof interrupted mid-transaction | Rely on transaction abort/`rollback`; verify no synthetic emails `@example.invalid` remain |
+| Staging seed / remote slice leftovers | Use staging-only seed/reset scripts; refuse non-staging hosts |
+| Client caches after schema abort | Explicit logout / local Prop Pass cache clear paths already used by auth logout hardening |
+
 ## Intentionally out of scope here
 
 - Capital preservation **persisted** component wiring (PPOS-117-13 remainder) — requires real compliance facts, not invented scores.
@@ -55,4 +104,4 @@ This reconciliation does **not** re-run remote staging apply. Re-proof staging o
 
 ## Next recommended step
 
-After PO green-light for **staging re-proof** (optional if files unchanged) or **production apply**: record evidence path + commit hash, then mark PPOS-117-19 production deployment DONE and continue PPOS-117-20 final gates / device QA blockers.
+After **complete Aikido PASS** on latest HEAD, mandatory security gates PASS, staging RLS proof PASS, journal + Challenge/Live lifecycle integration complete, and **explicit PO authorization**: apply production migrations with this rollback plan in hand, record evidence path + commit hash, then continue PPOS-117-20 / device QA blockers.

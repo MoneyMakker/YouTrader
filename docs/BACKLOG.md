@@ -598,8 +598,8 @@ final regression verification complete.
 19. Context-neutral Kill Switch pipeline wiring — DONE in source (`60d6972`); pipeline output includes `killSwitch` for all account contexts; cockpit, calendar, and command center read the shared resolver; Session Lock gate includes review surfacing (`c7492ed`); capital preservation persisted wiring under PPOS-117-13 remains open.
 20. Explainable calculations — DONE in pipeline trace and cockpit detail routes.
 21. Property/invariant tests — DONE in source (29 invariants, 13,000 generated assertions).
-22. Final persistence schema and RLS — IN PROGRESS; static schema/adapter gates + transactional RLS proof SQL reconciled in `docs/releases/1.6.1/PPOS-117-19_MIGRATION_READINESS.md`; production apply still pending PO authorization.
-23. Production migration — READY after PO authorization (staging re-proof optional if SQL unchanged).
+22. Final persistence schema and RLS — IN PROGRESS; static schema/adapter gates + transactional RLS proof SQL + rollback/cleanup plan reconciled in `docs/releases/1.6.1/PPOS-117-19_MIGRATION_READINESS.md`; production apply still pending PO authorization after complete Aikido PASS and remaining epic gates.
+23. Production migration — READY after PO authorization (requires complete Aikido PASS, security gates, staging RLS proof, journal + lifecycle integration, documented rollback).
 24. Final automated release gates — READY after final source.
 25. Physical-device QA — BLOCKED on final signed candidate and device interaction.
 26. Apple stored:true and revoke — BLOCKED on disposable Apple identity/system confirmation.
