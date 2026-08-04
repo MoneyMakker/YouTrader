@@ -1,0 +1,12 @@
+{
+  "gitSha": "2e72b85",
+  "gitFull": "2e72b854a0680bbd9364442f156075630d045abc",
+  "buildTimeUtc": "2026-08-04T04:03:47Z",
+  "version": "1.6.1",
+  "buildNumber": "117",
+  "xcodeConfiguration": "Release",
+  "archivePath": "/Users/valentynborovyk/Documents/YouTrader/yt3-build117/build/YouTrader-1.6.1-117.xcarchive",
+  "ipaPath": "/Users/valentynborovyk/Documents/YouTrader/yt3-build117/build/YouTrader-1.6.1-117.ipa",
+  "appPath": "/Users/valentynborovyk/Documents/YouTrader/yt3-build117/build/DerivedData-yt3-release-117/Build/Products/Release-iphoneos/YouTrader.app",
+  "searchToken": "YT_BUILD_FP_v1:2e72b85:117:Release"
+}

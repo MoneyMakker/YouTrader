@@ -6,9 +6,9 @@ import path from "node:path";
 const root = process.cwd();
 const requiredLocales = ["en", "ru", "es", "fr", "de", "it", "uk"];
 const expectedVersion = "1.6.1";
-// Build 116 is the authorized production candidate for this branch. This gate
+// Build 117 is the authorized production candidate for this branch. This gate
 // verifies checked-in native metadata; it never creates or increments a build.
-const expectedBuild = "116";
+const expectedBuild = "117";
 
 function run(name, command, args) {
   console.log(`\n[release:stability] ${name}`);
