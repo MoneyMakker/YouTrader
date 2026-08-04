@@ -100,5 +100,15 @@ forward-fix, staging reverse-drop order for non-production only.
 
 ---
 
-PRODUCTION MIGRATION READY: YES  
+## Production apply status (2026-08-04)
+
+Explicit PO authorization was received to apply **only**  
+`20260802225538_prop_pass_journal_automatic_sync.sql`.
+
+**Result: BLOCKED before apply.** Production (`izzrlsgumyabdvlmwlwn`) lacks Prop OS /
+Build 117 prerequisite tables and migrations. See  
+`docs/releases/1.6.1/PPOS-117_PRODUCTION_MIGRATION_RESULT.md`.
+
+PRODUCTION MIGRATION READY: YES (SQL packet / staging proof)  
+PRODUCTION APPLY: BLOCKED (missing prerequisites; expanded PO auth required)  
 EXPLICIT PO APPROVAL REQUIRED: YES
