@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   resolveAcquisitionPhase,
   resolveReleaseGateState,
+  mergeExplicitAuthRequiredFlag,
   type AcquisitionInput,
 } from "../../src/app/startup/acquisitionState";
 import {
@@ -101,6 +102,40 @@ function recordPhase(input: AcquisitionInput) {
   });
   assert.equal(resolveAcquisitionPhase(restarted), "auth");
   assert.equal(resolveReleaseGateState(restarted), "AUTH_REQUIRED");
+}
+
+// Hydrate race: storage not yet flushed, but in-memory sticky must win while signed out
+{
+  assert.equal(
+    mergeExplicitAuthRequiredFlag({ hasSession: false, storageSticky: false, previous: true }),
+    true,
+    "in-memory AUTH_REQUIRED survives storage lag",
+  );
+  assert.equal(
+    mergeExplicitAuthRequiredFlag({ hasSession: false, storageSticky: true, previous: false }),
+    true,
+    "storage sticky survives cold start",
+  );
+  assert.equal(
+    mergeExplicitAuthRequiredFlag({ hasSession: true, storageSticky: true, previous: true }),
+    false,
+    "successful login clears sticky",
+  );
+  assert.equal(
+    resolveAcquisitionPhase(
+      base({
+        hasSession: false,
+        isPremium: false,
+        explicitAuthRequired: mergeExplicitAuthRequiredFlag({
+          hasSession: false,
+          storageSticky: false,
+          previous: true,
+        }),
+      }),
+    ),
+    "auth",
+    "lagging storage must not flash paywall after logout",
+  );
 }
 
 // Login again with same account → CustomerInfo → main when entitled

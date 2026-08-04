@@ -119,6 +119,20 @@ export const ACQUISITION_AUTH_REQUIRED_KEY = "yt-acquisition-auth-required-v1";
 /** @deprecated Guest access removed — key ignored; kept to clear legacy installs. */
 export const ACQUISITION_GUEST_KEY = "yt-acquisition-guest-v1";
 
+/**
+ * Merge storage + in-memory AUTH_REQUIRED during acquisition hydrate.
+ * Prevents a logout race where session→null rehydrates before AsyncStorage.setItem
+ * flushes and would otherwise clear the sticky flag (paywall flash).
+ */
+export function mergeExplicitAuthRequiredFlag(input: {
+  hasSession: boolean;
+  storageSticky: boolean;
+  previous: boolean;
+}): boolean {
+  if (input.hasSession) return false;
+  return input.storageSticky || input.previous;
+}
+
 export function acquisitionPaywallUserKey(userId: string): string {
   return `yt-acquisition-paywall-user-v1:${userId}`;
 }

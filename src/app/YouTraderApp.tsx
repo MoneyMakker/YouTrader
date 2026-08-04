@@ -175,6 +175,7 @@ import {
   ACQUISITION_ONBOARDING_KEY,
   ACQUISITION_PAYWALL_DEVICE_KEY,
   acquisitionPaywallUserKey,
+  mergeExplicitAuthRequiredFlag,
   resolveAcquisitionPhase,
 } from "./startup/acquisitionState";
 import { RevenueCatIdentitySynchronizer } from "../billing/revenueCatIdentity";
@@ -10394,7 +10395,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (cancelled) return;
         setOnboardingCompleted(onboardingDone);
         setPaywallCompleted(paywallDone);
-        setExplicitAuthRequired(authRequiredSticky);
+        setExplicitAuthRequired((prev) =>
+          mergeExplicitAuthRequiredFlag({
+            hasSession: !!userId,
+            storageSticky: authRequiredSticky,
+            previous: prev,
+          }),
+        );
         setAcquisitionHydrated(true);
       } catch {
         if (!cancelled) {
@@ -11787,9 +11794,15 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     if (!beginExplicitLogoutGuard(signingOutRef)) return;
     const userId = session?.user.id || null;
     // Enter LOGGING_OUT before clearing session so acquisition cannot flash paywall.
+    // Persist AUTH_REQUIRED before session→null so the acquisition hydrate effect
+    // cannot race AsyncStorage and route anonymous users to the paywall.
     setLoggingOut(true);
     setExplicitAuthRequired(true);
-    void AsyncStorage.setItem(ACQUISITION_AUTH_REQUIRED_KEY, "1");
+    try {
+      await AsyncStorage.setItem(ACQUISITION_AUTH_REQUIRED_KEY, "1");
+    } catch {
+      // Keep in-memory sticky even if persistence fails this frame.
+    }
     try {
       try {
         const { clearPendingOAuthClientState } = await import("../auth/clearPendingOAuth");
