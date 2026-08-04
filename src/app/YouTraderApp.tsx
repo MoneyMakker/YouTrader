@@ -181,6 +181,7 @@ import {
 } from "./startup/acquisitionState";
 import { RevenueCatIdentitySynchronizer } from "../billing/revenueCatIdentity";
 import {
+  decideEntitlementUiPhase,
   decidePostLoginEntitlementReconcile,
   isActiveEntitlement,
 } from "../billing/entitlementReconcile";
@@ -9839,6 +9840,7 @@ function SettingsScreen({
   authBusy,
   authConfigured,
   isPremium,
+  entitlementResolving = false,
   customerInfo,
   packages,
   storeProducts,
@@ -9865,6 +9867,7 @@ function SettingsScreen({
   authBusy: boolean;
   authConfigured: boolean;
   isPremium: boolean;
+  entitlementResolving?: boolean;
   customerInfo: CustomerInfo | null;
   packages: PurchasesPackage[];
   storeProducts: PurchasesStoreProduct[];
@@ -9932,11 +9935,13 @@ You retain full ownership of your data. In compliance with data privacy regulati
 4. Children's Privacy (COPPA)
 YouTrader does not knowingly collect data from or market to individuals under the age of 18. If you are under 18, you are not authorized to use this application.`;
 
-  const subscriptionPresentation = isPremium
-    ? buildSettingsSubscriptionPresentation(customerInfo, REVENUECAT_ENTITLEMENT_ID, {
-        storeProducts,
-      })
-    : null;
+  const subscriptionPresentation =
+    isPremium && !entitlementResolving
+      ? buildSettingsSubscriptionPresentation(customerInfo, REVENUECAT_ENTITLEMENT_ID, {
+          storeProducts,
+        })
+      : null;
+  const subscriptionCardActive = isPremium && !entitlementResolving;
 
   useEffect(() => {
     if (!subscriptionPresentation?.expirationLooksStale) return;
@@ -10019,14 +10024,23 @@ YouTrader does not knowingly collect data from or market to individuals under th
             {t("more.subscription")}
           </Text>
           <View
-            style={[styles.proStatusBox, isPremium ? styles.proStatusActive : styles.proStatusLocked]}
+            style={[styles.proStatusBox, subscriptionCardActive ? styles.proStatusActive : styles.proStatusLocked]}
             testID="settings-subscription-card"
           >
-            <View style={[styles.proStatusIcon, isPremium ? styles.proStatusIconActive : styles.proStatusIconLocked]}>
-              {isPremium ? <Unlock size={22} color={C.green} strokeWidth={2.4} /> : <Lock size={22} color={C.purple} strokeWidth={2.4} />}
+            <View style={[styles.proStatusIcon, subscriptionCardActive ? styles.proStatusIconActive : styles.proStatusIconLocked]}>
+              {subscriptionCardActive ? <Unlock size={22} color={C.green} strokeWidth={2.4} /> : <Lock size={22} color={C.purple} strokeWidth={2.4} />}
             </View>
             <View style={styles.proStatusCopy}>
-              {subscriptionPresentation ? (
+              {entitlementResolving ? (
+                <>
+                  <Text style={[styles.proStatusTitle, styles.proStatusTitleActive]} maxFontSizeMultiplier={1.25}>
+                    {t("subscription.proActive")}
+                  </Text>
+                  <Text style={styles.proStatusText} maxFontSizeMultiplier={1.25} testID="settings-subscription-resolving">
+                    {t("checking")}
+                  </Text>
+                </>
+              ) : subscriptionPresentation ? (
                 <>
                   <Text style={[styles.proStatusTitle, styles.proStatusTitleActive]} maxFontSizeMultiplier={1.25}>
                     {`${t("subscription.currentPlan")}\n${subscriptionPresentation.planLabel}`}
@@ -10061,7 +10075,7 @@ YouTrader does not knowingly collect data from or market to individuals under th
               )}
             </View>
           </View>
-          {isPremium ? (
+          {entitlementResolving ? null : subscriptionCardActive ? (
             <Pressable
               onPress={() =>
                 openSubscriptionManagement(subscriptionPresentation?.managementURL)
@@ -10335,7 +10349,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   /** In-memory only: anonymous entitlement before Purchases.logIn(session.user.id). */
   const preAuthEntitledRef = useRef(false);
   const postLoginRestoreAttemptedRef = useRef(false);
+  /** Same Supabase UUID that held Pro at last logout — drives silent restore on re-login. */
+  const entitledUserIdAtLogoutRef = useRef<string | null>(null);
+  const identitySyncGenerationRef = useRef(0);
   const [identitySyncFailed, setIdentitySyncFailed] = useState(false);
+  const [identitySyncPending, setIdentitySyncPending] = useState(false);
   const revenueCatIdentityRef = useRef(
     new RevenueCatIdentitySynchronizer<CustomerInfo>(
       {
@@ -10354,8 +10372,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   // Prop Pass follows active CustomerInfo entitlement directly. Do not use a
   // local premium flag, a subscription-card label, a server mirror, or a
   // staging allowlist to decide this product's state.
+  const entitlementUiPhase = decideEntitlementUiPhase({
+    identitySyncPending: !!session?.user?.id && identitySyncPending,
+    identitySyncFailed,
+    isPro: isPremium,
+  });
   const propPassEntitled =
     !!session?.user?.id &&
+    entitlementUiPhase === "entitled" &&
     hasActivePropPassEntitlement(
       customerInfo,
       REVENUECAT_ENTITLEMENT_ID,
@@ -10514,8 +10538,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     "journal",
     ...(propPassTabVisible ? (["propPass"] as const) : []),
     "stats",
-    "settings",
     "more",
+    "settings",
   ];
   useDeviceQaCaptureWalk({
     phase: acquisitionPhase,
@@ -10902,14 +10926,21 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     if (!purchasesConfigured.current || !session?.user.id || !revenueCatReady) return;
     let cancelled = false;
     const userId = session.user.id;
-    const preAuthEntitled = preAuthEntitledRef.current || isActiveEntitlement(customerInfoRef.current, REVENUECAT_ENTITLEMENT_ID);
+    const generation = ++identitySyncGenerationRef.current;
+    const preAuthEntitled =
+      preAuthEntitledRef.current ||
+      isActiveEntitlement(customerInfoRef.current, REVENUECAT_ENTITLEMENT_ID);
+    const sameUserWasEntitledAtLogout = entitledUserIdAtLogoutRef.current === userId;
+    setIdentitySyncPending(true);
+    setIdentitySyncFailed(false);
 
     void (async () => {
       const result = await revenueCatIdentityRef.current.synchronize(userId);
-      if (cancelled) return;
+      if (cancelled || generation !== identitySyncGenerationRef.current) return;
 
       if (result.status === "failed") {
         setIdentitySyncFailed(true);
+        setIdentitySyncPending(false);
         setShowRestorePurchases(true);
         setPaywallError(t("restoreFailedTryAgain"));
         logger.error(new Error("revenuecat_identity_sync_failed"), {
@@ -10919,34 +10950,63 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         return;
       }
 
-      setIdentitySyncFailed(false);
       const info = result.customerInfo;
       if (info) applyCustomerInfo(info, `identity:${result.status}`);
 
-      const postLoginEntitled = isActiveEntitlement(info ?? customerInfoRef.current, REVENUECAT_ENTITLEMENT_ID);
+      let postLoginEntitled = isActiveEntitlement(info ?? customerInfoRef.current, REVENUECAT_ENTITLEMENT_ID);
+
+      // Explicit refresh when logIn/already_synced snapshot is not entitled yet.
+      if (!postLoginEntitled && purchasesConfigured.current) {
+        try {
+          const refreshed = await Purchases.getCustomerInfo();
+          if (cancelled || generation !== identitySyncGenerationRef.current) return;
+          applyCustomerInfo(refreshed, "identity:post_login_refresh");
+          postLoginEntitled = isActiveEntitlement(refreshed, REVENUECAT_ENTITLEMENT_ID);
+        } catch (error) {
+          if (!cancelled && generation === identitySyncGenerationRef.current) {
+            setIdentitySyncFailed(true);
+            setIdentitySyncPending(false);
+            setShowRestorePurchases(true);
+            logger.error(error, { feature: "revenuecat", action: "post_login_refresh" });
+          }
+          return;
+        }
+      }
+
       const decision = decidePostLoginEntitlementReconcile({
         preAuthEntitled,
         postLoginEntitled,
         restoreAlreadyAttempted: postLoginRestoreAttemptedRef.current,
+        sameUserWasEntitledAtLogout,
       });
 
       if (decision.action === "restore_once") {
         postLoginRestoreAttemptedRef.current = true;
         try {
           const restored = await withTimeout(Purchases.restorePurchases());
-          if (cancelled) return;
+          if (cancelled || generation !== identitySyncGenerationRef.current) return;
           applyCustomerInfo(restored, "identity:restore_fallback");
-          if (!isActiveEntitlement(restored, REVENUECAT_ENTITLEMENT_ID)) {
+          if (isActiveEntitlement(restored, REVENUECAT_ENTITLEMENT_ID)) {
+            preAuthEntitledRef.current = false;
+            entitledUserIdAtLogoutRef.current = null;
+            setIdentitySyncFailed(false);
+          } else {
             setIdentitySyncFailed(true);
+            setShowRestorePurchases(true);
             logger.warn("RevenueCat entitlement missing after identity restore fallback", {
               feature: "revenuecat",
               action: "identity_restore_fallback",
             });
           }
         } catch (error) {
-          if (!cancelled) {
+          if (!cancelled && generation === identitySyncGenerationRef.current) {
             setIdentitySyncFailed(true);
+            setShowRestorePurchases(true);
             logger.error(error, { feature: "revenuecat", action: "identity_restore_fallback" });
+          }
+        } finally {
+          if (!cancelled && generation === identitySyncGenerationRef.current) {
+            setIdentitySyncPending(false);
           }
         }
         return;
@@ -10954,13 +11014,17 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
       if (decision.action === "fail_closed") {
         setIdentitySyncFailed(true);
+        setShowRestorePurchases(true);
+        setIdentitySyncPending(false);
         return;
       }
 
-      // Clear anonymous pre-auth marker once identity is confirmed.
       if (decision.action === "confirmed_entitled") {
         preAuthEntitledRef.current = false;
+        entitledUserIdAtLogoutRef.current = null;
       }
+
+      setIdentitySyncPending(false);
     })();
 
     return () => {
@@ -11850,6 +11914,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         return;
       }
       // Force navigation root off authenticated shell immediately.
+      // Capture entitlement against this UUID before clearing RC identity.
+      const wasEntitledAtLogout = isActiveEntitlement(
+        customerInfoRef.current,
+        REVENUECAT_ENTITLEMENT_ID,
+      ) || customerHasPro(customerInfoRef.current);
+      entitledUserIdAtLogoutRef.current =
+        userId && wasEntitledAtLogout ? userId : null;
       setSession(null);
       await clearLocalUserCache(userId);
       resetAnalyticsUser();
@@ -11858,6 +11929,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       preAuthEntitledRef.current = false;
       postLoginRestoreAttemptedRef.current = false;
       setIdentitySyncFailed(false);
+      setIdentitySyncPending(false);
       revenueCatIdentityRef.current.reset();
       // RevenueCat logOut once when required. Does not cancel App Store subscription / StoreKit receipt.
       if (purchasesConfigured.current) {
@@ -12327,8 +12399,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     { id: "journal", label: t("journal") },
     ...(propPassTabVisible ? [{ id: "propPass" as const, label: t("propPass.tab") }] : []),
     { id: "stats", label: t("stats") },
-    { id: "settings", label: t("settings") },
     { id: "more", label: t("more.title") },
+    { id: "settings", label: t("settings") },
   ];
   const premiumTabs: Tab[] = [];
   const locked = !isPremium && premiumTabs.includes(tab);
@@ -12396,7 +12468,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               }}
             />
           ) : tab === "propPass" ? (
-            propPassEntitled ? (
+            entitlementUiPhase === "loading" ? (
+              <View style={styles.lockScreen} testID="prop-pass-entitlement-loading">
+                <AppStartupSkeleton />
+                <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("checking")}</Text>
+              </View>
+            ) : propPassEntitled ? (
             <React.Suspense fallback={null}>
               <LazyPropPassInternalScreen
                 key={`prop-pass-${qaPropPassEpoch}`}
@@ -12507,9 +12584,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
                   setTab("settings");
                   return;
                 }
-                if (dest === "help" || dest === "privacy" || dest === "terms") {
-                  return;
-                }
                 setMoreDestination("hub");
                 setTab(dest as Tab);
               }}
@@ -12522,6 +12596,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               authBusy={authBusy}
               authConfigured={authConfigured}
               isPremium={isPremium}
+              entitlementResolving={entitlementUiPhase === "loading"}
               customerInfo={customerInfo}
               packages={packages}
               storeProducts={storeProducts}

@@ -1,5 +1,6 @@
 /**
  * Bottom navigation contract — Settings primary, Calendar in More only.
+ * Dock order: Journal → Prop Pass → Stats → Futures (more) → Settings.
  * Run: npx tsx scripts/qa/bottomNavContract.selftest.ts
  */
 import assert from "node:assert/strict";
@@ -20,7 +21,7 @@ assert.ok(
   "Calendar must not appear in the bottom dock",
 );
 
-// Dock order: journal → propPass (always, unless QA hide) → stats → settings → more
+// Dock order: journal → propPass → stats → more (Futures) → settings
 const tabsBlockMatch = appSrc.match(
   /const tabs: \{ id: Tab; label: string \}\[\] = \[([\s\S]*?)\];/,
 );
@@ -51,9 +52,9 @@ const moreIdx = tabsBlock.indexOf('{ id: "more"');
 assert.ok(
   journalIdx < propPassIdx &&
     propPassIdx < statsIdx &&
-    statsIdx < settingsIdx &&
-    settingsIdx < moreIdx,
-  "Dock order must be Journal → Prop Pass → Stats → Settings → More",
+    statsIdx < moreIdx &&
+    moreIdx < settingsIdx,
+  "Dock order must be Journal → Prop Pass → Stats → Futures → Settings",
 );
 
 // Settings selected state must not remap to More
@@ -66,19 +67,28 @@ assert.ok(
   "Settings must keep its own selected dock state",
 );
 
-// More hub: Calendar present, Settings absent
+// More hub: Calendar present, Settings absent, Support/legal absent
 assert.ok(moreSrc.includes('id: "calendar"'), "Calendar must remain in More");
 assert.ok(!moreSrc.includes('id: "settings"'), "Settings must not be duplicated in More");
 assert.ok(
   moreSrc.includes("Settings is a primary bottom tab"),
   "MoreScreen must document Settings as primary tab",
 );
+assert.ok(!moreSrc.includes("more.sectionSupport"), "Futures must not show Support section");
+assert.ok(!moreSrc.includes('id: "help"'), "Futures must not include Help");
+assert.ok(!moreSrc.includes('id: "privacy"'), "Futures must not include Privacy Policy");
+assert.ok(!moreSrc.includes('id: "terms"'), "Futures must not include Terms of Use");
+assert.ok(
+  appSrc.includes('t("termsRiskPrivacy")') || appSrc.includes("termsRiskPrivacy"),
+  "Legal links must remain reachable from Settings",
+);
+assert.ok(appSrc.includes("Support"), "Support must remain reachable from Settings");
 
 // qaTabIds contract for Maestro/debug
 assert.ok(appSrc.includes('"settings"'), "qaTabIds / dock must expose settings");
 assert.ok(
-  /qaTabIds = \[[\s\S]*?"settings"[\s\S]*?"more"/.test(appSrc),
-  "qaTabIds must include settings before more",
+  /qaTabIds = \[[\s\S]*?"more"[\s\S]*?"settings"/.test(appSrc),
+  "qaTabIds must include more before settings",
 );
 
 console.log("bottomNavContract selftest PASS");
