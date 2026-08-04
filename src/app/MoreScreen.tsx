@@ -2,11 +2,12 @@
  * Futures hub — Calendar, Calculator, News, Reports, Import Trades.
  * Settings is a primary bottom tab (not duplicated here).
  * Prop Pass is a primary bottom tab (not placed in Futures).
- * Bottom tabs: always five (Journal, Prop Pass, Stats, Settings, Futures).
+ * Legal / Support links live in Settings (and paywall) — not duplicated here.
+ * Bottom tabs: always five (Journal, Prop Pass, Stats, Futures, Settings).
  * Route id remains `more` for deep-link stability.
  */
 import React from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import {
   Calculator as CalculatorIcon,
@@ -26,10 +27,7 @@ export type MoreDestination =
   | "restore"
   | "reports"
   | "account"
-  | "importTrades"
-  | "help"
-  | "privacy"
-  | "terms";
+  | "importTrades";
 
 type Props = {
   onOpen: (dest: MoreDestination) => void;
@@ -132,41 +130,6 @@ export function MoreScreen({ onOpen, isPremium }: Props) {
         theme={theme}
         isPremium={isPremium}
       />
-
-      <View style={styles.section}>
-        <YdlText role="label" color="text.secondary">
-          {t("more.sectionSupport")}
-        </YdlText>
-        <View style={styles.list}>
-          {(
-            [
-              { id: "help" as const, label: t("more.help"), url: "mailto:support@borovikgroup.com?subject=YouTrader%20Support" },
-              { id: "privacy" as const, label: t("privacyPolicy"), url: "https://youtrader.app/privacy" },
-              { id: "terms" as const, label: t("termsOfUse"), url: "https://youtrader.app/terms" },
-            ] as const
-          ).map((item) => (
-            <Pressable
-              key={item.id}
-              onPress={() => {
-                if (item.url) void Linking.openURL(item.url);
-                else onOpen(item.id);
-              }}
-              accessibilityRole="link"
-              accessibilityLabel={item.label}
-              testID={`more.open.${item.id}`}
-              style={[
-                styles.row,
-                {
-                  backgroundColor: theme.colors.surface.card,
-                  minHeight: YDL_MIN_TOUCH_TARGET,
-                },
-              ]}
-            >
-              <YdlText role="bodyEmphasized">{item.label}</YdlText>
-            </Pressable>
-          ))}
-        </View>
-      </View>
     </ScrollView>
   );
 }
