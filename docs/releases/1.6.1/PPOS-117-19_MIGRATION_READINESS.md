@@ -26,6 +26,8 @@ Predecessor Prop OS foundation migrations (`20260730*` / `20260731*`) remain pre
 | Schema + grant/RLS static assertions | `npm run test:prop-pass-persistence-schema` | PASS |
 | Adapter contract | `npm run test:prop-pass-persistence-adapter` | PASS |
 | Consolidated Trading OS gate (includes both above) | `npm run test:prop-pass-trading-os` | PASS |
+| Journal automatic sync QA | `npm run test:prop-pass-journal-sync` (in trading-os gate) | PASS |
+| Challenge + Live lifecycle QA | `npm run test:prop-pass-lifecycle` + challenge/live integration (in trading-os gate) | PASS |
 | Transactional RLS proof (synthetic users; **rollback**) | `supabase/tests/prop_pass_trading_os_persistence_rls.sql` | Run only on local/staging after migrations; never leave fixtures |
 
 Static schema QA asserts: RLS enable/force, owner `user_id = auth.uid()`, revoke from `public`/`anon`/`authenticated` where required, append-only / idempotency keys, processor functions **not** granted to `authenticated`, no provider/identity tokens in SQL.
