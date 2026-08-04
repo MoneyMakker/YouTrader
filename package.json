@@ -129,6 +129,7 @@
     "test:prop-pass-journal-sync-e2e": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-journal-sync-e2e-qa.ts",
     "test:prop-pass-journal-staging-transaction": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-journal-staging-transaction-qa.ts",
     "test:prop-pass-runtime-state-staging": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-runtime-state-staging-qa.ts",
+    "test:prop-pass-runtime-processor-remote-rehearsal": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-runtime-processor-remote-rehearsal-qa.ts",
     "test:prop-pass-build116-compat-static": "node --experimental-strip-types --experimental-transform-types scripts/prop-pass-build116-compat-static-qa.ts",
     "test:prop-pass-build116-compat-staging": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-build116-compat-staging-qa.ts",
     "test:prop-pass-advanced-product": "node --import ./scripts/prop-os-register.mjs --experimental-strip-types --experimental-transform-types scripts/prop-pass-advanced-product-qa.ts",

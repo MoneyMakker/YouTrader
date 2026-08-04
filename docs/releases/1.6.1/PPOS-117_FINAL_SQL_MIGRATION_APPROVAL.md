@@ -135,7 +135,32 @@ Target **only** `izzrlsgumyabdvlmwlwn`:
 18. Sanitized evidence commit  
 
 Do not apply PI migrations in this packet.  
-Do not deploy Edge in this packet.
+Do not deploy Edge in this **SQL** packet (processor is a separate authorization).
+
+---
+
+## Proven SQL-versus-processor deployment ordering
+
+Classification (Staging remote Edge rehearsal, 2026-08-04): **`SQL_SAFE_BEFORE_PROCESSOR`**
+
+| Fact | Proof |
+|---|---|
+| Journal events enqueue without a processor present | Sync trigger writes `pending` when assignment exists; no Edge cron |
+| Events wait safely | Pending rows survive until claim; no data loss |
+| Processing is pull-based | Authenticated Edge `process_pending` only |
+| Build 116 without Prop Pass assignments | No enqueue |
+| Processor packet | `PPOS-117_RUNTIME_PROCESSOR_DEPLOYMENT_APPROVAL.md` — Staging rehearsal **PASS** |
+
+**Coordinated production order (future; DO NOT EXECUTE):**
+
+1. Confirm Build 117 client wake-ups remain OFF for real users  
+2. Apply SQL migrations 1–13 (this packet + PO SQL approval)  
+3. Verify schema + RLS + claim RPC  
+4. Deploy `prop-pass-runtime-processor` with `verify_jwt:true` (processor packet + PO processor approval)  
+5. Processor smoke + disposable vertical slice + cleanup  
+6. Enable client activation only when PO authorizes  
+
+Operational preference: deploy the processor **immediately after** SQL verification so assigned-trade queues do not accumulate unnoticed. SQL-only apply remains safe (pending wait), not “activation disabled by preference.”
 
 ---
 
@@ -143,7 +168,7 @@ Do not deploy Edge in this packet.
 
 1. Explicit PO approval of this **13-file** set (not the prior 16-file or single-file auth).  
 2. Prefer a disposable **remote** Supabase rehearsal when Pro branching or project slot is available (local PG lacks full Edge).  
-3. Processor remains a **separate** authorization scope.
+3. Processor remains a **separate** authorization scope (Staging remote Edge rehearsal now **PASS**; production processor deploy still needs PO processor approval).
 
 PRODUCTION SQL MIGRATION READY: YES (packet) — apply still requires PO  
 EXPLICIT PO SQL APPROVAL REQUIRED: YES
