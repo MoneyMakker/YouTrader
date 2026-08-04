@@ -584,7 +584,7 @@ final regression verification complete.
 5. Complete drawdown variants — DONE.
 6. Versioned instrument registry — DONE.
 7. Journal ↔ Prop Pass automatic synchronization — DONE in source and deterministic tests including persistence-adapter E2E save/edit/delete/reload/duplicate/cross-user (`test:prop-pass-journal-sync-e2e`); remote staging transaction proof remains pending under item 22.
-8. Complete Challenge lifecycle integration — DONE in domain/runtime tests; final device proof remains pending.
+8. Complete Challenge lifecycle integration — DONE in domain/runtime tests with expanded state coverage (active/min-days/consistency/passed/breached/funded/archived + stable journal revision key); Live Session Lock/preservation withhold covered in live-account integration QA; final device/UI proof remains pending.
 9. Session Cockpit — DONE in source (persisted cockpit, i18n, QA in `test:prop-pass-trading-os`); final device/accessibility review remains under item 25.
 10. Full production UI — IN PROGRESS; Session Cockpit, Live Settings, Session Lock, and Multi-Account Command Center presentation/i18n are in source; remaining polish and device review remain.
 11. Challenge Autopilot Setup — DONE (wizard + QA included in `test:prop-pass-trading-os`).
