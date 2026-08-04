@@ -1,0 +1,24 @@
+{
+  "suite": "prop-pass-b116-compat-production",
+  "productionProjectRef": "izzrlsgumyabdvlmwlwn",
+  "results": {
+    "b116_auth": "PASS",
+    "no_fabricated_prop_account": "PASS",
+    "b116_journal_create": "PASS",
+    "b116_journal_read": "PASS",
+    "b116_journal_edit": "PASS",
+    "no_mandatory_b117_queue_for_unassigned": "PASS",
+    "b116_journal_delete": "PASS",
+    "user_not_allowlisted": "PASS",
+    "logout_routing_compatible": "PASS",
+    "cleanup": "PASS"
+  },
+  "evidence": {
+    "productionHost": "izzrlsgumyabdvlmwlwn",
+    "activationClientWakeups": "OFF",
+    "realUserBuild117Activation": "NOT_AUTHORIZED",
+    "allowlistGlobal": 0,
+    "leftoverTrades": 0
+  },
+  "stamp": "2026-08-04T03-39-41-466Z"
+}
