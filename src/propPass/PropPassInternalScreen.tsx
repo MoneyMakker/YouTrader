@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { YdlButton } from "../ydl/components/YdlButton";
@@ -584,6 +584,34 @@ function AvailableView({
   // production recommendations come only from the persisted Build 117 runtime.
   void todaysPlan;
   void insightsPresentation;
+  const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(null);
+
+  const selectAccount = useCallback(
+    (accountId: string) => {
+      if (!userId || accountId === model.account.id || switchingAccountId) return;
+      setSwitchingAccountId(accountId);
+      const req = newPropOsClientRequestId();
+      void runPropPassCommand(
+        req,
+        userId,
+        (svc) =>
+          svc.setDefaultAccount({
+            clientRequestId: req,
+            accountId,
+          }),
+        "prop_pass_default_account_changed",
+      ).then((res) => {
+        setSwitchingAccountId(null);
+        onMessage(
+          res.kind === "success"
+            ? t("propPass.account.defaultSaved")
+            : t("propPass.command.unexpected"),
+        );
+        if (res.kind === "success") onRefresh();
+      });
+    },
+    [model.account.id, onMessage, onRefresh, switchingAccountId, t, userId],
+  );
 
   return (
     <View style={styles.available}>
@@ -621,6 +649,8 @@ function AvailableView({
         <PropPassMultiAccountCommandCenter
           userId={userId}
           selectedAccountId={model.account.id}
+          onSelectAccount={selectAccount}
+          switchingAccountId={switchingAccountId}
         />
       ) : null}
     </View>

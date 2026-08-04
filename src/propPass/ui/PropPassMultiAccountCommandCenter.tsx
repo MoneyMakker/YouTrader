@@ -21,6 +21,8 @@ import { PropPassPersistenceError } from "../persistence/index";
 type Props = {
   userId: string;
   selectedAccountId: string;
+  onSelectAccount?: (accountId: string) => void;
+  switchingAccountId?: string | null;
 };
 
 type LoadState =
@@ -42,7 +44,12 @@ const FILTER_LABEL_KEYS: Record<CommandCenterFilter, string> = {
   live: "propPass.commandCenter.filter.live",
 };
 
-export function PropPassMultiAccountCommandCenter({ userId, selectedAccountId }: Props) {
+export function PropPassMultiAccountCommandCenter({
+  userId,
+  selectedAccountId,
+  onSelectAccount,
+  switchingAccountId = null,
+}: Props) {
   const { t } = useTranslation();
   const theme = useYdlTheme("dark");
   const [filter, setFilter] = useState<CommandCenterFilter>("all");
@@ -172,6 +179,12 @@ export function PropPassMultiAccountCommandCenter({ userId, selectedAccountId }:
             key={account.accountId}
             account={account}
             selected={account.accountId === selectedAccountId}
+            switching={account.accountId === switchingAccountId}
+            onSelect={
+              onSelectAccount && account.accountId !== selectedAccountId
+                ? () => onSelectAccount(account.accountId)
+                : undefined
+            }
           />
         ))
       )}
@@ -193,19 +206,27 @@ export function PropPassMultiAccountCommandCenter({ userId, selectedAccountId }:
 function AccountCommandCard({
   account,
   selected,
+  switching = false,
+  onSelect,
 }: {
   account: MultiAccountCommandItem;
   selected: boolean;
+  switching?: boolean;
+  onSelect?: () => void;
 }) {
   const { t } = useTranslation();
   const contextLabel = t(`propPass.commandCenter.context.${account.context}`);
   const statusLabel = title(account.health ?? account.lifecycleStatus);
-  const accessibilityLabel = `${account.name}. ${contextLabel}. ${statusLabel}.`;
+  const accessibilityLabel = selected
+    ? t("propPass.commandCenter.selectedA11y", { name: account.name, context: contextLabel, status: statusLabel })
+    : t("propPass.commandCenter.selectAccountA11y", { name: account.name, context: contextLabel, status: statusLabel });
   return (
     <YdlCard
-      variant={selected ? "selected" : "outlined"}
+      variant={selected ? "selected" : onSelect ? "interactive" : "outlined"}
       testID={`prop-pass-command-account-${account.accountId}`}
       accessibilityLabel={accessibilityLabel}
+      onPress={onSelect}
+      disabled={switching}
       style={styles.accountCard}
     >
       <View style={styles.heading}>

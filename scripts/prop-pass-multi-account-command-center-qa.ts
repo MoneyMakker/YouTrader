@@ -223,6 +223,10 @@ for (const filter of ["needs_attention", "healthy", "watch", "danger", "stop_tra
   assert.ok(component.includes(filter), `missing command center filter: ${filter}`);
 }
 assert.match(productionScreen, /<PropPassMultiAccountCommandCenter/);
+assert.match(productionScreen, /onSelectAccount={selectAccount}/);
+assert.match(component, /onSelectAccount/);
+assert.match(component, /selectAccountA11y/);
+assert.match(productionScreen, /setDefaultAccount/);
 assert.match(component, /accessibilityLiveRegion/);
 assert.match(component, /YdlSkeletonCard/);
 assert.doesNotMatch(component, /#[A-Fa-f0-9]{6}/, "Command Center must use semantic YDL tokens");

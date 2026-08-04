@@ -1509,6 +1509,8 @@
   "propPass.commandCenter.filter.challenge": "Challenge",
   "propPass.commandCenter.filter.funded": "Funded",
   "propPass.commandCenter.filter.live": "Live",
+  "propPass.commandCenter.selectAccountA11y": "Switch to {{name}}. {{context}}. {{status}}.",
+  "propPass.commandCenter.selectedA11y": "Selected account {{name}}. {{context}}. {{status}}.",
   "propPass.productBanner": "Futures challenge execution from server snapshots. Values are not recalculated on device.",
   "propPass.refreshCta": "Actualizar",
   "propPass.history.title": "Historial de challenges",
