@@ -1,6 +1,6 @@
 # PPOS-117 — Final staging migration readiness checkpoint
 
-**Reconciled HEAD:** `33878f2` (`feature/prop-pass-trading-os-build117`)  
+**Reconciled HEAD:** \`6883ce6\` (\`feature/prop-pass-trading-os-build117\`; tip includes docs stamps)  
 **Date:** 2026-08-04  
 **Production project ref:** `izzrlsgumyabdvlmwlwn`  
 **Staging project ref:** `zleojeqkzizeyerhjpur`  
