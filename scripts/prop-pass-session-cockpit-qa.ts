@@ -8,15 +8,49 @@ const liveSettings = fs.readFileSync(path.join(root, "src/propPass/ui/PropPassLi
 const screen = fs.readFileSync(path.join(root, "src/propPass/PropPassInternalScreen.tsx"), "utf8");
 const availability = fs.readFileSync(path.join(root, "src/propPass/usePropPassAvailability.ts"), "utf8");
 
-for (const required of ["Check Next Trade", "Today’s Plan", "Contract Calculator", "What-If Simulator", "Risk Rules", "Payout Planner", "Safe Withdrawal", "Timeline", "Decision Replay", "Capital Preservation", "Survival Capacity", "Daily Risk Calendar", "Breach Replay", "Session Lock", "buildDailyRiskCalendar", "calendarFactFromPipelineOutput", "prop-pass-calendar-day-", "Manual lock", "Lock reason", "Review expires", "formatReviewExpiry"]) assert.match(cockpit, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `Cockpit route missing: ${required}`);
-for (const required of ["Daily risk used", "Daily risk remaining", "Weekly loss room", "Drawdown room", "Trades used / allowed", "Risk mode"]) assert.ok(cockpit.includes(required), `Cockpit metric missing: ${required}`);
+const cockpitKeys = [
+  "propPass.cockpit.checkNextTrade",
+  "propPass.plan.title",
+  "propPass.cockpit.contractCalculator",
+  "propPass.cockpit.whatIfSimulator",
+  "propPass.cockpit.riskRules",
+  "propPass.cockpit.payoutPlanner",
+  "propPass.cockpit.safeWithdrawal",
+  "propPass.cockpit.timeline",
+  "propPass.cockpit.decisionReplay",
+  "propPass.cockpit.capitalPreservation",
+  "propPass.cockpit.survivalCapacity",
+  "propPass.cockpit.dailyRiskCalendar",
+  "propPass.cockpit.breachReplay",
+  "propPass.cockpit.sessionLock",
+  "propPass.cockpit.dailyRiskUsed",
+  "propPass.cockpit.dailyRiskRemaining",
+  "propPass.cockpit.weeklyLossRoom",
+  "propPass.commandCenter.drawdownRoom",
+  "propPass.cockpit.tradesUsedAllowed",
+  "propPass.cockpit.riskMode",
+  "propPass.cockpit.row.manualLock",
+  "propPass.sessionLock.reasonLabel",
+  "propPass.cockpit.row.reviewExpires",
+  "propPass.cockpit.calculationTrace",
+  "propPass.cockpit.contractsRoundDown",
+  "propPass.cockpit.survivalDisclaimer",
+  "propPass.cockpit.unavailable.equity",
+];
+
+for (const key of cockpitKeys) {
+  assert.match(cockpit, new RegExp(key.replace(/\./g, "\\.")), `Cockpit missing i18n key: ${key}`);
+}
+
+for (const required of ["buildDailyRiskCalendar", "calendarFactFromPipelineOutput", "prop-pass-calendar-day-", "formatReviewExpiry"]) {
+  assert.match(cockpit, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `Cockpit route missing: ${required}`);
+}
+
+assert.match(cockpit, /useTranslation/);
 assert.match(cockpit, /useYdlReduceMotion/);
 assert.match(cockpit, /withTiming/);
 assert.match(cockpit, /runYdlHaptic/);
 assert.match(cockpit, /enteredDanger/);
-assert.match(cockpit, /How this was calculated/);
-assert.match(cockpit, /Contracts always round down/);
-assert.match(cockpit, /prediction or passage probability/);
 assert.doesNotMatch(cockpit, /#[A-Fa-f0-9]{6}/, "Cockpit must use semantic theme tokens");
 assert.doesNotMatch(cockpit, /pass probability/i, "Cockpit must not expose fabricated passage probability");
 assert.match(screen, /<PropPassSessionCockpit/);
