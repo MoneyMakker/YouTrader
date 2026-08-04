@@ -343,6 +343,7 @@ function validateRuntimePayload(payload: Record<string, unknown>): void {
   resultRecord(payload.survival, "runtime survival");
   resultRecord(payload.breachReplay, "runtime breach replay");
   resultRecord(payload.payoutPlanner, "runtime payout planner");
+  if (payload.killSwitch != null) resultRecord(payload.killSwitch, "runtime kill switch");
 }
 function resultRecord(value: unknown, label: string): Record<string, unknown> { const row = record(value, label); enumValue(row.status, ["safe_to_take", "risky", "rule_violation", "stop_trading", "needs_input"], `${label} status`); if (!("values" in row)) throw new PropPassPersistenceError("invalid_row", `${label} values required`); stringArray(row.reasons, `${label} reasons`); stringArray(row.missingInputs, `${label} missing inputs`); array(row.appliedHardLimits, `${label} hard limits`); stringArray(row.relatedRuleIds, `${label} related rules`); return row; }
 function array(value: unknown, label: string): unknown[] { if (!Array.isArray(value)) throw new PropPassPersistenceError("invalid_row", `${label}: array expected`); return value; }

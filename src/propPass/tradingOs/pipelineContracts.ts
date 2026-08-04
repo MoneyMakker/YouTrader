@@ -158,6 +158,7 @@ export type PropPassCalculationPipelineOutput = Readonly<{
   timeline: ChallengeTimelineEvent[];
   challengeLifecycle: TradingOsResult<ChallengeLifecycleValues> | null;
   liveLifecycle: TradingOsResult<LiveAccountIntegrationValues> | null;
+  killSwitch: TradingOsResult<KillSwitchValues> | null;
   payoutReadiness: TradingOsResult<PayoutReadinessValues> | null;
   withdrawalReadiness: TradingOsResult<SafeWithdrawalValues> | null;
   scaling: TradingOsResult<ScalingRecommendationValues> | null;

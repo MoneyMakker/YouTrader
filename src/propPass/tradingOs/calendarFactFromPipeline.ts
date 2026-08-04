@@ -1,4 +1,5 @@
 import type { PropPassCalculationPipelineOutput } from "./pipelineContracts";
+import { resolveKillSwitchValues } from "./killSwitch";
 import type { DailyRiskCalendarFact } from "./riskCalendar";
 
 /**
@@ -34,7 +35,7 @@ export function calendarFactFromPipelineOutput(
     replays: output.decisionReplay.relatedTradeId
       ? [output.decisionReplay]
       : [],
-    killSwitchActive: Boolean(output.liveLifecycle?.values.killSwitch?.active),
+    killSwitchActive: Boolean(resolveKillSwitchValues(output)?.active),
     markers,
   };
 }

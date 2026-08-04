@@ -71,3 +71,10 @@ function stopped(ids: string[], manualConfirmationRequired: boolean, resetStrate
 }
 function resetInstruction(strategy: KillSwitchConfiguration["resetStrategy"]): string | null { return strategy === "next_trading_day" ? "Resets at the next configured trading day." : strategy === "next_session" ? "Resets at the next configured trading session." : null; }
 function result(status: TradingOsResult<KillSwitchValues>["status"], values: KillSwitchValues, reasons: string[], missingInputs: string[]): TradingOsResult<KillSwitchValues> { return { values, status, reasons, missingInputs, appliedHardLimits: [], relatedRuleIds: ["kill_switch"] }; }
+
+/** Context-neutral Kill Switch values for cockpit and calendar surfaces. */
+export function resolveKillSwitchValues(
+  output: Readonly<{ killSwitch?: TradingOsResult<KillSwitchValues> | null; liveLifecycle?: Readonly<{ values: Readonly<{ killSwitch?: KillSwitchValues | null }> }> | null }>,
+): KillSwitchValues | null {
+  return output.killSwitch?.values ?? output.liveLifecycle?.values.killSwitch ?? null;
+}

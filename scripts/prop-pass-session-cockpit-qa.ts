@@ -53,6 +53,7 @@ assert.match(cockpit, /runYdlHaptic/);
 assert.match(cockpit, /enteredDanger/);
 assert.doesNotMatch(cockpit, /#[A-Fa-f0-9]{6}/, "Cockpit must use semantic theme tokens");
 assert.doesNotMatch(cockpit, /pass probability/i, "Cockpit must not expose fabricated passage probability");
+assert.match(cockpit, /resolveKillSwitchValues/);
 assert.match(screen, /<PropPassSessionCockpit/);
 assert.doesNotMatch(screen, /<PropPassPassProbability/);
 assert.match(availability, /getRuntimeState\(resolvedAccountId\)/);

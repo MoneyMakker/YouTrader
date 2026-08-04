@@ -13,7 +13,7 @@ import { runYdlHaptic } from "../../ydl/haptics";
 import { YdlAnimatedNumber, YdlFade } from "../../ydl/motion";
 import { useYdlTheme } from "../../ydl/tokens";
 import type { PersistedRuntimeState } from "../persistence/index";
-import { compareRiskModes, buildDailyRiskCalendar, calendarFactFromPipelineOutput, type PropPassCalculationPipelineOutput } from "../tradingOs/index";
+import { compareRiskModes, buildDailyRiskCalendar, calendarFactFromPipelineOutput, resolveKillSwitchValues, type PropPassCalculationPipelineOutput } from "../tradingOs/index";
 import type { PropPassViewModel } from "../types";
 import { PropPassLiveSettingsEditor, PropPassSessionLockControl } from "./PropPassLiveSettingsEditor";
 
@@ -90,7 +90,7 @@ export function PropPassSessionCockpit({ model, runtime, runtimeLoading, runtime
         <Action label={t("propPass.cockpit.survivalCapacity")} detail={t("propPass.cockpit.staticScenario")} onPress={() => setPanel("survival")} />
         <Action label={t("propPass.cockpit.dailyRiskCalendar")} detail={t("propPass.cockpit.persistedDaysOnly")} onPress={() => setPanel("calendar")} />
         <Action label={t("propPass.cockpit.breachReplay")} detail={output?.breachReplay?.values ? t("propPass.cockpit.recordedBreach") : t("propPass.cockpit.noBreachData")} onPress={() => setPanel("breach")} />
-        <Action label={t("propPass.cockpit.sessionLock")} detail={output?.liveLifecycle?.values.killSwitch?.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.configuredGuardrail")} onPress={() => setPanel("session_lock")} />
+        <Action label={t("propPass.cockpit.sessionLock")} detail={resolveKillSwitchValues(output)?.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.configuredGuardrail")} onPress={() => setPanel("session_lock")} />
       </View>
       <YdlFade visible={panel != null}>{panel && output ? <Panel id={panel} output={output} runtime={runtime!} currency={currency} context={context} onClose={() => setPanel(null)} onRefresh={onRefresh} onAssignTrades={onAssignTrades} onOpenTrade={onOpenTrade} /> : null}</YdlFade>
     </View>
@@ -139,7 +139,7 @@ function Panel({ id, output, runtime, currency, context, onClose, onRefresh, onA
   }
   if (id === "breach") { const breach = output.breachReplay.values; return <Detail title={t("propPass.cockpit.breachReplay")} close={close}>{breach ? <><YdlText role="bodyEmphasized">{t("propPass.cockpit.accountFailedHere")}</YdlText><Rows rows={[[t("propPass.cockpit.row.trade"), breach.triggeringTradeId], [t("propPass.cockpit.row.rule"), breach.ruleId], [t("propPass.cockpit.row.bufferBefore"), money(breach.bufferBeforeMinor, currency, t)], [t("propPass.cockpit.row.plannedRisk"), money(breach.plannedRiskMinor, currency, t)], [t("propPass.cockpit.row.actualRisk"), money(breach.actualRiskMinor, currency, t)], [t("propPass.cockpit.row.breachAmount"), money(breach.breachAmountMinor, currency, t)], [t("propPass.cockpit.row.recommendedContracts"), String(breach.counterfactual.contracts)], [t("propPass.cockpit.row.projectedRemainingBuffer"), money(breach.counterfactual.projectedRemainingBufferMinor, currency, t)]]} /><YdlText role="caption" color="text.secondary">{t("propPass.cockpit.counterfactualNote")}</YdlText></> : <Unavailable label={t("propPass.cockpit.unavailable.breach")} />}</Detail>; }
   if (id === "session_lock") {
-    const kill = output.liveLifecycle?.values.killSwitch;
+    const kill = resolveKillSwitchValues(output);
     const lockTrigger = kill?.exactTriggers.find((trigger) => /manual session lock/i.test(trigger)) ?? null;
     const lockReviewRows: Array<[string, string]> = [];
     if (kill?.manualSessionLockReason) lockReviewRows.push([t("propPass.sessionLock.reasonLabel"), kill.manualSessionLockReason]);
@@ -190,7 +190,7 @@ function CompactRiskStrip({ output, currency, t }: { output: PropPassCalculation
     <View style={[styles.riskStrip, { backgroundColor: status === "stop_trading" ? theme.colors.status.negativeSoft : status === "danger" ? theme.colors.status.warningSoft : theme.colors.surface.interactive }]} accessibilityRole="summary" testID="prop-pass-sticky-risk-meter">
       <YdlText role="label">{title(status ?? "needs_input")}</YdlText>
       <YdlText role="bodyEmphasized">{t("propPass.cockpit.remainingAmount", { amount: money(output.riskMeter.values.remainingMinor, currency, t) })}</YdlText>
-      <YdlText role="caption" color="text.secondary">{output.liveLifecycle?.values.killSwitch?.active ? t("propPass.cockpit.killSwitchActiveLabel") : t("propPass.cockpit.hardLimitsActive")}</YdlText>
+      <YdlText role="caption" color="text.secondary">{resolveKillSwitchValues(output)?.active ? t("propPass.cockpit.killSwitchActiveLabel") : t("propPass.cockpit.hardLimitsActive")}</YdlText>
     </View>
   );
 }

@@ -248,6 +248,7 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
     timeline,
     challengeLifecycle,
     liveLifecycle,
+    killSwitch,
     payoutReadiness,
     withdrawalReadiness,
     scaling,

@@ -104,6 +104,7 @@ assert.equal(output.survival.values.prediction, false);
 assert.equal(output.breachReplay.status, "needs_input");
 assert.equal(output.payoutPlanner.status, "needs_input");
 assert.equal(output.journalApplication.persistenceRequired, true);
+assert.equal(output.killSwitch?.values.active, false, "pipeline exposes context-neutral Kill Switch values");
 
 const duplicate = calculatePropPassState({ ...input, journal: { ...input.journal, appliedTradeIds: ["trade-1", "trade-1"] } });
 assert.deepEqual(duplicate.journalApplication.duplicateTradeIds, ["trade-1"]);

@@ -4,6 +4,7 @@ import {
   type PersistedRuntimeState,
   type PropPassPersistenceSupabaseClient,
 } from "./persistence/index";
+import { resolveKillSwitchValues } from "./tradingOs/killSwitch";
 
 export const COMMAND_CENTER_FILTERS = [
   "all",
@@ -229,9 +230,10 @@ function buildCommandItem(
   const recoveryActive = live?.recovery
     ? requiredBoolean(live.recovery.active, "recovery active")
     : false;
-  const killSwitchActive = live?.killSwitch
-    ? requiredBoolean(live.killSwitch.active, "kill switch active")
-    : false;
+  const killSwitchActive = (() => {
+    const killSwitch = resolveKillSwitchValues(output ?? {});
+    return killSwitch ? requiredBoolean(killSwitch.active, "kill switch active") : false;
+  })();
   const intervention = output?.interventions[0] ?? null;
   const latestIntervention = intervention ? boundedLabel(intervention.title, "intervention title", 160) : null;
   const nextAction = intervention
