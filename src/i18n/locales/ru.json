@@ -2025,5 +2025,10 @@
   "propPass.cockpit.lossStreak": "Текущая серия убытков",
   "propPass.cockpit.drawdownFloor": "Пол просадки",
   "propPass.cockpit.recoveryMode": "Режим восстановления",
+  "propPass.cockpit.scaling": "Масштабирование",
+  "propPass.cockpit.positionProgression": "Прогрессия позиции",
+  "propPass.cockpit.rulesCompliance": "Соблюдение правил",
+  "propPass.cockpit.eligible": "Доступно",
+  "propPass.cockpit.notEligible": "Недоступно",
   "propPass.cockpit.profitProtection": "Защита прибыли"
 }

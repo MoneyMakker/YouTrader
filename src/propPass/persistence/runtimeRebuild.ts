@@ -21,8 +21,12 @@ import {
   type ChallengeRules,
   type KillSwitchConfiguration,
   type KillSwitchInput,
+  type PayoutReadinessInput,
+  type PositionSizeProgressionInput,
   type PropPassCalculationPipelineOutput,
   type RiskRooms,
+  type SafeWithdrawalInput,
+  type ScalingRecommendationInput,
   type TradingRiskMode,
 } from "../tradingOs/index";
 import {
@@ -193,6 +197,8 @@ export function rebuildPropPassRuntime(
           archivedAt: account.status === "archived" ? bundle.asOfUtc : null,
         }
       : null,
+    // Optional advanced inputs stay null until real facts exist — never invent
+    // reserves, peaks, compliance scores, or scaling criteria.
     payout: null,
     withdrawal: null,
     scaling: null,
@@ -272,20 +278,40 @@ export function rebuildPropPassRuntime(
         ?? null,
   });
   const preservationComponents = preservationInputFromEvaluation(preservationEvaluation);
-  const outputBase = context === "live" && bundle.liveRiskSettings
-    ? calculatePropPassState({
-      ...pipelineInputBase,
-      liveFacts: {
-        normalRiskPerTradeMinor: bundle.liveRiskSettings.normalRiskPerTradeMinor ?? null,
-        normalMaximumContracts: bundle.liveRiskSettings.normalMaximumContracts ?? null,
-        recoveryRiskBps: bundle.liveRiskSettings.recoveryRiskBps ?? null,
-        minimumCompliantProfitableSessions: bundle.liveRiskSettings.minimumCompliantProfitableSessions ?? null,
-        completedCompliantProfitableSessions: bundle.recoveryState?.state.exitProgress?.completedCompliantProfitableSessions ?? null,
-        preservation: preservationComponents,
-      },
-      preservation: preservationComponents,
-    })
-    : draftOutput;
+  const snapshotExtras = readSnapshotExtras(bundle.ruleSnapshotRow.snapshot);
+  const enrichedOptionalInputs = buildOptionalPipelineInputs({
+    context,
+    currentEquity,
+    startingBalanceMinor: challenge.startingBalanceMinor,
+    equityHighMinor: engine.accountState.hwmMinor,
+    realizedPnlMinor: currentEquity - challenge.startingBalanceMinor,
+    completedTradingDays: engine.tradingStats.daysTraded,
+    rules,
+    snapshotExtras,
+    riskRooms,
+    liveRiskSettings: bundle.liveRiskSettings,
+    recoveryState: bundle.recoveryState,
+    draftOutput,
+    asOfUtc: bundle.asOfUtc,
+    priorPayoutsMinor: sumRecordedPayouts(
+      bundle.persistedTimelineFacts.filter((fact) => fact.accountId === account.id),
+    ),
+  });
+  const outputBase = calculatePropPassState({
+    ...pipelineInputBase,
+    ...enrichedOptionalInputs,
+    liveFacts: context === "live" && bundle.liveRiskSettings
+      ? {
+          normalRiskPerTradeMinor: bundle.liveRiskSettings.normalRiskPerTradeMinor ?? null,
+          normalMaximumContracts: bundle.liveRiskSettings.normalMaximumContracts ?? null,
+          recoveryRiskBps: bundle.liveRiskSettings.recoveryRiskBps ?? null,
+          minimumCompliantProfitableSessions: bundle.liveRiskSettings.minimumCompliantProfitableSessions ?? null,
+          completedCompliantProfitableSessions: bundle.recoveryState?.state.exitProgress?.completedCompliantProfitableSessions ?? null,
+          preservation: preservationComponents,
+        }
+      : null,
+    preservation: preservationComponents,
+  });
   const output: PropPassCalculationPipelineOutput = Object.freeze({
     ...outputBase,
     capitalPreservation: preservationEvaluation,
@@ -383,6 +409,173 @@ function startOfWeek(day: string, weekStartsOn: 0 | 1): string {
 }
 
 export const PROP_PASS_RUNTIME_CALCULATION_VERSION = PROP_PASS_CALCULATION_VERSION;
+
+type SnapshotExtras = Readonly<{
+  payoutThresholdMinor: number | null;
+  postPayoutReserveMinor: number | null;
+  consistencyPassed: boolean | null;
+}>;
+
+function readSnapshotExtras(snapshot: unknown): SnapshotExtras {
+  const snap = snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : {};
+  const payoutThresholdMinor = typeof snap.payoutThresholdMinor === "number" && Number.isSafeInteger(snap.payoutThresholdMinor)
+    ? snap.payoutThresholdMinor
+    : null;
+  const postPayoutReserveMinor = typeof snap.postPayoutReserveMinor === "number" && Number.isSafeInteger(snap.postPayoutReserveMinor)
+    ? snap.postPayoutReserveMinor
+    : null;
+  const consistencyRule = snap.consistencyRule;
+  const consistencyPassed = consistencyRule == null
+    ? true
+    : null;
+  return { payoutThresholdMinor, postPayoutReserveMinor, consistencyPassed };
+}
+
+function sumRecordedPayouts(facts: readonly PersistedTimelineFact[]): number {
+  return facts
+    .filter((fact) => fact.type === "first_payout" || fact.type === "additional_payout")
+    .reduce((sum, fact) => sum + (fact.valueMinor ?? 0), 0);
+}
+
+function buildOptionalPipelineInputs(input: {
+  context: "challenge" | "live";
+  currentEquity: number;
+  startingBalanceMinor: number;
+  equityHighMinor: number;
+  realizedPnlMinor: number;
+  completedTradingDays: number;
+  rules: ChallengeRules;
+  snapshotExtras: SnapshotExtras;
+  riskRooms: RiskRooms;
+  liveRiskSettings: PropPassLiveRiskSettings | null;
+  recoveryState: PropPassRecoveryState | null;
+  draftOutput: PropPassCalculationPipelineOutput;
+  asOfUtc: string;
+  priorPayoutsMinor: number;
+}): {
+  payout: PayoutReadinessInput | null;
+  withdrawal: SafeWithdrawalInput | null;
+  scaling: ScalingRecommendationInput | null;
+  progression: PositionSizeProgressionInput | null;
+  profitProtection: null;
+  compliance: null;
+} {
+  const liveRules = input.liveRiskSettings?.rules;
+  const recoveryActive = Boolean(
+    input.draftOutput.liveLifecycle?.values.recovery?.active
+    ?? input.recoveryState?.state.active,
+  );
+  const killActive = Boolean(input.draftOutput.killSwitch?.values.active);
+  const allowedContracts = input.context === "live"
+    ? input.liveRiskSettings?.normalMaximumContracts ?? null
+    : input.rules.maximumContracts ?? null;
+  const allowedRiskPerTradeMinor = input.context === "live"
+    ? input.liveRiskSettings?.normalRiskPerTradeMinor ?? null
+    : input.riskRooms.configuredPerTradeRiskCapMinor ?? null;
+  const preservationScore = input.draftOutput.liveLifecycle?.values.preservation?.score ?? null;
+  const currentDrawdownBps = input.equityHighMinor > 0
+    ? Math.max(0, Math.floor(((input.equityHighMinor - input.currentEquity) * 10_000) / input.equityHighMinor))
+    : null;
+  const scaling: ScalingRecommendationInput | null = input.context === "live" && input.liveRiskSettings
+    ? {
+        currentRiskPerTradeMinor: input.liveRiskSettings.normalRiskPerTradeMinor ?? null,
+        currentContracts: input.liveRiskSettings.normalMaximumContracts ?? null,
+        maximumAllowedRiskPerTradeMinor: liveRules?.perTradeRiskCapMinor ?? null,
+        maximumAllowedContracts: input.liveRiskSettings.normalMaximumContracts ?? null,
+        userMaximumRiskPerTradeMinor: liveRules?.perTradeRiskCapMinor ?? null,
+        // Risk step is user-configured; withhold until persisted.
+        riskStepMinor: null,
+        requiresNewEquityHigh: input.rules.scalingRule?.requiresNewEquityHigh ?? null,
+        atNewEquityHigh: input.currentEquity >= input.equityHighMinor,
+        minimumProfitableSessions: input.liveRiskSettings.minimumCompliantProfitableSessions
+          ?? input.rules.scalingRule?.minimumProfitableSessions
+          ?? null,
+        completedCompliantProfitableSessions:
+          input.recoveryState?.state.exitProgress?.completedCompliantProfitableSessions ?? null,
+        currentDrawdownBps,
+        maximumAcceptableDrawdownBps: liveRules?.recoveryModeThresholdBps ?? null,
+        capitalPreservationScore: preservationScore,
+        // Do not invent a minimum preservation gate.
+        minimumPreservationScore: null,
+        stablePositionSizing: null,
+        recoveryModeActive: recoveryActive,
+        killSwitchActive: killActive,
+        weeklyRiskRoomPositive: input.riskRooms.weeklyLossRemainingMinor == null
+          ? null
+          : input.riskRooms.weeklyLossRemainingMinor > 0,
+      }
+    : null;
+
+  const progression: PositionSizeProgressionInput | null =
+    allowedContracts != null && allowedRiskPerTradeMinor != null
+      ? {
+          previousStage: null,
+          allowedContracts,
+          allowedRiskPerTradeMinor,
+          recoveryModeActive: recoveryActive,
+          killSwitchActive: killActive,
+          reducedRiskRequired: recoveryActive,
+          scalingEligible: false,
+          scaleAlreadyApplied: false,
+          occurredAt: input.asOfUtc,
+          relatedRuleId: input.context === "live"
+            ? input.liveRiskSettings?.rules.id ?? null
+            : input.rules.id,
+        }
+      : null;
+
+  const drawdownAmount = input.context === "live"
+    ? liveRules?.maximumDrawdownMinor ?? null
+    : input.rules.maximumLossLimitMinor ?? null;
+  const staticFloor = drawdownAmount == null
+    ? null
+    : Math.max(0, input.startingBalanceMinor - drawdownAmount);
+  const trailingFloor = drawdownAmount == null
+    ? null
+    : Math.max(0, input.equityHighMinor - drawdownAmount);
+
+  const payout: PayoutReadinessInput | null = input.context === "challenge"
+    ? {
+        currentEquityMinor: input.currentEquity,
+        startingBalanceMinor: input.startingBalanceMinor,
+        eligibleProfitMinor: Math.max(0, input.realizedPnlMinor),
+        completedTradingDays: input.completedTradingDays,
+        minimumTradingDays: input.rules.minimumTradingDays ?? null,
+        consistencyPassed: input.snapshotExtras.consistencyPassed,
+        payoutThresholdMinor: input.snapshotExtras.payoutThresholdMinor,
+        maximumLossFloorMinor: staticFloor,
+        trailingDrawdownFloorMinor: trailingFloor,
+        postPayoutReserveMinor: input.snapshotExtras.postPayoutReserveMinor,
+      }
+    : null;
+
+  const withdrawal: SafeWithdrawalInput | null = input.context === "live" && liveRules
+    ? {
+        currentEquityMinor: input.currentEquity,
+        equityHighMinor: input.equityHighMinor,
+        realizedEligibleProfitMinor: Math.max(0, input.realizedPnlMinor),
+        staticLossFloorMinor: staticFloor,
+        trailingDrawdownFloorMinor: trailingFloor,
+        postWithdrawalReserveMinor: liveRules.postWithdrawalReserveMinor ?? null,
+        dailyRiskReserveMinor: liveRules.dailyRiskBudgetMinor ?? null,
+        weeklyRiskReserveMinor: liveRules.weeklyLossLimitMinor ?? null,
+        recoverySafetyReserveMinor: liveRules.postWithdrawalReserveMinor ?? null,
+        recoveryModeActive: recoveryActive,
+        priorWithdrawalsMinor: input.priorPayoutsMinor,
+      }
+    : null;
+
+  return {
+    payout,
+    withdrawal,
+    scaling,
+    progression,
+    // Peaks and lock thresholds are not persisted yet — withhold rather than invent.
+    profitProtection: null,
+    // Component compliance scores require dedicated persisted behavior facts.
+    compliance: null,
+  };
+}
 
 function buildKillSwitchInput(
   settings: PropPassKillSwitchSettings | null,

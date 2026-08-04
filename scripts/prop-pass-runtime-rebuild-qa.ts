@@ -41,6 +41,10 @@ assert.equal(live.output.liveLifecycle?.values.recovery?.active, true, "Recovery
 assert.equal(live.output.capitalPreservation?.status, "ready");
 assert.ok(typeof live.output.capitalPreservation?.score === "number");
 assert.equal(live.output.liveLifecycle?.values.preservation?.score, live.output.capitalPreservation?.score);
+assert.equal(live.output.positionProgression?.values.stage, "recovery", "Live contract caps drive Position Progression without fabrication");
+assert.equal(live.output.scaling?.status, "needs_input", "Scaling stays needs_input until risk-step and preservation gate facts exist");
+assert.equal(result.output.payoutReadiness?.status, "needs_input", "Payout planner withholds without configured threshold/reserve");
+assert.equal(result.output.positionProgression, null, "Challenge without contract caps does not invent progression");
 const liveWithoutContractCap = rebuildPropPassRuntime({
   ...base,
   challengeRow: { ...base.challengeRow, phase: "funded", status: "funded" },

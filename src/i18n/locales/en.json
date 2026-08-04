@@ -2023,5 +2023,10 @@
   "propPass.cockpit.lossStreak": "Current loss streak",
   "propPass.cockpit.drawdownFloor": "Drawdown floor",
   "propPass.cockpit.recoveryMode": "Recovery Mode",
+  "propPass.cockpit.scaling": "Scaling",
+  "propPass.cockpit.positionProgression": "Position Progression",
+  "propPass.cockpit.rulesCompliance": "Rules Compliance",
+  "propPass.cockpit.eligible": "Eligible",
+  "propPass.cockpit.notEligible": "Not eligible",
   "propPass.cockpit.profitProtection": "Profit Protection"
 }

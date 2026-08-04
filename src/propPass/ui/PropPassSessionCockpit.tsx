@@ -95,6 +95,9 @@ export function PropPassSessionCockpit({ model, runtime, runtimeLoading, runtime
         <Action label={t("propPass.cockpit.timeline")} detail={t("propPass.cockpit.realEventsCount", { count: output?.timeline.length ?? 0 })} onPress={() => setPanel("timeline")} />
         <Action label={t("propPass.cockpit.decisionReplay")} detail={title(output?.decisionReplay.verdict ?? "insufficient_data")} onPress={() => setPanel("replay")} />
         <Action label={t("propPass.cockpit.capitalPreservation")} detail={preservationLabel(preservation, t)} onPress={() => setPanel("live_health")} />
+        <Action label={t("propPass.cockpit.scaling")} detail={scalingLabel(output, t)} onPress={() => setPanel("live_health")} />
+        <Action label={t("propPass.cockpit.positionProgression")} detail={progressionLabel(output, t)} onPress={() => setPanel("live_health")} />
+        <Action label={t("propPass.cockpit.rulesCompliance")} detail={complianceLabel(output, t)} onPress={() => setPanel("live_health")} />
         <Action label={t("propPass.cockpit.survivalCapacity")} detail={t("propPass.cockpit.staticScenario")} onPress={() => setPanel("survival")} />
         <Action label={t("propPass.cockpit.dailyRiskCalendar")} detail={t("propPass.cockpit.persistedDaysOnly")} onPress={() => setPanel("calendar")} />
         <Action label={t("propPass.cockpit.breachReplay")} detail={output?.breachReplay?.values ? t("propPass.cockpit.recordedBreach") : t("propPass.cockpit.noBreachData")} onPress={() => setPanel("breach")} />
@@ -115,13 +118,19 @@ function Panel({ id, output, runtime, currency, context, onClose, onRefresh, onA
   if (id === "what_if") { const scenario = output.whatIf; return <Detail title={t("propPass.cockpit.whatIfSimulator")} close={close}>{scenario ? <><Rows rows={[[t("propPass.cockpit.row.projectedEquity"), money(scenario.values.projectedEquityMinor, currency, t)], [t("propPass.cockpit.row.projectedBalance"), money(scenario.values.projectedBalanceMinor, currency, t)], [t("propPass.cockpit.row.dailyRoom"), money(scenario.values.projectedDailyRoomMinor, currency, t)], [t("propPass.cockpit.row.drawdownRoom"), money(scenario.values.projectedDrawdownRoomMinor, currency, t)], [t("propPass.cockpit.row.weeklyRoom"), money(scenario.values.projectedWeeklyRoomMinor, currency, t)], [t("propPass.cockpit.row.anotherTradePermitted"), scenario.values.anotherTradePermitted == null ? t("propPass.cockpit.needsInput") : scenario.values.anotherTradePermitted ? t("propPass.cockpit.yes") : t("propPass.cockpit.no")]]} /><Missing values={scenario.missingInputs} t={t} /></> : <Unavailable label={t("propPass.cockpit.unavailable.whatIf")} />}</Detail>; }
   if (id === "risk_modes") return <ModeComparison output={output} currency={currency} context={context} close={close} />;
   if (id === "rules") return <Detail title={t("propPass.cockpit.panel.riskRules")} close={close}><Rows rows={[[t("propPass.cockpit.row.ruleVersion"), runtime.versions.ruleVersion], [t("propPass.cockpit.row.instrumentVersion"), runtime.versions.instrumentVersion ?? t("propPass.cockpit.needsVerifiedInstrument")], [t("propPass.cockpit.row.calculationVersion"), runtime.versions.calculationVersion], [t("propPass.cockpit.row.dailyRoom"), money(output.hardRiskRooms?.dailyLossRemainingMinor ?? null, currency, t)], [t("propPass.cockpit.row.maximumLossRoom"), money(output.hardRiskRooms?.maximumLossRemainingMinor ?? null, currency, t)], [t("propPass.cockpit.row.drawdownRoom"), money(output.hardRiskRooms?.drawdownRemainingMinor ?? null, currency, t)], [t("propPass.cockpit.row.weeklyRoom"), money(output.hardRiskRooms?.weeklyLossRemainingMinor ?? null, currency, t)]]} /><YdlText role="caption" color="text.secondary">{t("propPass.autopilot.warning")}</YdlText>{context === "live" ? <PropPassLiveSettingsEditor accountId={runtime.accountId} onSaved={onRefresh} /> : null}<CalculationTrace output={output} stages={["rules", "trading_day", "instrument", "hard_risk_rooms"]} t={t} /></Detail>;
-  if (id === "readiness") { const result = context === "live" ? output.withdrawalReadiness : output.payoutReadiness; const amount = context === "live" ? output.withdrawalReadiness?.values.recommendedMaximumWithdrawalMinor : output.payoutReadiness?.values.recommendedMaximumPayoutMinor; return <Detail title={context === "live" ? t("propPass.cockpit.safeWithdrawal") : t("propPass.cockpit.payoutPlanner")} close={close}><Rows rows={[[t("propPass.commandCenter.readiness"), title(result?.status ?? "needs_input")], [t("propPass.cockpit.row.recommendedMaximum"), money(amount ?? null, currency, t)], [t("propPass.cockpit.row.safetyFloor"), money(context === "live" ? output.withdrawalReadiness?.values.safetyFloorMinor ?? null : output.payoutReadiness?.values.safetyFloorMinor ?? null, currency, t)], [t("propPass.cockpit.row.reserve"), money(context === "live" ? output.withdrawalReadiness?.values.reserveMinor ?? null : output.payoutReadiness?.values.postPayoutReserveMinor ?? null, currency, t)]]} /><Missing values={result?.missingInputs ?? []} t={t} />{context === "challenge" && output.payoutPlanner ? <Rows rows={output.payoutPlanner.values.scenarios.map((scenario) => [money(scenario.amountMinor, currency, t), scenario.permitted ? t("propPass.cockpit.withinSafeLimit") : title(scenario.blocker ?? "blocked")])} /> : null}<YdlText role="caption" color="text.secondary">{t("propPass.cockpit.planningOnlyDisclaimer")}</YdlText></Detail>; }
+  if (id === "readiness") { const result = context === "live" ? output.withdrawalReadiness : output.payoutReadiness; const amount = context === "live" ? output.withdrawalReadiness?.values.recommendedMaximumWithdrawalMinor : output.payoutReadiness?.values.recommendedMaximumPayoutMinor; return <Detail title={context === "live" ? t("propPass.cockpit.safeWithdrawal") : t("propPass.cockpit.payoutPlanner")} close={close}><Rows rows={[[t("propPass.commandCenter.readiness"), title(result?.status ?? "needs_input")], [t("propPass.cockpit.row.recommendedMaximum"), money(amount ?? null, currency, t)], [t("propPass.cockpit.row.safetyFloor"), money(context === "live" ? output.withdrawalReadiness?.values.safetyFloorMinor ?? null : output.payoutReadiness?.values.safetyFloorMinor ?? null, currency, t)], [t("propPass.cockpit.row.reserve"), money(context === "live" ? output.withdrawalReadiness?.values.reserveMinor ?? null : output.payoutReadiness?.values.postPayoutReserveMinor ?? null, currency, t)]]} /><Missing values={result?.missingInputs ?? []} t={t} />{context === "challenge" && output.payoutPlanner ? <Rows rows={output.payoutPlanner.values.scenarios.map((scenario) => [money(scenario.amountMinor, currency, t), scenario.permitted ? t("propPass.cockpit.withinSafeLimit") : title(scenario.blocker ?? "blocked")])} /> : null}<CalculationTrace output={output} stages={["payout_planner"]} t={t} /><YdlText role="caption" color="text.secondary">{t("propPass.cockpit.planningOnlyDisclaimer")}</YdlText></Detail>; }
   if (id === "timeline") return <Detail title={t("propPass.cockpit.panel.accountTimeline")} close={close}>{output.timeline.length ? output.timeline.map((event) => <YdlCard key={`${event.type}:${event.occurredAt}`}><YdlText role="bodyEmphasized">{title(event.type)}</YdlText><YdlText role="caption" color="text.secondary">{event.occurredAt}</YdlText><YdlText role="body">{event.explanation}</YdlText></YdlCard>) : <Unavailable label={t("propPass.cockpit.unavailable.timeline")} />}</Detail>;
   if (id === "replay") { const replay = output.decisionReplay; return <Detail title={t("propPass.cockpit.decisionReplay")} close={close}><StatusChip status={replay.verdict} fallback={t("propPass.cockpit.insufficientData")} /><YdlText role="bodyEmphasized">{replay.reason}</YdlText><YdlText role="body" color="text.secondary">{replay.mathematicalConsequence}</YdlText><YdlText role="body">{t("propPass.commandCenter.nextAction", { action: replay.nextAction })}</YdlText>{replay.relatedTradeId && onOpenTrade ? <YdlButton label={t("propPass.cockpit.openJournalTrade")} variant="secondary" onPress={() => onOpenTrade(replay.relatedTradeId!)} /> : null}</Detail>; }
   if (id === "live_health") {
     const live = output.liveLifecycle?.values;
     const preservation = output.capitalPreservation;
     const kill = resolveKillSwitchValues(output);
+    const advancedMissing = [
+      ...(output.scaling?.missingInputs ?? (output.scaling ? [] : ["scaling_configuration"])),
+      ...(output.positionProgression?.missingInputs ?? []),
+      ...(output.profitProtection?.missingInputs ?? (output.profitProtection ? [] : ["profit_protection_configuration"])),
+      ...(output.compliance?.missingInputs ?? (output.compliance ? [] : ["compliance_data_missing"])),
+    ];
     return (
       <Detail title={t("propPass.cockpit.capitalPreservation")} close={close}>
         <PreservationPanel preservation={preservation} t={t} />
@@ -129,12 +138,17 @@ function Panel({ id, output, runtime, currency, context, onClose, onRefresh, onA
           [t("propPass.cockpit.row.lifecycle"), title(output.challengeLifecycle?.values.state ?? live?.state ?? "needs_input")],
           [t("propPass.cockpit.row.recoveryMode"), recoveryLabel(output, t)],
           [t("propPass.cockpit.profitProtection"), profitProtectionLabel(output, t)],
+          [t("propPass.cockpit.scaling"), scalingLabel(output, t)],
+          [t("propPass.cockpit.positionProgression"), progressionLabel(output, t)],
+          [t("propPass.cockpit.rulesCompliance"), complianceLabel(output, t)],
           [t("propPass.cockpit.row.killSwitch"), kill?.active == null ? t("propPass.cockpit.needsInput") : kill.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.clear")],
           [t("propPass.cockpit.lossStreak"), value(kill?.consecutiveLosses ?? null, t)],
           [t("propPass.cockpit.weeklyLossRoom"), money(live?.weeklyLossRoomMinor ?? output.hardRiskRooms?.weeklyLossRemainingMinor ?? null, currency, t)],
           [t("propPass.cockpit.row.selectedAccount"), runtime.accountId],
           [t("propPass.cockpit.row.nextAction"), output.interventions[0]?.recommendedAction ?? preservation?.primaryImprovementAction ?? t("propPass.cockpit.keepAccountInPlan")],
         ]} />
+        <Missing values={advancedMissing} t={t} />
+        <CalculationTrace output={output} stages={["profit_protection", "scaling", "position_progression", "compliance"]} t={t} />
         <YdlText role="caption" color="text.secondary">{t("propPass.cockpit.accountIsolationNote")}</YdlText>
       </Detail>
     );
@@ -291,6 +305,25 @@ function profitProtectionLabel(output: PropPassCalculationPipelineOutput | null,
   const protection = output?.profitProtection;
   if (!protection || protection.status === "needs_input") return t("propPass.cockpit.needsInput");
   return protection.values.active ? title(protection.values.enforcement) : t("propPass.cockpit.clear");
+}
+function scalingLabel(output: PropPassCalculationPipelineOutput | null, t: TFunction): string {
+  const scaling = output?.scaling;
+  if (!scaling || scaling.status === "needs_input") return t("propPass.cockpit.needsInput");
+  return scaling.values.eligible ? t("propPass.cockpit.eligible") : t("propPass.cockpit.notEligible");
+}
+function progressionLabel(output: PropPassCalculationPipelineOutput | null, t: TFunction): string {
+  const progression = output?.positionProgression;
+  if (!progression || progression.status === "needs_input" || progression.values.stage == null) {
+    return t("propPass.cockpit.needsInput");
+  }
+  return title(progression.values.stage);
+}
+function complianceLabel(output: PropPassCalculationPipelineOutput | null, t: TFunction): string {
+  const compliance = output?.compliance;
+  if (!compliance || compliance.status === "needs_input" || compliance.values.score == null) {
+    return t("propPass.cockpit.needsInput");
+  }
+  return t("propPass.cockpit.scoreValue", { score: compliance.values.score });
 }
 function Unavailable({ label }: { label: string }) { return <YdlText role="body" color="text.secondary">{label}</YdlText>; }
 function money(minor: number | null | undefined, currency: string, t: TFunction): string { if (minor == null || !Number.isSafeInteger(minor)) return t("propPass.cockpit.needsInput"); return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100); }

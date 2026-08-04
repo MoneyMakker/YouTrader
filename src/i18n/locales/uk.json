@@ -2023,5 +2023,10 @@
   "propPass.cockpit.lossStreak": "Поточна серія збитків",
   "propPass.cockpit.drawdownFloor": "Підлога просадки",
   "propPass.cockpit.recoveryMode": "Режим відновлення",
+  "propPass.cockpit.scaling": "Масштабування",
+  "propPass.cockpit.positionProgression": "Прогресія позиції",
+  "propPass.cockpit.rulesCompliance": "Дотримання правил",
+  "propPass.cockpit.eligible": "Доступно",
+  "propPass.cockpit.notEligible": "Недоступно",
   "propPass.cockpit.profitProtection": "Захист прибутку"
 }
