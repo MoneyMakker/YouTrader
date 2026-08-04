@@ -92,6 +92,8 @@ debug-storybook.log
 
 # Local Cursor MCP config (may contain access tokens)
 .cursor/mcp.json
+# Local Cursor IDE settings (plugin enablement; machine-local)
+.cursor/settings.json
 
 *storybook.log
 storybook-static

@@ -1,0 +1,37 @@
+{
+  "suite": "prop-pass-build116-compat-staging",
+  "headHint": "feature/prop-pass-trading-os-build117",
+  "stagingProjectRef": "zleojeqkzizeyerhjpur",
+  "productionProjectRef": "izzrlsgumyabdvlmwlwn",
+  "productionTouched": false,
+  "results": {
+    "disposable_users": "PASS",
+    "auth_sign_in": "PASS",
+    "journal_insert": "PASS",
+    "prop_pass_revision_defaulted": "PASS",
+    "journal_update": "PASS",
+    "prop_pass_revision_bumped_or_stable": "PASS",
+    "cross_user_journal_denied": "PASS",
+    "journal_delete": "PASS",
+    "no_auto_prop_accounts": "PASS",
+    "no_auto_prop_challenges": "PASS",
+    "no_auto_prop_trade_assignments": "PASS",
+    "no_auto_prop_executions": "PASS",
+    "no_auto_prop_processed_journal_events": "PASS",
+    "no_auto_prop_account_runtime_states": "PASS",
+    "no_auto_prop_timeline_events": "PASS",
+    "no_auto_prop_daily_plan_snapshots": "PASS",
+    "auth_provider_tokens_relation_exists": "PASS",
+    "auth_provider_tokens_select_path_ok": "PASS",
+    "staging_cleanup_users": "PASS"
+  },
+  "evidence": {
+    "stagingHost": "zleojeqkzizeyerhjpur",
+    "productionTouched": false,
+    "owner": "9282b0f1…",
+    "other": "b18693ee…",
+    "tradeId": "c19cb03a…",
+    "activeDisposableUsers": 0
+  },
+  "stamp": "2026-08-04T02-32-29-807Z"
+}

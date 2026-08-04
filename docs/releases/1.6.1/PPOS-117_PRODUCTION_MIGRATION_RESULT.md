@@ -63,17 +63,15 @@ No emails, user IDs, trades, balances, or credentials recorded.
 
 ## Required next PO authorization (not executed)
 
-To complete Journal sync on production, PO must explicitly authorize the **ordered
-prerequisite migration set** (or an equivalent reviewed combined apply), at minimum:
+See exact 16-file ordered set + SHA-256 in  
+`docs/releases/1.6.1/PPOS-117_EXPANDED_PRODUCTION_MIGRATION_APPROVAL.md`.
 
-1. Prop OS foundation set (`20260730*` / required predecessors already on staging)
-2. `20260802212828_prop_pass_trading_os_persistence.sql`
-3. `20260802223818_prop_pass_build117_persistence_hardening.sql`
-4. `20260802225538_prop_pass_journal_automatic_sync.sql` (already approved)
-5. Likely also processor queue / pipeline stamp migrations if runtime proof is required  
-   (`20260802232311`, `20260802233700`, `20260802235500`) with their own SHA-256 checks
+Do not authorize with wildcards. Prior single-file auth for journal sync is
+insufficient without the Prop OS foundation and Build 117 persistence
+predecessors.
 
-Until that expanded authorization exists, production remains untouched.
+Until expanded authorization exists **and** clean prod-baseline staging rehearsal
+PASSes, production remains untouched.
 
 ---
 

@@ -1,14 +1,25 @@
 # PPOS-117-19 — Persistence / migration / RLS readiness
 
-**Status:** Staging schema + static gates READY; journal remote sync/retry PASS; runtime-state projection PASS (`prop_account_runtime_states` via real processor); production apply PENDING explicit PO authorization  
+**Status:** Staging schema + static gates READY; journal remote sync/retry PASS; runtime-state projection PASS (`prop_account_runtime_states` via real processor); **expanded production migration set identified but PRODUCTION MIGRATION READY = NO** until clean prod-baseline staging rehearsal + explicit PO auth for all 16 files  
 **Reconciled HEAD:** see latest commit on `feature/prop-pass-trading-os-build117`  
 **Date:** 2026-08-04  
-**Checkpoint:** see `docs/releases/1.6.1/PPOS-117_MIGRATION_APPROVAL_CHECKPOINT.md`  
-**Runtime proof:** `npm run test:prop-pass-runtime-state-staging`
+**Checkpoint:** see `docs/releases/1.6.1/PPOS-117_EXPANDED_PRODUCTION_MIGRATION_APPROVAL.md`  
+**Prior narrow apply:** BLOCKED — `PPOS-117_PRODUCTION_MIGRATION_RESULT.md`  
+**Runtime proof:** `npm run test:prop-pass-runtime-state-staging`  
+**Build 116 compat (live staging):** `npm run test:prop-pass-build116-compat-staging`
 
 This note reconciles Build 117 additive persistence work. It does **not** authorize production migration apply, Edge deploy, or App Store / external TestFlight.
 
-## Migration set (additive, ordered)
+## Expanded migration set (exact; see approval doc)
+
+Production lacks Prop OS foundation. The complete ordered set is **16 exact filenames**
+documented with SHA-256 in
+`docs/releases/1.6.1/PPOS-117_EXPANDED_PRODUCTION_MIGRATION_APPROVAL.md`
+(Prop OS `20260730190000` … `20260731290000` + Prop Pass `20260802212828` …
+`20260802235500`). Do not use wildcards. Do not re-apply production
+`auth_provider_tokens` (production stamp `20260802001324`).
+
+## Build 117 child-task delta (additive after foundation)
 
 | File | Role |
 |---|---|
@@ -19,7 +30,8 @@ This note reconciles Build 117 additive persistence work. It does **not** author
 | `supabase/migrations/20260802233700_prop_pass_runtime_processing_queue.sql` | Processor claim queue (`SKIP LOCKED`) |
 | `supabase/migrations/20260802235500_prop_pass_settings_recalculation_events.sql` | Settings-change recalculation events |
 
-Predecessor Prop OS foundation migrations (`20260730*` / `20260731*`) remain prerequisites and are out of this child-task delta.
+Predecessor Prop OS foundation migrations (`20260730*` / `20260731*`) are **in-scope
+prerequisites for production** and are listed individually in the expanded approval.
 
 ## Local / static verification (no remote apply)
 

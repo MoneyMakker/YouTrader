@@ -109,6 +109,12 @@ Explicit PO authorization was received to apply **only**
 Build 117 prerequisite tables and migrations. See  
 `docs/releases/1.6.1/PPOS-117_PRODUCTION_MIGRATION_RESULT.md`.
 
-PRODUCTION MIGRATION READY: YES (SQL packet / staging proof)  
-PRODUCTION APPLY: BLOCKED (missing prerequisites; expanded PO auth required)  
+**Expanded set:** identified in  
+`docs/releases/1.6.1/PPOS-117_EXPANDED_PRODUCTION_MIGRATION_APPROVAL.md`  
+(16 exact filenames + SHA-256). Build 116 staging compat PASS; Build 117 staging
+vertical slice PASS; **clean prod-baseline staging rehearsal FAIL** →  
+PRODUCTION MIGRATION READY: **NO**.
+
+PRODUCTION MIGRATION READY: NO  
+PRODUCTION APPLY: BLOCKED (missing prerequisites + clean rehearsal gap)  
 EXPLICIT PO APPROVAL REQUIRED: YES
