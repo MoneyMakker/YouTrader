@@ -1,8 +1,9 @@
 # PPOS-117-19 — Persistence / migration / RLS readiness
 
 **Status:** Staging schema + static gates READY; production apply PENDING explicit PO authorization  
-**Reconciled HEAD:** `727006f` (`feature/prop-pass-trading-os-build117`)  
-**Date:** 2026-08-03
+**Reconciled HEAD:** `ba46be4` (`feature/prop-pass-trading-os-build117`)  
+**Date:** 2026-08-03  
+**Aikido:** PASS on `ba46be4` — see `docs/releases/1.6.1/AIKIDO_PASS_BUILD117.md` (63/63 batches, 0 blocking). Production apply still pending explicit PO authorization.
 
 This note reconciles Build 117 additive persistence work. It does **not** authorize production migration apply, Edge deploy, or App Store / external TestFlight.
 

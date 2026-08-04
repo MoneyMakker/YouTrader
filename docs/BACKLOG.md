@@ -575,7 +575,7 @@ Production deployment remains pending — readiness reconciliation lives in
 consolidated deterministic gate but remains open until persistence wiring and
 final regression verification complete.
 
-**Build 117 execution reconciliation (2026-08-03, HEAD `727006f`):**
+**Build 117 execution reconciliation (2026-08-03, HEAD `ba46be4`):**
 
 1. Real persistence adapters — DONE in source; production deployment remains under item 22.
 2. Unified calculation pipeline verification — DONE (`build117.pipeline.v2`).
@@ -598,9 +598,9 @@ final regression verification complete.
 19. Context-neutral Kill Switch pipeline wiring — DONE in source (`60d6972`); pipeline output includes `killSwitch` for all account contexts; cockpit, calendar, and command center read the shared resolver; Session Lock gate includes review surfacing (`c7492ed`); capital preservation persisted wiring under PPOS-117-13 remains open.
 20. Explainable calculations — DONE in pipeline trace and cockpit detail routes.
 21. Property/invariant tests — DONE in source (29 invariants, 13,000 generated assertions).
-22. Final persistence schema and RLS — IN PROGRESS; static schema/adapter gates + transactional RLS proof SQL + rollback/cleanup plan reconciled in `docs/releases/1.6.1/PPOS-117-19_MIGRATION_READINESS.md`; production apply still pending PO authorization after complete Aikido PASS and remaining epic gates.
-23. Production migration — READY after PO authorization (requires complete Aikido PASS, security gates, staging RLS proof, journal + lifecycle integration, documented rollback).
-24. Final automated release gates — READY after final source.
+22. Final persistence schema and RLS — IN PROGRESS; static schema/adapter gates + transactional RLS proof SQL + rollback/cleanup plan reconciled in `docs/releases/1.6.1/PPOS-117-19_MIGRATION_READINESS.md`; production apply still pending PO authorization after Aikido PASS and remaining epic gates.
+23. Production migration — READY after PO authorization (Aikido PASS recorded in `docs/releases/1.6.1/AIKIDO_PASS_BUILD117.md`; still requires remaining security gates, staging RLS proof, journal + lifecycle integration evidence, documented rollback).
+24. Final automated release gates — READY after final source; Aikido full-rescan PASS on `ba46be4` (63/63 batches, 0 blocking).
 25. Physical-device QA — BLOCKED on final signed candidate and device interaction.
 26. Apple stored:true and revoke — BLOCKED on disposable Apple identity/system confirmation.
 27. Subscription/authentication matrix — BLOCKED on StoreKit/system confirmations.
