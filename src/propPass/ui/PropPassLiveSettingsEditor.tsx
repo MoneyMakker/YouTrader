@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Alert, StyleSheet, TextInput, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../config/appConfig";
 import { YdlButton } from "../../ydl/components/YdlButton";
 import { YdlCard } from "../../ydl/components/YdlCard";
@@ -37,6 +38,7 @@ const EMPTY_DRAFT: Draft = {
 };
 
 export function PropPassLiveSettingsEditor({ accountId, onSaved }: { accountId: string; onSaved: () => void }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [mode, setMode] = useState<TradingMode>("balanced");
   const [weekStartsOn, setWeekStartsOn] = useState<0 | 1>(1);
@@ -70,7 +72,7 @@ export function PropPassLiveSettingsEditor({ accountId, onSaved }: { accountId: 
     if (!supabase || saving) return;
     const parsed = parseDraft(draft, mode, weekStartsOn);
     if (!parsed) {
-      Alert.alert("Check risk settings", "Enter complete non-negative dollar amounts, whole-number limits, and percentages from 0 to 100. Recovery requires at least two compliant profitable sessions.");
+      Alert.alert(t("propPass.liveSettings.validationTitle"), t("propPass.liveSettings.validationBody"));
       return;
     }
     setSaving(true);
@@ -80,66 +82,67 @@ export function PropPassLiveSettingsEditor({ accountId, onSaved }: { accountId: 
     setSaving(false);
     const report = (result.data as { kind?: unknown; report?: { failed?: unknown } } | null)?.report;
     if (result.error || (result.data as { kind?: unknown } | null)?.kind !== "success" || report?.failed !== 0) {
-      Alert.alert("Settings not saved", "The server did not confirm the updated Live rules. Your prior saved rules remain active.");
+      Alert.alert(t("propPass.liveSettings.saveFailedTitle"), t("propPass.liveSettings.saveFailedBody"));
       return;
     }
-    Alert.alert("Live rules saved", "The account was recalculated from the saved rules and persisted Journal facts.");
+    Alert.alert(t("propPass.liveSettings.saveSuccessTitle"), t("propPass.liveSettings.saveSuccessBody"));
     onSaved();
     void load();
   };
 
-  if (loading) return <YdlCard><YdlText role="body" color="text.secondary">Loading saved Live rules…</YdlText></YdlCard>;
-  if (loadError) return <YdlCard><YdlText role="bodyEmphasized">Saved rules could not be verified</YdlText><YdlText role="body" color="text.secondary">No editable values are shown until the authenticated row passes validation.</YdlText><YdlButton label="Retry" variant="secondary" onPress={() => void load()} /></YdlCard>;
+  if (loading) return <YdlCard><YdlText role="body" color="text.secondary">{t("propPass.liveSettings.loading")}</YdlText></YdlCard>;
+  if (loadError) return <YdlCard><YdlText role="bodyEmphasized">{t("propPass.liveSettings.loadErrorTitle")}</YdlText><YdlText role="body" color="text.secondary">{t("propPass.liveSettings.loadErrorBody")}</YdlText><YdlButton label={t("propPass.commandCenter.retry")} variant="secondary" onPress={() => void load()} /></YdlCard>;
 
   return (
     <View style={styles.stack} testID="prop-pass-live-settings-editor">
       <YdlCard>
-        <YdlText role="bodyEmphasized">Live risk source of truth</YdlText>
-        <YdlText role="caption" color="text.secondary">Verify these rules against your current broker, risk policy, and account agreement. Saving recalculates the account; it never edits Journal history.</YdlText>
+        <YdlText role="bodyEmphasized">{t("propPass.liveSettings.sourceTitle")}</YdlText>
+        <YdlText role="caption" color="text.secondary">{t("propPass.liveSettings.sourceBody")}</YdlText>
       </YdlCard>
       <View style={styles.choiceRow} accessibilityRole="radiogroup">
-        {(["calm", "balanced", "gambler"] as const).map((item) => <YdlButton key={item} label={capitalized(item)} size="small" variant={mode === item ? "primary" : "secondary"} onPress={() => setMode(item)} />)}
+        {(["calm", "balanced", "gambler"] as const).map((item) => <YdlButton key={item} label={t(`propPass.riskMode.${item}`)} size="small" variant={mode === item ? "primary" : "secondary"} onPress={() => setMode(item)} />)}
       </View>
       <View style={styles.choiceRow} accessibilityRole="radiogroup">
-        <YdlButton label="Week starts Monday" size="small" variant={weekStartsOn === 1 ? "primary" : "secondary"} onPress={() => setWeekStartsOn(1)} />
-        <YdlButton label="Week starts Sunday" size="small" variant={weekStartsOn === 0 ? "primary" : "secondary"} onPress={() => setWeekStartsOn(0)} />
+        <YdlButton label={t("propPass.liveSettings.weekStartsMonday")} size="small" variant={weekStartsOn === 1 ? "primary" : "secondary"} onPress={() => setWeekStartsOn(1)} />
+        <YdlButton label={t("propPass.liveSettings.weekStartsSunday")} size="small" variant={weekStartsOn === 0 ? "primary" : "secondary"} onPress={() => setWeekStartsOn(0)} />
       </View>
       <View style={styles.grid}>
-        <LiveSettingsField label="Daily risk budget" suffix="$" value={draft.dailyRiskBudget} onChange={(value) => update("dailyRiskBudget", value)} />
-        <LiveSettingsField label="Weekly loss limit" suffix="$" value={draft.weeklyLossLimit} onChange={(value) => update("weeklyLossLimit", value)} />
-        <LiveSettingsField label="Maximum drawdown" suffix="$" value={draft.maximumDrawdown} onChange={(value) => update("maximumDrawdown", value)} />
-        <LiveSettingsField label="Per-trade risk cap" suffix="$" value={draft.perTradeRiskCap} onChange={(value) => update("perTradeRiskCap", value)} />
-        <LiveSettingsField label="Maximum trades" value={draft.maximumTrades} integer onChange={(value) => update("maximumTrades", value)} />
-        <LiveSettingsField label="Consecutive-loss stop" value={draft.consecutiveLossLimit} integer onChange={(value) => update("consecutiveLossLimit", value)} />
-        <LiveSettingsField label="Recovery activation" suffix="%" value={draft.recoveryThresholdPercent} onChange={(value) => update("recoveryThresholdPercent", value)} />
-        <LiveSettingsField label="Normal risk / trade" suffix="$" value={draft.normalRiskPerTrade} onChange={(value) => update("normalRiskPerTrade", value)} />
-        <LiveSettingsField label="Normal max contracts" value={draft.normalMaximumContracts} integer onChange={(value) => update("normalMaximumContracts", value)} />
-        <LiveSettingsField label="Recovery risk" suffix="% of normal" value={draft.recoveryRiskPercent} onChange={(value) => update("recoveryRiskPercent", value)} />
-        <LiveSettingsField label="Compliant sessions to exit" value={draft.minimumCompliantSessions} integer onChange={(value) => update("minimumCompliantSessions", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.dailyRiskBudget")} suffix="$" value={draft.dailyRiskBudget} onChange={(value) => update("dailyRiskBudget", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.weeklyLossLimit")} suffix="$" value={draft.weeklyLossLimit} onChange={(value) => update("weeklyLossLimit", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.maximumDrawdown")} suffix="$" value={draft.maximumDrawdown} onChange={(value) => update("maximumDrawdown", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.perTradeRiskCap")} suffix="$" value={draft.perTradeRiskCap} onChange={(value) => update("perTradeRiskCap", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.maximumTrades")} value={draft.maximumTrades} integer onChange={(value) => update("maximumTrades", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.consecutiveLossStop")} value={draft.consecutiveLossLimit} integer onChange={(value) => update("consecutiveLossLimit", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.recoveryActivation")} suffix="%" value={draft.recoveryThresholdPercent} onChange={(value) => update("recoveryThresholdPercent", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.normalRiskPerTrade")} suffix="$" value={draft.normalRiskPerTrade} onChange={(value) => update("normalRiskPerTrade", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.normalMaxContracts")} value={draft.normalMaximumContracts} integer onChange={(value) => update("normalMaximumContracts", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.recoveryRisk")} suffix={t("propPass.liveSettings.percentOfNormal")} value={draft.recoveryRiskPercent} onChange={(value) => update("recoveryRiskPercent", value)} />
+        <LiveSettingsField label={t("propPass.liveSettings.compliantSessionsToExit")} value={draft.minimumCompliantSessions} integer onChange={(value) => update("minimumCompliantSessions", value)} />
       </View>
-      <YdlButton label="Save and recalculate Live account" fullWidth loading={saving} disabled={!canSave} onPress={() => void save()} testID="prop-pass-save-live-settings" />
+      <YdlButton label={t("propPass.liveSettings.saveCta")} fullWidth loading={saving} disabled={!canSave} onPress={() => void save()} testID="prop-pass-save-live-settings" />
     </View>
   );
 
 }
 
 export function PropPassSessionLockControl({ accountId, active, onActivated }: { accountId: string; active: boolean; onActivated: () => void }) {
+  const { t } = useTranslation();
   const [activating, setActivating] = useState(false);
   const [reason, setReason] = useState("");
   const [durationHours, setDurationHours] = useState<2 | 24>(2);
   const activate = () => {
     const normalizedReason = reason.trim();
     if (!normalizedReason) {
-      Alert.alert("Reason required", "Record why this session is being locked before confirming.");
+      Alert.alert(t("propPass.sessionLock.reasonRequiredTitle"), t("propPass.sessionLock.reasonRequiredBody"));
       return;
     }
     Alert.alert(
-      "Lock this trading session?",
-      `Reason: ${normalizedReason}\n\nThis sets recommended risk and contracts to zero until the selected review time. It cannot be bypassed by Calm, Balanced, Gambler, or Continue Anyway.`,
+      t("propPass.sessionLock.confirmTitle"),
+      t("propPass.sessionLock.confirmBody", { reason: normalizedReason }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: "Lock Session",
+          text: t("propPass.sessionLock.confirmCta"),
           style: "destructive",
           onPress: async () => {
             if (!supabase) return;
@@ -156,32 +159,33 @@ export function PropPassSessionLockControl({ accountId, active, onActivated }: {
             setActivating(false);
             const body = result.data as { kind?: unknown; report?: { failed?: unknown } } | null;
             if (result.error || body?.kind !== "success" || body.report?.failed !== 0) {
-              Alert.alert("Session not locked", "The server did not confirm the lock. Existing hard limits remain active.");
+              Alert.alert(t("propPass.sessionLock.activateFailedTitle"), t("propPass.sessionLock.activateFailedBody"));
               return;
             }
-            Alert.alert("Session locked", "Stop Trading is active. Journal access remains available.");
+            Alert.alert(t("propPass.sessionLock.activateSuccessTitle"), t("propPass.sessionLock.activateSuccessBody"));
             onActivated();
           },
         },
       ],
     );
   };
-  if (active) return <YdlButton label="Stop Trading active" variant="destructive" fullWidth disabled onPress={activate} testID="prop-pass-activate-session-lock" />;
+  if (active) return <YdlButton label={t("propPass.commandCenter.killSwitchActive")} variant="destructive" fullWidth disabled onPress={activate} testID="prop-pass-activate-session-lock" />;
   return (
     <View style={styles.stack}>
-      <LiveSettingsField label="Session Lock reason" value={reason} onChange={setReason} />
+      <LiveSettingsField label={t("propPass.sessionLock.reasonLabel")} value={reason} onChange={setReason} />
       <View style={styles.choiceRow} accessibilityRole="radiogroup">
-        <YdlButton label="Review in 2 hours" size="small" variant={durationHours === 2 ? "primary" : "secondary"} onPress={() => setDurationHours(2)} />
-        <YdlButton label="Review in 24 hours" size="small" variant={durationHours === 24 ? "primary" : "secondary"} onPress={() => setDurationHours(24)} />
+        <YdlButton label={t("propPass.sessionLock.reviewIn2Hours")} size="small" variant={durationHours === 2 ? "primary" : "secondary"} onPress={() => setDurationHours(2)} />
+        <YdlButton label={t("propPass.sessionLock.reviewIn24Hours")} size="small" variant={durationHours === 24 ? "primary" : "secondary"} onPress={() => setDurationHours(24)} />
       </View>
-      <YdlButton label="Lock this session" variant="destructive" fullWidth disabled={!reason.trim()} loading={activating} onPress={activate} testID="prop-pass-activate-session-lock" />
+      <YdlButton label={t("propPass.sessionLock.lockCta")} variant="destructive" fullWidth disabled={!reason.trim()} loading={activating} onPress={activate} testID="prop-pass-activate-session-lock" />
     </View>
   );
 }
 
 function LiveSettingsField({ label, suffix, value, integer = false, onChange }: { label: string; suffix?: string; value: string; integer?: boolean; onChange: (value: string) => void }) {
+  const { t } = useTranslation();
   const theme = useYdlTheme("dark");
-  return <View style={styles.field}><YdlText role="caption" color="text.secondary">{label}{suffix ? ` (${suffix})` : ""}</YdlText><TextInput value={value} onChangeText={onChange} keyboardType={integer ? "number-pad" : "decimal-pad"} accessibilityLabel={label} placeholder="Required" placeholderTextColor={theme.colors.text.secondary} style={[styles.input, { color: theme.colors.text.primary, backgroundColor: theme.colors.surface.interactive, borderColor: theme.colors.border.subtle }]} /></View>;
+  return <View style={styles.field}><YdlText role="caption" color="text.secondary">{label}{suffix ? ` (${suffix})` : ""}</YdlText><TextInput value={value} onChangeText={onChange} keyboardType={integer ? "number-pad" : "decimal-pad"} accessibilityLabel={label} placeholder={t("propPass.liveSettings.requiredPlaceholder")} placeholderTextColor={theme.colors.text.secondary} style={[styles.input, { color: theme.colors.text.primary, backgroundColor: theme.colors.surface.interactive, borderColor: theme.colors.border.subtle }]} /></View>;
 }
 
 function parseSettings(value: unknown): PropPassLiveRiskSettings | null {
@@ -226,6 +230,5 @@ function parseInteger(value: string): number | null { if (!/^(?:0|[1-9]\d*)$/.te
 function fromMinor(value: number | undefined): string { return value == null ? "" : (value / 100).toFixed(2); }
 function fromBps(value: number | undefined): string { return value == null ? "" : (value / 100).toFixed(2); }
 function isMode(value: unknown): value is TradingMode { return value === "calm" || value === "balanced" || value === "gambler"; }
-function capitalized(value: string): string { return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`; }
 
 const styles = StyleSheet.create({ stack: { gap: 12 }, grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, field: { width: "48%", gap: 5 }, input: { minHeight: 48, borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, fontVariant: ["tabular-nums"] }, choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 } });
