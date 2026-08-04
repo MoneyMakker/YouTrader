@@ -36,6 +36,7 @@
     "security:all": "npm run security:check && npm run security:audit && npm run security:gitleaks && npm run security:semgrep",
     "release:stability": "node scripts/release-stability-check.mjs",
     "translations:check": "node scripts/check-translations.mjs",
+    "test:stats-period-filter": "npx tsx scripts/time-range-qa.ts && npx tsx scripts/qa/statsPeriodFilter.selftest.ts",
     "test:maestro": "maestro test .maestro",
     "test:maestro:launch": "maestro test .maestro/01_app_launch.yaml",
     "test:ai-safety": "npx promptfoo@latest eval -c promptfoo.config.yaml",

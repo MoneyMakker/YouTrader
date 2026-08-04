@@ -22,16 +22,14 @@ import {
   formatStatsPct,
   formatStatsRatio,
   groupTradesByKey,
-  performanceStateLabel,
   sessionBucket,
   type StatsPeriodId,
 } from "./presentation";
+import { STATS_TIME_RANGES } from "../analytics/timeRange";
 import { buildPerformanceRadar } from "./performanceRadar";
 import { getInsightsLearningState, type InsightsLearningTarget } from "./insightsLearning";
 import { StatsRadarCard } from "./StatsRadarCard";
 import { StatsHeatmapCard } from "./StatsHeatmapCard";
-
-const PERIODS: StatsPeriodId[] = ["1D", "7D", "1M", "YTD", "1Y", "ALL"];
 
 type Props = {
   trades: Trade[];
@@ -105,7 +103,7 @@ export function StatsDashboard({
         testID="stats-dashboard-empty"
       >
         <PeriodBar period={period} onPeriodChange={onPeriodChange} />
-        <View style={[styles.hero, { backgroundColor: theme.colors.surface.card }]}>
+        <View style={[styles.card, { backgroundColor: theme.colors.surface.card }]}>
           <YdlText role="title">{t("stats.emptyTitle")}</YdlText>
           <YdlText role="body" color="text.secondary">
             {t("stats.emptyBody")}
@@ -120,12 +118,6 @@ export function StatsDashboard({
     );
   }
 
-  const conclusion =
-    bestEdge?.insight ||
-    (stats.pnl >= 0
-      ? t("stats.heroPositive")
-      : t("stats.heroNegative"));
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.background.primary }}
@@ -133,27 +125,6 @@ export function StatsDashboard({
       testID="stats-dashboard"
     >
       <PeriodBar period={period} onPeriodChange={onPeriodChange} />
-
-      <View
-        style={[styles.hero, { backgroundColor: theme.colors.surface.card }]}
-        accessibilityRole="summary"
-        accessibilityLabel={`${formatStatsMoney(stats.pnl)}. ${stats.count} trades. ${performanceStateLabel(stats.pnl, stats.count)}`}
-        testID="stats-hero"
-      >
-        <YdlText role="caption" color="text.secondary">
-          {t("stats.netPnlPeriod", { period })}
-        </YdlText>
-        <YdlText
-          role="display"
-          style={{ color: stats.pnl >= 0 ? theme.colors.status.positive : theme.colors.status.negative }}
-        >
-          {formatStatsMoney(stats.pnl)}
-        </YdlText>
-        <YdlText role="body" color="text.secondary">
-          {`${stats.count} ${t("stats.tradesLabel")} · ${performanceStateLabel(stats.pnl, stats.count)}`}
-        </YdlText>
-        <YdlText role="body">{conclusion}</YdlText>
-      </View>
 
       <View testID="stats-equity">
         <StatsEquitySection trades={trades} stats={stats} />
@@ -300,18 +271,22 @@ function PeriodBar({
   period: StatsPeriodId;
   onPeriodChange: (p: StatsPeriodId) => void;
 }) {
+  const { t } = useTranslation();
   const theme = useYdlTheme("dark");
   return (
     <View style={styles.periodRow} accessibilityRole="tablist" testID="stats-period-bar">
-      {PERIODS.map((id) => {
+      {STATS_TIME_RANGES.map((id) => {
         const active = id === period;
+        const label = t(`stats.period.${id}`);
+        const a11y = t(`stats.periodA11y.${id}`);
         return (
           <Pressable
             key={id}
             onPress={() => onPeriodChange(id)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={`Period ${id}`}
+            accessibilityLabel={a11y}
+            testID={`stats-period-${id}`}
             style={[
               styles.periodChip,
               {
@@ -322,9 +297,14 @@ function PeriodBar({
           >
             <YdlText
               role="caption"
-              style={{ color: active ? theme.colors.action.primaryText : theme.colors.text.secondary }}
+              numberOfLines={1}
+              style={{
+                color: active ? theme.colors.action.primaryText : theme.colors.text.secondary,
+                textAlign: "center",
+                width: "100%",
+              }}
             >
-              {id}
+              {label}
             </YdlText>
           </Pressable>
         );
@@ -394,16 +374,24 @@ function InsightsLearningCard({
 
 const styles = StyleSheet.create({
   body: { padding: 16, gap: 14, paddingBottom: 32 },
-  hero: { borderRadius: 16, padding: 18, gap: 8 },
   card: { borderRadius: 14, padding: 14, gap: 10 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   metric: { width: "46%", gap: 2 },
-  periodRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  periodRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-between",
+    width: "100%",
+    gap: 6,
+  },
   periodChip: {
-    paddingHorizontal: 12,
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 2,
   },
   segmentRow: { flexDirection: "row", gap: 8, paddingRight: 16 },
   segment: {

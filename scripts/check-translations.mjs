@@ -23,6 +23,9 @@ const sourceFiles = [
   path.join(root, "App.tsx"),
   ...collectSourceFiles(path.join(root, "src/app")),
   ...collectSourceFiles(path.join(root, "src/propPass")),
+  ...collectSourceFiles(path.join(root, "src/stats")),
+  ...collectSourceFiles(path.join(root, "src/components/stats")),
+  ...collectSourceFiles(path.join(root, "src/analytics")),
 ].filter((file) => fs.existsSync(file));
 
 const usedKeys = new Set();
@@ -31,7 +34,34 @@ for (const file of sourceFiles) {
   const source = fs.readFileSync(file, "utf8");
   let match;
   while ((match = usageRegex.exec(source))) usedKeys.add(match[1]);
+  // PeriodBar: t(`stats.period.${id}`) / t(`stats.periodA11y.${id}`)
+  if (source.includes("stats.period.${id}") || source.includes("stats.periodA11y.${id}")) {
+    for (const id of ["1D", "7D", "2W", "1M", "YTD", "1Y", "ALL"]) {
+      usedKeys.add(`stats.period.${id}`);
+      usedKeys.add(`stats.periodA11y.${id}`);
+    }
+  }
 }
+
+const requiredPeriodKeys = [];
+for (const id of ["1D", "7D", "2W", "1M", "YTD", "1Y", "ALL"]) {
+  requiredPeriodKeys.push(`stats.period.${id}`, `stats.periodA11y.${id}`);
+}
+if (en["stats.period.2W"] !== "2W") {
+  console.error('stats.period.2W must be the visible label "2W"');
+  process.exit(1);
+}
+if (String(en["stats.periodA11y.2W"] || "").toLowerCase() !== "2 weeks") {
+  console.error('stats.periodA11y.2W must be "2 weeks"');
+  process.exit(1);
+}
+const missingPeriod = requiredPeriodKeys.filter((key) => !enKeys.has(key));
+if (missingPeriod.length) {
+  console.error("Missing required Stats period locale keys:");
+  for (const key of missingPeriod) console.error(`- ${key}`);
+  process.exit(1);
+}
+for (const key of requiredPeriodKeys) usedKeys.add(key);
 
 const missingUsed = [...usedKeys].filter((key) => !enKeys.has(key));
 if (missingUsed.length) {
@@ -46,6 +76,16 @@ for (const lang of langs) {
   const missing = Object.keys(en).filter((k) => !loc[k]);
   if (missing.length) {
     console.error(`${lang}.json missing ${missing.length} keys from en.json`);
+    process.exit(1);
+  }
+  const missingRequired = requiredPeriodKeys.filter((k) => !loc[k]);
+  if (missingRequired.length) {
+    console.error(`${lang}.json missing Stats period keys:`);
+    for (const key of missingRequired) console.error(`- ${key}`);
+    process.exit(1);
+  }
+  if (loc["stats.period.2W"] !== "2W") {
+    console.error(`${lang}.json stats.period.2W must be "2W"`);
     process.exit(1);
   }
 }
@@ -70,5 +110,5 @@ if (badInterpolation.length) {
 }
 
 console.log(
-  `Translation check passed: ${enKeys.size} en keys, ${usedKeys.size} used in App.tsx + src/app + src/propPass (${sourceFiles.length} files)`,
+  `Translation check passed: ${enKeys.size} en keys, ${usedKeys.size} used in App.tsx + src/app + src/propPass + src/stats (${sourceFiles.length} files)`,
 );
