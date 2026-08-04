@@ -259,6 +259,7 @@ export function calculatePropPassState(input: PropPassCalculationPipelineInput):
     breachReplay,
     payoutPlanner,
     whatIf,
+    capitalPreservation: null,
     missingInputs: [...new Set(missingInputs)],
     calculationTrace: trace,
   });

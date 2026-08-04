@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { evaluateLiveAccount } from "../src/propPass/tradingOs/index.ts";
+import { evaluateLiveAccount } from "../src/propPass/tradingOs/index";
 
 const account = {
   contextType: "live" as const,
@@ -82,7 +82,6 @@ const locked = evaluateLiveAccount({
     ...input.killSwitch,
     manualSessionLockRequested: true,
     manualSessionLockConfirmed: true,
-    manualSessionLockActivatedAt: "2026-08-02T14:00:00.000Z",
     manualSessionLockReason: "Need a break after tilt",
     manualSessionLockExpiresAt: "2026-08-03T20:00:00.000Z",
   },

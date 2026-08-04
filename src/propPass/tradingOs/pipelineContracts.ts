@@ -27,6 +27,7 @@ import type { ScalingRecommendationInput, ScalingRecommendationValues } from "./
 import type { PositionSizeProgressionInput, PositionSizeProgressionValues } from "./progression";
 import type { ProfitProtectionInput, ProfitProtectionValues } from "./profitProtection";
 import type { CapitalPreservationInput } from "./preservation";
+import type { CapitalPreservationEvaluation } from "./preservationEvidence";
 import type { ComplianceComponentId, RulesComplianceValues } from "./compliance";
 import type { AccountSurvivalValues } from "./survival";
 import type { BreachReplayInput, BreachReplayValues } from "./breachReplay";
@@ -169,6 +170,8 @@ export type PropPassCalculationPipelineOutput = Readonly<{
   breachReplay: TradingOsResult<BreachReplayValues | null>;
   payoutPlanner: TradingOsResult<PayoutPlannerValues>;
   whatIf: TradingOsResult<WhatIfValues> | null;
+  /** Evidence-backed Capital Preservation; score is null when withheld. */
+  capitalPreservation: CapitalPreservationEvaluation | null;
   missingInputs: string[];
   calculationTrace: PropPassCalculationTraceStep[];
 }>;

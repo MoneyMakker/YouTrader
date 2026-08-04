@@ -562,7 +562,7 @@ contributes focused tests and documentation before its successor starts.
 
 **Implementation note (2026-08-03):** PPOS-117-01 through PPOS-117-12 and
 PPOS-117-14 through PPOS-117-17 have focused commits and deterministic QA.
-PPOS-117-13 remains open for persisted product wiring; context-neutral Kill
+PPOS-117-13 persisted Capital Preservation evidence is in source (withhold-without-facts); remaining Live product/device wiring and context-neutral Kill
 Switch pipeline output, shared cockpit/calendar/command-center resolver, and
 Session Lock gate coverage are DONE in source (`60d6972`, `c7492ed`); capital
 preservation persisted wiring remains open. PPOS-117-18 has
@@ -595,7 +595,7 @@ final regression verification complete.
 16. Account Survival Forecast — DONE as static capacity, never probability; production interaction QA remains.
 17. Payout Planner — DONE in deterministic domain output; production interaction QA remains.
 18. Session Lock review workflow — DONE in source (server-confirmed reason, bounded review expiry, i18n, QA via session-cockpit gate); production interaction QA remains under item 25.
-19. Context-neutral Kill Switch pipeline wiring — DONE in source (`60d6972`); pipeline output includes `killSwitch` for all account contexts; cockpit, calendar, and command center read the shared resolver; Session Lock gate includes review surfacing (`c7492ed`); capital preservation persisted wiring under PPOS-117-13 remains open.
+19. Context-neutral Kill Switch pipeline wiring — DONE in source (`60d6972`); pipeline output includes `killSwitch` for all account contexts; cockpit, calendar, and command center read the shared resolver; Session Lock gate includes review surfacing (`c7492ed`); capital preservation persisted evidence wiring is in source (`build117.preservation.v1`, docs/releases/1.6.1/PPOS-117-13_PRESERVATION_EVIDENCE.md); Session Cockpit insufficient-evidence UI and remote staging proofs remain open.
 20. Explainable calculations — DONE in pipeline trace and cockpit detail routes.
 21. Property/invariant tests — DONE in source (29 invariants, 13,000 generated assertions).
 22. Final persistence schema and RLS — IN PROGRESS; static schema/adapter gates + transactional RLS proof SQL + rollback/cleanup plan reconciled in `docs/releases/1.6.1/PPOS-117-19_MIGRATION_READINESS.md`; production apply still pending PO authorization after Aikido PASS and remaining epic gates.

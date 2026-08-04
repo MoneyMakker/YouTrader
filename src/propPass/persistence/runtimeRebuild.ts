@@ -25,6 +25,12 @@ import {
   type RiskRooms,
   type TradingRiskMode,
 } from "../tradingOs/index";
+import {
+  evaluateCapitalPreservationEvidence,
+  preservationInputFromEvaluation,
+  type CapitalPreservationEvaluation,
+  type PersistedTradeRiskFact,
+} from "../tradingOs/preservationEvidence";
 import type { PropPassKillSwitchSettings, PropPassLiveRiskSettings, PropPassRecoveryState } from "./contracts";
 
 export type PropPassRuntimeRebuildBundle = Readonly<{
@@ -40,6 +46,8 @@ export type PropPassRuntimeRebuildBundle = Readonly<{
   killSwitchSettings: PropPassKillSwitchSettings | null;
   liveRiskSettings: PropPassLiveRiskSettings | null;
   recoveryState: PropPassRecoveryState | null;
+  /** Explicit planned/actual risk facts; never inferred from realized P&L. */
+  tradeRiskFacts?: readonly PersistedTradeRiskFact[];
 }>;
 
 export type PropPassRuntimeRebuildResult = Readonly<{
@@ -62,7 +70,7 @@ export function rebuildPropPassRuntime(
   const challenge = mapChallengeRow(bundle.challengeRow, legacyRules);
   const events = mapDomainEvents(bundle.executions, bundle.accountEvents);
   const engine = calculateChallenge({ challenge, events, asOfUtc: bundle.asOfUtc });
-  const context = challenge.phase === "funded" ? "live" : "challenge";
+  const context: "challenge" | "live" = challenge.phase === "funded" ? "live" : "challenge";
   const challengeDailyRoom = engine.buffers.find((buffer) => buffer.id === "daily_loss")?.remainingMinor ?? null;
   const challengeDrawdownRoom = engine.buffers.find((buffer) => buffer.id === "drawdown")?.remainingMinor ?? null;
   const liveMetrics = context === "live"
@@ -95,7 +103,21 @@ export function rebuildPropPassRuntime(
   const breach = mapBreach(engine, riskRooms);
   const killSwitch = buildKillSwitchInput(bundle.killSwitchSettings, bundle.executions, engine.accountState.dayPnlMinor, bundle.asOfUtc);
   const currentEquity = engine.accountState.equityMinor;
-  const output = calculatePropPassState({
+  const dailyRiskUsedMinor = Math.max(0, -(engine.accountState.dayPnlMinor ?? 0));
+  const ownedActiveExecutions = bundle.executions
+    .filter((row) => !row.voided && row.user_id === account.userId && row.account_id === account.id)
+    .map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      accountId: row.account_id ?? account.id,
+      tradeClientId: row.trade_client_id,
+      contracts: row.contracts,
+      occurredAt: row.occurred_at,
+    }));
+  const ownedTradeRiskFacts = (bundle.tradeRiskFacts ?? []).filter(
+    (fact) => !fact.voided && fact.userId === account.userId && fact.accountId === account.id,
+  );
+  const pipelineInputBase = {
     account: {
       contextType: context,
       accountId: account.id,
@@ -119,26 +141,35 @@ export function rebuildPropPassRuntime(
     instrument: null,
     tradingDay: null,
     riskRooms,
-    selectedMode: bundle.liveRiskSettings?.selectedMode ?? bundle.selectedMode ?? "balanced",
+    selectedMode: bundle.liveRiskSettings?.selectedMode ?? bundle.selectedMode ?? "balanced" as const,
     // Personal limits are opt-in. An absent row means no personal thresholds,
-    // not permission to bypass the immutable account loss rooms.
+    // not permission to bypass the immutable account hard rooms.
     killSwitch,
     journal: {
       appliedTradeIds: applied,
       // Planned risk is not present in prop_executions. Do not substitute P&L.
-      completedTrades: [],
-      dailyRiskUsedMinor: Math.max(0, -(engine.accountState.dayPnlMinor ?? 0)),
+      completedTrades: ownedTradeRiskFacts
+        .filter((fact) => fact.actualRiskMinor != null)
+        .map((fact) => ({
+          id: fact.tradeClientId,
+          occurredAt: fact.occurredAt,
+          realizedPnlMinor: 0,
+          riskMinor: fact.actualRiskMinor!,
+          contracts: fact.contracts ?? 1,
+          sessionId: fact.sessionId,
+        })),
+      dailyRiskUsedMinor,
       latestReplayTrade: latest
         ? {
             id: latest.trade_client_id!,
-            riskMinor: null,
+            riskMinor: ownedTradeRiskFacts.find((fact) => fact.tradeClientId === latest.trade_client_id)?.actualRiskMinor ?? null,
             realizedPnlMinor: latest.realized_pnl_minor,
             sequenceToday: null,
-            ruleViolationId: breach?.tradeId === latest.id ? breach.ruleId : null,
+            ruleViolationId: breach?.tradeId === latest.trade_client_id ? breach.ruleId : null,
             dailyBufferAfterMinor: dailyRoom,
           }
         : null,
-      persistedTimelineFacts: bundle.persistedTimelineFacts,
+      persistedTimelineFacts: bundle.persistedTimelineFacts.filter((fact) => fact.accountId === account.id),
     },
     currentDailyPlan: bundle.currentDailyPlan,
     dailyPlanDraft: bundle.currentDailyPlan
@@ -148,7 +179,7 @@ export function rebuildPropPassRuntime(
           generatedAt: bundle.asOfUtc,
           preferredInstrument: null,
           intendedSessionId: null,
-          recentLossStreak: 0,
+          recentLossStreak: killSwitch.consecutiveLosses,
         },
     proposedTradePlan: null,
     proposedInterventionTrade: null,
@@ -162,24 +193,11 @@ export function rebuildPropPassRuntime(
           archivedAt: account.status === "archived" ? bundle.asOfUtc : null,
         }
       : null,
-    liveFacts: context === "live" && bundle.liveRiskSettings
-      ? {
-          normalRiskPerTradeMinor: bundle.liveRiskSettings.normalRiskPerTradeMinor ?? null,
-          normalMaximumContracts: bundle.liveRiskSettings.normalMaximumContracts ?? null,
-          recoveryRiskBps: bundle.liveRiskSettings.recoveryRiskBps ?? null,
-          minimumCompliantProfitableSessions: bundle.liveRiskSettings.minimumCompliantProfitableSessions ?? null,
-          completedCompliantProfitableSessions: bundle.recoveryState?.state.exitProgress?.completedCompliantProfitableSessions ?? null,
-          // Required components are derived elsewhere from persisted compliance
-          // facts. Empty means the score is withheld, never fabricated.
-          preservation: { components: {} },
-        }
-      : null,
     payout: null,
     withdrawal: null,
     scaling: null,
     progression: null,
     profitProtection: null,
-    preservation: null,
     compliance: null,
     breachReplay: breach
       ? {
@@ -196,6 +214,81 @@ export function rebuildPropPassRuntime(
           recommendedContracts: null,
         }
       : null,
+  };
+  const draftOutput = calculatePropPassState({
+    ...pipelineInputBase,
+    liveFacts: context === "live" && bundle.liveRiskSettings
+      ? {
+          normalRiskPerTradeMinor: bundle.liveRiskSettings.normalRiskPerTradeMinor ?? null,
+          normalMaximumContracts: bundle.liveRiskSettings.normalMaximumContracts ?? null,
+          recoveryRiskBps: bundle.liveRiskSettings.recoveryRiskBps ?? null,
+          minimumCompliantProfitableSessions: bundle.liveRiskSettings.minimumCompliantProfitableSessions ?? null,
+          completedCompliantProfitableSessions: bundle.recoveryState?.state.exitProgress?.completedCompliantProfitableSessions ?? null,
+          // Empty until evidence evaluation finishes — never fabricate.
+          preservation: { components: {} },
+        }
+      : null,
+    preservation: null,
+  });
+  const weeklyLimit = bundle.liveRiskSettings?.rules.weeklyLossLimitMinor ?? null;
+  const weeklyRemaining = riskRooms.weeklyLossRemainingMinor;
+  const weeklyUsed = weeklyLimit != null && weeklyRemaining != null
+    ? Math.max(0, weeklyLimit - weeklyRemaining)
+    : null;
+  const preservationEvaluation = evaluateCapitalPreservationEvidence({
+    userId: account.userId,
+    accountId: account.id,
+    context,
+    tradingDayId: engine.accountState.tradingDayId,
+    currentEquityMinor: currentEquity,
+    equityHighMinor: engine.accountState.hwmMinor,
+    maximumDrawdownMinor: context === "live"
+      ? bundle.liveRiskSettings?.rules.maximumDrawdownMinor ?? null
+      : legacyRules.drawdown.amountMinor,
+    dailyRiskBudgetMinor: context === "live"
+      ? bundle.liveRiskSettings?.rules.dailyRiskBudgetMinor ?? null
+      : riskRooms.configuredDailyRiskBudgetMinor,
+    dailyRiskUsedMinor,
+    weeklyLossLimitMinor: weeklyLimit,
+    weeklyLossUsedMinor: weeklyUsed,
+    riskRooms,
+    dailyPlan: draftOutput.dailyPlan.values,
+    killSwitch,
+    recovery: context === "live" ? bundle.recoveryState?.state ?? draftOutput.liveLifecycle?.values.recovery ?? null : null,
+    breach,
+    activeExecutions: ownedActiveExecutions,
+    tradeRiskFacts: ownedTradeRiskFacts,
+    timelineFacts: bundle.persistedTimelineFacts.filter((fact) => fact.accountId === account.id),
+    maximumContracts: context === "live"
+      ? bundle.liveRiskSettings?.normalMaximumContracts ?? null
+      : rules.maximumContracts ?? legacyRules.maxContracts ?? null,
+    consecutiveLossLimit: context === "live"
+      ? bundle.liveRiskSettings?.rules.consecutiveLossLimit
+        ?? bundle.killSwitchSettings?.configuration.consecutiveLossLimit
+        ?? null
+      : rules.stopAfterLosses
+        ?? bundle.killSwitchSettings?.configuration.consecutiveLossLimit
+        ?? draftOutput.dailyPlan.values?.stopAfterLosses
+        ?? null,
+  });
+  const preservationComponents = preservationInputFromEvaluation(preservationEvaluation);
+  const outputBase = context === "live" && bundle.liveRiskSettings
+    ? calculatePropPassState({
+      ...pipelineInputBase,
+      liveFacts: {
+        normalRiskPerTradeMinor: bundle.liveRiskSettings.normalRiskPerTradeMinor ?? null,
+        normalMaximumContracts: bundle.liveRiskSettings.normalMaximumContracts ?? null,
+        recoveryRiskBps: bundle.liveRiskSettings.recoveryRiskBps ?? null,
+        minimumCompliantProfitableSessions: bundle.liveRiskSettings.minimumCompliantProfitableSessions ?? null,
+        completedCompliantProfitableSessions: bundle.recoveryState?.state.exitProgress?.completedCompliantProfitableSessions ?? null,
+        preservation: preservationComponents,
+      },
+      preservation: preservationComponents,
+    })
+    : draftOutput;
+  const output: PropPassCalculationPipelineOutput = Object.freeze({
+    ...outputBase,
+    capitalPreservation: preservationEvaluation,
   });
   return {
     lifecycleStatus: context === "challenge"
@@ -206,6 +299,8 @@ export function rebuildPropPassRuntime(
     output,
   };
 }
+
+export type { CapitalPreservationEvaluation };
 
 function mapChallengeRules(
   rules: ReturnType<typeof mapRuleSnapshotRow>,

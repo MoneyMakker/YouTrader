@@ -271,7 +271,7 @@ function createStatefulAdapter(store: Store, ownerUserId = user): PropPassPersis
       const existing = store.events.get(eventKey);
       if (existing) existing.processingState = "failed";
     },
-  } as PropPassPersistenceAdapter;
+  } as unknown as PropPassPersistenceAdapter;
 }
 
 function makeEvent(

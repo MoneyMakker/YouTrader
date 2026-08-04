@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildChallengeTimeline, evaluateChallengeLifecycle } from "../src/propPass/tradingOs/index.ts";
+import { buildChallengeTimeline, evaluateChallengeLifecycle } from "../src/propPass/tradingOs/index";
 
 const account = {
   contextType: "challenge" as const,

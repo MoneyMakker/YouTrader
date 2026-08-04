@@ -38,7 +38,23 @@ assert.equal(live.output.hardRiskRooms?.dailyLossRemainingMinor, 50_000, "prior 
 assert.equal(live.output.hardRiskRooms?.weeklyLossRemainingMinor, 80_000);
 assert.equal(live.output.hardRiskRooms?.drawdownRemainingMinor, 180_000);
 assert.equal(live.output.liveLifecycle?.values.recovery?.active, true, "Recovery Mode uses Live settings and real drawdown");
-assert.equal(live.output.liveLifecycle?.values.preservation?.score, null, "Preservation score is withheld without all compliance components");
+assert.equal(live.output.capitalPreservation?.status, "ready");
+assert.ok(typeof live.output.capitalPreservation?.score === "number");
+assert.equal(live.output.liveLifecycle?.values.preservation?.score, live.output.capitalPreservation?.score);
+const liveWithoutContractCap = rebuildPropPassRuntime({
+  ...base,
+  challengeRow: { ...base.challengeRow, phase: "funded", status: "funded" },
+  liveRiskSettings: {
+    configuredAt: base.asOfUtc, selectedMode: "calm", weekStartsOn: 1,
+    normalRiskPerTradeMinor: 10_000,
+    recoveryRiskBps: 5_000, minimumCompliantProfitableSessions: 3,
+    rules: { id: "live-v1", dailyRiskBudgetMinor: 50_000, weeklyLossLimitMinor: 100_000, maximumDrawdownMinor: 200_000, perTradeRiskCapMinor: 20_000, maximumTrades: 4, consecutiveLossLimit: 2, recoveryModeThresholdBps: 30 },
+  },
+  recoveryState: { state: { active: false, belowEquityHighBps: 0, normalRiskPerTradeMinor: 10_000, reducedRiskPerTradeMinor: 10_000, normalMaximumContracts: 2, reducedMaximumContracts: 2, activationReason: null, exitCriteria: [], exitProgress: { completedCompliantProfitableSessions: 1, requiredCompliantProfitableSessions: 3 }, scalingDisabled: false, gamblerDisabled: false }, updatedAt: base.asOfUtc },
+});
+assert.equal(liveWithoutContractCap.output.capitalPreservation?.status, "insufficient_evidence");
+assert.equal(liveWithoutContractCap.output.liveLifecycle?.values.preservation?.score ?? null, null, "Preservation score is withheld without complete compliance evidence");
+assert.ok((liveWithoutContractCap.output.capitalPreservation?.missingInputs.length ?? 0) > 0);
 const lockedLive = rebuildPropPassRuntime({
   ...base,
   challengeRow: { ...base.challengeRow, phase: "funded", status: "funded" },
