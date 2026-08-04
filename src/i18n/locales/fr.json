@@ -2016,5 +2016,12 @@
   "propPass.cockpit.row.reset": "Reset",
   "propPass.cockpit.row.maximumDailyRisk": "Maximum daily risk",
   "propPass.cockpit.row.maximumProjectedDamage": "Maximum projected damage",
-  "propPass.cockpit.row.remainingBuffer": "Remaining buffer"
+  "propPass.cockpit.row.remainingBuffer": "Remaining buffer",
+  "propPass.cockpit.insufficientTradingEvidence": "Preuves de trading insuffisantes",
+  "propPass.cockpit.preservationMissingEvidence": "Capital Preservation n'affiche un score qu'avec des faits de conformité persistés.",
+  "propPass.cockpit.noFabricatedScore": "Aucun score tant que les preuves réelles manquent.",
+  "propPass.cockpit.lossStreak": "Série de pertes actuelle",
+  "propPass.cockpit.drawdownFloor": "Plancher de drawdown",
+  "propPass.cockpit.recoveryMode": "Recovery Mode",
+  "propPass.cockpit.profitProtection": "Profit Protection"
 }

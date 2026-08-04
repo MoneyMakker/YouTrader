@@ -33,6 +33,8 @@ export function PropPassSessionCockpit({ model, runtime, runtimeLoading, runtime
   const status = risk?.status ?? (output?.status === "stop_trading" ? "stop_trading" : null);
   const warning = output?.interventions[0] ?? null;
   const plan = output?.dailyPlan.values ?? null;
+  const kill = resolveKillSwitchValues(output ?? {});
+  const preservation = output?.capitalPreservation ?? null;
   const priorHapticRevision = useRef<number | null>(null);
 
   useEffect(() => {
@@ -61,9 +63,15 @@ export function PropPassSessionCockpit({ model, runtime, runtimeLoading, runtime
           <Metric label={t("propPass.cockpit.dailyRiskUsed")} value={money(risk?.usedMinor ?? null, currency, t)} />
           <Metric label={t("propPass.cockpit.dailyRiskRemaining")} value={money(risk?.remainingMinor ?? output?.hardRiskRooms?.dailyLossRemainingMinor ?? null, currency, t)} />
           <Metric label={context === "live" ? t("propPass.cockpit.weeklyLossRoom") : t("propPass.cockpit.targetRemaining")} value={money(context === "live" ? output?.hardRiskRooms?.weeklyLossRemainingMinor ?? null : output?.challengeLifecycle?.values.profitRemainingMinor ?? model.progress.profitRemaining?.minor ?? null, currency, t)} />
+          <Metric label={t("propPass.cockpit.drawdownFloor")} value={money(model.buffers.trailingDrawdown?.limitMinor ?? output?.withdrawalReadiness?.values.safetyFloorMinor ?? output?.payoutReadiness?.values.safetyFloorMinor ?? null, currency, t)} />
           <Metric label={t("propPass.commandCenter.drawdownRoom")} value={money(output?.hardRiskRooms?.drawdownRemainingMinor ?? model.buffers.trailingDrawdown?.remainingMinor ?? null, currency, t)} />
           <Metric label={t("propPass.cockpit.tradesUsedAllowed")} value={plan ? t("propPass.cockpit.tradesUsedAllowedValue", { used: output?.journalApplication.appliedTradeIds.length ?? 0, allowed: plan.maximumTrades }) : t("propPass.cockpit.needsPlan")} />
+          <Metric label={t("propPass.cockpit.lossStreak")} value={value(kill?.consecutiveLosses ?? null, t)} />
           <Metric label={t("propPass.cockpit.riskMode")} value={plan?.mode ? title(plan.mode) : t("propPass.cockpit.needsPlan")} />
+          <Metric label={t("propPass.cockpit.capitalPreservation")} value={preservationLabel(preservation, t)} />
+          <Metric label={t("propPass.cockpit.recoveryMode")} value={recoveryLabel(output, t)} />
+          <Metric label={t("propPass.cockpit.profitProtection")} value={profitProtectionLabel(output, t)} />
+          <Metric label={t("propPass.cockpit.sessionLock")} value={kill?.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.clear")} />
         </View>
         <View style={[styles.warning, { backgroundColor: warning?.blocking ? theme.colors.status.negativeSoft : theme.colors.status.warningSoft }]} accessibilityLiveRegion="polite">
           <YdlText role="label">{warning?.title ?? (output?.missingInputs.length ? t("propPass.cockpit.setupRequired") : t("propPass.cockpit.nextSafeAction"))}</YdlText>
@@ -86,11 +94,11 @@ export function PropPassSessionCockpit({ model, runtime, runtimeLoading, runtime
         <Action label={t("propPass.cockpit.riskRules")} detail={runtime?.versions.ruleVersion ?? t("propPass.cockpit.needsVersion")} onPress={() => setPanel("rules")} />
         <Action label={t("propPass.cockpit.timeline")} detail={t("propPass.cockpit.realEventsCount", { count: output?.timeline.length ?? 0 })} onPress={() => setPanel("timeline")} />
         <Action label={t("propPass.cockpit.decisionReplay")} detail={title(output?.decisionReplay.verdict ?? "insufficient_data")} onPress={() => setPanel("replay")} />
-        <Action label={context === "live" ? t("propPass.cockpit.capitalPreservation") : t("propPass.commandCenter.title")} detail={context === "live" ? scoreLabel(output?.liveLifecycle?.values.preservation?.score ?? null, t) : t("propPass.cockpit.selectedAccountIsolated")} onPress={() => setPanel("live_health")} />
+        <Action label={t("propPass.cockpit.capitalPreservation")} detail={preservationLabel(preservation, t)} onPress={() => setPanel("live_health")} />
         <Action label={t("propPass.cockpit.survivalCapacity")} detail={t("propPass.cockpit.staticScenario")} onPress={() => setPanel("survival")} />
         <Action label={t("propPass.cockpit.dailyRiskCalendar")} detail={t("propPass.cockpit.persistedDaysOnly")} onPress={() => setPanel("calendar")} />
         <Action label={t("propPass.cockpit.breachReplay")} detail={output?.breachReplay?.values ? t("propPass.cockpit.recordedBreach") : t("propPass.cockpit.noBreachData")} onPress={() => setPanel("breach")} />
-        <Action label={t("propPass.cockpit.sessionLock")} detail={resolveKillSwitchValues(output)?.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.configuredGuardrail")} onPress={() => setPanel("session_lock")} />
+        <Action label={t("propPass.cockpit.sessionLock")} detail={kill?.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.configuredGuardrail")} onPress={() => setPanel("session_lock")} />
       </View>
       <YdlFade visible={panel != null}>{panel && output ? <Panel id={panel} output={output} runtime={runtime!} currency={currency} context={context} onClose={() => setPanel(null)} onRefresh={onRefresh} onAssignTrades={onAssignTrades} onOpenTrade={onOpenTrade} /> : null}</YdlFade>
     </View>
@@ -110,7 +118,27 @@ function Panel({ id, output, runtime, currency, context, onClose, onRefresh, onA
   if (id === "readiness") { const result = context === "live" ? output.withdrawalReadiness : output.payoutReadiness; const amount = context === "live" ? output.withdrawalReadiness?.values.recommendedMaximumWithdrawalMinor : output.payoutReadiness?.values.recommendedMaximumPayoutMinor; return <Detail title={context === "live" ? t("propPass.cockpit.safeWithdrawal") : t("propPass.cockpit.payoutPlanner")} close={close}><Rows rows={[[t("propPass.commandCenter.readiness"), title(result?.status ?? "needs_input")], [t("propPass.cockpit.row.recommendedMaximum"), money(amount ?? null, currency, t)], [t("propPass.cockpit.row.safetyFloor"), money(context === "live" ? output.withdrawalReadiness?.values.safetyFloorMinor ?? null : output.payoutReadiness?.values.safetyFloorMinor ?? null, currency, t)], [t("propPass.cockpit.row.reserve"), money(context === "live" ? output.withdrawalReadiness?.values.reserveMinor ?? null : output.payoutReadiness?.values.postPayoutReserveMinor ?? null, currency, t)]]} /><Missing values={result?.missingInputs ?? []} t={t} />{context === "challenge" && output.payoutPlanner ? <Rows rows={output.payoutPlanner.values.scenarios.map((scenario) => [money(scenario.amountMinor, currency, t), scenario.permitted ? t("propPass.cockpit.withinSafeLimit") : title(scenario.blocker ?? "blocked")])} /> : null}<YdlText role="caption" color="text.secondary">{t("propPass.cockpit.planningOnlyDisclaimer")}</YdlText></Detail>; }
   if (id === "timeline") return <Detail title={t("propPass.cockpit.panel.accountTimeline")} close={close}>{output.timeline.length ? output.timeline.map((event) => <YdlCard key={`${event.type}:${event.occurredAt}`}><YdlText role="bodyEmphasized">{title(event.type)}</YdlText><YdlText role="caption" color="text.secondary">{event.occurredAt}</YdlText><YdlText role="body">{event.explanation}</YdlText></YdlCard>) : <Unavailable label={t("propPass.cockpit.unavailable.timeline")} />}</Detail>;
   if (id === "replay") { const replay = output.decisionReplay; return <Detail title={t("propPass.cockpit.decisionReplay")} close={close}><StatusChip status={replay.verdict} fallback={t("propPass.cockpit.insufficientData")} /><YdlText role="bodyEmphasized">{replay.reason}</YdlText><YdlText role="body" color="text.secondary">{replay.mathematicalConsequence}</YdlText><YdlText role="body">{t("propPass.commandCenter.nextAction", { action: replay.nextAction })}</YdlText>{replay.relatedTradeId && onOpenTrade ? <YdlButton label={t("propPass.cockpit.openJournalTrade")} variant="secondary" onPress={() => onOpenTrade(replay.relatedTradeId!)} /> : null}</Detail>; }
-  if (id === "live_health") { const live = output.liveLifecycle?.values; return <Detail title={context === "live" ? t("propPass.cockpit.capitalPreservation") : t("propPass.commandCenter.title")} close={close}>{context === "live" ? <><Rows rows={[[t("propPass.cockpit.row.state"), title(live?.state ?? "needs_input")], [t("propPass.cockpit.row.preservationScore"), scoreLabel(live?.preservation?.score ?? null, t)], [t("propPass.cockpit.row.recoveryMode"), live?.recovery?.active == null ? t("propPass.cockpit.needsInput") : live.recovery.active ? t("propPass.cockpit.active") : t("propPass.cockpit.normal")], [t("propPass.cockpit.row.killSwitch"), live?.killSwitch?.active == null ? t("propPass.cockpit.needsInput") : live.killSwitch.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.clear")], [t("propPass.cockpit.weeklyLossRoom"), money(live?.weeklyLossRoomMinor ?? null, currency, t)], [t("propPass.cockpit.row.nextImprovement"), live?.preservation?.primaryImprovementAction ?? t("propPass.cockpit.completeRiskSetup")]]} /></> : <><Rows rows={[[t("propPass.cockpit.row.selectedAccount"), runtime.accountId], [t("propPass.cockpit.row.lifecycle"), title(output.challengeLifecycle?.values.state ?? "needs_input")], [t("propPass.cockpit.row.riskState"), title(output.riskMeter.values.status ?? "needs_input")], [t("propPass.cockpit.row.nextAction"), output.interventions[0]?.recommendedAction ?? t("propPass.cockpit.keepAccountInPlan")]]} /><YdlText role="caption" color="text.secondary">{t("propPass.cockpit.accountIsolationNote")}</YdlText></>}</Detail>; }
+  if (id === "live_health") {
+    const live = output.liveLifecycle?.values;
+    const preservation = output.capitalPreservation;
+    const kill = resolveKillSwitchValues(output);
+    return (
+      <Detail title={t("propPass.cockpit.capitalPreservation")} close={close}>
+        <PreservationPanel preservation={preservation} t={t} />
+        <Rows rows={[
+          [t("propPass.cockpit.row.lifecycle"), title(output.challengeLifecycle?.values.state ?? live?.state ?? "needs_input")],
+          [t("propPass.cockpit.row.recoveryMode"), recoveryLabel(output, t)],
+          [t("propPass.cockpit.profitProtection"), profitProtectionLabel(output, t)],
+          [t("propPass.cockpit.row.killSwitch"), kill?.active == null ? t("propPass.cockpit.needsInput") : kill.active ? t("propPass.commandCenter.killSwitchActive") : t("propPass.cockpit.clear")],
+          [t("propPass.cockpit.lossStreak"), value(kill?.consecutiveLosses ?? null, t)],
+          [t("propPass.cockpit.weeklyLossRoom"), money(live?.weeklyLossRoomMinor ?? output.hardRiskRooms?.weeklyLossRemainingMinor ?? null, currency, t)],
+          [t("propPass.cockpit.row.selectedAccount"), runtime.accountId],
+          [t("propPass.cockpit.row.nextAction"), output.interventions[0]?.recommendedAction ?? preservation?.primaryImprovementAction ?? t("propPass.cockpit.keepAccountInPlan")],
+        ]} />
+        <YdlText role="caption" color="text.secondary">{t("propPass.cockpit.accountIsolationNote")}</YdlText>
+      </Detail>
+    );
+  }
   if (id === "survival") return <Detail title={t("propPass.cockpit.panel.survivalCapacity")} close={close}><YdlText role="caption" color="text.secondary">{t("propPass.cockpit.survivalDisclaimer")}</YdlText><Rows rows={output.survival.values.modes.map((mode) => [title(mode.mode), mode.maximumRiskLossesRemaining == null ? t("propPass.cockpit.needsInput") : t("propPass.cockpit.maximumRiskLossesRemaining", { count: mode.maximumRiskLossesRemaining })])} /><Rows rows={[[t("propPass.cockpit.row.hardRoom"), money(output.survival.values.hardRoomMinor, currency, t)], [t("propPass.cockpit.row.dailyCapacity"), value(output.survival.values.dailyCapacity, t)], [t("propPass.cockpit.row.drawdownCapacity"), value(output.survival.values.drawdownCapacity, t)]]} /></Detail>;
   if (id === "calendar") {
     const fact = calendarFactFromPipelineOutput(output);
@@ -219,11 +247,55 @@ function Rows({ rows }: { rows: Array<[string, string]> }) { return <YdlCard>{ro
 function StatusChip({ status, fallback }: { status: string | null; fallback: string }) { const normalized = status ?? fallback; return <YdlChip label={title(normalized)} leadingSymbol={/stop|violation|danger|breach|fail/i.test(normalized) ? "warning" : /safe|healthy|good|pass|active/i.test(normalized) ? "success" : "info"} />; }
 function Missing({ values, t }: { values: string[]; t: TFunction }) { return values.length ? <YdlCard><YdlText role="bodyEmphasized">{t("propPass.cockpit.completeSetup")}</YdlText>{[...new Set(values)].slice(0, 8).map((item) => <YdlText role="body" color="text.secondary" key={item}>• {setupAction(item, t)}</YdlText>)}</YdlCard> : null; }
 function CalculationTrace({ output, stages, t }: { output: PropPassCalculationPipelineOutput; stages: PropPassCalculationPipelineOutput["calculationTrace"][number]["stage"][]; t: TFunction }) { const rows = output.calculationTrace.filter((step) => stages.includes(step.stage)); return <YdlCard><YdlText role="bodyEmphasized">{t("propPass.cockpit.calculationTrace")}</YdlText>{rows.map((step) => <View key={step.stage} style={styles.trace}><YdlText role="label">{step.order}. {title(step.stage)}</YdlText><YdlText role="caption" color="text.secondary">{title(step.status)} · {step.sourceVersion ?? output.calculationVersion}</YdlText>{step.arithmetic.map((line) => <YdlText role="caption" color="text.secondary" key={line}>{line}</YdlText>)}{step.rounding.map((line) => <YdlText role="caption" color="text.secondary" key={line}>{line}</YdlText>)}</View>)}</YdlCard>; }
+function PreservationPanel({ preservation, t }: { preservation: PropPassCalculationPipelineOutput["capitalPreservation"]; t: TFunction }) {
+  if (!preservation || preservation.status !== "ready" || preservation.score == null) {
+    const missing = preservation?.missingInputs ?? ["preservation_evidence"];
+    return (
+      <YdlCard testID="prop-pass-preservation-insufficient">
+        <YdlText role="bodyEmphasized">{t("propPass.cockpit.insufficientTradingEvidence")}</YdlText>
+        <YdlText role="body" color="text.secondary">{t("propPass.cockpit.noFabricatedScore")}</YdlText>
+        <YdlText role="caption" color="text.secondary">{t("propPass.cockpit.preservationMissingEvidence")}</YdlText>
+        {[...new Set(missing)].slice(0, 8).map((item) => (
+          <YdlText role="body" color="text.secondary" key={item}>• {setupAction(item, t)}</YdlText>
+        ))}
+      </YdlCard>
+    );
+  }
+  const componentRows = Object.entries(preservation.components)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([id, score]) => [title(id), t("propPass.cockpit.scoreValue", { score })] as [string, string]);
+  return (
+    <View testID="prop-pass-preservation-ready" style={styles.stack}>
+      <Rows rows={[
+        [t("propPass.cockpit.row.preservationScore"), t("propPass.cockpit.scoreValue", { score: preservation.score })],
+        [t("propPass.cockpit.row.state"), title(preservation.status)],
+        [t("propPass.cockpit.row.calculation"), preservation.calculationVersion],
+        [t("propPass.cockpit.row.nextImprovement"), preservation.primaryImprovementAction ?? t("propPass.cockpit.keepInPlan")],
+      ]} />
+      {componentRows.length ? <Rows rows={componentRows} /> : null}
+    </View>
+  );
+}
+function preservationLabel(preservation: PropPassCalculationPipelineOutput["capitalPreservation"], t: TFunction): string {
+  if (!preservation || preservation.status !== "ready" || preservation.score == null) {
+    return t("propPass.cockpit.insufficientTradingEvidence");
+  }
+  return t("propPass.cockpit.scoreValue", { score: preservation.score });
+}
+function recoveryLabel(output: PropPassCalculationPipelineOutput | null, t: TFunction): string {
+  const recovery = output?.liveLifecycle?.values.recovery;
+  if (!recovery || recovery.active == null) return t("propPass.cockpit.needsInput");
+  return recovery.active ? t("propPass.cockpit.active") : t("propPass.cockpit.normal");
+}
+function profitProtectionLabel(output: PropPassCalculationPipelineOutput | null, t: TFunction): string {
+  const protection = output?.profitProtection;
+  if (!protection || protection.status === "needs_input") return t("propPass.cockpit.needsInput");
+  return protection.values.active ? title(protection.values.enforcement) : t("propPass.cockpit.clear");
+}
 function Unavailable({ label }: { label: string }) { return <YdlText role="body" color="text.secondary">{label}</YdlText>; }
 function money(minor: number | null | undefined, currency: string, t: TFunction): string { if (minor == null || !Number.isSafeInteger(minor)) return t("propPass.cockpit.needsInput"); return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100); }
 function value(input: number | null | undefined, t: TFunction): string { return input == null ? t("propPass.cockpit.needsInput") : String(input); }
 function title(value: string): string { return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
-function scoreLabel(score: number | null, t: TFunction): string { return score == null ? t("propPass.cockpit.needsInput") : t("propPass.cockpit.scoreValue", { score }); }
 function formatReviewExpiry(iso: string): string {
   const parsed = Date.parse(iso);
   if (Number.isNaN(parsed)) return iso;

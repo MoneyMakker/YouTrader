@@ -2016,5 +2016,12 @@
   "propPass.cockpit.row.reset": "Скидання",
   "propPass.cockpit.row.maximumDailyRisk": "Максимальний денний ризик",
   "propPass.cockpit.row.maximumProjectedDamage": "Максимальна прогнозована шкода",
-  "propPass.cockpit.row.remainingBuffer": "Залишковий буфер"
+  "propPass.cockpit.row.remainingBuffer": "Залишковий буфер",
+  "propPass.cockpit.insufficientTradingEvidence": "Недостатньо торгових даних",
+  "propPass.cockpit.preservationMissingEvidence": "Збереження капіталу показує оцінку лише за наявності збережених фактів дотримання правил.",
+  "propPass.cockpit.noFabricatedScore": "Оцінку не показано, доки немає реальних даних.",
+  "propPass.cockpit.lossStreak": "Поточна серія збитків",
+  "propPass.cockpit.drawdownFloor": "Підлога просадки",
+  "propPass.cockpit.recoveryMode": "Режим відновлення",
+  "propPass.cockpit.profitProtection": "Захист прибутку"
 }

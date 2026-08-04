@@ -27,8 +27,15 @@ const cockpitKeys = [
   "propPass.cockpit.dailyRiskRemaining",
   "propPass.cockpit.weeklyLossRoom",
   "propPass.commandCenter.drawdownRoom",
+  "propPass.cockpit.drawdownFloor",
   "propPass.cockpit.tradesUsedAllowed",
+  "propPass.cockpit.lossStreak",
   "propPass.cockpit.riskMode",
+  "propPass.cockpit.recoveryMode",
+  "propPass.cockpit.profitProtection",
+  "propPass.cockpit.insufficientTradingEvidence",
+  "propPass.cockpit.noFabricatedScore",
+  "propPass.cockpit.preservationMissingEvidence",
   "propPass.cockpit.row.manualLock",
   "propPass.sessionLock.reasonLabel",
   "propPass.cockpit.row.reviewExpires",
@@ -42,7 +49,7 @@ for (const key of cockpitKeys) {
   assert.match(cockpit, new RegExp(key.replace(/\./g, "\\.")), `Cockpit missing i18n key: ${key}`);
 }
 
-for (const required of ["buildDailyRiskCalendar", "calendarFactFromPipelineOutput", "prop-pass-calendar-day-", "formatReviewExpiry"]) {
+for (const required of ["buildDailyRiskCalendar", "calendarFactFromPipelineOutput", "prop-pass-calendar-day-", "formatReviewExpiry", "prop-pass-preservation-insufficient", "capitalPreservation", "consecutiveLosses"]) {
   assert.match(cockpit, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `Cockpit route missing: ${required}`);
 }
 

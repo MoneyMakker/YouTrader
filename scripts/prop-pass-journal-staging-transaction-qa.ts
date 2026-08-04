@@ -128,8 +128,9 @@ async function scrubDisposableUser(userId: string): Promise<{ deletedAuth: boole
   const still = await a.auth.admin.getUserById(userId);
   const meta = still.data.user?.user_metadata ?? {};
   const email = still.data.user?.email ?? "";
+  const bannedUntil = (still.data.user as { banned_until?: string | null } | null)?.banned_until ?? null;
   const scrubbed =
-    Boolean(still.data.user?.banned_until) ||
+    Boolean(bannedUntil) ||
     email.includes("@youtrader.qa.invalid") ||
     meta.yt_suite === "build117-journal-staging-scrubbed";
   return { deletedAuth: false, scrubbed };

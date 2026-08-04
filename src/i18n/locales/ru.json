@@ -2018,5 +2018,12 @@
   "propPass.cockpit.row.reset": "Сброс",
   "propPass.cockpit.row.maximumDailyRisk": "Максимальный дневной риск",
   "propPass.cockpit.row.maximumProjectedDamage": "Максимальный прогнозируемый ущерб",
-  "propPass.cockpit.row.remainingBuffer": "Оставшийся буфер"
+  "propPass.cockpit.row.remainingBuffer": "Оставшийся буфер",
+  "propPass.cockpit.insufficientTradingEvidence": "Недостаточно торговых данных",
+  "propPass.cockpit.preservationMissingEvidence": "Сохранение капитала показывает оценку только при наличии сохранённых фактов соблюдения правил.",
+  "propPass.cockpit.noFabricatedScore": "Оценка не показывается, пока нет реальных данных.",
+  "propPass.cockpit.lossStreak": "Текущая серия убытков",
+  "propPass.cockpit.drawdownFloor": "Пол просадки",
+  "propPass.cockpit.recoveryMode": "Режим восстановления",
+  "propPass.cockpit.profitProtection": "Защита прибыли"
 }
