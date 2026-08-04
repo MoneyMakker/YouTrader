@@ -4,6 +4,8 @@
  */
 import assert from "node:assert/strict";
 import {
+  decideAfterLoginCustomerInfoRefresh,
+  decideEntitlementUiPhase,
   decidePostLoginEntitlementReconcile,
   isActiveEntitlement,
 } from "../../src/billing/entitlementReconcile";
@@ -31,6 +33,27 @@ assert.equal(
     restoreAlreadyAttempted: false,
   }).action,
   "restore_once",
+  "anonymous entitled purchase → login must auto-restore once",
+);
+assert.equal(
+  decidePostLoginEntitlementReconcile({
+    preAuthEntitled: false,
+    postLoginEntitled: false,
+    restoreAlreadyAttempted: false,
+    sameUserWasEntitledAtLogout: true,
+  }).action,
+  "restore_once",
+  "same-account re-login must auto-restore when logIn CI is empty",
+);
+assert.equal(
+  decidePostLoginEntitlementReconcile({
+    preAuthEntitled: false,
+    postLoginEntitled: false,
+    restoreAlreadyAttempted: false,
+    sameUserWasEntitledAtLogout: false,
+  }).action,
+  "confirmed_not_entitled",
+  "different account without entitlement must not auto-restore",
 );
 assert.equal(
   decidePostLoginEntitlementReconcile({
@@ -43,10 +66,39 @@ assert.equal(
 assert.equal(
   decidePostLoginEntitlementReconcile({
     preAuthEntitled: false,
-    postLoginEntitled: false,
+    postLoginEntitled: true,
     restoreAlreadyAttempted: false,
   }).action,
-  "confirmed_not_entitled",
+  "confirmed_entitled",
+  "existing entitled user login unlocks without Restore",
+);
+
+assert.equal(
+  decideAfterLoginCustomerInfoRefresh({ logInEntitled: false, refreshedEntitled: true }),
+  "confirmed_entitled",
+);
+assert.equal(
+  decideAfterLoginCustomerInfoRefresh({ logInEntitled: false, refreshedEntitled: false }),
+  "still_not_entitled",
+);
+
+assert.equal(
+  decideEntitlementUiPhase({ identitySyncPending: true, identitySyncFailed: false, isPro: false }),
+  "loading",
+  "CustomerInfo loading must not emit false paywall",
+);
+assert.equal(
+  decideEntitlementUiPhase({ identitySyncPending: false, identitySyncFailed: true, isPro: false }),
+  "retry",
+  "CustomerInfo network failure → retry",
+);
+assert.equal(
+  decideEntitlementUiPhase({ identitySyncPending: false, identitySyncFailed: false, isPro: true }),
+  "entitled",
+);
+assert.equal(
+  decideEntitlementUiPhase({ identitySyncPending: false, identitySyncFailed: false, isPro: false }),
+  "inactive",
 );
 
 assert.equal(

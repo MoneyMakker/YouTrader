@@ -86,9 +86,19 @@ export class RevenueCatIdentitySynchronizer<TCustomerInfo> {
         return { status: "already_synced", customerInfo };
       }
 
-      const { customerInfo } = await this.client.logIn(userId);
+      const { customerInfo: loggedInInfo } = await this.client.logIn(userId);
       this.lastResolvedUserId = userId;
-      return { status: "synced", customerInfo };
+      // Always consume logIn CustomerInfo, then explicitly refresh so callers never
+      // navigate on a stale anonymous snapshot left over from before identity switch.
+      if (this.client.getCustomerInfo) {
+        try {
+          const refreshed = await this.client.getCustomerInfo();
+          return { status: "synced", customerInfo: refreshed ?? loggedInInfo };
+        } catch {
+          return { status: "synced", customerInfo: loggedInInfo };
+        }
+      }
+      return { status: "synced", customerInfo: loggedInInfo };
     } catch {
       // Callers show a generic retry state. Do not retain a failed identity as cached.
       return { status: "failed" };

@@ -63,13 +63,18 @@ export async function runRevenueCatIdentityQa(): Promise<RevenueCatIdentityQaRes
   const afterConfigure = await startupSync.synchronize(userId);
   results.push({
     name: "startup_session_waits_for_configuration_then_logs_in_with_uuid",
-    pass: beforeConfigure.status === "skipped_not_configured" && afterConfigure.status === "synced" && startup.loginCalls === 1,
+    pass:
+      beforeConfigure.status === "skipped_not_configured" &&
+      afterConfigure.status === "synced" &&
+      startup.loginCalls === 1 &&
+      // logIn CustomerInfo is always followed by an explicit getCustomerInfo refresh.
+      startup.customerInfoCalls >= 1,
   });
 
   const repeated = await startupSync.synchronize(userId);
   results.push({
     name: "repeated_synchronization_is_idempotent",
-    pass: repeated.status === "already_synced" && startup.loginCalls === 1 && startup.customerInfoCalls === 1,
+    pass: repeated.status === "already_synced" && startup.loginCalls === 1 && startup.customerInfoCalls >= 2,
   });
 
   const concurrentClient = createClient({ deferLogin: true });
