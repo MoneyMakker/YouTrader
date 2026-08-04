@@ -562,7 +562,10 @@ contributes focused tests and documentation before its successor starts.
 
 **Implementation note (2026-08-03):** PPOS-117-01 through PPOS-117-12 and
 PPOS-117-14 through PPOS-117-17 have focused commits and deterministic QA.
-PPOS-117-13 remains open for persisted product wiring. PPOS-117-18 has
+PPOS-117-13 remains open for persisted product wiring; context-neutral Kill
+Switch pipeline output, shared cockpit/calendar/command-center resolver, and
+Session Lock gate coverage are DONE in source (`60d6972`, `c7492ed`); capital
+preservation persisted wiring remains open. PPOS-117-18 has
 Session Cockpit, Live Settings, Session Lock, and Multi-Account Command Center
 presentation/i18n in source; remaining production UI polish and device review
 stay open. PPOS-117-19 includes an additive, staging-verified migration; its
@@ -571,7 +574,7 @@ Production deployment remains pending. PPOS-117-20 has the consolidated
 deterministic gate but remains open until persistence wiring and final
 regression verification complete.
 
-**Build 117 execution reconciliation (2026-08-03, HEAD `c3ee6ca`):**
+**Build 117 execution reconciliation (2026-08-03, HEAD `c7492ed`):**
 
 1. Real persistence adapters — DONE in source; production deployment remains under item 22.
 2. Unified calculation pipeline verification — DONE (`build117.pipeline.v2`).
@@ -581,7 +584,7 @@ regression verification complete.
 6. Versioned instrument registry — DONE.
 7. Journal ↔ Prop Pass automatic synchronization — DONE in source and deterministic tests; remote release proof remains pending.
 8. Complete Challenge lifecycle integration — DONE in domain/runtime tests; final device proof remains pending.
-9. Session Cockpit — DONE in source (persisted cockpit, i18n, QA in `test:prop-pass-trading-os`); final device/accessibility review remains under item 24.
+9. Session Cockpit — DONE in source (persisted cockpit, i18n, QA in `test:prop-pass-trading-os`); final device/accessibility review remains under item 25.
 10. Full production UI — IN PROGRESS; Session Cockpit, Live Settings, Session Lock, and Multi-Account Command Center presentation/i18n are in source; remaining polish and device review remain.
 11. Challenge Autopilot Setup — DONE (wizard + QA included in `test:prop-pass-trading-os`).
 12. Multi-Account Command Center — DONE; persisted summaries, filters, and default-account switching from command cards are implemented in source.
@@ -590,19 +593,20 @@ regression verification complete.
 15. Rules Compliance Score — DONE in deterministic domain output; production interaction QA remains.
 16. Account Survival Forecast — DONE as static capacity, never probability; production interaction QA remains.
 17. Payout Planner — DONE in deterministic domain output; production interaction QA remains.
-18. Session Lock review workflow — DONE in source (server-confirmed reason, bounded review expiry, i18n, QA via session-cockpit gate); production interaction QA remains under item 24.
-19. Explainable calculations — DONE in pipeline trace and cockpit detail routes.
-20. Property/invariant tests — DONE in source (29 invariants, 13,000 generated assertions).
-21. Final persistence schema and RLS — IN PROGRESS; staging migration/RLS evidence exists, final reconciliation remains.
-22. Production migration — READY after final schema and staging gates.
-23. Final automated release gates — READY after final source.
-24. Physical-device QA — BLOCKED on final signed candidate and device interaction.
-25. Apple stored:true and revoke — BLOCKED on disposable Apple identity/system confirmation.
-26. Subscription/authentication matrix — BLOCKED on StoreKit/system confirmations.
-27. Final archive 1.6.1 (117) — BLOCKED on items 23–26.
-28. TestFlight processing and internal testing — BLOCKED on item 27 and App Store Connect processing.
-29. Exact source tag — BLOCKED on successful TestFlight processing.
-30. Final documentation and clean handoff — BLOCKED on items 22–29.
+18. Session Lock review workflow — DONE in source (server-confirmed reason, bounded review expiry, i18n, QA via session-cockpit gate); production interaction QA remains under item 25.
+19. Context-neutral Kill Switch pipeline wiring — DONE in source (`60d6972`); pipeline output includes `killSwitch` for all account contexts; cockpit, calendar, and command center read the shared resolver; Session Lock gate includes review surfacing (`c7492ed`); capital preservation persisted wiring under PPOS-117-13 remains open.
+20. Explainable calculations — DONE in pipeline trace and cockpit detail routes.
+21. Property/invariant tests — DONE in source (29 invariants, 13,000 generated assertions).
+22. Final persistence schema and RLS — IN PROGRESS; staging migration/RLS evidence exists, final reconciliation remains.
+23. Production migration — READY after final schema and staging gates.
+24. Final automated release gates — READY after final source.
+25. Physical-device QA — BLOCKED on final signed candidate and device interaction.
+26. Apple stored:true and revoke — BLOCKED on disposable Apple identity/system confirmation.
+27. Subscription/authentication matrix — BLOCKED on StoreKit/system confirmations.
+28. Final archive 1.6.1 (117) — BLOCKED on items 24–27.
+29. TestFlight processing and internal testing — BLOCKED on item 28 and App Store Connect processing.
+30. Exact source tag — BLOCKED on successful TestFlight processing.
+31. Final documentation and clean handoff — BLOCKED on items 23–30.
 
 This reconciliation does not reopen completed deterministic engines and does
 not mark release-only evidence as passed before it runs against the final
