@@ -1,0 +1,110 @@
+{
+  "suite": "prop-pass-clean-baseline-rehearsal",
+  "environment": {
+    "type": "local_ephemeral_postgresql",
+    "engine": "PostgreSQL 17",
+    "database": "yt_b117_clean_rehearsal",
+    "region": "local",
+    "baselineMethod": "apply_production_ledger_equivalent_migrations_schema_only",
+    "noProductionData": true,
+    "supabaseBranchBlocked": "Branching requires Pro plan",
+    "newProjectBlocked": "Free project limit reached (2)",
+    "prAgentRestore": "not_approved_autonomous"
+  },
+  "baselineLedgerTip": "20260802001324",
+  "minimalMigrationCount": 13,
+  "migrations": [
+    {
+      "order": 1,
+      "version": "20260730190000",
+      "filename": "20260730190000_prop_os_database_foundation.sql",
+      "sha256": "5ca0845a6f9fca338381be902675e9e8246bfc6b5925205b5c00064048b25f7f"
+    },
+    {
+      "order": 2,
+      "version": "20260730210000",
+      "filename": "20260730210000_prop_os_controlled_activation_read.sql",
+      "sha256": "055e3a0a91f86a2b9733c059d45768bc47ac51f39e319a6e4621b06f599f3f54"
+    },
+    {
+      "order": 3,
+      "version": "20260730220000",
+      "filename": "20260730220000_prop_os_internal_commands.sql",
+      "sha256": "eae741e9852c76c981a3960561a2f76178668fb951b2530d34a5f48010ded425"
+    },
+    {
+      "order": 4,
+      "version": "20260730230000",
+      "filename": "20260730230000_prop_os_command_boundary_hardening.sql",
+      "sha256": "5efa8e3e04aec573af3b4ed3b180ebf280254fce1b689f89f58c58247fc4ae96"
+    },
+    {
+      "order": 5,
+      "version": "20260730240000",
+      "filename": "20260730240000_prop_os_trade_assignment_commands.sql",
+      "sha256": "5e092feabb349246bd17438c0107a87cbbbfafe51bffd54f46ad86644b48179d"
+    },
+    {
+      "order": 6,
+      "version": "20260730250000",
+      "filename": "20260730250000_prop_os_assignment_recalc_hardening.sql",
+      "sha256": "d17eaecc0804bd9fd48b7f9d1dfe65d4c718f2ee6eb976051a4bd344e4070469"
+    },
+    {
+      "order": 7,
+      "version": "20260730260000",
+      "filename": "20260730260000_prop_os_assignment_identity_invariant.sql",
+      "sha256": "12e960caf36d32865038ee935236c8e0788b3bca90d46b7bcde02126b1fe5230"
+    },
+    {
+      "order": 8,
+      "version": "20260802212828",
+      "filename": "20260802212828_prop_pass_trading_os_persistence.sql",
+      "sha256": "9b0edf1b2eab15201c17806a93a7a0a17e026433cb1718e4011c06e3b14f2059"
+    },
+    {
+      "order": 9,
+      "version": "20260802223818",
+      "filename": "20260802223818_prop_pass_build117_persistence_hardening.sql",
+      "sha256": "d1a4037e60a18fb80c7f5c3d775788fdcde24a83d58bcda536411690c8eb19fe"
+    },
+    {
+      "order": 10,
+      "version": "20260802225538",
+      "filename": "20260802225538_prop_pass_journal_automatic_sync.sql",
+      "sha256": "f7ca73e3ba681c898ada9529674598f9190b4b2e013b815e5d14eaf0d66947fe"
+    },
+    {
+      "order": 11,
+      "version": "20260802232311",
+      "filename": "20260802232311_prop_pass_pipeline_v2_runtime.sql",
+      "sha256": "bac3bca3951bbab11848a8bcd38bd1ed272b479f20b6390ff809364f43b6ea6d"
+    },
+    {
+      "order": 12,
+      "version": "20260802233700",
+      "filename": "20260802233700_prop_pass_runtime_processing_queue.sql",
+      "sha256": "ecd79a18e68fef367a176cb08d602b237f6b4d2cf2cd5172affdf62e1fa5e09c"
+    },
+    {
+      "order": 13,
+      "version": "20260802235500",
+      "filename": "20260802235500_prop_pass_settings_recalculation_events.sql",
+      "sha256": "724672da606c1aab21bba7b5b9f2e11113b80c4ad1a52f01edfe356dca5c3e9a"
+    }
+  ],
+  "results": {
+    "baselineEquivalence": "PASS",
+    "cleanFirstApply": "PASS",
+    "duplicateApply": "PASS",
+    "interruptResume": "PASS",
+    "migration4AbsentOrEmpty": "PASS",
+    "migration4UnexpectedStop": "PASS",
+    "build116PostMigrate": "PASS",
+    "build117SqlVerticalSlice": "PASS",
+    "failureRecovery": "PASS",
+    "cleanup": "PASS",
+    "edgeProcessorDeploy": "FAIL",
+    "edgeProcessorDeployReason": "No disposable remote Supabase (branch Pro-only; free project limit; PR Agent restore blocked)"
+  }
+}

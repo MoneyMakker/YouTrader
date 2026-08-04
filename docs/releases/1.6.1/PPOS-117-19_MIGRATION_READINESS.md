@@ -1,12 +1,8 @@
 # PPOS-117-19 — Persistence / migration / RLS readiness
 
-**Status:** Staging schema + static gates READY; journal remote sync/retry PASS; runtime-state projection PASS (`prop_account_runtime_states` via real processor); **expanded production migration set identified but PRODUCTION MIGRATION READY = NO** until clean prod-baseline staging rehearsal + explicit PO auth for all 16 files  
-**Reconciled HEAD:** see latest commit on `feature/prop-pass-trading-os-build117`  
+**Status:** Staging schema + static gates READY; journal remote sync/retry PASS; runtime-state projection PASS; **minimal SQL set = 13 files** (PI excluded); clean local prod-baseline rehearsal PASS; Edge disposable deploy FAIL → see `PPOS-117_FINAL_SQL_MIGRATION_APPROVAL.md` + `PPOS-117_RUNTIME_PROCESSOR_DEPLOYMENT_APPROVAL.md`  
 **Date:** 2026-08-04  
-**Checkpoint:** see `docs/releases/1.6.1/PPOS-117_EXPANDED_PRODUCTION_MIGRATION_APPROVAL.md`  
-**Prior narrow apply:** BLOCKED — `PPOS-117_PRODUCTION_MIGRATION_RESULT.md`  
-**Runtime proof:** `npm run test:prop-pass-runtime-state-staging`  
-**Build 116 compat (live staging):** `npm run test:prop-pass-build116-compat-staging`
+**Checkpoint:** final SQL + processor packets (separate PO scopes)
 
 This note reconciles Build 117 additive persistence work. It does **not** authorize production migration apply, Edge deploy, or App Store / external TestFlight.
 
