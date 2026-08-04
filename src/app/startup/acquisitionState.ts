@@ -133,6 +133,22 @@ export function mergeExplicitAuthRequiredFlag(input: {
   return input.storageSticky || input.previous;
 }
 
+/**
+ * Clear sticky AUTH_REQUIRED only on a real login (signed-out → signed-in).
+ * Must NOT clear when logout sets the sticky while a session is still present —
+ * that bug routed Sign Out back to the acquisition paywall.
+ */
+export function shouldClearExplicitAuthRequiredOnSessionChange(input: {
+  explicitAuthRequired: boolean;
+  loggingOut: boolean;
+  previousUserId: string | null;
+  nextUserId: string | null;
+}): boolean {
+  if (!input.explicitAuthRequired) return false;
+  if (input.loggingOut) return false;
+  return !!input.nextUserId && !input.previousUserId;
+}
+
 export function acquisitionPaywallUserKey(userId: string): string {
   return `yt-acquisition-paywall-user-v1:${userId}`;
 }

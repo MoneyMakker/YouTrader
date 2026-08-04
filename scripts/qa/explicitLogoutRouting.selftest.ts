@@ -7,6 +7,7 @@ import {
   resolveAcquisitionPhase,
   resolveReleaseGateState,
   mergeExplicitAuthRequiredFlag,
+  shouldClearExplicitAuthRequiredOnSessionChange,
   type AcquisitionInput,
 } from "../../src/app/startup/acquisitionState";
 import {
@@ -135,6 +136,50 @@ function recordPhase(input: AcquisitionInput) {
     ),
     "auth",
     "lagging storage must not flash paywall after logout",
+  );
+}
+
+// Sticky must NOT clear when logout sets AUTH_REQUIRED while session still present
+{
+  assert.equal(
+    shouldClearExplicitAuthRequiredOnSessionChange({
+      explicitAuthRequired: true,
+      loggingOut: false,
+      previousUserId: "user-a",
+      nextUserId: "user-a",
+    }),
+    false,
+    "setting sticky mid-session (logout start) must not clear it",
+  );
+  assert.equal(
+    shouldClearExplicitAuthRequiredOnSessionChange({
+      explicitAuthRequired: true,
+      loggingOut: true,
+      previousUserId: "user-a",
+      nextUserId: "user-a",
+    }),
+    false,
+    "LOGGING_OUT blocks sticky clear",
+  );
+  assert.equal(
+    shouldClearExplicitAuthRequiredOnSessionChange({
+      explicitAuthRequired: true,
+      loggingOut: false,
+      previousUserId: null,
+      nextUserId: "user-b",
+    }),
+    true,
+    "login transition signed-out → signed-in clears sticky",
+  );
+  assert.equal(
+    shouldClearExplicitAuthRequiredOnSessionChange({
+      explicitAuthRequired: true,
+      loggingOut: false,
+      previousUserId: "user-a",
+      nextUserId: null,
+    }),
+    false,
+    "session cleared after logout keeps sticky",
   );
 }
 

@@ -177,6 +177,7 @@ import {
   acquisitionPaywallUserKey,
   mergeExplicitAuthRequiredFlag,
   resolveAcquisitionPhase,
+  shouldClearExplicitAuthRequiredOnSessionChange,
 } from "./startup/acquisitionState";
 import { RevenueCatIdentitySynchronizer } from "../billing/revenueCatIdentity";
 import {
@@ -10311,6 +10312,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   /** Sticky AUTH_REQUIRED after Settings → Log Out (persisted across restart). */
   const [explicitAuthRequired, setExplicitAuthRequired] = useState(false);
   const signingOutRef = useRef(false);
+  /** Tracks prior session id so sticky clears only on login, never mid-logout. */
+  const prevSessionUserIdRef = useRef<string | null>(null);
+  const loggingOutRef = useRef(false);
+  const explicitAuthRequiredRef = useRef(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<"off" | "syncing" | "synced" | "error">("off");
   const [cloudSyncMessage, setCloudSyncMessage] = useState("Sign in and upgrade to Pro to sync your journal.");
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
@@ -10399,9 +10404,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           mergeExplicitAuthRequiredFlag({
             hasSession: !!userId,
             storageSticky: authRequiredSticky,
-            previous: prev,
+            previous: prev || explicitAuthRequiredRef.current,
           }),
         );
+        if (userId) {
+          explicitAuthRequiredRef.current = false;
+        } else if (authRequiredSticky || explicitAuthRequiredRef.current) {
+          explicitAuthRequiredRef.current = true;
+        }
         setAcquisitionHydrated(true);
       } catch {
         if (!cancelled) {
@@ -10417,11 +10427,23 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [authHydrated, isPremium, session?.user?.id]);
 
   useEffect(() => {
-    if (!session?.user?.id) return;
-    if (!explicitAuthRequired) return;
+    const nextUserId = session?.user?.id ?? null;
+    const previousUserId = prevSessionUserIdRef.current;
+    prevSessionUserIdRef.current = nextUserId;
+    if (
+      !shouldClearExplicitAuthRequiredOnSessionChange({
+        explicitAuthRequired,
+        loggingOut: loggingOut || loggingOutRef.current,
+        previousUserId,
+        nextUserId,
+      })
+    ) {
+      return;
+    }
+    explicitAuthRequiredRef.current = false;
     setExplicitAuthRequired(false);
     void AsyncStorage.removeItem(ACQUISITION_AUTH_REQUIRED_KEY);
-  }, [explicitAuthRequired, session?.user?.id]);
+  }, [explicitAuthRequired, loggingOut, session?.user?.id]);
 
   useEffect(() => {
     if (isPremium) setPaywallCompleted(true);
@@ -10459,8 +10481,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     hasSession: !!session?.user,
     isPremium,
     revenueCatReady: !revenueCatConfigured || revenueCatReady,
-    loggingOut,
-    explicitAuthRequired,
+    loggingOut: loggingOut || loggingOutRef.current,
+    explicitAuthRequired: explicitAuthRequired || explicitAuthRequiredRef.current,
   });
 
   useEffect(() => {
@@ -11796,8 +11818,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     // Enter LOGGING_OUT before clearing session so acquisition cannot flash paywall.
     // Persist AUTH_REQUIRED before session→null so the acquisition hydrate effect
     // cannot race AsyncStorage and route anonymous users to the paywall.
+    // Refs are set synchronously — a "clear sticky on session" effect must not
+    // wipe AUTH_REQUIRED while logout still has an active session.
+    loggingOutRef.current = true;
+    explicitAuthRequiredRef.current = true;
     setLoggingOut(true);
     setExplicitAuthRequired(true);
+    let logoutCompleted = false;
     try {
       await AsyncStorage.setItem(ACQUISITION_AUTH_REQUIRED_KEY, "1");
     } catch {
@@ -11817,6 +11844,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         logger.error(error, { feature: "supabase", action: "sign_out" });
         Alert.alert(t("signOutFailed"), t("signOutFailedBody"));
         // Recoverable Supabase error — stay signed in; do not leave AUTH_REQUIRED sticky.
+        explicitAuthRequiredRef.current = false;
         setExplicitAuthRequired(false);
         void AsyncStorage.removeItem(ACQUISITION_AUTH_REQUIRED_KEY);
         return;
@@ -11865,7 +11893,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       setLastCloudSyncAt(null);
       setQaPropPassPayload(null);
       setTab("journal");
+      logoutCompleted = true;
     } finally {
+      if (logoutCompleted) {
+        // Keep AUTH_REQUIRED sticky/ref asserted after LOGGING_OUT ends.
+        explicitAuthRequiredRef.current = true;
+        setExplicitAuthRequired(true);
+      }
+      loggingOutRef.current = false;
       setLoggingOut(false);
       endExplicitLogoutGuard(signingOutRef);
     }
