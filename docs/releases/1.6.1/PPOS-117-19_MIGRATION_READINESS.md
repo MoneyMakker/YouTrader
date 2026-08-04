@@ -1,9 +1,10 @@
 # PPOS-117-19 — Persistence / migration / RLS readiness
 
-**Status:** Staging schema + static gates READY; journal remote sync/retry PASS; runtime projection for disposable users SKIP; production apply PENDING explicit PO authorization  
-**Reconciled HEAD:** `cbc75ac` (`feature/prop-pass-trading-os-build117`)  
+**Status:** Staging schema + static gates READY; journal remote sync/retry PASS; runtime-state projection PASS (`prop_account_runtime_states` via real processor); production apply PENDING explicit PO authorization  
+**Reconciled HEAD:** see latest commit on `feature/prop-pass-trading-os-build117`  
 **Date:** 2026-08-04  
-**Checkpoint:** see `docs/releases/1.6.1/PPOS-117_MIGRATION_APPROVAL_CHECKPOINT.md`
+**Checkpoint:** see `docs/releases/1.6.1/PPOS-117_MIGRATION_APPROVAL_CHECKPOINT.md`  
+**Runtime proof:** `npm run test:prop-pass-runtime-state-staging`
 
 This note reconciles Build 117 additive persistence work. It does **not** authorize production migration apply, Edge deploy, or App Store / external TestFlight.
 

@@ -1,6 +1,6 @@
 # PPOS-117 — Final staging migration readiness checkpoint
 
-**Reconciled HEAD:** `cbc75ac` (`feature/prop-pass-trading-os-build117`)  
+**Reconciled HEAD:** _(see git after this commit)_  
 **Date:** 2026-08-04  
 **Production project ref:** `izzrlsgumyabdvlmwlwn`  
 **Staging project ref:** `zleojeqkzizeyerhjpur`  
@@ -20,61 +20,85 @@ production apply, Edge deploy, archive creation, TestFlight upload, or Build 118
 | `20260802233700_prop_pass_runtime_processing_queue.sql` | `ecd79a18e68fef367a176cb08d602b237f6b4d2cf2cd5172affdf62e1fa5e09c` |
 | `20260802235500_prop_pass_settings_recalculation_events.sql` | `724672da606c1aab21bba7b5b9f2e11113b80c4ad1a52f01edfe356dca5c3e9a` |
 
-Primary journal sync migration for this checkpoint:  
+Primary journal sync migration:  
 `20260802225538_prop_pass_journal_automatic_sync.sql`  
-SHA-256: `f7ca73e3ba681c898ada9529674598f9190b4b2e013b815e5d14eaf0d66947fe`
+SHA-256: `f7ca73e3ba681c898ada9529674598f9190b4b2e013b815e5d14eaf0d66947fe`  
+**(unchanged)**
+
+## Exact previous SKIP cause
+
+**Classification:** disposable account missing required rule configuration.
+
+The Journal staging harness intentionally omitted `prop_challenge_rule_snapshots`
+so disposable cleanup would not hit `ON DELETE RESTRICT`. The real Edge
+processor `loadBundle()` **requires** that snapshot (`rules_read_failed:not_found`
+otherwise), so events could be claimed/failed but **`prop_account_runtime_states`
+was never written**. Processor HTTP 200 with applied work was therefore not
+sufficient without the rule fixture.
+
+## Fixture requirements (verified repo shape)
+
+- disposable owner + second user;
+- Prop Pass account (`apex-demo` / America/Chicago);
+- Challenge (`evaluation`) **and** Live (`funded`) contexts;
+- immutable `prop_challenge_rule_snapshots` using the verified slice shape
+  (`profitTargetMinor`, `dailyLossLimitMinor`, static `drawdown.amountMinor`, …);
+- immutable Daily Plan snapshot where required;
+- assigned Journal trade (`LONG` / MES) with material revision bump;
+- Live risk settings for the funded account.
+
+## Processor / runtime evidence
+
+Rerun command:
+
+```bash
+npm run test:prop-pass-runtime-state-staging
+```
+
+Sanitized evidence:
+
+- `docs/releases/1.6.1/evidence/RUNTIME_STATE_STAGING_LATEST.json`
+
+| Check | Result |
+|---|---|
+| Processor execution | PASS |
+| Event consumed exactly once | PASS |
+| Runtime-state write | PASS |
+| Runtime save projection | PASS |
+| Runtime edit projection | PASS |
+| Runtime delete projection | PASS |
+| Hard risk rooms | PASS |
+| Risk Meter projection | PASS |
+| Challenge lifecycle projection | PASS |
+| Live lifecycle projection | PASS |
+| Session Cockpit persisted read (owner JWT select) | PASS |
+| Network retry / empty re-claim | PASS |
+| Duplicate delivery no digest drift | PASS |
+| Reload convergence | PASS |
+| Cross-user runtime denial | PASS |
+| Direct client write denial | PASS |
+| Staging cleanup (mutable + scrubbed identities) | PASS |
 
 ## Additive / destructive assessment
 
 - Additive-only Build 117 Prop Pass persistence set: **YES**
-- Destructive `DROP TABLE` / `TRUNCATE` / `DELETE FROM` / column drops in `202608022*` Prop Pass set: **NONE found**
-- Indexes / unique idempotency keys / owner RLS / processor grant denials: asserted by `npm run test:prop-pass-persistence-schema` → **PASS**
+- Destructive `DROP TABLE` / `TRUNCATE` / `DELETE FROM` / column drops in `202608022*` Prop Pass set: **NO**
+- Indexes / unique idempotency / owner RLS / processor grant denials: `npm run test:prop-pass-persistence-schema` → **PASS**
 
-## Gate results
+## Rollback plan
 
-| Gate | Result |
-|---|---|
-| Capital Preservation persisted evidence | PASS (`aeb1fd0` + cockpit wiring `cbc75ac`) |
-| Journal remote staging save/edit/delete | PASS |
-| Remote network retry / duplicate delivery | PASS |
-| Reload convergence | PASS |
-| Cross-user denial | PASS |
-| Multi-account isolation | PASS |
-| Staging cleanup (mutable + scrubbed identities) | PASS |
-| Challenge lifecycle | PASS |
-| Live lifecycle | PASS |
-| Session Cockpit real pipeline + insufficient evidence UI | PASS |
-| Logout → auth chooser (never paywall) | PASS |
-| Trading-day / timezone engine | PASS |
-| Staging RLS (owner isolation / direct write denial / token read denial) | PASS |
-| Old-user compatibility | PASS (additive schema; no rewrite of existing journal columns beyond nullable-safe `prop_pass_revision` default) |
-| Hard risk rooms / Risk Meter / Challenge-Live runtime projection on disposable staging users | **SKIP** (processor returned 200; no `prop_account_runtime_states` row for disposable non-allowlisted users) |
+Documented in `PPOS-117-19_MIGRATION_READINESS.md` — kill-switch first, prefer
+forward-fix, staging reverse-drop order for non-production only.
+**READY** (document only; do not execute without PO).
 
-Sanitized journal evidence:  
-`docs/releases/1.6.1/evidence/JOURNAL_STAGING_TRANSACTION_LATEST.json`
+## Synthetic production QA / cleanup
 
-## Rollback plan (document only)
-
-1. Client/edge kill-switch first; stop processors.
-2. Prefer forward-fix migrations over DROP on production.
-3. Staging reverse-drop order documented in `PPOS-117-19_MIGRATION_READINESS.md`.
-4. Never delete real user journal rows or append-only Prop OS history as cleanup.
-
-## Synthetic production QA / cleanup plan (do not execute without PO)
-
-1. Disposable synthetic users only; refuse non-staging hosts in scripts.
-2. Prove save/edit/delete + retry + RLS on staging clone of final SQL.
-3. Scrub disposable identities; accept append-only residuals under scrubbed users.
-4. Confirm 0 active disposable emails, 0 mutable synthetic trades/events/assignments.
-5. Production apply only after PO; then synthetic QA on production only if PO authorizes a separate window.
-
-## Remaining blocker before READY = YES
-
-Remote staging must prove `prop_account_runtime_states` (hard rooms / risk meter /
-challenge-live projection) for the Journal sync path, not only execution/event
-idempotency. Until that projection is PASS on staging, production apply stays blocked.
+1. Disposable users only; refuse non-staging hosts.
+2. Include rule snapshots; scrub auth identities when append-only residuals block delete.
+3. Confirm 0 active disposable emails, 0 mutable trades/events/assignments/runtime rows.
+4. Production apply only after explicit PO approval.
 
 ---
 
-PRODUCTION MIGRATION READY: NO  
+PRODUCTION MIGRATION READY: YES  
 EXPLICIT PO APPROVAL REQUIRED: YES
