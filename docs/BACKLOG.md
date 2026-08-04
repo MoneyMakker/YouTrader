@@ -560,16 +560,18 @@ mutate real state; persisted user data is owner-isolated by RLS; and build 117
 alone carries this scope. Each child task follows the one-task workflow and
 contributes focused tests and documentation before its successor starts.
 
-**Implementation note (2026-08-02):** PPOS-117-01 through PPOS-117-12 and
+**Implementation note (2026-08-03):** PPOS-117-01 through PPOS-117-12 and
 PPOS-117-14 through PPOS-117-17 have focused commits and deterministic QA.
 PPOS-117-13 remains open for persisted product wiring. PPOS-117-18 has
-context-correct funded Live presentation work underway. PPOS-117-19 includes
-an additive, staging-verified migration; its transaction RLS proof creates and
-rolls back only synthetic users/rows. Production deployment remains pending.
-PPOS-117-20 has the consolidated deterministic gate but remains open until
-persistence wiring and final regression verification complete.
+Session Cockpit, Live Settings, Session Lock, and Multi-Account Command Center
+presentation/i18n in source; remaining production UI polish and device review
+stay open. PPOS-117-19 includes an additive, staging-verified migration; its
+transaction RLS proof creates and rolls back only synthetic users/rows.
+Production deployment remains pending. PPOS-117-20 has the consolidated
+deterministic gate but remains open until persistence wiring and final
+regression verification complete.
 
-**Build 117 execution reconciliation (2026-08-03, HEAD `ca50db0`):**
+**Build 117 execution reconciliation (2026-08-03, HEAD `c3ee6ca`):**
 
 1. Real persistence adapters — DONE in source; production deployment remains under item 22.
 2. Unified calculation pipeline verification — DONE (`build117.pipeline.v2`).
@@ -579,8 +581,8 @@ persistence wiring and final regression verification complete.
 6. Versioned instrument registry — DONE.
 7. Journal ↔ Prop Pass automatic synchronization — DONE in source and deterministic tests; remote release proof remains pending.
 8. Complete Challenge lifecycle integration — DONE in domain/runtime tests; final device proof remains pending.
-9. Session Cockpit — IN PROGRESS; persisted primary cockpit exists and final device/accessibility review remains.
-10. Full production UI — IN PROGRESS.
+9. Session Cockpit — DONE in source (persisted cockpit, i18n, QA in `test:prop-pass-trading-os`); final device/accessibility review remains under item 24.
+10. Full production UI — IN PROGRESS; Session Cockpit, Live Settings, Session Lock, and Multi-Account Command Center presentation/i18n are in source; remaining polish and device review remain.
 11. Challenge Autopilot Setup — DONE (wizard + QA included in `test:prop-pass-trading-os`).
 12. Multi-Account Command Center — DONE; persisted summaries, filters, and default-account switching from command cards are implemented in source.
 13. Breach Replay — DONE in deterministic domain output; production interaction QA remains.
@@ -588,7 +590,7 @@ persistence wiring and final regression verification complete.
 15. Rules Compliance Score — DONE in deterministic domain output; production interaction QA remains.
 16. Account Survival Forecast — DONE as static capacity, never probability; production interaction QA remains.
 17. Payout Planner — DONE in deterministic domain output; production interaction QA remains.
-18. Session Lock review workflow — IN PROGRESS; server-confirmed reason and bounded review expiry are implemented.
+18. Session Lock review workflow — DONE in source (server-confirmed reason, bounded review expiry, i18n, QA via session-cockpit gate); production interaction QA remains under item 24.
 19. Explainable calculations — DONE in pipeline trace and cockpit detail routes.
 20. Property/invariant tests — DONE in source (29 invariants, 13,000 generated assertions).
 21. Final persistence schema and RLS — IN PROGRESS; staging migration/RLS evidence exists, final reconciliation remains.
