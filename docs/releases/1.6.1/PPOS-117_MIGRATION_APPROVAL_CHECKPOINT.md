@@ -1,6 +1,6 @@
 # PPOS-117 — Final staging migration readiness checkpoint
 
-**Reconciled HEAD:** _(see git after this commit)_  
+**Reconciled HEAD:**  ()  
 **Date:** 2026-08-04  
 **Production project ref:** `izzrlsgumyabdvlmwlwn`  
 **Staging project ref:** `zleojeqkzizeyerhjpur`  
