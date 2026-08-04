@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-04  
 **Branch:** `feature/prop-pass-trading-os-build117`  
-**Document HEAD at authoring:** `8c838e0` (pre-commit baseline; commit that lands this file is the approval HEAD)  
+**Document HEAD:** `477706a` (`feature/prop-pass-trading-os-build117`)  
+**Pre-checkpoint baseline:** `8c838e0` (legitimate ancestor)  
 **Production project ref:** `izzrlsgumyabdvlmwlwn`  
 **Staging project ref:** `zleojeqkzizeyerhjpur`  
 **Production modifications:** NONE  
