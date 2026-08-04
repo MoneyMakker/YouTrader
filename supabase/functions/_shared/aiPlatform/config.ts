@@ -7,16 +7,38 @@ function env(name: string) {
   return Deno.env.get(name)?.trim() || "";
 }
 
+const DANGEROUS_MERGE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Iterative deep merge — skips prototype-polluting keys; no recursive assign. */
 function deepMerge<T extends Record<string, unknown>>(base: T, override: Partial<T>): T {
-  const out = { ...base };
-  for (const [key, value] of Object.entries(override)) {
-    if (value && typeof value === "object" && !Array.isArray(value) && typeof base[key] === "object") {
-      out[key as keyof T] = deepMerge(base[key] as Record<string, unknown>, value as Record<string, unknown>) as T[keyof T];
-    } else if (value !== undefined) {
-      out[key as keyof T] = value as T[keyof T];
+  const root = { ...base } as Record<string, unknown>;
+  const stack: Array<{
+    target: Record<string, unknown>;
+    source: Record<string, unknown>;
+  }> = [{ target: root, source: override as Record<string, unknown> }];
+
+  while (stack.length) {
+    const frame = stack.pop();
+    if (!frame) break;
+    for (const key of Object.keys(frame.source)) {
+      if (DANGEROUS_MERGE_KEYS.has(key)) continue;
+      const nextValue = frame.source[key];
+      const currentValue = frame.target[key];
+      if (isPlainObject(nextValue) && isPlainObject(currentValue)) {
+        const nested = { ...currentValue };
+        frame.target[key] = nested;
+        stack.push({ target: nested, source: nextValue });
+      } else if (nextValue !== undefined) {
+        frame.target[key] = nextValue;
+      }
     }
   }
-  return out;
+
+  return root as T;
 }
 
 export function loadPlatformConfig(): PlatformConfig {
