@@ -3,8 +3,10 @@
  */
 
 import type { Trade } from "../app/types";
+import type { StatsTimeRange } from "../analytics/timeRange";
 
-export type StatsPeriodId = "1D" | "7D" | "1M" | "YTD" | "1Y" | "ALL";
+/** @deprecated Prefer StatsTimeRange — kept as alias for Stats dashboard props. */
+export type StatsPeriodId = StatsTimeRange;
 
 export type StatsEdgeLeak = {
   title: string;
@@ -140,13 +142,6 @@ export function formatStatsRatio(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   if (!Number.isFinite(value) || value > 99) return "∞";
   return value.toFixed(2);
-}
-
-export function performanceStateLabel(pnl: number, tradeCount: number): string {
-  if (tradeCount <= 0) return "No trades yet";
-  if (pnl > 0) return "Performance improving";
-  if (pnl < 0) return "Protect the next session";
-  return "Flat period";
 }
 
 export function deriveRecentTrend(trades: Trade[]): {

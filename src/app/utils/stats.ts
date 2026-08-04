@@ -108,7 +108,11 @@ export function primarySetupLabel(trade: Trade) {
 
 export function buildDailySeries(trades: Trade[]) {
   const map: Record<string, number> = {};
-  trades.forEach((t) => { map[t.date] = (map[t.date] || 0) + t.pnl; });
+  trades.forEach((t) => {
+    const day = String(t.date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+    map[day] = (map[day] || 0) + t.pnl;
+  });
   return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).map(([label, value]) => ({ label, value }));
 }
 

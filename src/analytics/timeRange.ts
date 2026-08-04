@@ -1,15 +1,24 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { todayISO } from "../app/utils/dates";
 
-export type StatsTimeRange = "1D" | "7D" | "1M" | "YTD" | "1Y" | "ALL";
+export type StatsTimeRange = "1D" | "7D" | "2W" | "1M" | "YTD" | "1Y" | "ALL";
 
-export const STATS_TIME_RANGES: readonly StatsTimeRange[] = ["1D", "7D", "1M", "YTD", "1Y", "ALL"];
+/** Canonical period order for the Stats selector (UI labels match these ids except a11y). */
+export const STATS_TIME_RANGES: readonly StatsTimeRange[] = ["1D", "7D", "2W", "1M", "YTD", "1Y", "ALL"];
 
 export const DEFAULT_STATS_TIME_RANGE: StatsTimeRange = "1M";
 
 const STORAGE_KEY = "stats-time-range-v1";
 
 export type TradeDateLike = { date: string };
+
+/** Normalize journal trade dates to YYYY-MM-DD for inclusive range compares. */
+export function normalizeTradeDateISO(value: string | undefined | null): string {
+  const raw = String(value || "").trim();
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(raw);
+  return match ? match[1] : "";
+}
 
 function parseISODate(iso: string): Date {
   const [year, month, day] = iso.split("-").map(Number);
@@ -29,15 +38,21 @@ function addCalendarDays(iso: string, days: number): string {
   return formatISODate(date);
 }
 
-export function statsAnchorDateISO(reference = new Date()): string {
-  return formatISODate(reference);
+/**
+ * Stats period anchor = same trading-day boundary as Journal (`todayISO` / America/New_York).
+ * Optional `reference` overrides for tests (local calendar components).
+ */
+export function statsAnchorDateISO(reference?: Date): string {
+  if (reference) return formatISODate(reference);
+  return todayISO();
 }
 
-/** Inclusive rolling/calendar window ending on anchorDate (local calendar dates). */
+/** Inclusive rolling/calendar window ending on anchorDate (trading-day calendar dates). */
 export function resolveTimeRangeStart(range: StatsTimeRange, anchorDateISO: string): string | null {
   if (range === "ALL") return null;
   if (range === "1D") return anchorDateISO;
   if (range === "7D") return addCalendarDays(anchorDateISO, -6);
+  if (range === "2W") return addCalendarDays(anchorDateISO, -13);
   if (range === "1M") return addCalendarDays(anchorDateISO, -29);
   if (range === "1Y") return addCalendarDays(anchorDateISO, -364);
   if (range === "YTD") return `${parseISODate(anchorDateISO).getFullYear()}-01-01`;
@@ -49,18 +64,29 @@ export function filterTradesByTimeRange<T extends TradeDateLike>(
   range: StatsTimeRange,
   anchorDateISO: string = statsAnchorDateISO(),
 ): T[] {
+  const anchor = normalizeTradeDateISO(anchorDateISO) || statsAnchorDateISO();
   if (range === "ALL") return trades;
-  if (range === "1D") return trades.filter((trade) => trade.date === anchorDateISO);
-  const start = resolveTimeRangeStart(range, anchorDateISO);
+  if (range === "1D") {
+    return trades.filter((trade) => normalizeTradeDateISO(trade.date) === anchor);
+  }
+  const start = resolveTimeRangeStart(range, anchor);
   if (!start) return trades;
-  return trades.filter((trade) => trade.date >= start && trade.date <= anchorDateISO);
+  return trades.filter((trade) => {
+    const day = normalizeTradeDateISO(trade.date);
+    if (!day) return false;
+    return day >= start && day <= anchor;
+  });
 }
 
 export function statsTimeRangeToLegacyPeriod(range: StatsTimeRange): "day" | "week" | "month" | "year" {
   if (range === "1D") return "day";
-  if (range === "7D") return "week";
+  if (range === "7D" || range === "2W") return "week";
   if (range === "1M") return "month";
   return "year";
+}
+
+export function isStatsTimeRange(value: string | null | undefined): value is StatsTimeRange {
+  return Boolean(value && (STATS_TIME_RANGES as readonly string[]).includes(value));
 }
 
 type StatsTimeRangeContextValue = {
@@ -78,8 +104,8 @@ export function StatsTimeRangeProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((value) => {
-        if (value && (STATS_TIME_RANGES as readonly string[]).includes(value)) {
-          setRangeState(value as StatsTimeRange);
+        if (isStatsTimeRange(value)) {
+          setRangeState(value);
         }
       })
       .catch(() => {});
