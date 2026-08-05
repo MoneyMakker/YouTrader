@@ -174,7 +174,7 @@ for (const provider of ["email", "apple", "google"] as const) {
   assert.equal(cache.get(userCacheKey(userA, "entitlement")), "weekly");
 }
 
-// Authenticated without entitlement → four-tab main (paywall from Settings)
+// Authenticated without entitlement → Paywall (account-first; never Main)
 assert.equal(
   resolveAcquisitionPhase({
     hydrated: true,
@@ -185,7 +185,7 @@ assert.equal(
     isPremium: false,
     revenueCatReady: true,
   }),
-  "main",
+  "paywall",
 );
 
 console.log("identityLinkContract selftest AUTH LINK CONTRACT PASS (LIVE PROVIDER E2E NOT RUN)");

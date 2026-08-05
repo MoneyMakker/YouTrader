@@ -165,6 +165,7 @@ assert.equal(
   "main",
 );
 
+// Unauthenticated + inactive → Auth (never Paywall before login)
 assert.equal(
   resolveAcquisitionPhase({
     hydrated: true,
@@ -175,9 +176,10 @@ assert.equal(
     isPremium: false,
     revenueCatReady: true,
   }),
-  "paywall",
+  "auth",
 );
 
+// Authenticated + inactive CustomerInfo → Paywall
 assert.equal(
   resolveAcquisitionPhase({
     hydrated: true,
@@ -188,12 +190,16 @@ assert.equal(
     isPremium: false,
     revenueCatReady: true,
   }),
-  "main",
+  "paywall",
 );
 
 // No free / guest strings in acquisition + settings sources
 const acq = fs.readFileSync(path.join(root, "src/app/startup/acquisitionState.ts"), "utf8");
-assert.ok(acq.includes("Anonymous users never enter the tab shell") || acq.includes("no guest") || acq.includes("four-tab"));
+assert.ok(
+  acq.includes("Never: Paywall before Auth") ||
+    acq.includes("never paywall") ||
+    acq.includes("account-first"),
+);
 assert.ok(!new RegExp("Continue without an " + "account", "i").test(acq));
 
 console.log("customerInfoContract selftest CONTRACT PASS (LIVE REVENUECAT NOT RUN)");
