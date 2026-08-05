@@ -11,7 +11,14 @@ export type PostPurchaseAuthPhase =
   | "linking_revenuecat"
   | "migrating_local_data"
   | "verifying_entitlement"
+  | "success"
   | "error_recoverable";
+
+export type AnonymousEntitlementStatus =
+  | "loading"
+  | "active"
+  | "inactive"
+  | "unknown";
 
 export type PostPurchaseState = {
   phase: PostPurchaseAuthPhase;
@@ -26,3 +33,6 @@ export const INITIAL_POST_PURCHASE_STATE: PostPurchaseState = {
   errorMessage: null,
   attemptGeneration: 0,
 };
+
+/** Persisted marker so relaunch can restore the post-purchase auth screen. */
+export const POST_PURCHASE_LINKING_MARKER_KEY = "yt-post-purchase-linking-marker-v1";

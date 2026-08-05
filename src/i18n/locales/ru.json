@@ -869,6 +869,8 @@
   "postPurchase.heading": "Your Pro Access Is Ready",
   "postPurchase.legalPrefix": "By continuing, you agree to our",
   "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
+
+  "postPurchase.successHeading": "You're All Set",
   "proActiveBody": "Все premium analytics, инструменты разбора, news, calendar, import и export открыты.",
   "proActiveTitle": "Подписка Pro активна",
   "productOnboardingBody": "YouTrader помогает улучшаться каждый торговый день — с чистого журнала, разбора и дисциплины.",

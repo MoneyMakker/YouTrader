@@ -869,6 +869,8 @@
   "postPurchase.heading": "Your Pro Access Is Ready",
   "postPurchase.legalPrefix": "By continuing, you agree to our",
   "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
+
+  "postPurchase.successHeading": "You're All Set",
   "proActiveBody": "All premium analytics, review tools, news, calendar, import, and export features are unlocked.",
   "proActiveTitle": "Tu suscripción Pro está activa",
   "productOnboardingBody": "YouTrader te ayuda a mejorar cada día de trading — con diario, revisión y disciplina.",

@@ -112,8 +112,9 @@ import Svg, {
 } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
 import { AuthScreen } from "../auth/AuthScreen";
-import { PostPurchaseAuthBridge } from "../postPurchase/PostPurchaseAuthBridge";
+import { PostPurchaseAuthContainer } from "../postPurchase/PostPurchaseAuthContainer";
 import { migrateGuestTradesToUser } from "../postPurchase/AnonymousDataMigrationService";
+import { POST_PURCHASE_LINKING_MARKER_KEY } from "../postPurchase/types";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "../auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "../auth/userCache";
 import { classifyBootstrapSession, shouldPurgeCachedSession } from "../auth/accountDeletionFlow";
@@ -10346,9 +10347,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [pushCalendarEvents, setPushCalendarEvents] = useState<EconEvent[]>([]);
   const [shareExportHostReady, setShareExportHostReady] = useState(false);
   const purchasesConfigured = useRef(false);
-  const [postPurchaseAuthPending, setPostPurchaseAuthPending] = useState(false);
+  const [anonymousEntitlementStatus, setAnonymousEntitlementStatus] = useState<"loading" | "active" | "inactive" | "unknown">("unknown");
   const anonymousCustomerInfoRef = useRef<CustomerInfo | null>(null);
-  const anonymousPurchaseRef = useRef(false);
+  const anonymousEntitlementHydratedRef = useRef(false);
   const cloudSyncInFlight = useRef(false);
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -10499,19 +10500,20 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
 
   const appReady = tradesHydrated && authHydrated;
+  const anonymousEntitlementActive = anonymousEntitlementStatus === "active";
   const acquisitionPhase = resolveAcquisitionPhase({
     hydrated: appReady && acquisitionHydrated,
     onboardingCompleted,
     paywallCompleted,
     authRequired,
     hasSession: !!session?.user,
-    isPremium: isPremium || postPurchaseAuthPending,
+    isPremium,
     revenueCatReady: !revenueCatConfigured || revenueCatReady,
     identitySyncPending: !!session?.user?.id && identitySyncPending,
     identitySyncFailed: !!session?.user?.id && identitySyncFailed,
     loggingOut: loggingOut || loggingOutRef.current,
     explicitAuthRequired: explicitAuthRequired || explicitAuthRequiredRef.current,
-    postPurchaseAuthPending,
+    anonymousEntitlementActive,
   });
 
   useEffect(() => {
@@ -10929,6 +10931,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           // Track anonymous CustomerInfo for post-purchase entitlement detection.
           if (!sessionRef.current?.user?.id) {
             anonymousCustomerInfoRef.current = info;
+            const hasActivePro = customerHasPro(info);
+            setAnonymousEntitlementStatus(hasActivePro ? "active" : "inactive");
+            if (!hasActivePro) {
+              // Clear stale linking marker if entitlement is no longer active.
+              void AsyncStorage.removeItem(POST_PURCHASE_LINKING_MARKER_KEY);
+            }
             return;
           }
           applyCustomerInfo(info, "customerInfoUpdateListener");
@@ -11047,26 +11055,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       cancelled = true;
     };
   }, [applyCustomerInfo, revenueCatReady, session?.user.id]);
-
-  // Post-purchase linking detection: when a session appears after anonymous
-  // purchase and identity sync confirms Pro, clear the pending flag to enter Main.
-  useEffect(() => {
-    if (!postPurchaseAuthPending || !session?.user?.id) return;
-    if (identitySyncPending) return; // still syncing — will re-evaluate
-    if (identitySyncFailed) {
-      // Sync failed — user sees Auth; flag stays until successful linking.
-      return;
-    }
-    if (proAccess.isPro) {
-      // Entitlement confirmed — link complete, enter Main.
-      void (async () => {
-        await migrateGuestTradesToUser(session!.user.id);
-        setPostPurchaseAuthPending(false);
-        anonymousPurchaseRef.current = false;
-        anonymousCustomerInfoRef.current = null;
-      })();
-    }
-  }, [postPurchaseAuthPending, session?.user?.id, identitySyncPending, identitySyncFailed, proAccess.isPro]);
 
   const refreshLockScreenBufferReminder = useCallback(async () => {
     const [enabledRaw, templateKeyRaw, modeRaw] = await Promise.all([
@@ -11852,37 +11840,57 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     }
   }, [authConfigured]);
 
-  // Post-purchase auth: thin wrappers that don't show destructive alerts.
-  // Errors bubble to PostPurchaseAuthBridge for inline display.
-  const handlePostPurchaseApple = useCallback(async () => {
-    if (!supabase || !authConfigured || !enableNativeAppleSignIn) {
-      throw new Error("Apple Sign-In is not available.");
-    }
+  // Post-purchase auth: async wrappers that return { userId } | null after
+  // the supabase auth listener confirms the new session.
+
+  /** Wait up to 15s for a new Supabase session after Apple/Google sign-in. */
+  const waitForNextSession = useCallback((client: typeof supabase): Promise<string | null> => {
+    return new Promise<string | null>((resolve) => {
+      // If session already exists (sync sign-in), resolve immediately.
+      client.auth.getSession().then(({ data }) => {
+        if (data.session?.user?.id) { resolve(data.session.user.id); return; }
+      });
+      const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
+        if (nextSession?.user?.id) {
+          data.subscription.unsubscribe();
+          resolve(nextSession.user.id);
+        }
+      });
+      setTimeout(() => {
+        data.subscription.unsubscribe();
+        resolve(null);
+      }, 15000);
+    });
+  }, []);
+
+  const handlePostPurchaseAuthenticate = useCallback(async (provider: AuthProvider): Promise<{ userId: string } | null> => {
+    if (!supabase || !authConfigured) throw new Error("Sign-in is not available.");
     setAuthBusy(true);
     try {
-      const credential = await signInWithAppleNative(supabase);
-      if (credential.fullName?.givenName || credential.fullName?.familyName) {
-        const fullName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(" ");
-        await supabase.auth.updateUser({ data: { full_name: fullName, given_name: credential.fullName.givenName, family_name: credential.fullName.familyName } });
+      if (provider === "apple") {
+        if (!enableNativeAppleSignIn) throw new Error("Apple Sign-In is not available.");
+        const credential = await signInWithAppleNative(supabase);
+        if (credential.fullName?.givenName || credential.fullName?.familyName) {
+          const fullName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(" ");
+          await supabase.auth.updateUser({ data: { full_name: fullName, given_name: credential.fullName.givenName, family_name: credential.fullName.familyName } });
+        }
+        beginAppleLifecycleAttempt();
+        void storeAppleAuthTokenAfterSignIn(credential.authorizationCode);
+      } else if (provider === "google") {
+        await signInWithGoogle(supabase);
+      } else {
+        throw new Error(`Unsupported provider: ${provider}`);
       }
-      beginAppleLifecycleAttempt();
-      void storeAppleAuthTokenAfterSignIn(credential.authorizationCode);
+      // Wait for the session to appear via onAuthStateChange.
+      const userId = await waitForNextSession(supabase);
+      if (!userId) throw new Error("Sign-in did not complete. Please try again.");
+      return { userId };
     } finally {
       setAuthBusy(false);
     }
   }, [authConfigured]);
 
-  const handlePostPurchaseGoogle = useCallback(async () => {
-    if (!supabase || !authConfigured) throw new Error("Google Sign-In is not available.");
-    setAuthBusy(true);
-    try {
-      await signInWithGoogle(supabase);
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [authConfigured]);
-
-  const handlePostPurchaseEmail = useCallback(async (email: string, password: string) => {
+  const handlePostPurchaseEmail = useCallback(async (email: string, password: string): Promise<{ userId: string } | null> => {
     if (!supabase || !authConfigured) throw new Error("Email sign-in is not configured.");
     const limit = await checkClientRateLimit("auth", "email");
     if (!limit.allowed) throw new Error(SECURITY_MESSAGES.rateLimited);
@@ -11892,11 +11900,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       if (!data.user?.id) throw new Error("Sign-in failed. Please check your credentials.");
       setSession(data.session);
       setAuthHydrated(true);
-      setAuthBusy(false);
       trackEvent("login_completed", { provider: "email" });
-    } catch (e: any) {
+      return { userId: data.user.id };
+    } finally {
       setAuthBusy(false);
-      throw e;
     }
   }, [authConfigured]);
 
@@ -12126,10 +12133,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     }
 
     // Anonymous purchase: no session yet, but CustomerInfo confirms Pro entitlement.
+    // Persist a lightweight marker for relaunch recovery.
     if (!session?.user?.id && customerHasPro(result.customerInfo)) {
-      anonymousPurchaseRef.current = true;
       anonymousCustomerInfoRef.current = result.customerInfo;
-      setPostPurchaseAuthPending(true);
+      void AsyncStorage.setItem(POST_PURCHASE_LINKING_MARKER_KEY, "1");
+      setAnonymousEntitlementStatus("active");
       logger.info("post_purchase_auth pending", { feature: "revenuecat", action: "anonymous_purchase" });
       trackEvent("pro_purchased", { reason });
       successHaptic();
@@ -12550,14 +12558,18 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   if (acquisitionPhase === "post_purchase_auth") {
     return (
-      <View style={styles.app} testID="post-purchase-auth-root">
-        <StatusBar style="light" backgroundColor="#080A0E" />
-        <PostPurchaseAuthBridge
-          onSignInWithApple={handlePostPurchaseApple}
-          onSignInWithGoogle={handlePostPurchaseGoogle}
-          onSignInWithEmail={handlePostPurchaseEmail}
-        />
-      </View>
+      <PostPurchaseAuthContainer
+        anonymousCustomerInfo={anonymousCustomerInfoRef.current}
+        onAuthenticate={handlePostPurchaseAuthenticate}
+        onAuthenticateEmail={handlePostPurchaseEmail}
+        onLinkingComplete={(result) => {
+          void AsyncStorage.removeItem(POST_PURCHASE_LINKING_MARKER_KEY);
+          applyCustomerInfo(result.customerInfo, "post-purchase-linking");
+          setAnonymousEntitlementStatus("inactive");
+          anonymousCustomerInfoRef.current = null;
+          // Coordinator handled migration; acquisition now routes to main (session + Pro).
+        }}
+      />
     );
   }
 

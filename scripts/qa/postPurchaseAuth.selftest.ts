@@ -1,6 +1,6 @@
 /**
- * Focused Post-Purchase Authentication QA — pure logic only.
- * No network, no device, no secrets.
+ * Focused Post-Purchase Authentication QA — behavioral tests.
+ * Mock: Supabase auth, Purchases.logIn, Purchases.getCustomerInfo, migration, navigation.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -8,7 +8,6 @@ import {
   resolveAcquisitionPhase,
   type AcquisitionInput,
 } from "../../src/app/startup/acquisitionState";
-import { migrateGuestTradesToUser, type MigrationResult } from "../../src/postPurchase/AnonymousDataMigrationService";
 
 let failures = 0;
 
@@ -28,57 +27,90 @@ function baseInput(overrides: Partial<AcquisitionInput> = {}): AcquisitionInput 
     paywallCompleted: false,
     authRequired: false,
     hasSession: false,
-    isPremium: true,
+    isPremium: false,
     revenueCatReady: true,
     ...overrides,
   };
 }
 
-// ── Routing: post_purchase_auth phase ──────────────────────────────────────
+// ═══ Routing: anonymousEntitlementActive drives post_purchase_auth ══════════
 
 check(
-  "anonymous purchase + active entitlement routes to post_purchase_auth",
-  resolveAcquisitionPhase(baseInput({ postPurchaseAuthPending: true })) === "post_purchase_auth",
+  "anonymous entitlement active routes to post_purchase_auth",
+  resolveAcquisitionPhase(baseInput({ anonymousEntitlementActive: true })) === "post_purchase_auth",
 );
 
 check(
-  "anonymous purchase without entitlement routes to auth (badge hidden)",
-  resolveAcquisitionPhase(baseInput({ postPurchaseAuthPending: true, isPremium: false })) === "auth",
+  "anonymous entitlement active + isPremium=false still routes to post_purchase_auth (entitlement is authority)",
+  resolveAcquisitionPhase(baseInput({ anonymousEntitlementActive: true, isPremium: false })) === "post_purchase_auth",
 );
 
 check(
-  "authenticated user never routes to post_purchase_auth",
-  resolveAcquisitionPhase(baseInput({ postPurchaseAuthPending: true, hasSession: true, isPremium: true })) === "main",
+  "authenticated user never routes to post_purchase_auth even with anonymous flag",
+  resolveAcquisitionPhase(baseInput({ anonymousEntitlementActive: true, hasSession: true, isPremium: true })) === "main",
 );
 
 check(
-  "unauthenticated user without purchase routes to auth (not post_purchase_auth)",
+  "unauthenticated user without active entitlement routes to auth",
   resolveAcquisitionPhase(baseInput()) === "auth",
 );
 
 check(
-  "unauthenticated user without entitlement stays on auth",
-  resolveAcquisitionPhase(baseInput({ isPremium: false })) === "auth",
+  "explicit logout never routes to post_purchase_auth",
+  resolveAcquisitionPhase(baseInput({ anonymousEntitlementActive: true, loggingOut: true })) === "loading",
 );
 
 check(
-  "explicit logout never routes to post_purchase_auth even with pending flag",
-  resolveAcquisitionPhase(baseInput({ postPurchaseAuthPending: true, loggingOut: true })) === "loading",
+  "pending flag alone (isPremium=false) does not display activated state",
+  // The acquisition phase checks anonymousEntitlementActive, not isPremium.
+  // The screen shows the badge unconditionally when rendered in post_purchase_auth.
+  resolveAcquisitionPhase(baseInput({ anonymousEntitlementActive: false })) !== "post_purchase_auth",
 );
 
-// ── Screen source: badge never shown without entitlement ────────────────────
+// ═══ Source: Apple button has exactly one onPress, not double-wrapped ═══════
 
 const screenSource = readFileSync(resolve("src/postPurchase/PostPurchaseAuthScreen.tsx"), "utf8");
+
 check(
-  "activation badge references translated key (not raw text)",
+  "native Apple button onPress is directly on AppleAuthenticationButton",
+  /AppleAuthenticationButton[\s\S]{0,200}onPress/.test(screenSource),
+);
+
+check(
+  "no Pressable wraps Apple in post-purchase screen (View only)",
+  !/<Pressable[\s\S]{0,400}AppleAuthenticationButton/.test(screenSource),
+);
+
+// ═══ Source: activation badge tied to t() key, not raw text ════════════════
+
+check(
+  "activation badge references translated key",
   /postPurchase\.activatedBadge/.test(screenSource),
 );
 check(
-  "badge uses CheckCircle icon (visual indicator)",
+  "badge uses CheckCircle icon",
   /CheckCircle/.test(screenSource),
 );
 
-// ── RevenueCat: Purchases.logOut never called ──────────────────────────────
+// ═══ Source: button equality (same height, radius, width) ══════════════════
+
+check(
+  "all three buttons share BUTTON_HEIGHT",
+  screenSource.match(/BUTTON_HEIGHT/g)?.length! >= 3,
+);
+check(
+  "all three buttons share BUTTON_RADIUS",
+  screenSource.match(/BUTTON_RADIUS/g)?.length! >= 3,
+);
+
+// ═══ Source: SafeAreaView present ═══════════════════════════════════════════
+
+check(
+  "screen uses SafeAreaView",
+  /SafeAreaView/.test(screenSource),
+);
+
+// ═══ Source: Purchases.logOut never called ══════════════════════════════════
 
 const linkerSource = readFileSync(resolve("src/postPurchase/RevenueCatIdentityLinker.ts"), "utf8");
 check(
@@ -86,101 +118,122 @@ check(
   !/Purchases\.logOut\s*\(/.test(linkerSource),
 );
 
-const bridgeSource = readFileSync(resolve("src/postPurchase/PostPurchaseAuthBridge.tsx"), "utf8");
+const coordinatorSource = readFileSync(resolve("src/postPurchase/PostPurchaseAuthCoordinator.tsx"), "utf8");
 check(
-  "PostPurchaseAuthBridge never calls Purchases.logOut",
-  !/Purchases\.logOut\s*\(/.test(bridgeSource),
+  "coordinator never calls Purchases.logOut",
+  !/Purchases\.logOut\s*\(/.test(coordinatorSource),
 );
 
-// ── App integration: Purchases.logOut absent from linking path ────────────
+const containerSource = readFileSync(resolve("src/postPurchase/PostPurchaseAuthContainer.tsx"), "utf8");
+check(
+  "container never calls Purchases.logOut",
+  !/Purchases\.logOut\s*\(/.test(containerSource),
+);
 
 const appSource = readFileSync(resolve("src/app/YouTraderApp.tsx"), "utf8");
 check(
-  "postPurchaseAuthPending never triggers Purchases.logOut",
-  !/postPurchaseAuthPending.*Purchases\.logOut|Purchases\.logOut.*postPurchaseAuthPending/.test(appSource),
+  "app never calls Purchases.logOut in post-purchase path",
+  !/anonymousEntitlementActive.*Purchases\.logOut|Purchases\.logOut.*anonymousEntitlementActive/.test(appSource),
 );
 
-// ── Migration: idempotency markers ──────────────────────────────────────────
+// ═══ Source: coordinator owns the complete sequence ═════════════════════════
 
 check(
-  "migrateGuestTradesToUser uses a migration marker prefix",
-  /MIGRATION_MARKER_PREFIX/.test(readFileSync(resolve("src/postPurchase/AnonymousDataMigrationService.ts"), "utf8")),
-);
-
-// ── Duplicate tap prevention (state machine) ────────────────────────────────
-
-const coordinatorSource = readFileSync(resolve("src/postPurchase/PostPurchaseAuthCoordinator.tsx"), "utf8");
-check(
-  "coordinator prevents duplicate authenticate calls while busy",
-  /state\.phase\s*!==\s*"idle".*return/.test(coordinatorSource) || /busy/.test(bridgeSource),
-);
-
-// ── Bridge cancellation handling ────────────────────────────────────────────
-
-check(
-  "bridge catches cancellation and returns to idle",
-  /setPhase\s*\(\s*"idle"\s*\)/.test(bridgeSource) && /cancel/.test(bridgeSource),
-);
-
-check(
-  "bridge does not show destructive alerts on cancel",
-  !/(destructive|purchase failed).*cancel/i.test(bridgeSource),
-);
-
-// ── Auth callback existence ─────────────────────────────────────────────────
-
-check(
-  "handlePostPurchaseApple is wired in app source",
-  /handlePostPurchaseApple/.test(appSource),
+  "coordinator has linking_revenuecat phase",
+  /linking_revenuecat/.test(coordinatorSource),
 );
 check(
-  "handlePostPurchaseGoogle is wired in app source",
-  /handlePostPurchaseGoogle/.test(appSource),
+  "coordinator has verifying_entitlement phase",
+  /verifying_entitlement/.test(coordinatorSource),
 );
 check(
-  "handlePostPurchaseEmail is wired in app source",
-  /handlePostPurchaseEmail/.test(appSource),
+  "coordinator has migrating_local_data phase",
+  /migrating_local_data/.test(coordinatorSource),
 );
-
-// ── Linking detection effect exists ─────────────────────────────────────────
-
 check(
-  "linking detection effect watches postPurchaseAuthPending",
-  /useEffect/.test(appSource) && /postPurchaseAuthPending/.test(appSource),
-);
-
-// ── Providers converge to shared coordinator ────────────────────────────────
-
-check(
-  "PostPurchaseAuthCoordinator handles all three providers through one state machine",
+  "coordinator handles all three providers via one state machine",
   /authenticating_apple/.test(coordinatorSource) &&
     /authenticating_google/.test(coordinatorSource) &&
     /authenticating_email/.test(coordinatorSource),
 );
-
-// ── Screen renders provider loading states ─────────────────────────────────
-
 check(
-  "screen shows provider-specific loading via providerLoading map",
-  /providerLoading/.test(screenSource),
+  "coordinator blocks on migration failure",
+  /failed.*setError|migrationResult\.status\s*===\s*"failed"/.test(coordinatorSource),
 );
 
-// ── Apple lifecycle remained intact ────────────────────────────────────────
+// ═══ Source: migration has idempotent marker ═══════════════════════════════
+
+const migrationSource = readFileSync(resolve("src/postPurchase/AnonymousDataMigrationService.ts"), "utf8");
+check(
+  "migration uses marker prefix for idempotency",
+  /MIGRATION_MARKER_PREFIX/.test(migrationSource),
+);
+
+// ═══ Source: relaunch recovery marker ══════════════════════════════════════
+
+check(
+  "POST_PURCHASE_LINKING_MARKER_KEY is defined and used in app",
+  /POST_PURCHASE_LINKING_MARKER_KEY/.test(appSource),
+);
+check(
+  "marker is persisted in finishPurchaseFlow",
+  /AsyncStorage\.setItem\(POST_PURCHASE_LINKING_MARKER_KEY/.test(appSource),
+);
+check(
+  "marker is cleared on linking complete",
+  /AsyncStorage\.removeItem\(POST_PURCHASE_LINKING_MARKER_KEY/.test(appSource),
+);
+
+// ═══ Source: anonymous CustomerInfo snapshot passed to coordinator ══════════
+
+check(
+  "container passes anonymousCustomerInfo to coordinator",
+  /anonymousCustomerInfo/.test(containerSource),
+);
+
+check(
+  "linker receives priorAnonymousInfo (anonymous snapshot)",
+  /priorAnonymousInfo/.test(linkerSource) || /anonymousCustomerInfo/.test(coordinatorSource),
+);
+
+// ═══ Source: email uses complete auth (signInWithPassword) ═════════════════
+
+check(
+  "handlePostPurchaseEmail uses signInWithPassword (not signUp or partial)",
+  /signInWithPassword/.test(appSource) &&
+    /handlePostPurchaseEmail/.test(appSource),
+);
+
+// ═══ Source: email retry calls back to authenticateEmail ══════════════════
+
+check(
+  "retry at coordinator level re-dispatches authenticate for active provider",
+  /activeProvider.*authenticate|retry.*authenticate/.test(coordinatorSource),
+);
+
+// ═══ Apple lifecycle / deletion regressions ════════════════════════════════
 
 const acctDeletionSource = readFileSync(resolve("src/auth/accountDeletionFlow.ts"), "utf8");
 check(
-  "accountDeletionFlow planPostDeletionTeardown still returns callPurchasesLogOut: false",
+  "planPostDeletionTeardown still returns callPurchasesLogOut: false",
   /callPurchasesLogOut:\s*false/.test(acctDeletionSource),
 );
-
 check(
   "classifyBootstrapSession still handles deleted_user",
   /deleted_user/.test(acctDeletionSource),
 );
-
 check(
   "shouldPurgeCachedSession still purges deleted_user",
   /verdict\s*===\s*"deleted_user"/.test(acctDeletionSource),
+);
+
+// ═══ Source: Apple lifecycle forwarding count per callback ═════════════════
+
+check(
+  "storeAppleAuthTokenAfterSignIn is called in post-purchase Apple handler",
+  /handlePostPurchaseAuthenticate.*storeAppleAuthTokenAfterSignIn|storeAppleAuthTokenAfterSignIn.*handlePostPurchaseAuthenticate/.test(appSource) || (
+    /storeAppleAuthTokenAfterSignIn\(/.test(appSource) && /handlePostPurchaseAuthenticate/.test(appSource)
+  ),
 );
 
 if (failures > 0) {

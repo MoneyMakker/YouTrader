@@ -58,7 +58,7 @@ export type AcquisitionInput = {
    */
   explicitAuthRequired?: boolean;
   /** Anonymous purchase completed with active entitlement — route to post-purchase auth. */
-  postPurchaseAuthPending?: boolean;
+  anonymousEntitlementActive?: boolean;
 };
 
 /**
@@ -68,7 +68,7 @@ export type AcquisitionInput = {
  * - Not hydrated → loading
  * - Explicit logout in flight → loading (never paywall)
  * - No session + onboarding incomplete → onboarding
- * - No session + post-purchase auth pending + Pro → post_purchase_auth
+ * - No session + anonymous entitlement active → post_purchase_auth
  * - No session → auth (never paywall, never main)
  * - Session + identity sync pending/failed → loading (retryable; not false paywall)
  * - Session + RevenueCat not ready → loading
@@ -81,7 +81,7 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
 
   if (!input.hasSession) {
     if (!input.onboardingCompleted) return "onboarding";
-    if (input.postPurchaseAuthPending && input.isPremium) return "post_purchase_auth";
+    if (input.anonymousEntitlementActive) return "post_purchase_auth";
     return "auth";
   }
 

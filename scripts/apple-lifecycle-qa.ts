@@ -115,9 +115,22 @@ check(
   "bootstrap validates the cached session before trusting it",
   /classifyBootstrapSession/.test(appSource) && /shouldPurgeCachedSession/.test(appSource),
 );
+// Each Apple sign-in callback must forward the authorization code exactly once.
+// Only count handler blocks that actually CALL signInWithAppleNative (not just reference it).
+const appSourceLines = readFileSync(resolve("src/app/YouTraderApp.tsx"), "utf8");
+const handlerBlocks = appSourceLines.split(/useCallback\s*\(/);
+let appleHandlerCount = 0;
+let misplacedCallCount = 0;
+for (const block of handlerBlocks) {
+  // Must actually invoke signInWithAppleNative, not just reference it.
+  if (!/signInWithAppleNative\s*\(/.test(block)) continue;
+  const calls = (block.match(/storeAppleAuthTokenAfterSignIn\(/g) || []).length;
+  appleHandlerCount += 1;
+  if (calls !== 1) misplacedCallCount += 1;
+}
 check(
-  "authorization code is forwarded exactly once per sign-in path",
-  (appSource.match(/storeAppleAuthTokenAfterSignIn\(/g) || []).length >= 1,
+  "every Apple sign-in callback forwards authorization code exactly once",
+  appleHandlerCount >= 2 && misplacedCallCount === 0,
 );
 
 if (failures > 0) {
