@@ -1,9 +1,24 @@
 import { Linking } from "react-native";
 import { supabase } from "../config/appConfig";
+import {
+  evaluateDeleteAccountResponse,
+  evaluateStoreAppleTokenResponse,
+  type StoreAppleTokenEvidence,
+} from "./accountDeletionFlow";
 
 export type DeleteAccountResult =
-  | { ok: true; manualAppleRevocationRequired?: boolean; appleRevoked?: boolean }
+  | {
+      ok: true;
+      manualAppleRevocationRequired: boolean;
+      appleRevoked: boolean;
+      revokePass: boolean;
+    }
   | { ok: false; reason: "not_configured" | "unauthorized" | "failed" };
+
+/** Sanitized lifecycle evidence — booleans only, never codes, tokens, ids, or emails. */
+function logAppleLifecycle(event: string, details: Record<string, boolean>) {
+  console.warn(`[YouTrader:apple-lifecycle] ${event}`, details);
+}
 
 /**
  * Requests secure server-side account deletion for the current session user.
@@ -19,13 +34,23 @@ export async function requestAccountDeletion(): Promise<DeleteAccountResult> {
     body: {},
   });
 
-  if (error || !data?.ok) {
+  const evidence = evaluateDeleteAccountResponse(data);
+  logAppleLifecycle("delete-account response", {
+    transportError: !!error,
+    ok: evidence.ok,
+    appleRevoked: evidence.appleRevoked,
+    manualAppleRevocationRequired: evidence.manualAppleRevocationRequired,
+    revokePass: evidence.pass,
+  });
+
+  if (error || !evidence.ok) {
     return { ok: false, reason: "failed" };
   }
   return {
     ok: true,
-    manualAppleRevocationRequired: !!data.manualAppleRevocationRequired,
-    appleRevoked: !!data.appleRevoked,
+    manualAppleRevocationRequired: evidence.manualAppleRevocationRequired,
+    appleRevoked: evidence.appleRevoked,
+    revokePass: evidence.pass,
   };
 }
 
@@ -35,18 +60,39 @@ export async function requestAccountDeletion(): Promise<DeleteAccountResult> {
  */
 export async function storeAppleAuthTokenAfterSignIn(
   authorizationCode: string | null | undefined,
-): Promise<void> {
+): Promise<StoreAppleTokenEvidence> {
   const code = (authorizationCode || "").trim();
-  if (!code || !supabase) return;
+  const authorizationCodePresent = code.length > 0;
+  if (!authorizationCodePresent || !supabase) {
+    const evidence = evaluateStoreAppleTokenResponse(authorizationCodePresent, null);
+    logAppleLifecycle("store-apple-auth-token skipped", {
+      authorizationCodePresent,
+      ok: evidence.ok,
+      stored: evidence.stored,
+      pass: evidence.pass,
+    });
+    return evidence;
+  }
   const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session?.access_token) return;
+  if (!sessionData.session?.access_token) {
+    return evaluateStoreAppleTokenResponse(authorizationCodePresent, null);
+  }
   try {
-    await supabase.functions.invoke("store-apple-auth-token", {
+    const { data } = await supabase.functions.invoke("store-apple-auth-token", {
       method: "POST",
       body: { authorizationCode: code },
     });
+    const evidence = evaluateStoreAppleTokenResponse(authorizationCodePresent, data);
+    logAppleLifecycle("store-apple-auth-token response", {
+      authorizationCodePresent,
+      ok: evidence.ok,
+      stored: evidence.stored,
+      pass: evidence.pass,
+    });
+    return evidence;
   } catch {
     // Non-blocking for sign-in; deletion falls back to manual Apple revocation.
+    return evaluateStoreAppleTokenResponse(authorizationCodePresent, null);
   }
 }
 

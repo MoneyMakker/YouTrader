@@ -50,7 +50,7 @@ type Props = {
   onOpenDetails?: () => void;
   onBack?: () => void;
   onSignIn: (provider: AuthProvider) => void;
-  onSignOut: () => void;
+  onSignOut: (options?: { force?: boolean }) => void;
   onChangePassword: () => void;
   onChangeEmail: () => void;
 };
@@ -225,7 +225,7 @@ export function SettingsAccountSection({
             } else {
               Alert.alert(t("deleteAccount"), t("deleteAccountSuccess"));
             }
-            onSignOut();
+            onSignOut({ force: true });
           })();
         },
       },
@@ -387,7 +387,7 @@ export function SettingsAccountSection({
             <PremiumButton
               label={t("signOut")}
               icon={LogOut}
-              onPress={onSignOut}
+              onPress={() => onSignOut()}
               variant="danger"
               testID="settings-sign-out"
             />

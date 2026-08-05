@@ -91,7 +91,9 @@ async function main() {
   );
 
   // Ordinary logout must not call Purchases.logOut.
-  const signOutMatch = appSource.match(/const signOut = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[/);
+  const signOutMatch = appSource.match(
+    /const signOut = useCallback\(async \([^)]*\) => \{[\s\S]*?\n  \}, \[/,
+  );
   assert(!!signOutMatch, "signOut callback must exist");
   assert(
     !/Purchases\.logOut\s*\(/.test(signOutMatch![0]),

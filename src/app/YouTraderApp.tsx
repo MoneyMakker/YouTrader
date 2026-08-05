@@ -9878,7 +9878,7 @@ function SettingsScreen({
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
   onSignIn: (provider: AuthProvider) => void;
-  onSignOut: () => void;
+  onSignOut: (options?: { force?: boolean }) => void;
   onChangePassword: (password: string) => Promise<void>;
   onChangeEmail: (email: string) => Promise<void>;
   calendarEvents: EconEvent[];
@@ -11874,9 +11874,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     Alert.alert(t("account"), EMAIL_PASSWORD_MESSAGES.passwordUpdated);
   }, [session?.user]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { force?: boolean }) => {
     if (!supabase) return;
     if (!beginExplicitLogoutGuard(signingOutRef)) return;
+    // Deleted accounts cannot sign out remotely (403 user_not_found) — local
+    // teardown must still complete so the deleted user never stays inside.
+    const forceLocalTeardown = options?.force === true;
     const userId = session?.user.id || null;
     // Enter LOGGING_OUT before clearing session so acquisition cannot flash paywall.
     // Persist AUTH_REQUIRED before session→null so the acquisition hydrate effect
@@ -11905,12 +11908,20 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       const { error } = await supabase.auth.signOut();
       if (error) {
         logger.error(error, { feature: "supabase", action: "sign_out" });
-        Alert.alert(t("signOutFailed"), t("signOutFailedBody"));
-        // Recoverable Supabase error — stay signed in; do not leave AUTH_REQUIRED sticky.
-        explicitAuthRequiredRef.current = false;
-        setExplicitAuthRequired(false);
-        void AsyncStorage.removeItem(ACQUISITION_AUTH_REQUIRED_KEY);
-        return;
+        if (!forceLocalTeardown) {
+          Alert.alert(t("signOutFailed"), t("signOutFailedBody"));
+          // Recoverable Supabase error — stay signed in; do not leave AUTH_REQUIRED sticky.
+          explicitAuthRequiredRef.current = false;
+          setExplicitAuthRequired(false);
+          void AsyncStorage.removeItem(ACQUISITION_AUTH_REQUIRED_KEY);
+          return;
+        }
+        // Drop the persisted session locally so relaunch cannot rehydrate it.
+        try {
+          await supabase.auth.signOut({ scope: "local" });
+        } catch {
+          // Local scope is best-effort; teardown below still clears app state.
+        }
       }
       // Force navigation root off authenticated shell immediately.
       setSession(null);
@@ -12253,7 +12264,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
             } else {
               Alert.alert(t("deleteAccount"), t("deleteAccountSuccess"));
             }
-            await signOut();
+            await signOut({ force: true });
           })();
         },
       },
