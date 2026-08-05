@@ -11869,11 +11869,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, []);
 
   const handlePostPurchaseAuthenticate = useCallback(async (provider: AuthProvider): Promise<{ userId: string } | null> => {
-    if (!supabase || !authConfigured) throw new Error("Sign-in is not available.");
-    setAuthBusy(true);
-    try {
-      if (provider === "apple") {
-        if (!enableNativeAppleSignIn) throw new Error("Apple Sign-In is not available.");
+      if (!supabase || !authConfigured) throw new Error(t("postPurchase.notAvailable"));
+      setAuthBusy(true);
+      try {
+        if (provider === "apple") {
+          if (!enableNativeAppleSignIn) throw new Error(t("postPurchase.appleUnavailable"));
         const credential = await signInWithAppleNative(supabase);
         if (credential.fullName?.givenName || credential.fullName?.familyName) {
           const fullName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(" ");
@@ -11888,7 +11888,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       }
       // Wait for the session to appear via onAuthStateChange.
       const userId = await waitForNextSession(supabase);
-      if (!userId) throw new Error("Sign-in did not complete. Please try again.");
+      if (!userId) throw new Error(t("postPurchase.authCancelled"));
       return { userId };
     } finally {
       setAuthBusy(false);
@@ -11896,13 +11896,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [authConfigured]);
 
   const handlePostPurchaseEmail = useCallback(async (email: string, password: string): Promise<{ userId: string } | null> => {
-    if (!supabase || !authConfigured) throw new Error("Email sign-in is not configured.");
+    if (!supabase || !authConfigured) throw new Error(t("postPurchase.notConfigured"));
     const limit = await checkClientRateLimit("auth", "email");
     if (!limit.allowed) throw new Error(SECURITY_MESSAGES.rateLimited);
     setAuthBusy(true);
     try {
       const { data } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (!data.user?.id) throw new Error("Sign-in failed. Please check your credentials.");
+      if (!data.user?.id) throw new Error(t("postPurchase.signinFailed"));
       setSession(data.session);
       setAuthHydrated(true);
       trackEvent("login_completed", { provider: "email" });

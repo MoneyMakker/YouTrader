@@ -31,6 +31,7 @@ import type { PostPurchaseAuthPhase } from "./types";
 import { C } from "../theme/colors";
 import { t } from "../i18n";
 import { enableNativeAppleSignIn, enableNativeGoogleSignIn } from "../config/appConfig";
+import { GoogleGIcon } from "./GoogleGIcon";
 
 type Props = {
   phase: PostPurchaseAuthPhase;
@@ -51,18 +52,24 @@ const BUTTON_RADIUS = 16;
 
 // ── Success checkmark animation ─────────────────────────────────────────────
 
-function SuccessAnimation({ visible }: { visible: boolean }) {
+function SuccessAnimation({ visible, reduceMotion }: { visible: boolean; reduceMotion: boolean }) {
   const scale = useRef(new Animated.Value(visible ? 1 : 0.85)).current;
   const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
 
   useEffect(() => {
+    if (reduceMotion) {
+      // Static success — no spring/bounce/scale.
+      Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 150, useNativeDriver: true }).start();
+      scale.setValue(1);
+      return;
+    }
     if (visible) {
       Animated.parallel([
         Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }),
         Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, reduceMotion]);
 
   if (!visible) return null;
   return (
@@ -104,11 +111,23 @@ export function PostPurchaseAuthScreen({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [emailError, setEmailError] = useState("");
   const [emailConfirmSent, setEmailConfirmSent] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const showApple = enableNativeAppleSignIn ?? true;
   const showGoogle = enableNativeGoogleSignIn ?? true;
   const busy = phase !== "idle" && phase !== "error_recoverable";
   const isSuccess = phase === "success";
+
+  useEffect(() => {
+    void (async () => {
+      const enabled = await AccessibilityInfo.isReduceMotionEnabled();
+      setReduceMotion(enabled);
+    })();
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", (enabled) => {
+      setReduceMotion(enabled);
+    });
+    return () => { sub.remove(); };
+  }, []);
 
   const providerLoading = useCallback((provider: string) => {
     if (isSuccess) return null;
@@ -125,8 +144,8 @@ export function PostPurchaseAuthScreen({
 
   const handleEmailSubmit = useCallback(async () => {
     const e = email.trim();
-    if (!e) { setEmailError("Email is required."); return; }
-    if (!e.includes("@")) { setEmailError("Enter a valid email."); return; }
+    if (!e) { setEmailError(t("postPurchase.emailRequired")); return; }
+    if (!e.includes("@")) { setEmailError(t("postPurchase.emailInvalid")); return; }
 
     if (emailMode === "forgot" && onResetPassword) {
       setEmailError("");
@@ -135,14 +154,14 @@ export function PostPurchaseAuthScreen({
         await onResetPassword(e);
         setEmailConfirmSent(true);
       } catch (err: any) {
-        setEmailError(err?.message || "Password reset failed.");
+        setEmailError(err?.message || t("postPurchase.passwordResetFailed"));
       }
       return;
     }
 
     if (emailMode === "signup" && onSignUpWithEmail) {
-      if (!password) { setEmailError("Password is required."); return; }
-      if (confirmPassword && password !== confirmPassword) { setEmailError("Passwords do not match."); return; }
+      if (!password) { setEmailError(t("postPurchase.passwordRequired")); return; }
+      if (confirmPassword && password !== confirmPassword) { setEmailError(t("postPurchase.passwordMismatch")); return; }
       setEmailError("");
       Keyboard.dismiss();
       try {
@@ -151,13 +170,13 @@ export function PostPurchaseAuthScreen({
           setEmailConfirmSent(true);
         }
       } catch (err: any) {
-        setEmailError(err?.message || "Create account failed.");
+        setEmailError(err?.message || t("postPurchase.createAccountFailed"));
       }
       return;
     }
 
     // signin
-    if (!password) { setEmailError("Password is required."); return; }
+    if (!password) { setEmailError(t("postPurchase.passwordRequired")); return; }
     setEmailError("");
     Keyboard.dismiss();
     onSignInWithEmail(e, password);
@@ -192,10 +211,10 @@ export function PostPurchaseAuthScreen({
     void Linking.openURL("https://youtrader.app/privacy");
   }, []);
 
-  // Announce loading / success for accessibility
+  // Announce success for accessibility
   useEffect(() => {
     if (isSuccess) {
-      AccessibilityInfo.announceForAccessibility("Account linked. Entering YouTrader.");
+      AccessibilityInfo.announceForAccessibility(t("postPurchase.successAnnounce"));
     }
   }, [isSuccess]);
 
@@ -219,7 +238,7 @@ export function PostPurchaseAuthScreen({
               <View style={styles.brandCircle}>
                 <Text style={styles.brandY} maxFontSizeMultiplier={1}>Y</Text>
                 <View style={styles.checkmarkBadge}>
-                  <SuccessAnimation visible={isSuccess} />
+                  <SuccessAnimation visible={isSuccess} reduceMotion={reduceMotion} />
                   {!isSuccess ? <CheckCircle size={16} color={LIME} strokeWidth={2.8} /> : null}
                 </View>
               </View>
@@ -297,7 +316,7 @@ export function PostPurchaseAuthScreen({
                     {phase === "authenticating_google" ? (
                       <ActivityIndicator size="small" color={LIME} />
                     ) : (
-                      <Text style={styles.googleIcon}>G</Text>
+                      <GoogleGIcon size={20} />
                     )}
                     <Text style={[styles.authButtonLabel, styles.googleLabel]} maxFontSizeMultiplier={1.15}>
                       {providerLoading("google") || t("authGoogle")}
@@ -370,7 +389,7 @@ export function PostPurchaseAuthScreen({
                     onPress={closeEmailModal}
                     style={({ pressed }) => [styles.modalSubmit, pressed && styles.modalSubmitPressed]}
                   >
-                    <Text style={styles.modalSubmitText} maxFontSizeMultiplier={1.15}>OK</Text>
+                    <Text style={styles.modalSubmitText} maxFontSizeMultiplier={1.15}>{t("postPurchase.okLabel")}</Text>
                   </Pressable>
                 </>
               ) : (
@@ -408,7 +427,7 @@ export function PostPurchaseAuthScreen({
                       {emailMode === "signup" ? (
                         <TextInput
                           style={styles.modalInput}
-                          placeholder="Confirm password"
+                          placeholder={t("postPurchase.confirmPassword")}
                           placeholderTextColor={C.muted}
                           secureTextEntry
                           textContentType="newPassword"
@@ -532,7 +551,6 @@ const styles = StyleSheet.create({
   emailButton: { borderColor: "rgba(255,255,255,0.14)", backgroundColor: "#1A1D24" },
   authButtonDisabled: { opacity: 0.5 },
   authButtonPressed: { backgroundColor: "rgba(255,255,255,0.06)" },
-  googleIcon: { color: C.text, fontSize: 19, fontWeight: "900", width: 24, textAlign: "center" },
   authButtonLabel: { fontSize: 16, fontWeight: "800" },
   googleLabel: { color: C.text },
   emailLabel: { color: C.text },

@@ -15,6 +15,7 @@ import type { PostPurchaseAuthPhase } from "./types";
 import { linkAnonymousPurchaseToIdentity } from "./RevenueCatIdentityLinker";
 import { migrateGuestTradesToUser } from "./AnonymousDataMigrationService";
 import { REVENUECAT_ENTITLEMENT_ID } from "../config/appConfig";
+import { t } from "../i18n";
 
 export type LinkingResult = {
   customerInfo: CustomerInfo;
@@ -68,11 +69,11 @@ export function usePostPurchaseAuthCoordinator({
 
     const linkResult = await linkAnonymousPurchaseToIdentity(userId, anonymousCustomerInfo);
     if (linkResult.status === "not_configured") {
-      setError("Billing is not available. Please try again.", "linking");
+      setError(t("postPurchase.billingUnavailable"), "linking");
       return;
     }
     if (linkResult.status === "failed") {
-      setError(linkResult.message || "Linking failed. Please try again.", "linking");
+      setError(linkResult.message || t("postPurchase.linkingFailed"), "linking");
       return;
     }
 
@@ -81,7 +82,7 @@ export function usePostPurchaseAuthCoordinator({
     const info = linkResult.customerInfo;
     const hasPro = !!info?.entitlements?.active?.[REVENUECAT_ENTITLEMENT_ID]?.isActive;
     if (!hasPro) {
-      setError("Your Pro access could not be verified. Please try again.", "verify");
+      setError(t("postPurchase.entitlementUnverified"), "verify");
       return;
     }
 
@@ -91,7 +92,7 @@ export function usePostPurchaseAuthCoordinator({
 
     // failed migration blocks Main — user stays with retry
     if (migrationResult.status === "failed") {
-      setError("Data migration failed. Your purchase and journal are preserved — Retry to continue.", "migrate");
+      setError(t("postPurchase.migrationFailed"), "migrate");
       return;
     }
 
@@ -131,7 +132,7 @@ export function usePostPurchaseAuthCoordinator({
       }
       await handleAuthResult(result.userId);
     } catch (error: any) {
-      const msg = String(error?.message || "Authentication failed");
+      const msg = String(error?.message || t("postPurchase.signinFailed"));
       if (msg.toLowerCase().includes("cancel") || msg.toLowerCase().includes("user cancelled")) {
         gotoIdle();
       } else {
@@ -156,7 +157,7 @@ export function usePostPurchaseAuthCoordinator({
       }
       await handleAuthResult(result.userId);
     } catch (error: any) {
-      const msg = String(error?.message || "Authentication failed");
+      const msg = String(error?.message || t("postPurchase.signinFailed"));
       if (msg.toLowerCase().includes("cancel") || msg.toLowerCase().includes("user cancelled")) {
         gotoIdle();
       } else {

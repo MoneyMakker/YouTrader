@@ -896,6 +896,46 @@
   "postPurchase.linkingMigrating": "Migrating your data…",
 
   "postPurchase.linkingVerifying": "Verifying Pro access…",
+
+  "postPurchase.appleUnavailable": "Apple Sign-In is not available.",
+
+  "postPurchase.authCancelled": "Sign-in did not complete. Please try again.",
+
+  "postPurchase.billingUnavailable": "Billing is not available. Please try again.",
+
+  "postPurchase.confirmPassword": "Confirm password",
+
+  "postPurchase.createAccountFailed": "Create account failed.",
+
+  "postPurchase.emailInvalid": "Enter a valid email.",
+
+  "postPurchase.emailRequired": "Email is required.",
+
+  "postPurchase.entitlementUnverified": "Your Pro access could not be verified. Please try again.",
+
+  "postPurchase.googleUnavailable": "Google Sign-In is not available.",
+
+  "postPurchase.linkingFailed": "Linking failed. Please try again.",
+
+  "postPurchase.migrationFailed": "Data migration failed. Your purchase and journal are preserved.",
+
+  "postPurchase.notAvailable": "Sign-in is not available.",
+
+  "postPurchase.notConfigured": "Email sign-in is not configured.",
+
+  "postPurchase.okLabel": "OK",
+
+  "postPurchase.passwordMismatch": "Passwords do not match.",
+
+  "postPurchase.passwordRequired": "Password is required.",
+
+  "postPurchase.passwordResetFailed": "Password reset failed.",
+
+  "postPurchase.signinFailed": "Sign-in failed. Please check your credentials.",
+
+  "postPurchase.successAnnounce": "Account linked. Entering YouTrader.",
+
+  "postPurchase.unsupportedProvider": "Unsupported sign-in provider.",
   "postPurchase.successHeading": "You're All Set",
   "proActiveBody": "All premium analytics, review tools, news, calendar, import, and export features are unlocked.",
   "proActiveTitle": "Il tuo abbonamento Pro è attivo",

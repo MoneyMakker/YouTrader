@@ -96,7 +96,64 @@ check(
   !/<Pressable[\s\S]{0,400}AppleAuthenticationButton/.test(screenSource),
 );
 
-// ═══ Source: activation badge tied to t() key, not raw text ════════════════
+// ═══ Source: Google uses GoogleGIcon (bundled SVG), not plain text G ═══════
+
+check(
+  "plain text googleIcon style is removed from screen",
+  !/googleIcon/.test(screenSource),
+);
+
+check(
+  "GoogleGIcon component is imported in the screen",
+  /GoogleGIcon/.test(screenSource),
+);
+
+const googleIconSource = readFileSync(resolve("src/postPurchase/GoogleGIcon.tsx"), "utf8");
+check(
+  "GoogleGIcon uses react-native-svg (bundled, not remote)",
+  /react-native-svg/.test(googleIconSource),
+);
+
+// ═══ Source: Reduce Motion listener present ════════════════════════════════
+
+check(
+  "screen listens for reduceMotionChanged",
+  /reduceMotionChanged/.test(screenSource),
+);
+
+check(
+  "SuccessAnimation accepts reduceMotion prop",
+  /reduceMotion/.test(screenSource),
+);
+
+// ═══ Source: no hardcoded user-facing English in PostPurchaseAuthScreen ═════
+
+const hardcodedPhrases = [
+  "Email is required",
+  "Enter a valid email",
+  "Password is required",
+  "Passwords do not match",
+  "Password reset failed",
+  "Create account failed",
+  "Check Your Email",
+  "Confirm Your Email",
+  "Send Link",
+  "Create account",
+  "Forgot password",
+  "Back to sign in",
+  "Account linked",
+];
+for (const phrase of hardcodedPhrases) {
+  // Allow the phrase inside t() calls but not as a standalone string
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const insideTranslation = new RegExp(`t\\([^)]*${escaped}[^)]*\\)`, "s");
+  const asHardcoded = new RegExp(`["']${escaped}["']`, "i");
+  const hasTranslation = insideTranslation.test(screenSource) || !asHardcoded.test(screenSource);
+  check(
+    `"${phrase}" is not hardcoded English (uses translation key)`,
+    !asHardcoded.test(screenSource) || insideTranslation.test(screenSource),
+  );
+}
 
 check(
   "activation badge references translated key",
