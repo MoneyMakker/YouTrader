@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
- * RevenueCat mobile identity + restore-path contract QA.
- * Behavior-oriented source checks against YouTraderApp (not brittle App.tsx-only asserts).
+ * RevenueCat mobile identity + restore-path contract QA (account-first).
+ * Behavior-oriented source checks against YouTraderApp.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -15,6 +15,7 @@ async function main() {
   const results = await runRevenueCatIdentityQaOrThrow();
   const appSource = readFileSync(resolve(process.cwd(), "src/app/YouTraderApp.tsx"), "utf8");
   const identitySource = readFileSync(resolve(process.cwd(), "src/billing/revenueCatIdentity.ts"), "utf8");
+  const logoutSource = readFileSync(resolve(process.cwd(), "src/auth/explicitLogout.ts"), "utf8");
 
   assert(
     appSource.includes("RevenueCatIdentitySynchronizer"),
@@ -36,8 +37,16 @@ async function main() {
     !/Purchases\.logIn\(\s*session\.user\.email/.test(appSource),
     "Email must never be used as RevenueCat App User ID",
   );
+  assert(
+    /Purchases\.configure\(\{\s*apiKey:\s*REVENUECAT_API_KEY,\s*appUserID:\s*userId\s*\}\)/.test(appSource) ||
+      appSource.includes("appUserID: userId"),
+    "RevenueCat must configure with Supabase UUID appUserID",
+  );
+  assert(
+    !/Purchases\.configure\(\{\s*apiKey:\s*REVENUECAT_API_KEY\s*\}\)/.test(appSource),
+    "Anonymous Purchases.configure({ apiKey }) must not remain in the normal flow",
+  );
 
-  // Path A — anonymous restore from paywall: restorePurchases without requiring a session UUID first.
   const restoreFnMatch = appSource.match(
     /const restorePurchases = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[/,
   );
@@ -48,9 +57,13 @@ async function main() {
     "Restore must call Purchases.restorePurchases()",
   );
   assert(
-    restoreBody.includes('session?.user?.id') &&
+    restoreBody.includes("!session?.user?.id") || restoreBody.includes("if (!session?.user?.id)"),
+    "Restore must require an authenticated Supabase session",
+  );
+  assert(
+    restoreBody.includes("ensureAuthenticatedRevenueCatIdentity") ||
       restoreBody.includes("revenueCatIdentityRef.current.synchronize"),
-    "Path B: authenticated restore must synchronize identity before restore",
+    "Authenticated restore must synchronize identity before restore",
   );
   assert(
     restoreBody.includes('t("noActiveSubscription")') &&
@@ -63,15 +76,34 @@ async function main() {
     "Restore must never start a purchase",
   );
 
-  // Identity reconciliation restore is allowed as a separate fallback path.
+  // Automatic restore after login must be gone.
   assert(
-    appSource.includes("decidePostLoginEntitlementReconcile") ||
-      appSource.includes("identity:restore_fallback"),
-    "Post-login entitlement reconciliation restore fallback must be wired",
+    !appSource.includes("identity:restore_fallback"),
+    "Post-login automatic restore fallback must be removed",
+  );
+  assert(
+    !appSource.includes("preAuthEntitledRef"),
+    "preAuthEntitledRef must be removed",
+  );
+  assert(
+    !appSource.includes("entitledUserIdAtLogoutRef"),
+    "entitledUserIdAtLogoutRef silent-restore marker must be removed",
+  );
+
+  // Ordinary logout must not call Purchases.logOut.
+  const signOutMatch = appSource.match(/const signOut = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[/);
+  assert(!!signOutMatch, "signOut callback must exist");
+  assert(
+    !/Purchases\.logOut\s*\(/.test(signOutMatch![0]),
+    "Ordinary YouTrader logout must not call Purchases.logOut",
+  );
+  assert(
+    logoutSource.includes("revenueCatLogOutOnce: false"),
+    "explicitLogout plan must keep revenueCatLogOutOnce false",
   );
 
   console.log(
-    `[YouTrader:revenuecat-mobile-identity-qa] ${results.length + 6} scenarios passed`,
+    `[YouTrader:revenuecat-mobile-identity-qa] ${results.length + 10} scenarios passed`,
   );
 }
 

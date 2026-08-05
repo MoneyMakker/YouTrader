@@ -1,5 +1,5 @@
 /**
- * Post-login entitlement reconciliation — Node selftest.
+ * Post-login entitlement reconciliation — Node selftest (account-first).
  * Run: npx tsx scripts/qa/entitlementReconcile.selftest.ts
  */
 import assert from "node:assert/strict";
@@ -32,8 +32,8 @@ assert.equal(
     postLoginEntitled: false,
     restoreAlreadyAttempted: false,
   }).action,
-  "restore_once",
-  "anonymous entitled purchase → login must auto-restore once",
+  "confirmed_not_entitled",
+  "pre-auth entitled flag must never trigger automatic restore",
 );
 assert.equal(
   decidePostLoginEntitlementReconcile({
@@ -42,8 +42,8 @@ assert.equal(
     restoreAlreadyAttempted: false,
     sameUserWasEntitledAtLogout: true,
   }).action,
-  "restore_once",
-  "same-account re-login must auto-restore when logIn CI is empty",
+  "confirmed_not_entitled",
+  "same-account re-login must not auto-restore",
 );
 assert.equal(
   decidePostLoginEntitlementReconcile({
@@ -53,7 +53,6 @@ assert.equal(
     sameUserWasEntitledAtLogout: false,
   }).action,
   "confirmed_not_entitled",
-  "different account without entitlement must not auto-restore",
 );
 assert.equal(
   decidePostLoginEntitlementReconcile({
@@ -61,7 +60,8 @@ assert.equal(
     postLoginEntitled: false,
     restoreAlreadyAttempted: true,
   }).action,
-  "fail_closed",
+  "confirmed_not_entitled",
+  "restoreAlreadyAttempted is ignored — never fail_closed via auto restore",
 );
 assert.equal(
   decidePostLoginEntitlementReconcile({
@@ -138,7 +138,7 @@ assert.equal(
     isPremium: true,
     revenueCatReady: true,
   }),
-  "ANONYMOUS_ENTITLED_REQUIRES_AUTH",
+  "UNAUTHENTICATED",
 );
 assert.equal(
   resolveReleaseGateState({
@@ -162,7 +162,7 @@ assert.equal(
     isPremium: false,
     revenueCatReady: true,
   }),
-  "main",
+  "paywall",
 );
 
 console.log("entitlementReconcile + releaseGate + trialPresentation selftest PASS");

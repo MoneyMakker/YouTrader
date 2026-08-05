@@ -246,9 +246,9 @@ function recordPhase(input: AcquisitionInput) {
   );
 }
 
-// RevenueCat identity: logOut once when required
+// RevenueCat identity: ordinary logout must NOT call Purchases.logOut
 {
-  assert.equal(shouldCallRevenueCatLogOut({ purchasesConfigured: true, isAnonymous: false }), true);
+  assert.equal(shouldCallRevenueCatLogOut({ purchasesConfigured: true, isAnonymous: false }), false);
   assert.equal(shouldCallRevenueCatLogOut({ purchasesConfigured: true, isAnonymous: true }), false);
   assert.equal(shouldCallRevenueCatLogOut({ purchasesConfigured: false, isAnonymous: false }), false);
 }
@@ -259,7 +259,8 @@ function recordPhase(input: AcquisitionInput) {
   assert.equal(plan.navigationRoot, "AUTH_REQUIRED");
   assert.equal(plan.suppressPaywall, true);
   assert.equal(plan.preserveStoreKitReceipt, true);
-  assert.equal(plan.revenueCatLogOutOnce, true);
+  assert.equal(plan.revenueCatLogOutOnce, false);
+  assert.equal(plan.clearLocalCustomerInfo, true);
   assert.equal(plan.clearInMemoryJournal, true);
   assert.equal(plan.clearLocalUserCache, true);
 }
@@ -287,7 +288,7 @@ function recordPhase(input: AcquisitionInput) {
   );
 }
 
-// Fresh acquisition without explicit logout still uses paywall
+// Fresh acquisition without session uses Auth (never Paywall before login)
 {
   assert.equal(
     resolveAcquisitionPhase(
@@ -298,7 +299,7 @@ function recordPhase(input: AcquisitionInput) {
         onboardingCompleted: true,
       }),
     ),
-    "paywall",
+    "auth",
   );
 }
 

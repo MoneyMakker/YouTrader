@@ -1,10 +1,11 @@
 /**
- * First-launch acquisition resolver — Node selftest.
+ * Account-first acquisition resolver — Node selftest.
  * Run: npx tsx scripts/qa/acquisitionPhase.selftest.ts
  */
 import assert from "node:assert/strict";
 import {
   resolveAcquisitionPhase,
+  resolveReleaseGateState,
   type AcquisitionInput,
 } from "../../src/app/startup/acquisitionState";
 import {
@@ -27,7 +28,8 @@ assert.equal(resolveAcquisitionPhase({ ...base, hydrated: false }), "loading");
 assert.equal(resolveAcquisitionPhase(base), "onboarding");
 assert.equal(
   resolveAcquisitionPhase({ ...base, onboardingCompleted: true }),
-  "paywall",
+  "auth",
+  "no session after onboarding → Auth, never Paywall",
 );
 assert.equal(
   resolveAcquisitionPhase({
@@ -35,8 +37,8 @@ assert.equal(
     onboardingCompleted: true,
     paywallCompleted: true,
   }),
-  "paywall",
-  "paywallCompleted alone must not unlock Main App without entitlement",
+  "auth",
+  "paywallCompleted alone must not unlock Main or Paywall without session",
 );
 assert.equal(
   resolveAcquisitionPhase({
@@ -46,16 +48,7 @@ assert.equal(
     isPremium: true,
   }),
   "auth",
-  "purchase-before-auth must force registration",
-);
-assert.equal(
-  resolveAcquisitionPhase({
-    ...base,
-    onboardingCompleted: true,
-    isPremium: true,
-    paywallCompleted: false,
-  }),
-  "auth",
+  "anonymous premium flag must never skip Auth",
 );
 assert.equal(
   resolveAcquisitionPhase({
@@ -65,8 +58,8 @@ assert.equal(
     paywallCompleted: true,
     isPremium: false,
   }),
-  "main",
-  "authenticated without entitlement enters four-tab main",
+  "paywall",
+  "authenticated without entitlement → Paywall",
 );
 assert.equal(
   resolveAcquisitionPhase({
@@ -82,9 +75,68 @@ assert.equal(
   resolveAcquisitionPhase({
     ...base,
     onboardingCompleted: true,
+    hasSession: true,
+    identitySyncPending: true,
+    isPremium: true,
+  }),
+  "loading",
+  "identity sync pending must not flash Journal or Paywall",
+);
+assert.equal(
+  resolveAcquisitionPhase({
+    ...base,
+    onboardingCompleted: true,
+    hasSession: true,
+    identitySyncFailed: true,
+    isPremium: false,
+  }),
+  "loading",
+  "identity sync failure → retry loading, not false Paywall",
+);
+assert.equal(
+  resolveAcquisitionPhase({
+    ...base,
+    onboardingCompleted: true,
+    hasSession: true,
     revenueCatReady: false,
   }),
   "loading",
+);
+assert.equal(
+  resolveAcquisitionPhase({
+    ...base,
+    onboardingCompleted: true,
+    loggingOut: true,
+    hasSession: false,
+  }),
+  "loading",
+);
+
+assert.equal(
+  resolveReleaseGateState({
+    ...base,
+    onboardingCompleted: true,
+    hasSession: false,
+  }),
+  "UNAUTHENTICATED",
+);
+assert.equal(
+  resolveReleaseGateState({
+    ...base,
+    onboardingCompleted: true,
+    hasSession: true,
+    isPremium: false,
+  }),
+  "AUTHENTICATED_NOT_ENTITLED",
+);
+assert.equal(
+  resolveReleaseGateState({
+    ...base,
+    onboardingCompleted: true,
+    hasSession: true,
+    isPremium: true,
+  }),
+  "AUTHENTICATED_ENTITLED",
 );
 
 const profile = defaultOnboardingProfile({
