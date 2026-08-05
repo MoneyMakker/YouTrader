@@ -1,6 +1,8 @@
 /**
- * Post-auth entitlement reconciliation after purchase-before-login.
- * Pure helpers + restore decision — no React / no I/O.
+ * Post-auth entitlement reconciliation — account-first (no anonymous purchase).
+ * Pure helpers — no React / no I/O.
+ *
+ * Automatic restorePurchases is never selected. Manual Restore is a UI action.
  */
 
 export type EntitlementProbe = {
@@ -10,38 +12,29 @@ export type EntitlementProbe = {
 export type ReconcileDecision =
   | { action: "confirmed_entitled" }
   | { action: "confirmed_not_entitled" }
-  | { action: "restore_once" }
   | { action: "fail_closed" }
   | { action: "refresh_then_decide" };
 
 /**
- * Decide how to proceed after Purchases.logIn when the anonymous customer
- * may have held an entitlement that did not transfer cleanly.
- *
- * Restore is automatic only when:
- * - anonymous / pre-auth CustomerInfo was entitled (purchase-before-login), or
- * - the same Supabase user was entitled at the previous logout (same-account re-login).
- *
- * Never restore solely because another account used this device.
+ * Decide how to proceed after Purchases.logIn + CustomerInfo.
+ * Never auto-restores. Legacy preAuth / same-user-at-logout flags are ignored.
  */
 export function decidePostLoginEntitlementReconcile(input: {
-  preAuthEntitled: boolean;
+  /** @deprecated Ignored — purchase-before-login removed. */
+  preAuthEntitled?: boolean;
   postLoginEntitled: boolean;
-  restoreAlreadyAttempted: boolean;
-  /** Same Supabase UUID that held Pro at last logout on this device session. */
+  /** @deprecated Ignored — automatic restore removed. */
+  restoreAlreadyAttempted?: boolean;
+  /** @deprecated Ignored — automatic restore removed. */
   sameUserWasEntitledAtLogout?: boolean;
 }): ReconcileDecision {
   if (input.postLoginEntitled) return { action: "confirmed_entitled" };
-  const shouldAutoRestore =
-    input.preAuthEntitled || input.sameUserWasEntitledAtLogout === true;
-  if (!shouldAutoRestore) return { action: "confirmed_not_entitled" };
-  if (!input.restoreAlreadyAttempted) return { action: "restore_once" };
-  return { action: "fail_closed" };
+  return { action: "confirmed_not_entitled" };
 }
 
 /**
  * After identity logIn, prefer an explicit CustomerInfo refresh before treating
- * a empty post-login snapshot as confirmed inactive.
+ * an empty post-login snapshot as confirmed inactive.
  */
 export function decideAfterLoginCustomerInfoRefresh(input: {
   logInEntitled: boolean;

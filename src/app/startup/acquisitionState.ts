@@ -1,16 +1,12 @@
 /**
- * Acquisition / startup phase resolver — unit-testable, no I/O.
+ * Account-first acquisition / startup phase resolver — unit-testable, no I/O.
  *
- * Paid funnel:
- * onboarding → paywall (purchase/restore) → auth → main
+ * Contract:
+ * Splash → Onboarding (once) → Auth → RevenueCat UUID identity → Journal | Paywall
  *
- * Explicit logout:
- * LOGGING_OUT (suppress paywall) → AUTH_REQUIRED (auth chooser) → login → CustomerInfo → main/paywall
- *
- * Anonymous users never enter the tab shell.
- * Authenticated + entitled → five-tab main.
- * Authenticated + not entitled → five-tab main (Prop Pass shows locked preview).
- * Paywall remains reachable from Settings / Prop Pass CTAs / More subscription.
+ * Never: Paywall before Auth.
+ * Never: anonymous purchase / anonymous RevenueCat bootstrap.
+ * Explicit logout → AUTH_REQUIRED (Auth), never Paywall.
  */
 
 export type AcquisitionPhase =
@@ -26,9 +22,11 @@ export type ReleaseGateState =
   | "LOGGING_OUT"
   | "AUTH_REQUIRED"
   | "BILLING_UNAVAILABLE"
-  | "ANONYMOUS_NOT_ENTITLED"
-  | "ANONYMOUS_ENTITLED_REQUIRES_AUTH"
+  | "ONBOARDING_REQUIRED"
+  | "UNAUTHENTICATED"
   | "AUTHENTICATING"
+  | "REVENUECAT_IDENTITY_SYNC"
+  | "ENTITLEMENT_CHECKING"
   | "AUTHENTICATED_ENTITLED"
   | "AUTHENTICATED_NOT_ENTITLED"
   | "RECOVERABLE_ERROR";
@@ -36,39 +34,42 @@ export type ReleaseGateState =
 export type AcquisitionInput = {
   hydrated: boolean;
   onboardingCompleted: boolean;
-  /** @deprecated Kept for migration/tests; entitlement (isPremium) gates Main App for anonymous. */
+  /** @deprecated Device flag only; must not grant Pro or unlock Main. */
   paywallCompleted: boolean;
   authRequired: boolean;
   hasSession: boolean;
   isPremium: boolean;
   revenueCatReady: boolean;
-  /** Optional: auth exchange in progress after purchase. */
+  /** Optional: auth exchange in progress. */
   authBusy?: boolean;
   /** Optional: RevenueCat configure/catalog hard failure. */
   billingUnavailable?: boolean;
-  /** Optional: identity sync failed after auth (retryable). */
+  /** Identity sync / CustomerInfo in flight for the authenticated user. */
+  identitySyncPending?: boolean;
+  /** Optional: identity sync failed after auth (retryable — not false paywall). */
   identitySyncFailed?: boolean;
   /** Central in-flight explicit logout — suppresses paywall flash. */
   loggingOut?: boolean;
   /**
    * Sticky AUTH_REQUIRED after explicit logout (persisted).
-   * Forces the production auth chooser; never routes to acquisition paywall
+   * Forces the production auth chooser; never routes to paywall
    * until the next successful login clears it.
    */
   explicitAuthRequired?: boolean;
 };
 
 /**
- * Pure resolver.
+ * Pure resolver — account-first.
  *
  * Rules:
  * - Not hydrated → loading
  * - Explicit logout in flight → loading (never paywall)
- * - Onboarding incomplete (anonymous) → onboarding
- * - Explicit AUTH_REQUIRED (post-logout) → auth
- * - Anonymous + no entitlement → paywall (wait RevenueCat ready)
- * - Anonymous + entitlement → auth (mandatory post-purchase/restore)
- * - Authenticated → main (tab count depends on isPremium; never permanent paywall gate)
+ * - No session + onboarding incomplete → onboarding
+ * - No session → auth (never paywall, never main)
+ * - Session + identity sync pending/failed → loading (retryable; not false paywall)
+ * - Session + RevenueCat not ready → loading
+ * - Session + confirmed not entitled → paywall
+ * - Session + entitled → main (Trading Journal)
  */
 export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPhase {
   if (!input.hydrated) return "loading";
@@ -76,39 +77,38 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
 
   if (!input.hasSession) {
     if (!input.onboardingCompleted) return "onboarding";
-    // Explicit logout root — auth chooser, never acquisition paywall.
-    if (input.explicitAuthRequired) return "auth";
-    if (!input.isPremium) {
-      if (!input.revenueCatReady) return "loading";
-      return "paywall";
-    }
-    // Entitled anonymous — force auth before tabs.
     return "auth";
   }
 
-  // Authenticated — never force marketing onboarding; never trap on paywall.
+  // Authenticated — wait for identity + CustomerInfo before Journal/Paywall.
+  if (input.identitySyncPending || input.identitySyncFailed) return "loading";
+  if (!input.revenueCatReady) return "loading";
+  if (!input.isPremium) return "paywall";
   return "main";
 }
 
 export function resolveReleaseGateState(input: AcquisitionInput): ReleaseGateState {
   if (input.loggingOut) return "LOGGING_OUT";
-  if (input.billingUnavailable && !input.hasSession) return "BILLING_UNAVAILABLE";
+  if (input.billingUnavailable && input.hasSession) return "BILLING_UNAVAILABLE";
   if (input.identitySyncFailed && input.hasSession) return "RECOVERABLE_ERROR";
+  if (input.identitySyncPending && input.hasSession) return "REVENUECAT_IDENTITY_SYNC";
 
   const phase = resolveAcquisitionPhase(input);
-  if (phase === "loading") return "STARTUP_LOADING";
+  if (phase === "loading") {
+    if (input.hasSession && !input.revenueCatReady) return "ENTITLEMENT_CHECKING";
+    return "STARTUP_LOADING";
+  }
+  if (phase === "onboarding") return "ONBOARDING_REQUIRED";
   if (phase === "auth") {
     if (input.explicitAuthRequired) return "AUTH_REQUIRED";
     if (input.authBusy) return "AUTHENTICATING";
-    return "ANONYMOUS_ENTITLED_REQUIRES_AUTH";
+    return "UNAUTHENTICATED";
   }
-  if (phase === "paywall" || phase === "onboarding") return "ANONYMOUS_NOT_ENTITLED";
+  if (phase === "paywall") return "AUTHENTICATED_NOT_ENTITLED";
   if (phase === "main") {
     if (input.hasSession && input.isPremium) return "AUTHENTICATED_ENTITLED";
     if (input.hasSession && !input.isPremium) return "AUTHENTICATED_NOT_ENTITLED";
   }
-  if (!input.hasSession && input.isPremium) return "ANONYMOUS_ENTITLED_REQUIRES_AUTH";
-  if (!input.hasSession && !input.isPremium) return "ANONYMOUS_NOT_ENTITLED";
   return "STARTUP_LOADING";
 }
 

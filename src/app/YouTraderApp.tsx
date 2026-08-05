@@ -19,7 +19,9 @@ import {
 } from "../auth/authErrors";
 import { processAuthDeepLink } from "../auth/authDeepLinkCoordinator";
 import {
+  openAppleAppsUsingAppleIdSettings,
   openSubscriptionManagement,
+  requestAccountDeletion,
   storeAppleAuthTokenAfterSignIn,
 } from "../auth/accountDeletion";
 import { ChangeEmailModal } from "../auth/ChangeEmailModal";
@@ -166,7 +168,7 @@ import { logStartupCheckpoint, logStartupError, logStartupPerf, markAppStart } f
 import { logger } from "../lib/logger";
 import { computeCalculatorResults, formatCalcUsd } from "../calc/riskCalculator";
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
-import { FirstLaunchFunnel } from "./startup/FirstLaunchFunnel";
+import { ValueOnboarding } from "./startup/ValueOnboarding";
 import { AcquisitionPaywall } from "./startup/AcquisitionPaywall";
 import { buildSettingsSubscriptionPresentation } from "./startup/settingsSubscriptionPresentation";
 import {
@@ -188,7 +190,6 @@ import {
 import {
   beginExplicitLogoutGuard,
   endExplicitLogoutGuard,
-  shouldCallRevenueCatLogOut,
 } from "../auth/explicitLogout";
 import { MoreScreen, type MoreDestination } from "./MoreScreen";
 import { SubscriptionScreen } from "./SubscriptionScreen";
@@ -914,16 +915,15 @@ function buildProAccessState(
   customerInfo: CustomerInfo | null,
   serverEntitlementActive: boolean,
 ): ProAccessState {
+  // CustomerInfo is the only client access source. Server mirrors are diagnostic only.
   const revenueCatEntitlementActive = customerHasRevenueCatProEntitlement(customerInfo);
   const appleMonthlyActive = customerHasActiveProSubscription(customerInfo);
-  const isPro = revenueCatEntitlementActive || appleMonthlyActive || serverEntitlementActive;
+  const isPro = revenueCatEntitlementActive || appleMonthlyActive;
   const source: ProAccessSource = revenueCatEntitlementActive
     ? "revenuecat_entitlement"
     : appleMonthlyActive
       ? "apple_subscription"
-      : serverEntitlementActive
-        ? "server_entitlement"
-        : "none";
+      : "none";
   return {
     isPro,
     source,
@@ -10346,11 +10346,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
   const serverEntitlementActiveRef = useRef(false);
-  /** In-memory only: anonymous entitlement before Purchases.logIn(session.user.id). */
-  const preAuthEntitledRef = useRef(false);
-  const postLoginRestoreAttemptedRef = useRef(false);
-  /** Same Supabase UUID that held Pro at last logout — drives silent restore on re-login. */
-  const entitledUserIdAtLogoutRef = useRef<string | null>(null);
   const identitySyncGenerationRef = useRef(0);
   const [identitySyncFailed, setIdentitySyncFailed] = useState(false);
   const [identitySyncPending, setIdentitySyncPending] = useState(false);
@@ -10505,6 +10500,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     hasSession: !!session?.user,
     isPremium,
     revenueCatReady: !revenueCatConfigured || revenueCatReady,
+    identitySyncPending: !!session?.user?.id && identitySyncPending,
+    identitySyncFailed: !!session?.user?.id && identitySyncFailed,
     loggingOut: loggingOut || loggingOutRef.current,
     explicitAuthRequired: explicitAuthRequired || explicitAuthRequiredRef.current,
   });
@@ -10811,6 +10808,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [activeTradesStorageKey, session?.user.id, trades, tradesHydrated]);
 
   const applyCustomerInfo = useCallback((info: CustomerInfo, reason: string) => {
+    // Ignore CustomerInfo updates while signed out — never expose previous-user Pro.
+    if (!sessionRef.current?.user?.id) {
+      billingDebugLog("customer info ignored (unauthenticated)", { reason });
+      return false;
+    }
     customerInfoRef.current = info;
     setCustomerInfo(info);
     const nextAccess = buildProAccessState(info, serverEntitlementActiveRef.current);
@@ -10818,10 +10820,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     if (nextAccess.isPro) {
       setPaywallError("");
       setShowRestorePurchases(false);
-      // Anonymous purchase/restore: remember entitlement until Supabase UUID logIn completes.
-      if (!sessionRef.current?.user?.id) {
-        preAuthEntitledRef.current = true;
-      }
     }
     billingDebugLog("customer info updated", {
       reason,
@@ -10896,41 +10894,56 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [applyCustomerInfo]);
 
   useEffect(() => {
-    if (!revenueCatConfigured || purchasesConfigured.current) return;
+    // Account-first: configure RevenueCat only with an authenticated Supabase UUID.
+    // Never create an anonymous customer for Onboarding/Auth.
+    if (!revenueCatConfigured) return;
+    const userId = session?.user?.id;
+    if (!userId) return;
+
     let listener: ((info: CustomerInfo) => void) | null = null;
-    const task = InteractionManager.runAfterInteractions(() => {
+    let cancelled = false;
+
+    const attach = () => {
+      if (cancelled) return;
       try {
-        Purchases.setLogLevel(LOG_LEVEL.ERROR);
-        Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-        purchasesConfigured.current = true;
-        setRevenueCatReady(true);
-        refreshRevenueCat();
+        if (!purchasesConfigured.current) {
+          Purchases.setLogLevel(LOG_LEVEL.ERROR);
+          Purchases.configure({ apiKey: REVENUECAT_API_KEY, appUserID: userId });
+          purchasesConfigured.current = true;
+          setRevenueCatReady(true);
+        }
         listener = (info: CustomerInfo) => {
+          if (!sessionRef.current?.user?.id) return;
           applyCustomerInfo(info, "customerInfoUpdateListener");
         };
         Purchases.addCustomerInfoUpdateListener(listener);
+        void refreshRevenueCat();
       } catch (error: any) {
         if (!isExpoGo) {
           logger.error(error, { feature: "revenuecat", action: "configure" });
         }
         setPaywallError(userFacingBillingError(error?.message || "RevenueCat setup failed."));
+        setIdentitySyncFailed(true);
       }
-    });
+    };
+
+    const task = purchasesConfigured.current
+      ? null
+      : InteractionManager.runAfterInteractions(attach);
+    if (purchasesConfigured.current) attach();
+
     return () => {
-      task.cancel();
+      cancelled = true;
+      task?.cancel();
       if (listener) Purchases.removeCustomerInfoUpdateListener(listener);
     };
-  }, [applyCustomerInfo, refreshRevenueCat, revenueCatConfigured]);
+  }, [applyCustomerInfo, refreshRevenueCat, revenueCatConfigured, session?.user?.id]);
 
   useEffect(() => {
     if (!purchasesConfigured.current || !session?.user.id || !revenueCatReady) return;
     let cancelled = false;
     const userId = session.user.id;
     const generation = ++identitySyncGenerationRef.current;
-    const preAuthEntitled =
-      preAuthEntitledRef.current ||
-      isActiveEntitlement(customerInfoRef.current, REVENUECAT_ENTITLEMENT_ID);
-    const sameUserWasEntitledAtLogout = entitledUserIdAtLogoutRef.current === userId;
     setIdentitySyncPending(true);
     setIdentitySyncFailed(false);
 
@@ -10938,15 +10951,39 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       const result = await revenueCatIdentityRef.current.synchronize(userId);
       if (cancelled || generation !== identitySyncGenerationRef.current) return;
 
-      if (result.status === "failed") {
+      if (result.status === "failed" || result.status === "skipped_not_configured" || result.status === "skipped_no_user") {
         setIdentitySyncFailed(true);
         setIdentitySyncPending(false);
         setShowRestorePurchases(true);
         setPaywallError(t("restoreFailedTryAgain"));
-        logger.error(new Error("revenuecat_identity_sync_failed"), {
-          feature: "revenuecat",
-          action: "log_in",
-        });
+        if (result.status === "failed") {
+          logger.error(new Error("revenuecat_identity_sync_failed"), {
+            feature: "revenuecat",
+            action: "log_in",
+          });
+        }
+        return;
+      }
+
+      // Verify App User ID matches Supabase UUID before granting access.
+      try {
+        const currentAppUserId = await Purchases.getAppUserID();
+        if (cancelled || generation !== identitySyncGenerationRef.current) return;
+        if (currentAppUserId !== userId) {
+          setIdentitySyncFailed(true);
+          setIdentitySyncPending(false);
+          logger.error(new Error("revenuecat_app_user_id_mismatch"), {
+            feature: "revenuecat",
+            action: "identity_verify",
+          });
+          return;
+        }
+      } catch (error) {
+        if (!cancelled && generation === identitySyncGenerationRef.current) {
+          setIdentitySyncFailed(true);
+          setIdentitySyncPending(false);
+          logger.error(error, { feature: "revenuecat", action: "identity_verify" });
+        }
         return;
       }
 
@@ -10964,66 +11001,28 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           postLoginEntitled = isActiveEntitlement(refreshed, REVENUECAT_ENTITLEMENT_ID);
         } catch (error) {
           if (!cancelled && generation === identitySyncGenerationRef.current) {
-            setIdentitySyncFailed(true);
-            setIdentitySyncPending(false);
-            setShowRestorePurchases(true);
-            logger.error(error, { feature: "revenuecat", action: "post_login_refresh" });
+            // Network failure with no usable CustomerInfo → retry, not false paywall.
+            if (!info) {
+              setIdentitySyncFailed(true);
+              setIdentitySyncPending(false);
+              setShowRestorePurchases(true);
+              logger.error(error, { feature: "revenuecat", action: "post_login_refresh" });
+              return;
+            }
           }
-          return;
         }
       }
 
       const decision = decidePostLoginEntitlementReconcile({
-        preAuthEntitled,
         postLoginEntitled,
-        restoreAlreadyAttempted: postLoginRestoreAttemptedRef.current,
-        sameUserWasEntitledAtLogout,
       });
 
-      if (decision.action === "restore_once") {
-        postLoginRestoreAttemptedRef.current = true;
-        try {
-          const restored = await withTimeout(Purchases.restorePurchases());
-          if (cancelled || generation !== identitySyncGenerationRef.current) return;
-          applyCustomerInfo(restored, "identity:restore_fallback");
-          if (isActiveEntitlement(restored, REVENUECAT_ENTITLEMENT_ID)) {
-            preAuthEntitledRef.current = false;
-            entitledUserIdAtLogoutRef.current = null;
-            setIdentitySyncFailed(false);
-          } else {
-            setIdentitySyncFailed(true);
-            setShowRestorePurchases(true);
-            logger.warn("RevenueCat entitlement missing after identity restore fallback", {
-              feature: "revenuecat",
-              action: "identity_restore_fallback",
-            });
-          }
-        } catch (error) {
-          if (!cancelled && generation === identitySyncGenerationRef.current) {
-            setIdentitySyncFailed(true);
-            setShowRestorePurchases(true);
-            logger.error(error, { feature: "revenuecat", action: "identity_restore_fallback" });
-          }
-        } finally {
-          if (!cancelled && generation === identitySyncGenerationRef.current) {
-            setIdentitySyncPending(false);
-          }
-        }
-        return;
-      }
-
-      if (decision.action === "fail_closed") {
-        setIdentitySyncFailed(true);
+      // Never auto-restore. Manual Restore is a Paywall/Settings action only.
+      if (decision.action === "confirmed_not_entitled") {
         setShowRestorePurchases(true);
-        setIdentitySyncPending(false);
-        return;
       }
 
-      if (decision.action === "confirmed_entitled") {
-        preAuthEntitledRef.current = false;
-        entitledUserIdAtLogoutRef.current = null;
-      }
-
+      setIdentitySyncFailed(false);
       setIdentitySyncPending(false);
     })();
 
@@ -11914,50 +11913,24 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         return;
       }
       // Force navigation root off authenticated shell immediately.
-      // Capture entitlement against this UUID before clearing RC identity.
-      const wasEntitledAtLogout = isActiveEntitlement(
-        customerInfoRef.current,
-        REVENUECAT_ENTITLEMENT_ID,
-      ) || customerHasPro(customerInfoRef.current);
-      entitledUserIdAtLogoutRef.current =
-        userId && wasEntitledAtLogout ? userId : null;
       setSession(null);
       await clearLocalUserCache(userId);
       resetAnalyticsUser();
       setMonitoringUser(null);
       serverEntitlementActiveRef.current = false;
-      preAuthEntitledRef.current = false;
-      postLoginRestoreAttemptedRef.current = false;
       setIdentitySyncFailed(false);
       setIdentitySyncPending(false);
+      identitySyncGenerationRef.current += 1;
       revenueCatIdentityRef.current.reset();
-      // RevenueCat logOut once when required. Does not cancel App Store subscription / StoreKit receipt.
-      if (purchasesConfigured.current) {
-        try {
-          const anonymous = await Purchases.isAnonymous();
-          if (shouldCallRevenueCatLogOut({ purchasesConfigured: true, isAnonymous: anonymous })) {
-            const nextInfo = await Purchases.logOut();
-            applyCustomerInfo(nextInfo, "signOut");
-          } else {
-            customerInfoRef.current = null;
-            setCustomerInfo(null);
-            setProAccess(emptyProAccessState());
-          }
-        } catch (logoutError) {
-          logger.warn("RevenueCat logOut failed during sign out", {
-            feature: "revenuecat",
-            action: "log_out",
-            error: logoutError instanceof Error ? logoutError.message : String(logoutError),
-          });
-          customerInfoRef.current = null;
-          setCustomerInfo(null);
-          setProAccess(emptyProAccessState());
-        }
-      } else {
-        customerInfoRef.current = null;
-        setCustomerInfo(null);
-        setProAccess(emptyProAccessState());
-      }
+      // Account-first: clear local CustomerInfo only. Do NOT call Purchases.logOut.
+      // Next login uses Purchases.logIn(newSupabaseUUID) when App User ID differs.
+      customerInfoRef.current = null;
+      setCustomerInfo(null);
+      setProAccess(emptyProAccessState());
+      setPackages([]);
+      setStoreProducts([]);
+      setPaywallError("");
+      setShowRestorePurchases(true);
       setTrades([]);
       setTradesHydrated(true);
       setCloudSyncStatus("off");
@@ -11976,10 +11949,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       setLoggingOut(false);
       endExplicitLogoutGuard(signingOutRef);
     }
-  }, [applyCustomerInfo, session?.user.id]);
+  }, [session?.user.id]);
 
   const refreshCurrentEntitlements = useCallback(async (reason: string, retryDelays = ENTITLEMENT_RETRY_DELAYS_MS) => {
     if (!purchasesConfigured.current) return null;
+    if (!sessionRef.current?.user?.id) return null;
     let latestInfo: CustomerInfo | null = null;
     for (const [attempt, delay] of retryDelays.entries()) {
       if (delay > 0) await sleep(delay);
@@ -12022,9 +11996,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       ...summarizeCustomerInfo(result.customerInfo),
     });
 
-    // Prefer entitlement unlock over strict product-id string match. ASC/RC product
-    // identifiers can differ by trailing characters (e.g. yearly `__` typo) while still
-    // granting the shared YouTrader Pro entitlement.
+    // Prefer entitlement unlock over StoreKit transaction success alone.
     if (applyCustomerInfo(result.customerInfo, `${reason}:purchase-result`)) {
       logger.info("RevenueCat purchase unlocked Pro", { feature: "revenuecat", action: "purchase_success", reason });
       trackEvent("purchase_success", { reason });
@@ -12068,12 +12040,33 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }, [applyCustomerInfo, lang, refreshCurrentEntitlements, session?.user.id]);
 
+  const ensureAuthenticatedRevenueCatIdentity = useCallback(async (): Promise<boolean> => {
+    const userId = sessionRef.current?.user?.id;
+    if (!userId || !purchasesConfigured.current) return false;
+    try {
+      const currentAppUserId = await Purchases.getAppUserID();
+      if (currentAppUserId !== userId) {
+        const sync = await revenueCatIdentityRef.current.synchronize(userId);
+        if (sync.status === "failed") return false;
+        if (sync.customerInfo) applyCustomerInfo(sync.customerInfo, "purchase:identity");
+      }
+      const verified = await Purchases.getAppUserID();
+      return verified === userId;
+    } catch {
+      return false;
+    }
+  }, [applyCustomerInfo]);
+
   const purchasePackage = useCallback(async (pkg?: PurchasesPackage | null, productId = YOU_TRADER_MONTHLY_PRODUCT_ID) => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
       Alert.alert(t("premiumAccess"), t("restoreUnavailable"));
       return;
     }
-    // Accept any known Pro product id (monthly OR yearly). Both unlock the same entitlement.
+    if (!session?.user?.id) {
+      Alert.alert(t("premiumAccess"), t("authSecureNote"));
+      return;
+    }
+    // Accept any known Pro product id (weekly/monthly/yearly). Both unlock the same entitlement.
     if (!YOU_TRADER_PRO_PRODUCT_IDS.includes(productId)) {
       const message = t("subsTemporarilyUnavailable");
       setPaywallError(message);
@@ -12085,13 +12078,19 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       Alert.alert(t("premiumAccess"), message);
       return;
     }
+    const identityOk = await ensureAuthenticatedRevenueCatIdentity();
+    if (!identityOk) {
+      setIdentitySyncFailed(true);
+      Alert.alert(t("premiumAccess"), t("restoreFailedTryAgain"));
+      return;
+    }
     const isYearly =
       productId === YOU_TRADER_YEARLY_PRODUCT_ID ||
       productId === "youtrader_pro_yearly" ||
       productId === "youtrader_pro_yearly__";
 
     setPurchaseBusy(true);
-    setShowRestorePurchases(false);
+    setShowRestorePurchases(true);
     try {
       const limit = await checkClientRateLimit("purchase", session?.user.id || "local");
       if (!limit.allowed) {
@@ -12167,7 +12166,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     } finally {
       setPurchaseBusy(false);
     }
-  }, [finishPurchaseFlow, packages, refreshRevenueCat, revenueCatConfigured, session?.user.id, storeProducts]);
+  }, [ensureAuthenticatedRevenueCatIdentity, finishPurchaseFlow, packages, refreshRevenueCat, revenueCatConfigured, session?.user.id, storeProducts]);
 
   const restorePurchases = useCallback(async () => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
@@ -12177,30 +12176,29 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       );
       return;
     }
+    if (!session?.user?.id) {
+      Alert.alert(t("restorePurchases"), t("authSecureNote"));
+      return;
+    }
 
     setPurchaseBusy(true);
     try {
-      const limit = await checkClientRateLimit("restore", session?.user.id || "local");
+      const limit = await checkClientRateLimit("restore", session.user.id);
       if (!limit.allowed) {
         Alert.alert(t("restorePurchases"), SECURITY_MESSAGES.rateLimited);
         return;
       }
 
-      // Path B: authenticated restore — synchronize RevenueCat UUID first.
-      if (session?.user?.id) {
-        const sync = await revenueCatIdentityRef.current.synchronize(session.user.id);
-        if (sync.status === "failed") {
-          setIdentitySyncFailed(true);
-          Alert.alert(t("restorePurchases"), t("restoreFailedTryAgain"));
-          return;
-        }
-        if (sync.customerInfo) applyCustomerInfo(sync.customerInfo, "restore:identity");
-        setIdentitySyncFailed(false);
+      const identityOk = await ensureAuthenticatedRevenueCatIdentity();
+      if (!identityOk) {
+        setIdentitySyncFailed(true);
+        Alert.alert(t("restorePurchases"), t("restoreFailedTryAgain"));
+        return;
       }
 
       billingDebugLog("restore started", { productId: YOU_TRADER_MONTHLY_PRODUCT_ID });
       const info = await withTimeout(Purchases.restorePurchases());
-      await claimRemoteIdempotency("subscription:restore", session?.user.id, {
+      await claimRemoteIdempotency("subscription:restore", session.user.id, {
         entitlement: REVENUECAT_ENTITLEMENT_ID,
         hasPro: customerHasPro(info),
         hour: new Date().toISOString().slice(0, 13),
@@ -12213,11 +12211,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         setPaywallError("");
         setShowRestorePurchases(false);
         trackEvent("pro_restored", { source: "restore_purchases" });
-        // Path A: anonymous restore → acquisition routes to mandatory auth (no tab shell).
-        // Path B: authenticated restore → five-tab main via isPremium.
-        if (session?.user?.id) {
-          Alert.alert(t("premiumAccess"), t("proUnlocked"));
-        }
+        Alert.alert(t("premiumAccess"), t("proUnlocked"));
       } else {
         logger.warn("RevenueCat restore found no active subscription", { feature: "revenuecat", action: "restore_no_active_subscription" });
         setShowRestorePurchases(true);
@@ -12232,12 +12226,45 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     } finally {
       setPurchaseBusy(false);
     }
-  }, [applyCustomerInfo, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id]);
+  }, [applyCustomerInfo, ensureAuthenticatedRevenueCatIdentity, refreshCurrentEntitlements, revenueCatConfigured, session?.user.id]);
+
+  const confirmDeleteAccountFromPaywall = useCallback(() => {
+    Alert.alert(t("deleteAccountConfirmTitle"), t("deleteAccountConfirmBody"), [
+      { text: t("cancel") || "Cancel", style: "cancel" },
+      {
+        text: t("deleteAccountManageSubscription"),
+        onPress: () => openSubscriptionManagement(customerInfoRef.current?.managementURL),
+      },
+      {
+        text: t("deleteAccountContinue"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            const result = await requestAccountDeletion();
+            if (!result.ok) {
+              Alert.alert(t("deleteAccount"), t("deleteAccountFailed"));
+              return;
+            }
+            if (result.manualAppleRevocationRequired) {
+              Alert.alert(t("deleteAccount"), t("deleteAccountAppleManualRevokeBody"), [
+                { text: t("deleteAccountAppleManualRevokeAction"), onPress: () => openAppleAppsUsingAppleIdSettings() },
+                { text: t("ok") || "OK", style: "cancel" },
+              ]);
+            } else {
+              Alert.alert(t("deleteAccount"), t("deleteAccountSuccess"));
+            }
+            await signOut();
+          })();
+        },
+      },
+    ]);
+  }, [signOut]);
 
   useEffect(() => {
     if (!revenueCatConfigured) return;
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active" || !purchasesConfigured.current) return;
+      if (!sessionRef.current?.user?.id) return;
       void refreshCurrentEntitlements("app-foreground", [0]);
       void refreshServerEntitlement();
     });
@@ -12256,10 +12283,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   useNetworkReconnect(() => {
     if (cloudSyncEnabled) syncTradesWithCloud();
-    if (purchasesConfigured.current) {
+    if (purchasesConfigured.current && sessionRef.current?.user?.id) {
       void refreshCurrentEntitlements("network-reconnect", [0]);
     }
-    void refreshServerEntitlement();
+    if (sessionRef.current?.user?.id) {
+      void refreshServerEntitlement();
+    }
   });
 
   const authScreenCopy: AuthScreenCopy = {
@@ -12314,7 +12343,38 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         <StatusBar style="light" backgroundColor="#000000" />
         <View style={styles.lockScreen}>
           <AppStartupSkeleton />
-          <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
+          <Text style={[styles.sub, styles.startupSkeletonCaption]}>
+            {identitySyncFailed ? t("tryAgain") : t("loadingJournal")}
+          </Text>
+          {identitySyncFailed ? (
+            <Pressable
+              onPress={() => {
+                setIdentitySyncFailed(false);
+                setIdentitySyncPending(true);
+                identitySyncGenerationRef.current += 1;
+                const userId = session?.user?.id;
+                if (userId) {
+                  void revenueCatIdentityRef.current.synchronize(userId).then((result) => {
+                    if (result.status === "failed") {
+                      setIdentitySyncFailed(true);
+                      setIdentitySyncPending(false);
+                      return;
+                    }
+                    if (result.customerInfo) applyCustomerInfo(result.customerInfo, "identity:retry");
+                    setIdentitySyncPending(false);
+                  });
+                } else {
+                  setIdentitySyncPending(false);
+                }
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={t("tryAgain")}
+              testID="entitlement-retry"
+              style={{ marginTop: 16, minHeight: 44, justifyContent: "center", paddingHorizontal: 20 }}
+            >
+              <Text style={styles.sub}>{t("tryAgain")}</Text>
+            </Pressable>
+          ) : null}
         </View>
         {stagingQaResetOverlay}
       </SafeAreaView>
@@ -12326,7 +12386,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
         <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
         {stagingQaResetOverlay}
-        <FirstLaunchFunnel onComplete={() => completeProductOnboarding()} />
+        <ValueOnboarding onComplete={() => completeProductOnboarding()} />
       </SafeAreaView>
     );
   }
@@ -12341,9 +12401,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           storeProducts={storeProducts}
           purchaseBusy={purchaseBusy}
           paywallError={paywallError}
-          showRestorePurchases={showRestorePurchases}
+          showRestorePurchases
+          authenticatedAccountActions
           onPurchase={purchasePackage}
           onRestore={restorePurchases}
+          onSignOut={() => void signOut()}
+          onDeleteAccount={confirmDeleteAccountFromPaywall}
           onRetryOfferings={() => {
             void refreshRevenueCat();
           }}

@@ -1,6 +1,7 @@
 /**
  * Explicit logout orchestration — pure helpers for routing + side-effect order.
  * Logout must never cancel StoreKit / App Store subscriptions.
+ * Account-first: do NOT call Purchases.logOut on ordinary YouTrader logout.
  */
 
 export type ExplicitLogoutPhase =
@@ -19,8 +20,13 @@ export type ExplicitLogoutPlan = {
   clearLocalUserCache: true;
   resetAnalyticsUser: true;
   clearMonitoringUser: true;
-  /** Call Purchases.logOut exactly once when configured and not already anonymous. */
-  revenueCatLogOutOnce: true;
+  /**
+   * Clear in-memory CustomerInfo / entitlement coordinator state.
+   * Do not call Purchases.logOut — next login uses Purchases.logIn(newUUID).
+   */
+  clearLocalCustomerInfo: true;
+  /** @deprecated Always false in account-first architecture. */
+  revenueCatLogOutOnce: false;
   clearInMemoryJournal: true;
   clearCloudSyncStatus: true;
   /** Preserve StoreKit receipt — do not touch App Store subscription APIs. */
@@ -40,7 +46,8 @@ export function planExplicitLogout(): ExplicitLogoutPlan {
     clearLocalUserCache: true,
     resetAnalyticsUser: true,
     clearMonitoringUser: true,
-    revenueCatLogOutOnce: true,
+    clearLocalCustomerInfo: true,
+    revenueCatLogOutOnce: false,
     clearInMemoryJournal: true,
     clearCloudSyncStatus: true,
     preserveStoreKitReceipt: true,
@@ -63,14 +70,15 @@ export function endExplicitLogoutGuard(inFlight: { current: boolean }): void {
   inFlight.current = false;
 }
 
-/** Whether RevenueCat logOut should run (exactly once when not anonymous). */
-export function shouldCallRevenueCatLogOut(input: {
+/**
+ * Ordinary YouTrader logout must NOT call Purchases.logOut.
+ * Always returns false under the account-first contract.
+ */
+export function shouldCallRevenueCatLogOut(_input: {
   purchasesConfigured: boolean;
   isAnonymous: boolean | null;
 }): boolean {
-  if (!input.purchasesConfigured) return false;
-  if (input.isAnonymous === true) return false;
-  return true;
+  return false;
 }
 
 /**

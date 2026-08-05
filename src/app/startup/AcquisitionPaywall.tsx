@@ -33,9 +33,13 @@ type Props = {
   purchaseBusy: boolean;
   paywallError: string;
   showRestorePurchases: boolean;
+  /** Authenticated paywall: Sign Out + Delete Account (required when Main Settings unreachable). */
+  authenticatedAccountActions?: boolean;
   onPurchase: (pkg?: PurchasesPackage | null, productId?: string) => void;
   onRestore: () => void;
   onRetryOfferings: () => void;
+  onSignOut?: () => void;
+  onDeleteAccount?: () => void;
   onClose?: () => void;
   packageTitle: (pkg: PurchasesPackage) => string;
   packagePrice: (pkg?: PurchasesPackage | null) => string;
@@ -130,9 +134,12 @@ export function AcquisitionPaywall({
   purchaseBusy,
   paywallError,
   showRestorePurchases,
+  authenticatedAccountActions = false,
   onPurchase,
   onRestore,
   onRetryOfferings,
+  onSignOut,
+  onDeleteAccount,
   onClose,
   packageTitle,
   packagePrice,
@@ -143,9 +150,11 @@ export function AcquisitionPaywall({
   const [selected, setSelected] = useState<PaywallPlanId>("yearly");
   const purchaseLock = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
-  // Sticky CTA (primary + supporting ± restore) must not cover plan cards.
+  // Sticky CTA (primary + restore + optional account actions) must not cover plan cards.
   const stickyReserve =
-    132 + (showRestorePurchases || !!paywallError ? 56 : 0) + Math.max(insets.bottom, 10);
+    188 +
+    (authenticatedAccountActions ? 96 : 0) +
+    Math.max(insets.bottom, 10);
 
   const weekly =
     packages.find((pkg) => packageTitle(pkg) === "WEEKLY") ||
@@ -527,14 +536,42 @@ export function AcquisitionPaywall({
           >
             {active.presentation.supporting}
           </YdlText>
-          {(showRestorePurchases || !!paywallError) && (
-            <YdlButton
-              label={purchaseBusy ? t("checking") : t("restorePurchases")}
-              variant="secondary"
-              onPress={onRestore}
-              disabled={purchaseBusy}
-            />
-          )}
+          <YdlButton
+            label={purchaseBusy ? t("checking") : t("restorePurchases")}
+            variant="secondary"
+            onPress={onRestore}
+            disabled={purchaseBusy}
+            testID="paywall-restore"
+          />
+          {authenticatedAccountActions ? (
+            <View style={styles.accountActions} testID="paywall-account-actions">
+              <Pressable
+                onPress={onSignOut}
+                accessibilityRole="button"
+                accessibilityLabel={t("signOut")}
+                style={styles.accountAction}
+                testID="paywall-sign-out"
+              >
+                <YdlText role="caption" color="text.secondary">
+                  {t("signOut")}
+                </YdlText>
+              </Pressable>
+              <YdlText role="caption" color="text.tertiary">
+                ·
+              </YdlText>
+              <Pressable
+                onPress={onDeleteAccount}
+                accessibilityRole="button"
+                accessibilityLabel={t("deleteAccount")}
+                style={styles.accountAction}
+                testID="paywall-delete-account"
+              >
+                <YdlText role="caption" color="text.secondary">
+                  {t("deleteAccount")}
+                </YdlText>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -596,5 +633,17 @@ const styles = StyleSheet.create({
     gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(255,255,255,0.08)",
+  },
+  accountActions: {
+    minHeight: YDL_MIN_TOUCH_TARGET,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  accountAction: {
+    minHeight: YDL_MIN_TOUCH_TARGET,
+    justifyContent: "center",
+    paddingHorizontal: 4,
   },
 });

@@ -32,8 +32,9 @@ function normalizeUserId(userId: string | null | undefined): string | null {
 }
 
 /**
- * Coordinates the RevenueCat identity for one app process. RevenueCat manages
- * aliases created by logIn; this helper only supplies the Supabase user UUID.
+ * Coordinates the RevenueCat identity for one app process.
+ * Callers must configure Purchases with the Supabase UUID (or already configured),
+ * then synchronize via logIn when the App User ID differs.
  */
 export class RevenueCatIdentitySynchronizer<TCustomerInfo> {
   private lastResolvedUserId: string | null = null;
@@ -89,7 +90,7 @@ export class RevenueCatIdentitySynchronizer<TCustomerInfo> {
       const { customerInfo: loggedInInfo } = await this.client.logIn(userId);
       this.lastResolvedUserId = userId;
       // Always consume logIn CustomerInfo, then explicitly refresh so callers never
-      // navigate on a stale anonymous snapshot left over from before identity switch.
+      // navigate on a stale snapshot left over from a previous identity.
       if (this.client.getCustomerInfo) {
         try {
           const refreshed = await this.client.getCustomerInfo();
@@ -104,4 +105,9 @@ export class RevenueCatIdentitySynchronizer<TCustomerInfo> {
       return { status: "failed" };
     }
   }
+}
+
+/** True when a candidate App User ID is a Supabase UUID (never email). */
+export function isSupabaseUuidAppUserId(userId: string | null | undefined): boolean {
+  return normalizeUserId(userId) !== null;
 }
