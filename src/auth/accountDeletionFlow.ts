@@ -76,6 +76,45 @@ export function planPostDeletionTeardown(): PostDeletionTeardownPlan {
   };
 }
 
+export type BootstrapSessionVerdict =
+  | "valid"
+  | "deleted_user"
+  | "expired_refresh"
+  | "network_retryable";
+
+type SessionValidationError = {
+  status?: number | null;
+  code?: string | null;
+  name?: string | null;
+  message?: string | null;
+} | null | undefined;
+
+/**
+ * A cached session must only be purged for a genuinely invalid user.
+ * Transient network failures keep a valid offline session usable.
+ */
+export function classifyBootstrapSession(error: SessionValidationError): BootstrapSessionVerdict {
+  if (!error) return "valid";
+  const code = (error.code || "").toLowerCase();
+  const name = (error.name || "").toLowerCase();
+  const message = (error.message || "").toLowerCase();
+  if (name.includes("retryable") || message.includes("network request failed") || message.includes("fetch failed")) {
+    return "network_retryable";
+  }
+  if (code.includes("user_not_found") || message.includes("user from sub claim in jwt does not exist")) {
+    return "deleted_user";
+  }
+  if (code.includes("refresh_token") || message.includes("refresh token")) {
+    return "expired_refresh";
+  }
+  if (error.status === 401 || error.status === 403) return "deleted_user";
+  return "network_retryable";
+}
+
+export function shouldPurgeCachedSession(verdict: BootstrapSessionVerdict): boolean {
+  return verdict === "deleted_user" || verdict === "expired_refresh";
+}
+
 /** Responses correlated to a superseded attempt must never close a gate. */
 export function isStaleLifecycleResponse(
   responseCorrelationId: string | null | undefined,

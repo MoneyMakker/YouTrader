@@ -17,7 +17,18 @@ export type DeleteAccountResult =
 
 /** Sanitized lifecycle evidence — booleans only, never codes, tokens, ids, or emails. */
 function logAppleLifecycle(event: string, details: Record<string, boolean>) {
-  console.warn(`[YouTrader:apple-lifecycle] ${event}`, details);
+  console.warn(`[YouTrader:apple-lifecycle] ${event}`, {
+    correlationId: activeCorrelationId,
+    ...details,
+  });
+}
+
+let activeCorrelationId = "none";
+
+/** Starts a new correlated Apple lifecycle attempt; the id carries no identity. */
+export function beginAppleLifecycleAttempt(): string {
+  activeCorrelationId = `YT-AL-${Date.now().toString(36)}`;
+  return activeCorrelationId;
 }
 
 /**

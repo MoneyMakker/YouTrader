@@ -19,6 +19,7 @@ import {
 } from "../auth/authErrors";
 import { processAuthDeepLink } from "../auth/authDeepLinkCoordinator";
 import {
+  beginAppleLifecycleAttempt,
   openAppleAppsUsingAppleIdSettings,
   openSubscriptionManagement,
   requestAccountDeletion,
@@ -113,6 +114,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { AuthScreen } from "../auth/AuthScreen";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "../auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "../auth/userCache";
+import { classifyBootstrapSession, shouldPurgeCachedSession } from "../auth/accountDeletionFlow";
 import { StagingQaResetMarkers } from "../qa/StagingQaResetMarkers";
 import { hashLocalAiInput, localAiCacheKey, readLocalAiResponse, writeLocalAiResponse } from "../utils/localAiResponseCache";
 import { clearOfflineJobsForUser, enqueueOfflineJob } from "../sync/offlineQueue";
@@ -11195,8 +11197,25 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       try {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
+        let cachedSession = data.session;
+        if (cachedSession) {
+          // A cached session can outlive its account: validate before trusting it.
+          const { error: userError } = await supabase.auth.getUser();
+          if (cancelled) return;
+          const verdict = classifyBootstrapSession(userError as { status?: number } | null);
+          if (shouldPurgeCachedSession(verdict)) {
+            const staleUserId = cachedSession.user.id;
+            try {
+              await supabase.auth.signOut({ scope: "local" });
+            } catch {
+              // Local purge is best-effort; state below still routes to Auth.
+            }
+            await clearLocalUserCache(staleUserId);
+            cachedSession = null;
+          }
+        }
         clearTimeout(safety);
-        setSession(data.session);
+        setSession(cachedSession);
         setAuthHydrated(true);
       } catch (error) {
         if (cancelled) return;
@@ -11776,6 +11795,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           });
         }
         // Authorization code is exchanged server-side only; never persist locally.
+        beginAppleLifecycleAttempt();
         void storeAppleAuthTokenAfterSignIn(credential.authorizationCode);
         trackEvent("signup_completed", { provider });
         return;
@@ -11905,7 +11925,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         // non-fatal
       }
       await signOutGoogleNative();
-      const { error } = await supabase.auth.signOut();
+      let error: unknown = null;
+      try {
+        ({ error } = await supabase.auth.signOut());
+      } catch (thrown) {
+        // A thrown transport failure must never skip local teardown.
+        error = thrown;
+      }
       if (error) {
         logger.error(error, { feature: "supabase", action: "sign_out" });
         if (!forceLocalTeardown) {
