@@ -8,8 +8,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   AccessibilityInfo,
+  Animated,
   Dimensions,
   Keyboard,
   KeyboardAvoidingView,
@@ -38,6 +38,8 @@ type Props = {
   errorMessage: string | null;
   onSignIn: (provider: AuthProvider) => void;
   onSignInWithEmail: (email: string, password: string) => void;
+  onSignUpWithEmail?: (email: string, password: string) => Promise<string | null>;
+  onResetPassword?: (email: string) => Promise<void>;
   onRetry: () => void;
 };
 
@@ -91,12 +93,17 @@ export function PostPurchaseAuthScreen({
   errorMessage,
   onSignIn,
   onSignInWithEmail,
+  onSignUpWithEmail,
+  onResetPassword,
   onRetry,
 }: Props) {
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailMode, setEmailMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [emailConfirmSent, setEmailConfirmSent] = useState(false);
 
   const showApple = enableNativeAppleSignIn ?? true;
   const showGoogle = enableNativeGoogleSignIn ?? true;
@@ -116,15 +123,55 @@ export function PostPurchaseAuthScreen({
     return null;
   }, [phase, isSuccess]);
 
-  const handleEmailSubmit = useCallback(() => {
+  const handleEmailSubmit = useCallback(async () => {
     const e = email.trim();
     if (!e) { setEmailError("Email is required."); return; }
     if (!e.includes("@")) { setEmailError("Enter a valid email."); return; }
+
+    if (emailMode === "forgot" && onResetPassword) {
+      setEmailError("");
+      Keyboard.dismiss();
+      try {
+        await onResetPassword(e);
+        setEmailConfirmSent(true);
+      } catch (err: any) {
+        setEmailError(err?.message || "Password reset failed.");
+      }
+      return;
+    }
+
+    if (emailMode === "signup" && onSignUpWithEmail) {
+      if (!password) { setEmailError("Password is required."); return; }
+      if (confirmPassword && password !== confirmPassword) { setEmailError("Passwords do not match."); return; }
+      setEmailError("");
+      Keyboard.dismiss();
+      try {
+        const result = await onSignUpWithEmail(e, password);
+        if (result === "confirmation_sent") {
+          setEmailConfirmSent(true);
+        }
+      } catch (err: any) {
+        setEmailError(err?.message || "Create account failed.");
+      }
+      return;
+    }
+
+    // signin
     if (!password) { setEmailError("Password is required."); return; }
     setEmailError("");
     Keyboard.dismiss();
     onSignInWithEmail(e, password);
-  }, [email, password, onSignInWithEmail]);
+  }, [email, password, confirmPassword, emailMode, onSignInWithEmail, onSignUpWithEmail, onResetPassword]);
+
+  const closeEmailModal = useCallback(() => {
+    setEmailModalOpen(false);
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setEmailError("");
+    setEmailConfirmSent(false);
+    setEmailMode("signin");
+  }, []);
 
   const handleApplePress = useCallback(() => {
     if (busy) return;
@@ -191,9 +238,9 @@ export function PostPurchaseAuthScreen({
               <View style={styles.linkingRow}>
                 <ActivityIndicator size="small" color={LIME} />
                 <Text style={styles.linkingText} maxFontSizeMultiplier={1.15}>
-                  {phase === "linking_revenuecat" ? "Linking your purchase…"
-                   : phase === "verifying_entitlement" ? "Verifying Pro access…"
-                   : "Migrating your data…"}
+                  {phase === "linking_revenuecat" ? t("postPurchase.linkingLinking")
+                   : phase === "verifying_entitlement" ? t("postPurchase.linkingVerifying")
+                   : t("postPurchase.linkingMigrating")}
                 </Text>
               </View>
             ) : (
@@ -307,64 +354,118 @@ export function PostPurchaseAuthScreen({
         {/* Email modal */}
         {emailModalOpen && !isSuccess ? (
           <View style={styles.modalOverlay}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => { if (!busy) { setEmailModalOpen(false); setEmail(""); setPassword(""); setEmailError(""); } }} />
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => { if (!busy) closeEmailModal(); }} />
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle} maxFontSizeMultiplier={1.15}>
-                {t("authEmail")}
-              </Text>
-              {emailError ? (
-                <Text style={styles.emailErrorText} maxFontSizeMultiplier={1.15}>{emailError}</Text>
-              ) : null}
-              <TextInput
-                style={styles.modalInput}
-                placeholder={t("authEmail")}
-                placeholderTextColor={C.muted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                value={email}
-                onChangeText={(txt) => { setEmail(txt); setEmailError(""); }}
-                editable={!busy}
-              />
-              <TextInput
-                style={styles.modalInput}
-                placeholder={t("accountPasswordLabel")}
-                placeholderTextColor={C.muted}
-                secureTextEntry
-                textContentType="password"
-                value={password}
-                onChangeText={(txt) => { setPassword(txt); setEmailError(""); }}
-                editable={!busy}
-              />
-              <View style={styles.modalActions}>
-                <Pressable
-                  onPress={() => { setEmailModalOpen(false); setEmail(""); setPassword(""); setEmailError(""); }}
-                  disabled={busy}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("cancel") || "Cancel"}
-                  style={({ pressed }) => [styles.modalCancel, pressed && styles.modalCancelPressed]}
-                >
-                  <Text style={styles.modalCancelText} maxFontSizeMultiplier={1.15}>
-                    {t("cancel") || "Cancel"}
+              {emailConfirmSent ? (
+                <>
+                  <Text style={styles.modalTitle} maxFontSizeMultiplier={1.15}>
+                    {emailMode === "forgot" ? t("postPurchase.emailCheckEmail") : t("postPurchase.emailConfirmEmail")}
                   </Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleEmailSubmit}
-                  disabled={busy}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("postPurchase.continueEmail")}
-                  style={({ pressed }) => [styles.modalSubmit, busy && styles.modalSubmitDisabled, pressed && !busy && styles.modalSubmitPressed]}
-                >
-                  {phase === "authenticating_email" ? (
-                    <ActivityIndicator size="small" color={LIME} />
-                  ) : (
-                    <Text style={styles.modalSubmitText} maxFontSizeMultiplier={1.15}>
-                      {t("postPurchase.continueEmail")}
-                    </Text>
-                  )}
-                </Pressable>
-              </View>
+                  <Text style={styles.description} maxFontSizeMultiplier={1.2}>
+                    {emailMode === "forgot"
+                      ? t("postPurchase.emailResetBody")
+                      : t("postPurchase.emailCheckBody")}
+                  </Text>
+                  <Pressable
+                    onPress={closeEmailModal}
+                    style={({ pressed }) => [styles.modalSubmit, pressed && styles.modalSubmitPressed]}
+                  >
+                    <Text style={styles.modalSubmitText} maxFontSizeMultiplier={1.15}>OK</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.modalTitle} maxFontSizeMultiplier={1.15}>
+                    {emailMode === "signup" ? t("postPurchase.emailCreateAccount") : emailMode === "forgot" ? t("postPurchase.emailForgotPassword") : t("authEmail")}
+                  </Text>
+                  {emailError ? (
+                    <Text style={styles.emailErrorText} maxFontSizeMultiplier={1.15}>{emailError}</Text>
+                  ) : null}
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder={t("authEmail")}
+                    placeholderTextColor={C.muted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
+                    value={email}
+                    onChangeText={(txt) => { setEmail(txt); setEmailError(""); }}
+                    editable={!busy}
+                  />
+                  {emailMode !== "forgot" ? (
+                    <>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder={t("accountPasswordLabel")}
+                        placeholderTextColor={C.muted}
+                        secureTextEntry
+                        textContentType="password"
+                        value={password}
+                        onChangeText={(txt) => { setPassword(txt); setEmailError(""); }}
+                        editable={!busy}
+                      />
+                      {emailMode === "signup" ? (
+                        <TextInput
+                          style={styles.modalInput}
+                          placeholder="Confirm password"
+                          placeholderTextColor={C.muted}
+                          secureTextEntry
+                          textContentType="newPassword"
+                          value={confirmPassword}
+                          onChangeText={(txt) => { setConfirmPassword(txt); setEmailError(""); }}
+                          editable={!busy}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+                  <View style={styles.modalActions}>
+                    <Pressable
+                      onPress={closeEmailModal}
+                      disabled={busy}
+                      accessibilityRole="button"
+                      accessibilityLabel={t("cancel") || "Cancel"}
+                      style={({ pressed }) => [styles.modalCancel, pressed && styles.modalCancelPressed]}
+                    >
+                      <Text style={styles.modalCancelText} maxFontSizeMultiplier={1.15}>
+                        {t("cancel") || "Cancel"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { void handleEmailSubmit(); }}
+                      disabled={busy}
+                      accessibilityRole="button"
+                      accessibilityLabel={emailMode === "forgot" ? "Send Reset Link" : t("postPurchase.continueEmail")}
+                      style={({ pressed }) => [styles.modalSubmit, busy && styles.modalSubmitDisabled, pressed && !busy && styles.modalSubmitPressed]}
+                    >
+                      {phase === "authenticating_email" ? (
+                        <ActivityIndicator size="small" color={LIME} />
+                      ) : (
+                        <Text style={styles.modalSubmitText} maxFontSizeMultiplier={1.15}>
+                          {emailMode === "forgot" ? t("postPurchase.emailSendLink") : t("postPurchase.continueEmail")}
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                  <View style={styles.emailAltLinks}>
+                    {emailMode === "signin" ? (
+                      <>
+                        <Text style={styles.emailAltLink} onPress={() => { setEmailMode("signup"); setEmailError(""); setPassword(""); setConfirmPassword(""); }}>
+                          {t("postPurchase.emailCreateLink")}
+                        </Text>
+                        <Text style={styles.emailAltSeparator}> · </Text>
+                        <Text style={styles.emailAltLink} onPress={() => { setEmailMode("forgot"); setEmailError(""); setPassword(""); }}>
+                          {t("postPurchase.emailForgotLink")}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.emailAltLink} onPress={() => { setEmailMode("signin"); setEmailError(""); setPassword(""); setConfirmPassword(""); }}>
+                        {t("postPurchase.emailBackToSignIn")}
+                      </Text>
+                    )}
+                  </View>
+                </>
+              )}
             </View>
           </View>
         ) : null}
@@ -452,4 +553,7 @@ const styles = StyleSheet.create({
   modalSubmitDisabled: { opacity: 0.5 },
   modalSubmitPressed: { backgroundColor: "rgba(163,255,18,0.18)" },
   modalSubmitText: { color: LIME, fontSize: 15, fontWeight: "800" },
+  emailAltLinks: { flexDirection: "row", justifyContent: "center", marginTop: 8 },
+  emailAltLink: { color: C.sub, fontSize: 13, fontWeight: "700" },
+  emailAltSeparator: { color: C.muted, fontSize: 13, fontWeight: "600" },
 });

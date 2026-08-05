@@ -10349,7 +10349,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const purchasesConfigured = useRef(false);
   const [anonymousEntitlementStatus, setAnonymousEntitlementStatus] = useState<"loading" | "active" | "inactive" | "unknown">("unknown");
   const anonymousCustomerInfoRef = useRef<CustomerInfo | null>(null);
-  const anonymousEntitlementHydratedRef = useRef(false);
+  const linkingMarkerActiveRef = useRef(false);
   const cloudSyncInFlight = useRef(false);
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -10398,14 +10398,16 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     let cancelled = false;
     void (async () => {
       try {
-        const [onboarding, devicePaywall, legacyPaywall, authRequiredFlag] = await Promise.all([
+        const [onboarding, devicePaywall, legacyPaywall, authRequiredFlag, linkingMarker] = await Promise.all([
           AsyncStorage.getItem(ACQUISITION_ONBOARDING_KEY),
           AsyncStorage.getItem(ACQUISITION_PAYWALL_DEVICE_KEY),
           AsyncStorage.getItem(POST_AUTH_PAYWALL_SEEN_KEY),
           AsyncStorage.getItem(ACQUISITION_AUTH_REQUIRED_KEY),
+          AsyncStorage.getItem(POST_PURCHASE_LINKING_MARKER_KEY),
         ]);
         // Clear legacy guest flag — free/guest access is removed.
         void AsyncStorage.removeItem(ACQUISITION_GUEST_KEY);
+        linkingMarkerActiveRef.current = linkingMarker === "1";
         let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
         let onboardingDone = onboarding === "1";
         let authRequiredSticky = authRequiredFlag === "1";
@@ -10514,6 +10516,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     loggingOut: loggingOut || loggingOutRef.current,
     explicitAuthRequired: explicitAuthRequired || explicitAuthRequiredRef.current,
     anonymousEntitlementActive,
+    linkingMarkerActive: linkingMarkerActiveRef.current,
   });
 
   useEffect(() => {
@@ -10965,7 +10968,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [applyCustomerInfo, refreshRevenueCat, revenueCatConfigured, session?.user?.id]);
 
   useEffect(() => {
+    // Suppress normal RC identity sync while post-purchase linking owns Purchases.logIn.
     if (!purchasesConfigured.current || !session?.user.id || !revenueCatReady) return;
+    if (linkingMarkerActiveRef.current) return;
     let cancelled = false;
     const userId = session.user.id;
     const generation = ++identitySyncGenerationRef.current;
@@ -12137,6 +12142,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     if (!session?.user?.id && customerHasPro(result.customerInfo)) {
       anonymousCustomerInfoRef.current = result.customerInfo;
       void AsyncStorage.setItem(POST_PURCHASE_LINKING_MARKER_KEY, "1");
+      linkingMarkerActiveRef.current = true;
       setAnonymousEntitlementStatus("active");
       logger.info("post_purchase_auth pending", { feature: "revenuecat", action: "anonymous_purchase" });
       trackEvent("pro_purchased", { reason });
@@ -12559,15 +12565,21 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   if (acquisitionPhase === "post_purchase_auth") {
     return (
       <PostPurchaseAuthContainer
+        sessionUserId={session?.user?.id ?? null}
         anonymousCustomerInfo={anonymousCustomerInfoRef.current}
         onAuthenticate={handlePostPurchaseAuthenticate}
         onAuthenticateEmail={handlePostPurchaseEmail}
+        onSignUpWithEmail={async (e, p) => {
+          const result = await signUpWithEmailPasswordHandler(e, p);
+          return result === "confirmation_sent" ? "confirmation_sent" : null;
+        }}
+        onResetPassword={async (e) => { await requestPasswordResetHandler(e); }}
         onLinkingComplete={(result) => {
           void AsyncStorage.removeItem(POST_PURCHASE_LINKING_MARKER_KEY);
+          linkingMarkerActiveRef.current = false;
           applyCustomerInfo(result.customerInfo, "post-purchase-linking");
           setAnonymousEntitlementStatus("inactive");
           anonymousCustomerInfoRef.current = null;
-          // Coordinator handled migration; acquisition now routes to main (session + Pro).
         }}
       />
     );

@@ -59,6 +59,8 @@ export type AcquisitionInput = {
   explicitAuthRequired?: boolean;
   /** Anonymous purchase completed with active entitlement — route to post-purchase auth. */
   anonymousEntitlementActive?: boolean;
+  /** Post-purchase linking marker is active — keep coordinator mounted until complete. */
+  linkingMarkerActive?: boolean;
 };
 
 /**
@@ -67,8 +69,9 @@ export type AcquisitionInput = {
  * Rules:
  * - Not hydrated → loading
  * - Explicit logout in flight → loading (never paywall)
- * - No session + onboarding incomplete → onboarding
+ * - Linking marker active → post_purchase_auth (survives session creation)
  * - No session + anonymous entitlement active → post_purchase_auth
+ * - No session + onboarding incomplete → onboarding
  * - No session → auth (never paywall, never main)
  * - Session + identity sync pending/failed → loading (retryable; not false paywall)
  * - Session + RevenueCat not ready → loading
@@ -78,6 +81,9 @@ export type AcquisitionInput = {
 export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPhase {
   if (!input.hydrated) return "loading";
   if (input.loggingOut) return "loading";
+
+  // Active linking marker survives session creation — keeps coordinator mounted.
+  if (input.linkingMarkerActive) return "post_purchase_auth";
 
   if (!input.hasSession) {
     if (!input.onboardingCompleted) return "onboarding";

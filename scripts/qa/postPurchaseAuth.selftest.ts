@@ -36,8 +36,23 @@ function baseInput(overrides: Partial<AcquisitionInput> = {}): AcquisitionInput 
 // ═══ Routing: anonymousEntitlementActive drives post_purchase_auth ══════════
 
 check(
-  "anonymous entitlement active routes to post_purchase_auth",
-  resolveAcquisitionPhase(baseInput({ anonymousEntitlementActive: true })) === "post_purchase_auth",
+  "linkingMarkerActive survives session creation (coordinator stays mounted)",
+  resolveAcquisitionPhase(baseInput({ linkingMarkerActive: true, hasSession: true, isPremium: true })) === "post_purchase_auth",
+);
+
+check(
+  "linkingMarkerActive without session routes to post_purchase_auth",
+  resolveAcquisitionPhase(baseInput({ linkingMarkerActive: true })) === "post_purchase_auth",
+);
+
+check(
+  "linkingMarkerActive is overridden by explicit logout",
+  resolveAcquisitionPhase(baseInput({ linkingMarkerActive: true, loggingOut: true })) === "loading",
+);
+
+check(
+  "session + marker active = post_purchase_auth (not main, not paywall)",
+  resolveAcquisitionPhase(baseInput({ linkingMarkerActive: true, hasSession: true, isPremium: false, revenueCatReady: true, identitySyncPending: false })) === "post_purchase_auth",
 );
 
 check(
@@ -46,7 +61,7 @@ check(
 );
 
 check(
-  "authenticated user never routes to post_purchase_auth even with anonymous flag",
+  "session without marker never routes to post_purchase_auth",
   resolveAcquisitionPhase(baseInput({ anonymousEntitlementActive: true, hasSession: true, isPremium: true })) === "main",
 );
 

@@ -14,6 +14,7 @@ import type { AuthProvider } from "../auth/types";
 import type { PostPurchaseAuthPhase } from "./types";
 import { linkAnonymousPurchaseToIdentity } from "./RevenueCatIdentityLinker";
 import { migrateGuestTradesToUser } from "./AnonymousDataMigrationService";
+import { REVENUECAT_ENTITLEMENT_ID } from "../config/appConfig";
 
 export type LinkingResult = {
   customerInfo: CustomerInfo;
@@ -43,11 +44,14 @@ export function usePostPurchaseAuthCoordinator({
   const callbacksRef = useRef({ onLinkingComplete });
   callbacksRef.current = { onLinkingComplete };
   const busyRef = useRef(false);
+  const failedStageRef = useRef<"auth" | "linking" | "verify" | "migrate" | null>(null);
+  const retryUserIdRef = useRef<string | null>(null);
 
-  const setError = useCallback((msg: string) => {
+  const setError = useCallback((msg: string, stage: "auth" | "linking" | "verify" | "migrate") => {
     setErrorMessage(msg);
     setPhase("error_recoverable");
     busyRef.current = false;
+    failedStageRef.current = stage;
   }, []);
 
   const gotoIdle = useCallback(() => {
@@ -58,25 +62,26 @@ export function usePostPurchaseAuthCoordinator({
   }, []);
 
   const handleAuthResult = useCallback(async (userId: string) => {
+    retryUserIdRef.current = userId;
     // Phase: linking_revenuecat
     setPhase("linking_revenuecat");
 
     const linkResult = await linkAnonymousPurchaseToIdentity(userId, anonymousCustomerInfo);
     if (linkResult.status === "not_configured") {
-      setError("Billing is not available. Please try again.");
+      setError("Billing is not available. Please try again.", "linking");
       return;
     }
     if (linkResult.status === "failed") {
-      setError(linkResult.message || "Linking failed. Please try again.");
+      setError(linkResult.message || "Linking failed. Please try again.", "linking");
       return;
     }
 
     // Phase: verifying_entitlement
     setPhase("verifying_entitlement");
     const info = linkResult.customerInfo;
-    const hasPro = !!info?.entitlements?.active?.["pro"]?.isActive;
+    const hasPro = !!info?.entitlements?.active?.[REVENUECAT_ENTITLEMENT_ID]?.isActive;
     if (!hasPro) {
-      setError("Your Pro access could not be verified. Please try again.");
+      setError("Your Pro access could not be verified. Please try again.", "verify");
       return;
     }
 
@@ -86,18 +91,22 @@ export function usePostPurchaseAuthCoordinator({
 
     // failed migration blocks Main — user stays with retry
     if (migrationResult.status === "failed") {
-      setError("Data migration failed. Your purchase and journal are preserved — Retry to continue.");
+      setError("Data migration failed. Your purchase and journal are preserved — Retry to continue.", "migrate");
       return;
     }
 
-    // Phase: success
+    // Phase: success — let animation render before navigating to Main.
     setPhase("success");
     busyRef.current = false;
-    callbacksRef.current.onLinkingComplete({
+    const cb = callbacksRef.current.onLinkingComplete;
+    const finalResult: LinkingResult = {
       customerInfo: info,
       tradesMigrated: migrationResult.status === "migrated" ? migrationResult.tradesMigrated : 0,
       migrationStatus: migrationResult.status,
-    });
+    };
+    // Brief delay so the success visual is visible before the parent clears
+    // the marker and acquisition routes to Main.
+    setTimeout(() => { cb(finalResult); }, 900);
   }, [anonymousCustomerInfo, setError]);
 
   const authenticate = useCallback(async (provider: AuthProvider) => {
@@ -126,7 +135,7 @@ export function usePostPurchaseAuthCoordinator({
       if (msg.toLowerCase().includes("cancel") || msg.toLowerCase().includes("user cancelled")) {
         gotoIdle();
       } else {
-        setError(msg);
+        setError(msg, "auth");
       }
     }
   }, [onAuthenticate, handleAuthResult, gotoIdle, setError]);
@@ -151,18 +160,47 @@ export function usePostPurchaseAuthCoordinator({
       if (msg.toLowerCase().includes("cancel") || msg.toLowerCase().includes("user cancelled")) {
         gotoIdle();
       } else {
-        setError(msg);
+        setError(msg, "auth");
       }
     }
   }, [onAuthenticateEmail, handleAuthResult, gotoIdle, setError]);
 
+  /** Stage-aware retry — resumes the failed stage without repeating OAuth. */
   const retry = useCallback(() => {
-    if (!activeProvider) {
+    const stage = failedStageRef.current;
+    failedStageRef.current = null;
+    if (!stage) {
       gotoIdle();
       return;
     }
-    void authenticate(activeProvider);
-  }, [activeProvider, authenticate, gotoIdle]);
+    busyRef.current = true;
+    setErrorMessage(null);
+
+    if (stage === "auth") {
+      if (activeProvider) {
+        void authenticate(activeProvider);
+      } else {
+        gotoIdle();
+      }
+    } else {
+      // linking / verify / migrate — resume from the stored userId.
+      const userId = retryUserIdRef.current;
+      if (!userId) {
+        gotoIdle();
+        return;
+      }
+      void handleAuthResult(userId);
+    }
+  }, [activeProvider, authenticate, gotoIdle, handleAuthResult]);
+
+  /** Resume linking when session already exists (relaunch after auth). */
+  const resumeLinking = useCallback(async (userId: string) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setPhase("linking_revenuecat");
+    setErrorMessage(null);
+    await handleAuthResult(userId);
+  }, [handleAuthResult]);
 
   return {
     phase,
@@ -171,6 +209,7 @@ export function usePostPurchaseAuthCoordinator({
     authenticate,
     authenticateEmail,
     retry,
+    resumeLinking,
     gotoIdle,
   };
 }

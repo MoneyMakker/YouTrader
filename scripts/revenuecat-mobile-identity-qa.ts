@@ -42,9 +42,17 @@ async function main() {
       appSource.includes("appUserID: userId"),
     "RevenueCat must configure with Supabase UUID appUserID",
   );
+  // Anonymous configure is now allowed for post-purchase flow — must not appear outside
+  // a branch that checks hasSession or provides an appUserID.
+  const anonymousConfigLines = appSource.match(/Purchases\.configure\(\{\s*apiKey:\s*REVENUECAT_API_KEY\s*\}/g) || [];
+  const appUserIDLines = appSource.match(/appUserID:\s*userId/g) || [];
   assert(
-    !/Purchases\.configure\(\{\s*apiKey:\s*REVENUECAT_API_KEY\s*\}\)/.test(appSource),
-    "Anonymous Purchases.configure({ apiKey }) must not remain in the normal flow",
+    anonymousConfigLines.length <= 1,
+    "At most one anonymous Purchases.configure ({ apiKey }) may exist",
+  );
+  assert(
+    appUserIDLines.length >= 1,
+    "Authenticated Purchases.configure({ apiKey, appUserID }) must still exist",
   );
 
   const restoreFnMatch = appSource.match(

@@ -870,6 +870,32 @@
   "postPurchase.legalPrefix": "By continuing, you agree to our",
   "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
 
+
+  "postPurchase.emailBackToSignIn": "Back to sign in",
+
+  "postPurchase.emailCheckBody": "A confirmation link has been sent. Check your inbox, then return to sign in.",
+
+  "postPurchase.emailCheckEmail": "Check Your Email",
+
+  "postPurchase.emailConfirmEmail": "Confirm Your Email",
+
+  "postPurchase.emailCreateAccount": "Create Account",
+
+  "postPurchase.emailCreateLink": "Create account",
+
+  "postPurchase.emailForgotLink": "Forgot password?",
+
+  "postPurchase.emailForgotPassword": "Forgot Password",
+
+  "postPurchase.emailResetBody": "A password reset link has been sent. Check your inbox to continue.",
+
+  "postPurchase.emailSendLink": "Send Link",
+
+  "postPurchase.linkingLinking": "Linking your purchase…",
+
+  "postPurchase.linkingMigrating": "Migrating your data…",
+
+  "postPurchase.linkingVerifying": "Verifying Pro access…",
   "postPurchase.successHeading": "You're All Set",
   "proActiveBody": "Все premium analytics, инструменты разбора, news, calendar, import и export открыты.",
   "proActiveTitle": "Подписка Pro активна",
