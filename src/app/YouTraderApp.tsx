@@ -112,6 +112,8 @@ import Svg, {
 } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
 import { AuthScreen } from "../auth/AuthScreen";
+import { PostPurchaseAuthBridge } from "../postPurchase/PostPurchaseAuthBridge";
+import { migrateGuestTradesToUser } from "../postPurchase/AnonymousDataMigrationService";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "../auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "../auth/userCache";
 import { classifyBootstrapSession, shouldPurgeCachedSession } from "../auth/accountDeletionFlow";
@@ -10344,6 +10346,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [pushCalendarEvents, setPushCalendarEvents] = useState<EconEvent[]>([]);
   const [shareExportHostReady, setShareExportHostReady] = useState(false);
   const purchasesConfigured = useRef(false);
+  const [postPurchaseAuthPending, setPostPurchaseAuthPending] = useState(false);
+  const anonymousCustomerInfoRef = useRef<CustomerInfo | null>(null);
+  const anonymousPurchaseRef = useRef(false);
   const cloudSyncInFlight = useRef(false);
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -10500,12 +10505,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     paywallCompleted,
     authRequired,
     hasSession: !!session?.user,
-    isPremium,
+    isPremium: isPremium || postPurchaseAuthPending,
     revenueCatReady: !revenueCatConfigured || revenueCatReady,
     identitySyncPending: !!session?.user?.id && identitySyncPending,
     identitySyncFailed: !!session?.user?.id && identitySyncFailed,
     loggingOut: loggingOut || loggingOutRef.current,
     explicitAuthRequired: explicitAuthRequired || explicitAuthRequiredRef.current,
+    postPurchaseAuthPending,
   });
 
   useEffect(() => {
@@ -10896,11 +10902,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [applyCustomerInfo]);
 
   useEffect(() => {
-    // Account-first: configure RevenueCat only with an authenticated Supabase UUID.
-    // Never create an anonymous customer for Onboarding/Auth.
+    // Configure RevenueCat. When an authenticated Supabase UUID exists, use it
+    // as the appUserID. Without a session, configure anonymously to allow
+    // pre-auth purchases that are later linked via Purchases.logIn.
     if (!revenueCatConfigured) return;
     const userId = session?.user?.id;
-    if (!userId) return;
+    const hasSession = !!userId;
 
     let listener: ((info: CustomerInfo) => void) | null = null;
     let cancelled = false;
@@ -10910,12 +10917,20 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       try {
         if (!purchasesConfigured.current) {
           Purchases.setLogLevel(LOG_LEVEL.ERROR);
-          Purchases.configure({ apiKey: REVENUECAT_API_KEY, appUserID: userId });
+          if (hasSession) {
+            Purchases.configure({ apiKey: REVENUECAT_API_KEY, appUserID: userId });
+          } else {
+            Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+          }
           purchasesConfigured.current = true;
           setRevenueCatReady(true);
         }
         listener = (info: CustomerInfo) => {
-          if (!sessionRef.current?.user?.id) return;
+          // Track anonymous CustomerInfo for post-purchase entitlement detection.
+          if (!sessionRef.current?.user?.id) {
+            anonymousCustomerInfoRef.current = info;
+            return;
+          }
           applyCustomerInfo(info, "customerInfoUpdateListener");
         };
         Purchases.addCustomerInfoUpdateListener(listener);
@@ -11032,6 +11047,26 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       cancelled = true;
     };
   }, [applyCustomerInfo, revenueCatReady, session?.user.id]);
+
+  // Post-purchase linking detection: when a session appears after anonymous
+  // purchase and identity sync confirms Pro, clear the pending flag to enter Main.
+  useEffect(() => {
+    if (!postPurchaseAuthPending || !session?.user?.id) return;
+    if (identitySyncPending) return; // still syncing — will re-evaluate
+    if (identitySyncFailed) {
+      // Sync failed — user sees Auth; flag stays until successful linking.
+      return;
+    }
+    if (proAccess.isPro) {
+      // Entitlement confirmed — link complete, enter Main.
+      void (async () => {
+        await migrateGuestTradesToUser(session!.user.id);
+        setPostPurchaseAuthPending(false);
+        anonymousPurchaseRef.current = false;
+        anonymousCustomerInfoRef.current = null;
+      })();
+    }
+  }, [postPurchaseAuthPending, session?.user?.id, identitySyncPending, identitySyncFailed, proAccess.isPro]);
 
   const refreshLockScreenBufferReminder = useCallback(async () => {
     const [enabledRaw, templateKeyRaw, modeRaw] = await Promise.all([
@@ -11817,6 +11852,54 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     }
   }, [authConfigured]);
 
+  // Post-purchase auth: thin wrappers that don't show destructive alerts.
+  // Errors bubble to PostPurchaseAuthBridge for inline display.
+  const handlePostPurchaseApple = useCallback(async () => {
+    if (!supabase || !authConfigured || !enableNativeAppleSignIn) {
+      throw new Error("Apple Sign-In is not available.");
+    }
+    setAuthBusy(true);
+    try {
+      const credential = await signInWithAppleNative(supabase);
+      if (credential.fullName?.givenName || credential.fullName?.familyName) {
+        const fullName = [credential.fullName.givenName, credential.fullName.familyName].filter(Boolean).join(" ");
+        await supabase.auth.updateUser({ data: { full_name: fullName, given_name: credential.fullName.givenName, family_name: credential.fullName.familyName } });
+      }
+      beginAppleLifecycleAttempt();
+      void storeAppleAuthTokenAfterSignIn(credential.authorizationCode);
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [authConfigured]);
+
+  const handlePostPurchaseGoogle = useCallback(async () => {
+    if (!supabase || !authConfigured) throw new Error("Google Sign-In is not available.");
+    setAuthBusy(true);
+    try {
+      await signInWithGoogle(supabase);
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [authConfigured]);
+
+  const handlePostPurchaseEmail = useCallback(async (email: string, password: string) => {
+    if (!supabase || !authConfigured) throw new Error("Email sign-in is not configured.");
+    const limit = await checkClientRateLimit("auth", "email");
+    if (!limit.allowed) throw new Error(SECURITY_MESSAGES.rateLimited);
+    setAuthBusy(true);
+    try {
+      const { data } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (!data.user?.id) throw new Error("Sign-in failed. Please check your credentials.");
+      setSession(data.session);
+      setAuthHydrated(true);
+      setAuthBusy(false);
+      trackEvent("login_completed", { provider: "email" });
+    } catch (e: any) {
+      setAuthBusy(false);
+      throw e;
+    }
+  }, [authConfigured]);
+
   const completeEmailAuthSession = useCallback(async (nextSession: Session) => {
     setSession(nextSession);
     setAuthHydrated(true);
@@ -12037,6 +12120,17 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     if (applyCustomerInfo(result.customerInfo, `${reason}:purchase-result`)) {
       logger.info("RevenueCat purchase unlocked Pro", { feature: "revenuecat", action: "purchase_success", reason });
       trackEvent("purchase_success", { reason });
+      trackEvent("pro_purchased", { reason });
+      successHaptic();
+      return;
+    }
+
+    // Anonymous purchase: no session yet, but CustomerInfo confirms Pro entitlement.
+    if (!session?.user?.id && customerHasPro(result.customerInfo)) {
+      anonymousPurchaseRef.current = true;
+      anonymousCustomerInfoRef.current = result.customerInfo;
+      setPostPurchaseAuthPending(true);
+      logger.info("post_purchase_auth pending", { feature: "revenuecat", action: "anonymous_purchase" });
       trackEvent("pro_purchased", { reason });
       successHaptic();
       return;
@@ -12451,6 +12545,19 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           packagePrice={packagePrice}
         />
       </SafeAreaView>
+    );
+  }
+
+  if (acquisitionPhase === "post_purchase_auth") {
+    return (
+      <View style={styles.app} testID="post-purchase-auth-root">
+        <StatusBar style="light" backgroundColor="#080A0E" />
+        <PostPurchaseAuthBridge
+          onSignInWithApple={handlePostPurchaseApple}
+          onSignInWithGoogle={handlePostPurchaseGoogle}
+          onSignInWithEmail={handlePostPurchaseEmail}
+        />
+      </View>
     );
   }
 

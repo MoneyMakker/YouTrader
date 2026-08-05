@@ -14,6 +14,7 @@ export type AcquisitionPhase =
   | "onboarding"
   | "paywall"
   | "auth"
+  | "post_purchase_auth"
   | "main";
 
 /** Explicit release gate states mapped from acquisition + billing readiness. */
@@ -56,6 +57,8 @@ export type AcquisitionInput = {
    * until the next successful login clears it.
    */
   explicitAuthRequired?: boolean;
+  /** Anonymous purchase completed with active entitlement — route to post-purchase auth. */
+  postPurchaseAuthPending?: boolean;
 };
 
 /**
@@ -65,6 +68,7 @@ export type AcquisitionInput = {
  * - Not hydrated → loading
  * - Explicit logout in flight → loading (never paywall)
  * - No session + onboarding incomplete → onboarding
+ * - No session + post-purchase auth pending + Pro → post_purchase_auth
  * - No session → auth (never paywall, never main)
  * - Session + identity sync pending/failed → loading (retryable; not false paywall)
  * - Session + RevenueCat not ready → loading
@@ -77,6 +81,7 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
 
   if (!input.hasSession) {
     if (!input.onboardingCompleted) return "onboarding";
+    if (input.postPurchaseAuthPending && input.isPremium) return "post_purchase_auth";
     return "auth";
   }
 
@@ -105,6 +110,7 @@ export function resolveReleaseGateState(input: AcquisitionInput): ReleaseGateSta
     return "UNAUTHENTICATED";
   }
   if (phase === "paywall") return "AUTHENTICATED_NOT_ENTITLED";
+  if (phase === "post_purchase_auth") return "AUTHENTICATING";
   if (phase === "main") {
     if (input.hasSession && input.isPremium) return "AUTHENTICATED_ENTITLED";
     if (input.hasSession && !input.isPremium) return "AUTHENTICATED_NOT_ENTITLED";

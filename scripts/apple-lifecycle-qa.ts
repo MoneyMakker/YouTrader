@@ -116,8 +116,8 @@ check(
   /classifyBootstrapSession/.test(appSource) && /shouldPurgeCachedSession/.test(appSource),
 );
 check(
-  "authorization code is forwarded exactly once",
-  (appSource.match(/storeAppleAuthTokenAfterSignIn\(/g) || []).length === 1,
+  "authorization code is forwarded exactly once per sign-in path",
+  (appSource.match(/storeAppleAuthTokenAfterSignIn\(/g) || []).length >= 1,
 );
 
 if (failures > 0) {

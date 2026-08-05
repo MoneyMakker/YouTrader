@@ -15,6 +15,7 @@
     "test:email-password": "npx tsx scripts/email-password-qa.ts",
     "test:apple-lifecycle": "npx tsx scripts/apple-lifecycle-qa.ts",
     "test:delete-account-cleanup": "npx tsx scripts/qa/deleteAccountCleanupHardening.selftest.ts",
+    "test:post-purchase-auth": "npx tsx scripts/qa/postPurchaseAuth.selftest.ts",
     "test:usage-limits": "npx tsx scripts/usage-limits-qa.ts",
     "test:session-storage": "node --experimental-strip-types scripts/security/session-storage-qa.ts",
     "test:release-readiness": "npx tsx scripts/release-readiness-qa.ts",
