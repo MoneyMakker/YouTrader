@@ -125,3 +125,6 @@ docs/releases/**/qa-artifacts/
 ios/**/xcshareddata/swiftpm/
 
 .maestro/screenshots/
+
+# Build 117 physical QA local evidence (may contain disposable emails in screenshots)
+docs/releases/1.6.1/evidence/build117-physical-qa-*/
