@@ -118,32 +118,11 @@ Deno.serve(async (req) => {
     await deleteAppleRefreshToken(admin, userId);
   }
 
-  // Best-effort cleanup of known user-owned production tables.
-  const tables = [
-    "trade_journal",
-    "trades",
-    "user_subscriptions",
-    "user_app_state",
-    "user_firm_settings",
-    "risk_snapshots",
-    "upload_files",
-    "security_events",
-    "idempotency_keys",
-    "request_limits",
-    "ai_analysis_usage",
-    "ai_usage_events",
-    "achievement_share_usage",
-    "ai_quota_lifecycle",
-    "account_deletion_requests",
-    "auth_provider_tokens",
-  ];
-  for (const table of tables) {
-    const { error: tableError } = await admin.from(table).delete().eq("user_id", userId);
-    if (tableError) {
-      console.warn(`delete-account: cleanup skipped for ${table}`);
-    }
-  }
-
+  // User-owned rows are removed by ON DELETE CASCADE from the auth.users FK
+  // on every table that carries a user_id column (see migrations).
+  // auth_provider_tokens is cleaned above via deleteAppleRefreshToken.
+  // security_events uses ON DELETE SET NULL to preserve audit artifacts.
+  // request_limits uses actor_hash (no FK) — pseudonymous rows survive deletion.
   const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
   if (deleteError) {
     // Idempotent-ish: if user already gone, treat as success.
