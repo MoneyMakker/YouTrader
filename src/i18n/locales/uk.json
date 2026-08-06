@@ -2093,5 +2093,22 @@
   "youAreImprovingSub": "Лише чесне порівняння. Якщо результат падає — картка покаже це.",
   "youTraderEconomicCalendar": "Економічний календар YouTrader",
   "youTraderPro": "YouTrader Pro",
-  "youTraderRiskCoach": "YouTrader Risk Coach"
+  "youTraderRiskCoach": "YouTrader Risk Coach",
+  "propPass.firstAction.eyebrow": "PROP PASS",
+  "propPass.firstAction.title": "Your Prop Pass Is Active",
+  "propPass.firstAction.body": "Your personalized guardrails are ready. Confirm your challenge limits before enabling authoritative warnings.",
+  "propPass.firstAction.readiness": "Readiness score",
+  "propPass.firstAction.riskProfile": "Risk profile",
+  "propPass.firstAction.recommendedRisk": "Recommended risk",
+  "propPass.firstAction.stopLoss": "Stop-loss behavior",
+  "propPass.firstAction.accountSize": "Account size",
+  "propPass.firstAction.confirmLimits": "Confirm your challenge limits",
+  "propPass.firstAction.tradeGuardrail": "Trade guardrail",
+  "propPass.firstAction.conservative": "Conservative",
+  "propPass.firstAction.reviewBefore": "Review before start",
+  "propPass.firstAction.firmConfirmBody": "Select your exact prop firm and challenge account size so accurate limits can be calculated.",
+  "propPass.firstAction.accountConfirmBody": "Enter your exact challenge account size so buffer limits are accurate.",
+  "propPass.firstAction.confirmAndStart": "Confirm and Start Challenge",
+  "propPass.firstAction.start": "Start My Challenge",
+  "propPass.firstAction.note": "Firm limits remain disabled until you confirm the challenge rules."
 }

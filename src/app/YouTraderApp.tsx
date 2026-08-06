@@ -10457,9 +10457,23 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (visualPreview) {
           linkingMarkerActiveRef.current = true;
         }
-        // Dev-only QA reset: set yt-qa-reset-assessment=1 to clear all funnel state.
+        // Dev-only QA reset: set yt-qa-reset-assessment=1 to clear all funnel state (one-shot).
         if (__DEV__) {
-          try { const reset = await AsyncStorage.getItem("yt-qa-reset-assessment"); if (reset === "1") { await AsyncStorage.multiRemove(["yt-assessment-answers-v1", "yt-assessment-result-v1", "yt-assessment-question-index-v1", ASSESSMENT_FUNNEL_PHASE_KEY, POST_PURCHASE_LINKING_MARKER_KEY, POST_PURCHASE_FIRST_ACTION_MARKER_KEY]); setFunnelPhase("assessment_intro"); } } catch { /* noop */ }
+          try {
+            const reset = await AsyncStorage.getItem("yt-qa-reset-assessment");
+            if (reset === "1") {
+              await AsyncStorage.multiRemove(["yt-assessment-answers-v1", "yt-assessment-result-v1", "yt-assessment-question-index-v1", ASSESSMENT_FUNNEL_PHASE_KEY, POST_PURCHASE_LINKING_MARKER_KEY, POST_PURCHASE_FIRST_ACTION_MARKER_KEY, "yt-qa-post-purchase"]);
+              await AsyncStorage.removeItem("yt-qa-reset-assessment");
+              setFunnelPhase("assessment_intro");
+            }
+          } catch { /* noop */ }
+          try {
+            const sessionReset = await AsyncStorage.getItem("yt-qa-reset-assessment-and-session");
+            if (sessionReset === "1" && supabase) {
+              try { await supabase.auth.signOut({ scope: "local" }); } catch { /* best effort */ }
+              await AsyncStorage.removeItem("yt-qa-reset-assessment-and-session");
+            }
+          } catch { /* noop */ }
         }
         setExplicitAuthRequired((prev) =>
           mergeExplicitAuthRequiredFlag({
@@ -10553,9 +10567,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     linkingMarkerActive: linkingMarkerActiveRef.current,
     funnelPhase: purchaseBusy ? "purchasing" : funnelPhase,
   });
-  // Startup diagnostic: log acquisition resolution without PII.
+  // Dev-only startup diagnostic: log acquisition resolution without PII.
   useEffect(() => {
-    if (!acquisitionHydrated) return;
+    if (!acquisitionHydrated || !__DEV__) return;
     logger.info("acquisition_phase_resolved", {
       feature: "acquisition",
       phase: acquisitionPhase,
