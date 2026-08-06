@@ -448,7 +448,7 @@
   "levelTop25": "Топ 25%",
   "levelTop5": "Топ 5%",
   "liveNews": "Живые новости",
-  "loading": "Loading\u2026",
+  "loading": "Loading…",
   "loadingJournal": "Загружаю журнал...",
   "localCoachAgentConsAction": "Разбирай те же метрики еженедельно перед сменой риска.",
   "localCoachAgentConsEvidence": "Win rate {{wr}}%, profit factor {{pf}}.",
@@ -863,80 +863,46 @@
   "prev": "ПРЕД",
   "previousMonth": "Предыдущий месяц",
   "privacyPolicy": "Privacy Policy",
-  "postPurchase.activatedBadge": "YouTrader Pro activated",
-  "postPurchase.continueEmail": "Continue",
-  "postPurchase.description": "Sign in once to link your Pro access and keep your journal and prop challenge progress synced across devices.",
-  "postPurchase.heading": "Your Pro Access Is Ready",
-  "postPurchase.legalPrefix": "By continuing, you agree to our",
-  "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
-
-
-  "postPurchase.emailBackToSignIn": "Back to sign in",
-
-  "postPurchase.emailCheckBody": "A confirmation link has been sent. Check your inbox, then return to sign in.",
-
-  "postPurchase.emailCheckEmail": "Check Your Email",
-
-  "postPurchase.emailConfirmEmail": "Confirm Your Email",
-
-  "postPurchase.emailCreateAccount": "Create Account",
-
-  "postPurchase.emailCreateLink": "Create account",
-
-  "postPurchase.emailForgotLink": "Forgot password?",
-
-  "postPurchase.emailForgotPassword": "Forgot Password",
-
-  "postPurchase.emailResetBody": "A password reset link has been sent. Check your inbox to continue.",
-
-  "postPurchase.emailSendLink": "Send Link",
-
-  "postPurchase.linkingLinking": "Linking your purchase…",
-
-  "postPurchase.linkingMigrating": "Migrating your data…",
-
-  "postPurchase.linkingVerifying": "Verifying Pro access…",
-
-  "postPurchase.appleUnavailable": "Apple Sign-In is not available.",
-
-  "postPurchase.authCancelled": "Sign-in did not complete. Please try again.",
-
-  "postPurchase.billingUnavailable": "Billing is not available. Please try again.",
-
-  "postPurchase.confirmPassword": "Confirm password",
-
-  "postPurchase.createAccountFailed": "Create account failed.",
-
-  "postPurchase.emailInvalid": "Enter a valid email.",
-
-  "postPurchase.emailRequired": "Email is required.",
-
-  "postPurchase.entitlementUnverified": "Your Pro access could not be verified. Please try again.",
-
-  "postPurchase.googleUnavailable": "Google Sign-In is not available.",
-
-  "postPurchase.linkingFailed": "Linking failed. Please try again.",
-
-  "postPurchase.migrationFailed": "Data migration failed. Your purchase and journal are preserved.",
-
-  "postPurchase.notAvailable": "Sign-in is not available.",
-
-  "postPurchase.notConfigured": "Email sign-in is not configured.",
-
+  "postPurchase.activatedBadge": "YouTrader Pro активирован",
+  "postPurchase.continueEmail": "Продолжить",
+  "postPurchase.description": "Войдите один раз, чтобы привязать Pro-доступ и синхронизировать журнал на всех устройствах.",
+  "postPurchase.heading": "Ваш Pro-доступ готов",
+  "postPurchase.legalPrefix": "Продолжая, вы соглашаетесь с",
+  "postPurchase.reassurance": "Ваш журнал остаётся приватным.",
+  "postPurchase.emailBackToSignIn": "Вернуться ко входу",
+  "postPurchase.emailCheckBody": "Ссылка для подтверждения отправлена. Проверьте почту.",
+  "postPurchase.emailCheckEmail": "Проверьте почту",
+  "postPurchase.emailConfirmEmail": "Подтвердите email",
+  "postPurchase.emailCreateAccount": "Создать аккаунт",
+  "postPurchase.emailCreateLink": "Создать аккаунт",
+  "postPurchase.emailForgotLink": "Забыли пароль?",
+  "postPurchase.emailForgotPassword": "Забыли пароль",
+  "postPurchase.emailResetBody": "Ссылка для сброса пароля отправлена.",
+  "postPurchase.emailSendLink": "Отправить ссылку",
+  "postPurchase.linkingLinking": "Привязка покупки…",
+  "postPurchase.linkingMigrating": "Перенос данных…",
+  "postPurchase.linkingVerifying": "Проверка Pro-доступа…",
+  "postPurchase.appleUnavailable": "Вход с Apple недоступен.",
+  "postPurchase.authCancelled": "Вход не завершён.",
+  "postPurchase.billingUnavailable": "Платёжная система недоступна.",
+  "postPurchase.confirmPassword": "Подтвердите пароль",
+  "postPurchase.createAccountFailed": "Не удалось создать аккаунт.",
+  "postPurchase.emailInvalid": "Введите корректный email.",
+  "postPurchase.emailRequired": "Email обязателен.",
+  "postPurchase.entitlementUnverified": "Не удалось подтвердить Pro-доступ.",
+  "postPurchase.googleUnavailable": "Вход с Google недоступен.",
+  "postPurchase.linkingFailed": "Не удалось привязать покупку.",
+  "postPurchase.migrationFailed": "Перенос данных не удался.",
+  "postPurchase.notAvailable": "Вход недоступен.",
+  "postPurchase.notConfigured": "Вход по email не настроен.",
   "postPurchase.okLabel": "OK",
-
-  "postPurchase.passwordMismatch": "Passwords do not match.",
-
-  "postPurchase.passwordRequired": "Password is required.",
-
-  "postPurchase.passwordResetFailed": "Password reset failed.",
-
-  "postPurchase.signinFailed": "Sign-in failed. Please check your credentials.",
-
-  "postPurchase.successAnnounce": "Account linked. Entering YouTrader.",
-
-  "postPurchase.unsupportedProvider": "Unsupported sign-in provider.",
-  "postPurchase.successHeading": "You're All Set",
+  "postPurchase.passwordMismatch": "Пароли не совпадают.",
+  "postPurchase.passwordRequired": "Пароль обязателен.",
+  "postPurchase.passwordResetFailed": "Не удалось сбросить пароль.",
+  "postPurchase.signinFailed": "Не удалось войти.",
+  "postPurchase.successAnnounce": "Аккаунт привязан. Переход в YouTrader.",
+  "postPurchase.unsupportedProvider": "Неподдерживаемый способ входа.",
+  "postPurchase.successHeading": "Всё готово",
   "proActiveBody": "Все premium analytics, инструменты разбора, news, calendar, import и export открыты.",
   "proActiveTitle": "Подписка Pro активна",
   "productOnboardingBody": "YouTrader помогает улучшаться каждый торговый день — с чистого журнала, разбора и дисциплины.",

@@ -448,7 +448,7 @@
   "levelTop25": "Top 25 %",
   "levelTop5": "Top 5 %",
   "liveNews": "Live-News",
-  "loading": "Loading\u2026",
+  "loading": "Loading…",
   "loadingJournal": "Lade dein Journal...",
   "localCoachAgentConsAction": "Dieselben Metriken wöchentlich prüfen, bevor du Risiko änderst.",
   "localCoachAgentConsEvidence": "Trefferquote {{wr}}%, Profit Factor {{pf}}.",
@@ -863,80 +863,46 @@
   "prev": "ZURÜCK",
   "previousMonth": "Vorheriger Monat",
   "privacyPolicy": "Privacy Policy",
-  "postPurchase.activatedBadge": "YouTrader Pro activated",
-  "postPurchase.continueEmail": "Continue",
-  "postPurchase.description": "Sign in once to link your Pro access and keep your journal and prop challenge progress synced across devices.",
-  "postPurchase.heading": "Your Pro Access Is Ready",
-  "postPurchase.legalPrefix": "By continuing, you agree to our",
-  "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
-
-
-  "postPurchase.emailBackToSignIn": "Back to sign in",
-
-  "postPurchase.emailCheckBody": "A confirmation link has been sent. Check your inbox, then return to sign in.",
-
-  "postPurchase.emailCheckEmail": "Check Your Email",
-
-  "postPurchase.emailConfirmEmail": "Confirm Your Email",
-
-  "postPurchase.emailCreateAccount": "Create Account",
-
-  "postPurchase.emailCreateLink": "Create account",
-
-  "postPurchase.emailForgotLink": "Forgot password?",
-
-  "postPurchase.emailForgotPassword": "Forgot Password",
-
-  "postPurchase.emailResetBody": "A password reset link has been sent. Check your inbox to continue.",
-
-  "postPurchase.emailSendLink": "Send Link",
-
-  "postPurchase.linkingLinking": "Linking your purchase…",
-
-  "postPurchase.linkingMigrating": "Migrating your data…",
-
-  "postPurchase.linkingVerifying": "Verifying Pro access…",
-
-  "postPurchase.appleUnavailable": "Apple Sign-In is not available.",
-
-  "postPurchase.authCancelled": "Sign-in did not complete. Please try again.",
-
-  "postPurchase.billingUnavailable": "Billing is not available. Please try again.",
-
-  "postPurchase.confirmPassword": "Confirm password",
-
-  "postPurchase.createAccountFailed": "Create account failed.",
-
-  "postPurchase.emailInvalid": "Enter a valid email.",
-
-  "postPurchase.emailRequired": "Email is required.",
-
-  "postPurchase.entitlementUnverified": "Your Pro access could not be verified. Please try again.",
-
-  "postPurchase.googleUnavailable": "Google Sign-In is not available.",
-
-  "postPurchase.linkingFailed": "Linking failed. Please try again.",
-
-  "postPurchase.migrationFailed": "Data migration failed. Your purchase and journal are preserved.",
-
-  "postPurchase.notAvailable": "Sign-in is not available.",
-
-  "postPurchase.notConfigured": "Email sign-in is not configured.",
-
+  "postPurchase.activatedBadge": "YouTrader Pro aktiviert",
+  "postPurchase.continueEmail": "Weiter",
+  "postPurchase.description": "Melde dich einmal an, um deinen Pro-Zugang zu verknüpfen und Journal sowie Prop-Challenge-Fortschritt geräteübergreifend zu synchronisieren.",
+  "postPurchase.heading": "Dein Pro-Zugang ist bereit",
+  "postPurchase.legalPrefix": "Durch die Fortsetzung stimmst du den",
+  "postPurchase.reassurance": "Dein Journal bleibt privat.",
+  "postPurchase.emailBackToSignIn": "Zurück zur Anmeldung",
+  "postPurchase.emailCheckBody": "Bestätigungslink gesendet. Prüfe dein Postfach und kehre zur Anmeldung zurück.",
+  "postPurchase.emailCheckEmail": "E-Mail prüfen",
+  "postPurchase.emailConfirmEmail": "E-Mail bestätigen",
+  "postPurchase.emailCreateAccount": "Konto erstellen",
+  "postPurchase.emailCreateLink": "Konto erstellen",
+  "postPurchase.emailForgotLink": "Passwort vergessen?",
+  "postPurchase.emailForgotPassword": "Passwort vergessen",
+  "postPurchase.emailResetBody": "Link zum Zurücksetzen des Passworts gesendet.",
+  "postPurchase.emailSendLink": "Link senden",
+  "postPurchase.linkingLinking": "Kauf wird verknüpft…",
+  "postPurchase.linkingMigrating": "Daten werden übertragen…",
+  "postPurchase.linkingVerifying": "Pro-Zugang wird geprüft…",
+  "postPurchase.appleUnavailable": "Apple-Anmeldung nicht verfügbar.",
+  "postPurchase.authCancelled": "Anmeldung nicht abgeschlossen. Versuche es erneut.",
+  "postPurchase.billingUnavailable": "Zahlungssystem nicht verfügbar.",
+  "postPurchase.confirmPassword": "Passwort bestätigen",
+  "postPurchase.createAccountFailed": "Kontoerstellung fehlgeschlagen.",
+  "postPurchase.emailInvalid": "Gültige E-Mail-Adresse eingeben.",
+  "postPurchase.emailRequired": "E-Mail erforderlich.",
+  "postPurchase.entitlementUnverified": "Pro-Zugang konnte nicht bestätigt werden. Erneut versuchen.",
+  "postPurchase.googleUnavailable": "Google-Anmeldung nicht verfügbar.",
+  "postPurchase.linkingFailed": "Verknüpfung fehlgeschlagen.",
+  "postPurchase.migrationFailed": "Datenübertragung fehlgeschlagen.",
+  "postPurchase.notAvailable": "Anmeldung nicht verfügbar.",
+  "postPurchase.notConfigured": "E-Mail-Anmeldung nicht konfiguriert.",
   "postPurchase.okLabel": "OK",
-
-  "postPurchase.passwordMismatch": "Passwords do not match.",
-
-  "postPurchase.passwordRequired": "Password is required.",
-
-  "postPurchase.passwordResetFailed": "Password reset failed.",
-
-  "postPurchase.signinFailed": "Sign-in failed. Please check your credentials.",
-
-  "postPurchase.successAnnounce": "Account linked. Entering YouTrader.",
-
-  "postPurchase.unsupportedProvider": "Unsupported sign-in provider.",
-  "postPurchase.successHeading": "You're All Set",
+  "postPurchase.passwordMismatch": "Passwörter stimmen nicht überein.",
+  "postPurchase.passwordRequired": "Passwort erforderlich.",
+  "postPurchase.passwordResetFailed": "Zurücksetzen fehlgeschlagen.",
+  "postPurchase.signinFailed": "Anmeldung fehlgeschlagen.",
+  "postPurchase.successAnnounce": "Konto verknüpft. YouTrader wird geöffnet.",
+  "postPurchase.unsupportedProvider": "Nicht unterstützter Anbieter.",
+  "postPurchase.successHeading": "Alles bereit",
   "proActiveBody": "All premium analytics, review tools, news, calendar, import, and export features are unlocked.",
   "proActiveTitle": "Dein Pro-Abo ist aktiv",
   "productOnboardingBody": "YouTrader hilft dir, jeden Trading-Tag zu verbessern — mit Journal, Review und Disziplin.",

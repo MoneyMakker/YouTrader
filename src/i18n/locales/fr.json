@@ -448,7 +448,7 @@
   "levelTop25": "Top 25 %",
   "levelTop5": "Top 5 %",
   "liveNews": "Actualités en direct",
-  "loading": "Loading\u2026",
+  "loading": "Loading…",
   "loadingJournal": "Chargement de votre journal...",
   "localCoachAgentConsAction": "Revoyez les mêmes métriques chaque semaine avant de changer le risque.",
   "localCoachAgentConsEvidence": "Taux de réussite {{wr}}%, profit factor {{pf}}.",
@@ -863,80 +863,46 @@
   "prev": "PRÉC",
   "previousMonth": "Mois précédent",
   "privacyPolicy": "Privacy Policy",
-  "postPurchase.activatedBadge": "YouTrader Pro activated",
-  "postPurchase.continueEmail": "Continue",
-  "postPurchase.description": "Sign in once to link your Pro access and keep your journal and prop challenge progress synced across devices.",
-  "postPurchase.heading": "Your Pro Access Is Ready",
-  "postPurchase.legalPrefix": "By continuing, you agree to our",
-  "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
-
-
-  "postPurchase.emailBackToSignIn": "Back to sign in",
-
-  "postPurchase.emailCheckBody": "A confirmation link has been sent. Check your inbox, then return to sign in.",
-
-  "postPurchase.emailCheckEmail": "Check Your Email",
-
-  "postPurchase.emailConfirmEmail": "Confirm Your Email",
-
-  "postPurchase.emailCreateAccount": "Create Account",
-
-  "postPurchase.emailCreateLink": "Create account",
-
-  "postPurchase.emailForgotLink": "Forgot password?",
-
-  "postPurchase.emailForgotPassword": "Forgot Password",
-
-  "postPurchase.emailResetBody": "A password reset link has been sent. Check your inbox to continue.",
-
-  "postPurchase.emailSendLink": "Send Link",
-
-  "postPurchase.linkingLinking": "Linking your purchase…",
-
-  "postPurchase.linkingMigrating": "Migrating your data…",
-
-  "postPurchase.linkingVerifying": "Verifying Pro access…",
-
-  "postPurchase.appleUnavailable": "Apple Sign-In is not available.",
-
-  "postPurchase.authCancelled": "Sign-in did not complete. Please try again.",
-
-  "postPurchase.billingUnavailable": "Billing is not available. Please try again.",
-
-  "postPurchase.confirmPassword": "Confirm password",
-
-  "postPurchase.createAccountFailed": "Create account failed.",
-
-  "postPurchase.emailInvalid": "Enter a valid email.",
-
-  "postPurchase.emailRequired": "Email is required.",
-
-  "postPurchase.entitlementUnverified": "Your Pro access could not be verified. Please try again.",
-
-  "postPurchase.googleUnavailable": "Google Sign-In is not available.",
-
-  "postPurchase.linkingFailed": "Linking failed. Please try again.",
-
-  "postPurchase.migrationFailed": "Data migration failed. Your purchase and journal are preserved.",
-
-  "postPurchase.notAvailable": "Sign-in is not available.",
-
-  "postPurchase.notConfigured": "Email sign-in is not configured.",
-
+  "postPurchase.activatedBadge": "YouTrader Pro activé",
+  "postPurchase.continueEmail": "Continuer",
+  "postPurchase.description": "Connectez-vous une fois pour lier votre accès Pro et synchroniser votre journal sur tous vos appareils.",
+  "postPurchase.heading": "Votre accès Pro est prêt",
+  "postPurchase.legalPrefix": "En continuant, vous acceptez les",
+  "postPurchase.reassurance": "Votre journal reste privé.",
+  "postPurchase.emailBackToSignIn": "Retour à la connexion",
+  "postPurchase.emailCheckBody": "Lien de confirmation envoyé. Vérifiez votre boîte mail.",
+  "postPurchase.emailCheckEmail": "Vérifiez votre messagerie",
+  "postPurchase.emailConfirmEmail": "Confirmez votre email",
+  "postPurchase.emailCreateAccount": "Créer un compte",
+  "postPurchase.emailCreateLink": "Créer un compte",
+  "postPurchase.emailForgotLink": "Mot de passe oublié ?",
+  "postPurchase.emailForgotPassword": "Mot de passe oublié",
+  "postPurchase.emailResetBody": "Lien de réinitialisation envoyé.",
+  "postPurchase.emailSendLink": "Envoyer le lien",
+  "postPurchase.linkingLinking": "Liaison de l'achat…",
+  "postPurchase.linkingMigrating": "Migration des données…",
+  "postPurchase.linkingVerifying": "Vérification de l'accès Pro…",
+  "postPurchase.appleUnavailable": "Connexion Apple indisponible.",
+  "postPurchase.authCancelled": "Connexion non terminée.",
+  "postPurchase.billingUnavailable": "Système de paiement indisponible.",
+  "postPurchase.confirmPassword": "Confirmer le mot de passe",
+  "postPurchase.createAccountFailed": "Échec de la création du compte.",
+  "postPurchase.emailInvalid": "Saisissez un email valide.",
+  "postPurchase.emailRequired": "Email requis.",
+  "postPurchase.entitlementUnverified": "Impossible de vérifier l'accès Pro.",
+  "postPurchase.googleUnavailable": "Connexion Google indisponible.",
+  "postPurchase.linkingFailed": "Échec de la liaison.",
+  "postPurchase.migrationFailed": "Échec de la migration.",
+  "postPurchase.notAvailable": "Connexion indisponible.",
+  "postPurchase.notConfigured": "Connexion email non configurée.",
   "postPurchase.okLabel": "OK",
-
-  "postPurchase.passwordMismatch": "Passwords do not match.",
-
-  "postPurchase.passwordRequired": "Password is required.",
-
-  "postPurchase.passwordResetFailed": "Password reset failed.",
-
-  "postPurchase.signinFailed": "Sign-in failed. Please check your credentials.",
-
-  "postPurchase.successAnnounce": "Account linked. Entering YouTrader.",
-
-  "postPurchase.unsupportedProvider": "Unsupported sign-in provider.",
-  "postPurchase.successHeading": "You're All Set",
+  "postPurchase.passwordMismatch": "Mots de passe différents.",
+  "postPurchase.passwordRequired": "Mot de passe requis.",
+  "postPurchase.passwordResetFailed": "Échec de la réinitialisation.",
+  "postPurchase.signinFailed": "Échec de la connexion.",
+  "postPurchase.successAnnounce": "Compte lié. Ouverture de YouTrader.",
+  "postPurchase.unsupportedProvider": "Fournisseur non pris en charge.",
+  "postPurchase.successHeading": "Tout est prêt",
   "proActiveBody": "All premium analytics, review tools, news, calendar, import, and export features are unlocked.",
   "proActiveTitle": "Votre abonnement Pro est actif",
   "productOnboardingBody": "YouTrader vous aide à progresser chaque jour — journal, revue et discipline.",

@@ -10429,6 +10429,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (cancelled) return;
         setOnboardingCompleted(onboardingDone);
         setPaywallCompleted(paywallDone);
+        // Dev-only QA: set yt-qa-post-purchase=1 to force post-purchase screen.
+        if (__DEV__) {
+          try { const qa = await AsyncStorage.getItem("yt-qa-post-purchase"); if (qa === "1") { linkingMarkerActiveRef.current = true; setAnonymousEntitlementStatus("active"); } } catch { /* noop */ }
+        }
         setExplicitAuthRequired((prev) =>
           mergeExplicitAuthRequiredFlag({
             hasSession: !!userId,

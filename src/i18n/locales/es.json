@@ -448,7 +448,7 @@
   "levelTop25": "Top 25 %",
   "levelTop5": "Top 5 %",
   "liveNews": "Noticias en vivo",
-  "loading": "Loading\u2026",
+  "loading": "Loading…",
   "loadingJournal": "Cargando tu diario...",
   "localCoachAgentConsAction": "Revisa las mismas métricas semanalmente antes de cambiar riesgo.",
   "localCoachAgentConsEvidence": "Tasa de acierto {{wr}}%, profit factor {{pf}}.",
@@ -863,80 +863,46 @@
   "prev": "ANT",
   "previousMonth": "Mes anterior",
   "privacyPolicy": "Privacy Policy",
-  "postPurchase.activatedBadge": "YouTrader Pro activated",
-  "postPurchase.continueEmail": "Continue",
-  "postPurchase.description": "Sign in once to link your Pro access and keep your journal and prop challenge progress synced across devices.",
-  "postPurchase.heading": "Your Pro Access Is Ready",
-  "postPurchase.legalPrefix": "By continuing, you agree to our",
-  "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
-
-
-  "postPurchase.emailBackToSignIn": "Back to sign in",
-
-  "postPurchase.emailCheckBody": "A confirmation link has been sent. Check your inbox, then return to sign in.",
-
-  "postPurchase.emailCheckEmail": "Check Your Email",
-
-  "postPurchase.emailConfirmEmail": "Confirm Your Email",
-
-  "postPurchase.emailCreateAccount": "Create Account",
-
-  "postPurchase.emailCreateLink": "Create account",
-
-  "postPurchase.emailForgotLink": "Forgot password?",
-
-  "postPurchase.emailForgotPassword": "Forgot Password",
-
-  "postPurchase.emailResetBody": "A password reset link has been sent. Check your inbox to continue.",
-
-  "postPurchase.emailSendLink": "Send Link",
-
-  "postPurchase.linkingLinking": "Linking your purchase…",
-
-  "postPurchase.linkingMigrating": "Migrating your data…",
-
-  "postPurchase.linkingVerifying": "Verifying Pro access…",
-
-  "postPurchase.appleUnavailable": "Apple Sign-In is not available.",
-
-  "postPurchase.authCancelled": "Sign-in did not complete. Please try again.",
-
-  "postPurchase.billingUnavailable": "Billing is not available. Please try again.",
-
-  "postPurchase.confirmPassword": "Confirm password",
-
-  "postPurchase.createAccountFailed": "Create account failed.",
-
-  "postPurchase.emailInvalid": "Enter a valid email.",
-
-  "postPurchase.emailRequired": "Email is required.",
-
-  "postPurchase.entitlementUnverified": "Your Pro access could not be verified. Please try again.",
-
-  "postPurchase.googleUnavailable": "Google Sign-In is not available.",
-
-  "postPurchase.linkingFailed": "Linking failed. Please try again.",
-
-  "postPurchase.migrationFailed": "Data migration failed. Your purchase and journal are preserved.",
-
-  "postPurchase.notAvailable": "Sign-in is not available.",
-
-  "postPurchase.notConfigured": "Email sign-in is not configured.",
-
+  "postPurchase.activatedBadge": "YouTrader Pro activado",
+  "postPurchase.continueEmail": "Continuar",
+  "postPurchase.description": "Inicia sesión una vez para vincular tu acceso Pro y sincronizar tu diario en todos tus dispositivos.",
+  "postPurchase.heading": "Tu acceso Pro está listo",
+  "postPurchase.legalPrefix": "Al continuar, aceptas los",
+  "postPurchase.reassurance": "Tu diario permanece privado.",
+  "postPurchase.emailBackToSignIn": "Volver al inicio de sesión",
+  "postPurchase.emailCheckBody": "Enlace de confirmación enviado. Revisa tu correo.",
+  "postPurchase.emailCheckEmail": "Revisa tu correo",
+  "postPurchase.emailConfirmEmail": "Confirma tu correo",
+  "postPurchase.emailCreateAccount": "Crear cuenta",
+  "postPurchase.emailCreateLink": "Crear cuenta",
+  "postPurchase.emailForgotLink": "¿Olvidaste tu contraseña?",
+  "postPurchase.emailForgotPassword": "Olvidé mi contraseña",
+  "postPurchase.emailResetBody": "Enlace de restablecimiento enviado.",
+  "postPurchase.emailSendLink": "Enviar enlace",
+  "postPurchase.linkingLinking": "Vinculando compra…",
+  "postPurchase.linkingMigrating": "Migrando datos…",
+  "postPurchase.linkingVerifying": "Verificando acceso Pro…",
+  "postPurchase.appleUnavailable": "Inicio con Apple no disponible.",
+  "postPurchase.authCancelled": "Inicio de sesión no completado.",
+  "postPurchase.billingUnavailable": "Sistema de pago no disponible.",
+  "postPurchase.confirmPassword": "Confirmar contraseña",
+  "postPurchase.createAccountFailed": "No se pudo crear la cuenta.",
+  "postPurchase.emailInvalid": "Ingresa un correo válido.",
+  "postPurchase.emailRequired": "El correo es obligatorio.",
+  "postPurchase.entitlementUnverified": "No se pudo verificar el acceso Pro.",
+  "postPurchase.googleUnavailable": "Inicio con Google no disponible.",
+  "postPurchase.linkingFailed": "Error al vincular la compra.",
+  "postPurchase.migrationFailed": "Migración fallida.",
+  "postPurchase.notAvailable": "Inicio de sesión no disponible.",
+  "postPurchase.notConfigured": "Inicio por correo no configurado.",
   "postPurchase.okLabel": "OK",
-
-  "postPurchase.passwordMismatch": "Passwords do not match.",
-
-  "postPurchase.passwordRequired": "Password is required.",
-
-  "postPurchase.passwordResetFailed": "Password reset failed.",
-
-  "postPurchase.signinFailed": "Sign-in failed. Please check your credentials.",
-
-  "postPurchase.successAnnounce": "Account linked. Entering YouTrader.",
-
-  "postPurchase.unsupportedProvider": "Unsupported sign-in provider.",
-  "postPurchase.successHeading": "You're All Set",
+  "postPurchase.passwordMismatch": "Las contraseñas no coinciden.",
+  "postPurchase.passwordRequired": "La contraseña es obligatoria.",
+  "postPurchase.passwordResetFailed": "Error al restablecer.",
+  "postPurchase.signinFailed": "Error al iniciar sesión.",
+  "postPurchase.successAnnounce": "Cuenta vinculada. Ingresando a YouTrader.",
+  "postPurchase.unsupportedProvider": "Proveedor no compatible.",
+  "postPurchase.successHeading": "Todo listo",
   "proActiveBody": "All premium analytics, review tools, news, calendar, import, and export features are unlocked.",
   "proActiveTitle": "Tu suscripción Pro está activa",
   "productOnboardingBody": "YouTrader te ayuda a mejorar cada día de trading — con diario, revisión y disciplina.",
