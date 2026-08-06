@@ -10359,6 +10359,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const linkingMarkerActiveRef = useRef(false);
   // Set synchronously from env so RC configure effect sees it before first render.
   const isVisualPreviewRef = useRef(__DEV__ && process.env.EXPO_PUBLIC_YT_VISUAL_PREVIEW === "1");
+  const startupTimestampRef = useRef(Date.now());
+  const [startupStuck, setStartupStuck] = useState(false);
   const cloudSyncInFlight = useRef(false);
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -10580,6 +10582,29 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       revenueCatReady,
     });
   }, [acquisitionHydrated, acquisitionPhase, session?.user, tradesHydrated, authHydrated, revenueCatReady]);
+
+  // STARTUP WATCHDOG: if stuck in loading > 8s, show recovery instead of infinite skeleton.
+  useEffect(() => {
+    const safety = setTimeout(() => {
+      if (acquisitionPhase === "loading" && !startupStuck) {
+        console.warn("[YouTrader:startup:watchdog] stuck in loading", {
+          elapsed: Date.now() - startupTimestampRef.current,
+          appReady,
+          tradesHydrated,
+          authHydrated,
+          acquisitionHydrated,
+          hasSession: !!session?.user,
+          revenueCatReady,
+          identitySyncPending,
+          identitySyncFailed,
+          funnelPhase,
+        });
+        setStartupStuck(true);
+      }
+    }, 8000);
+    if (acquisitionPhase !== "loading") { setStartupStuck(false); }
+    return () => clearTimeout(safety);
+  }, [acquisitionPhase, appReady, tradesHydrated, authHydrated, acquisitionHydrated, session, revenueCatReady, identitySyncPending, identitySyncFailed, funnelPhase, startupStuck]);
 
   useEffect(() => {
     if (!showStagingQaResetMarkers) return;
@@ -12546,6 +12571,37 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }
 
   if (acquisitionPhase === "loading") {
+    // Startup watchdog recovery: stuck skeleton → recoverable screen.
+    if (startupStuck) {
+      return (
+        <SafeAreaView style={styles.app}>
+          <StatusBar style="light" backgroundColor="#000000" />
+          <View style={styles.lockScreen}>
+            <Text style={[styles.sub, { fontWeight: "800", fontSize: 18, marginBottom: 12, textAlign: "center" }]}>
+              {t("postPurchase.notAvailable")}
+            </Text>
+            <Text style={[styles.sub, { textAlign: "center", marginBottom: 24 }]}>
+              {t("restoreFailedTryAgain")}
+            </Text>
+            <Pressable
+              onPress={() => { setStartupStuck(false); }}
+              accessibilityRole="button"
+              accessibilityLabel={t("retry") || "Retry"}
+              style={({ pressed }) => [{ minHeight: 48, paddingHorizontal: 32, borderRadius: 14, borderWidth: 1, borderColor: "rgba(163,255,18,0.55)", backgroundColor: "rgba(163,255,18,0.12)", alignItems: "center", justifyContent: "center" }, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={{ color: "#A3FF12", fontWeight: "800", fontSize: 16 }}>{t("retry") || "Retry"}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setStartupStuck(false); void signOut({ force: true }); }}
+              accessibilityRole="button"
+              style={{ marginTop: 16 }}
+            >
+              <Text style={{ color: C.muted, fontSize: 14 }}>{t("signOut")}</Text>
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
