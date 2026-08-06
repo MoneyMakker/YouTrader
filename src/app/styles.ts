@@ -380,23 +380,6 @@ export const styles = StyleSheet.create({
     minWidth: 0,
     gap: 8,
   },
-  startupSkeletonWrap: {
-    width: "100%",
-    maxWidth: 420,
-    alignItems: "stretch",
-  },
-  startupSkeletonBar: {
-    marginTop: 6,
-    marginBottom: 16,
-    opacity: 0.78,
-  },
-  startupSkeletonCard: {
-    marginBottom: 12,
-  },
-  startupSkeletonCaption: {
-    marginTop: 2,
-    textAlign: "center",
-  },
   safeText: {
     minWidth: 0,
     maxWidth: "100%",

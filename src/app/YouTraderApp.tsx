@@ -5,6 +5,7 @@ import {
 } from "react-native-safe-area-context";
 import { YouTraderSafeAreaProvider } from "./YouTraderSafeAreaProvider";
 import { StartupFailureFallback } from "./StartupFailureFallback";
+import { StartupLoadingScreen } from "./StartupLoadingScreen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import * as FileSystem from "expo-file-system/legacy";
@@ -2056,17 +2057,6 @@ function Card({ children, style, animated = true, delay = 0 }: any) {
     <AnimatedEntrance style={[styles.card, styles.safeCard, style]} delay={delay} disabled={!animated}>
       {children}
     </AnimatedEntrance>
-  );
-}
-
-function AppStartupSkeleton() {
-  return (
-    <View style={styles.startupSkeletonWrap} accessibilityLabel="Loading" accessibilityRole="progressbar">
-      <Text style={styles.h1}>YouTrader</Text>
-      <PremiumLoadingBar indeterminate height={4} tone="lime" style={styles.startupSkeletonBar} />
-      <SkeletonCard rows={4} tone="lime" style={styles.startupSkeletonCard} />
-      <SkeletonCard rows={3} tone="purple" style={styles.startupSkeletonCard} />
-    </View>
   );
 }
 
@@ -12563,8 +12553,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       <SafeAreaView style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
         <View style={styles.lockScreen}>
-          <AppStartupSkeleton />
-          <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
+          <StartupLoadingScreen status={t("startup.preparingWorkspace")} />
         </View>
         {stagingQaResetOverlay}
       </SafeAreaView>
@@ -12578,27 +12567,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         <SafeAreaView style={styles.app}>
           <StatusBar style="light" backgroundColor="#000000" />
           <View style={styles.lockScreen}>
-            <Text style={[styles.sub, { fontWeight: "800", fontSize: 18, marginBottom: 12, textAlign: "center" }]}>
-              {t("postPurchase.notAvailable")}
-            </Text>
-            <Text style={[styles.sub, { textAlign: "center", marginBottom: 24 }]}>
-              {t("restoreFailedTryAgain")}
-            </Text>
-            <Pressable
-              onPress={() => { setStartupStuck(false); }}
-              accessibilityRole="button"
-              accessibilityLabel={t("retry") || "Retry"}
-              style={({ pressed }) => [{ minHeight: 48, paddingHorizontal: 32, borderRadius: 14, borderWidth: 1, borderColor: "rgba(163,255,18,0.55)", backgroundColor: "rgba(163,255,18,0.12)", alignItems: "center", justifyContent: "center" }, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={{ color: "#A3FF12", fontWeight: "800", fontSize: 16 }}>{t("retry") || "Retry"}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => { setStartupStuck(false); void signOut({ force: true }); }}
-              accessibilityRole="button"
-              style={{ marginTop: 16 }}
-            >
-              <Text style={{ color: C.muted, fontSize: 14 }}>{t("signOut")}</Text>
-            </Pressable>
+            <StartupLoadingScreen error onRetry={() => setStartupStuck(false)} onSignOut={() => { setStartupStuck(false); void signOut({ force: true }); }} />
           </View>
         </SafeAreaView>
       );
@@ -12607,39 +12576,19 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       <SafeAreaView style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />
         <View style={styles.lockScreen}>
-          <AppStartupSkeleton />
-          <Text style={[styles.sub, styles.startupSkeletonCaption]}>
-            {identitySyncFailed ? t("tryAgain") : t("loadingJournal")}
-          </Text>
-          {identitySyncFailed ? (
-            <Pressable
-              onPress={() => {
-                setIdentitySyncFailed(false);
-                setIdentitySyncPending(true);
-                identitySyncGenerationRef.current += 1;
-                const userId = session?.user?.id;
-                if (userId) {
-                  void revenueCatIdentityRef.current.synchronize(userId).then((result) => {
-                    if (result.status === "failed") {
-                      setIdentitySyncFailed(true);
-                      setIdentitySyncPending(false);
-                      return;
-                    }
-                    if (result.customerInfo) applyCustomerInfo(result.customerInfo, "identity:retry");
-                    setIdentitySyncPending(false);
-                  });
-                } else {
-                  setIdentitySyncPending(false);
-                }
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={t("tryAgain")}
-              testID="entitlement-retry"
-              style={{ marginTop: 16, minHeight: 44, justifyContent: "center", paddingHorizontal: 20 }}
-            >
-              <Text style={styles.sub}>{t("tryAgain")}</Text>
-            </Pressable>
-          ) : null}
+          <StartupLoadingScreen error={identitySyncFailed} status={identitySyncFailed ? t("tryAgain") : t("startup.preparingWorkspace")} onRetry={identitySyncFailed ? () => {
+            setIdentitySyncFailed(false);
+            setIdentitySyncPending(true);
+            identitySyncGenerationRef.current += 1;
+            const userId = session?.user?.id;
+            if (userId) {
+              void revenueCatIdentityRef.current.synchronize(userId).then((result) => {
+                if (result.status === "failed") { setIdentitySyncFailed(true); setIdentitySyncPending(false); return; }
+                if (result.customerInfo) applyCustomerInfo(result.customerInfo, "identity:retry");
+                setIdentitySyncPending(false);
+              });
+            } else setIdentitySyncPending(false);
+          } : undefined} onSignOut={session?.user?.id ? () => void signOut({ force: true }) : undefined} />
         </View>
         {stagingQaResetOverlay}
       </SafeAreaView>
@@ -12847,8 +12796,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           ) : tab === "propPass" ? (
             entitlementUiPhase === "loading" ? (
               <View style={styles.lockScreen} testID="prop-pass-entitlement-loading">
-                <AppStartupSkeleton />
-                <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("checking")}</Text>
+                <StartupLoadingScreen status={t("checking")} />
               </View>
             ) : propPassEntitled ? (
             <React.Suspense fallback={null}>

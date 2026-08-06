@@ -2206,5 +2206,11 @@
   "assessment.result.cta": "See My Plan",
   "assessment.preview.title": "Your Prop Pass Plan Is Ready",
   "assessment.preview.cta": "Unlock My Prop Pass",
-  "propPass.firstAction.otherFirm": "Other"
+  "propPass.firstAction.otherFirm": "Other",
+  "startup.wordmark": "YouTrader",
+  "startup.voiceOver": "Trading-Arbeitsbereich wird gestartet",
+  "startup.preparingWorkspace": "Trading-Arbeitsbereich wird vorbereitet",
+  "startup.failureBody": "Deine Daten sind sicher. Erneut versuchen oder zur Anmeldung zurückkehren.",
+  "startup.tryAgain": "Erneut versuchen",
+  "startup.signInAgain": "Erneut anmelden"
 }
