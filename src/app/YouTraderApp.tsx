@@ -10457,6 +10457,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (visualPreview) {
           linkingMarkerActiveRef.current = true;
         }
+        // Dev-only QA reset: set yt-qa-reset-assessment=1 to clear all funnel state.
+        if (__DEV__) {
+          try { const reset = await AsyncStorage.getItem("yt-qa-reset-assessment"); if (reset === "1") { await AsyncStorage.multiRemove(["yt-assessment-answers-v1", "yt-assessment-result-v1", "yt-assessment-question-index-v1", ASSESSMENT_FUNNEL_PHASE_KEY, POST_PURCHASE_LINKING_MARKER_KEY, POST_PURCHASE_FIRST_ACTION_MARKER_KEY]); setFunnelPhase("assessment_intro"); } } catch { /* noop */ }
+        }
         setExplicitAuthRequired((prev) =>
           mergeExplicitAuthRequiredFlag({
             hasSession: !!userId,
@@ -10549,6 +10553,19 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     linkingMarkerActive: linkingMarkerActiveRef.current,
     funnelPhase: purchaseBusy ? "purchasing" : funnelPhase,
   });
+  // Startup diagnostic: log acquisition resolution without PII.
+  useEffect(() => {
+    if (!acquisitionHydrated) return;
+    logger.info("acquisition_phase_resolved", {
+      feature: "acquisition",
+      phase: acquisitionPhase,
+      hasSession: !!session?.user,
+      tradesHydrated,
+      authHydrated,
+      acquisitionHydrated,
+      revenueCatReady,
+    });
+  }, [acquisitionHydrated, acquisitionPhase, session?.user, tradesHydrated, authHydrated, revenueCatReady]);
 
   useEffect(() => {
     if (!showStagingQaResetMarkers) return;
