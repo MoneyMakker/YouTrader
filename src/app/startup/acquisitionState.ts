@@ -9,6 +9,7 @@
 
 export type AcquisitionPhase =
   | "loading"
+  | "startup_loading"
   | "onboarding"
   | "onboarding_slides"
   | "onboarding_personalization"

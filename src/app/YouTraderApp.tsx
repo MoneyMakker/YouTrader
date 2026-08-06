@@ -10319,7 +10319,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [acquisitionHydrated, setAcquisitionHydrated] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [paywallCompleted, setPaywallCompleted] = useState(false);
-  const [funnelPhase, setFunnelPhase] = useState<AcquisitionPhase>("onboarding_slides");
+  const [funnelPhase, setFunnelPhase] = useState<AcquisitionPhase>("loading");
   /** In-flight explicit logout — suppresses acquisition paywall flash. */
   const [loggingOut, setLoggingOut] = useState(false);
   /** Sticky AUTH_REQUIRED after Settings → Log Out (persisted across restart). */
@@ -10413,6 +10413,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           const allowed = ["onboarding_slides", "onboarding_personalization", "purchase_paywall"].includes(storedFunnelPhase);
           if (oldAssessment) setFunnelPhase("onboarding_slides");
           else if (allowed) setFunnelPhase(storedFunnelPhase as AcquisitionPhase);
+        } else if (!userId) {
+          setTimeout(() => {
+            setFunnelPhase((curr) => (curr === "loading" ? "onboarding_slides" : curr));
+          }, 900);
         }
         let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
         let onboardingDone = onboarding === "1";
