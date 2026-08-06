@@ -18,11 +18,18 @@ const PROP_FIRMS = [
   { id: "other", label: "Other" },
 ] as const;
 
-const VERSION = "prop-pass-setup-v2";
-const RESULT_VERSION = "prop-pass-result-v2";
+const CANONICAL_KEY = "prop-pass-canonical-setup-v1";
+
+type AssessmentSetup = {
+  modelVersion?: string; readinessScore?: number; riskControl?: number;
+  discipline?: number; challengeBuffer?: number; primaryRisk?: string;
+  riskLevel?: string; challengeStage?: string; stopLossBehavior?: string;
+  riskPerTrade?: string; tradesPerDay?: string; propPassBenefitKeys?: string[];
+  propFirm?: string; accountSize?: string;
+} | null;
 
 type ConfirmedSetup = {
-  version: typeof VERSION;
+  version: "prop-pass-canonical-v1";
   propFirm: string;
   propFirmDisplay: string;
   customFirmName?: string;
@@ -31,9 +38,18 @@ type ConfirmedSetup = {
   dailyLossLimit: number;
   overallLossLimit: number;
   limitsSource: "verified_template" | "user_confirmed";
-  primaryRisk?: string;
+  modelVersion?: string;
   readinessScore?: number;
+  riskControl?: number;
+  discipline?: number;
+  challengeBuffer?: number;
+  primaryRisk?: string;
   riskLevel?: string;
+  challengeStage?: string;
+  stopLossBehavior?: string;
+  riskPerTrade?: string;
+  tradesPerDay?: string;
+  propPassBenefitKeys?: string[];
   confirmedAt: string;
 };
 
@@ -42,6 +58,7 @@ function toNum(s: string): number | null { const n = Number(s.trim()); return Nu
 
 export function PropPassFirstActionScreen({ userId, onStart }: Props) {
   const insets = useSafeAreaInsets();
+  const [assessment, setAssessment] = useState<AssessmentSetup>(null);
   const [firm, setFirm] = useState("");
   const [customFirm, setCustomFirm] = useState("");
   const [accountSize, setAccountSize] = useState("");
@@ -53,9 +70,18 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
   const handledRef = useRef(false);
 
   useEffect(() => {
-    void AsyncStorage.getItem(`${RESULT_VERSION}:${userId}`).then((raw) => {
+    void AsyncStorage.getItem(CANONICAL_KEY).then((raw) => {
       if (!raw) return;
-      try { const s = JSON.parse(raw) as Partial<ConfirmedSetup>; if (s.version === VERSION && s.propFirm && s.accountSize && s.profitTarget) { handledRef.current = true; onStart(); return; } } catch { /* ignore */ }
+      try { const s = JSON.parse(raw) as Partial<ConfirmedSetup>; if (s.version === "prop-pass-canonical-v1" && s.propFirm && s.accountSize && s.profitTarget) { handledRef.current = true; onStart(); return; } } catch { /* ignore */ }
+    });
+    void AsyncStorage.getItem(`prop-pass-setup-v1:${userId}`).then((raw) => {
+      if (!raw) return;
+      try {
+        const s = JSON.parse(raw) as AssessmentSetup;
+        setAssessment(s);
+        if (s?.propFirm && s.propFirm !== "other") { setFirm(s.propFirm); }
+        if (s?.accountSize && !["small", "medium", "large"].includes(s.accountSize)) { setAccountSize(String(s.accountSize)); }
+      } catch { /* ignore */ }
     });
   }, [userId, onStart]);
 
@@ -82,7 +108,7 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
     busyRef.current = true;
     try {
       const confirmed: ConfirmedSetup = {
-        version: VERSION,
+        version: "prop-pass-canonical-v1",
         propFirm: selectedFirm,
         propFirmDisplay: firmName,
         ...(isCustom ? { customFirmName: firmName } : {}),
@@ -91,15 +117,26 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
         dailyLossLimit: dlNum,
         overallLossLimit: olNum,
         limitsSource: "user_confirmed",
+        modelVersion: assessment?.modelVersion,
+        readinessScore: assessment?.readinessScore,
+        riskControl: assessment?.riskControl,
+        discipline: assessment?.discipline,
+        challengeBuffer: assessment?.challengeBuffer,
+        primaryRisk: assessment?.primaryRisk,
+        riskLevel: assessment?.riskLevel,
+        challengeStage: assessment?.challengeStage,
+        stopLossBehavior: assessment?.stopLossBehavior,
+        riskPerTrade: assessment?.riskPerTrade,
+        tradesPerDay: assessment?.tradesPerDay,
+        propPassBenefitKeys: assessment?.propPassBenefitKeys,
         confirmedAt: new Date().toISOString(),
       };
-      const key = `${RESULT_VERSION}:${userId}`;
-      await AsyncStorage.setItem(key, JSON.stringify(confirmed));
-      const readBack = await AsyncStorage.getItem(key);
+      await AsyncStorage.setItem(CANONICAL_KEY, JSON.stringify(confirmed));
+      const readBack = await AsyncStorage.getItem(CANONICAL_KEY);
       if (!readBack) { setError(nc("propPass.validation.writeFailed", "Setup could not be verified. Try again.")); busyRef.current = false; return; }
       let parsed: Partial<ConfirmedSetup> | null = null;
       try { parsed = JSON.parse(readBack) as Partial<ConfirmedSetup>; } catch { parsed = null; }
-      if (!parsed || parsed.version !== VERSION || parsed.propFirm !== confirmed.propFirm || parsed.accountSize !== confirmed.accountSize || parsed.profitTarget !== confirmed.profitTarget || parsed.dailyLossLimit !== confirmed.dailyLossLimit || parsed.overallLossLimit !== confirmed.overallLossLimit) {
+      if (!parsed || parsed.version !== confirmed.version || parsed.propFirm !== confirmed.propFirm || parsed.accountSize !== confirmed.accountSize || parsed.profitTarget !== confirmed.profitTarget || parsed.dailyLossLimit !== confirmed.dailyLossLimit || parsed.overallLossLimit !== confirmed.overallLossLimit) {
         setError(nc("propPass.validation.writeFailed", "Setup verification failed. Try again.")); busyRef.current = false; return;
       }
       handledRef.current = true;

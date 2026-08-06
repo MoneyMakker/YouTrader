@@ -44,54 +44,6 @@ const QUESTION_KEYS: Record<AssessmentQuestionId, string> = {
   stopLossBehavior: "assessment.question.stopLossBehavior",
 };
 
-const QUESTION_FALLBACKS: Record<AssessmentQuestionId, string> = {
-  propFirm: "Which prop firm are you using?",
-  accountSize: "What account size are you preparing for?",
-  challengeStage: "Where are you in the challenge?",
-  previousAttempts: "How many challenge attempts have you made?",
-  failurePattern: "What usually puts your challenge at risk?",
-  riskPerTrade: "How much do you risk per trade?",
-  tradesPerDay: "How many trades do you take per day?",
-  stopLossBehavior: "What do you do with your stop loss?",
-};
-
-const OPTION_FALLBACKS: Record<string, string> = {
-  ftmo: "FTMO", topstep: "Topstep", fundedNext: "FundedNext", other: "Another firm",
-  small: "Under $25,000", medium: "$25,000–$100,000", large: "Over $100,000",
-  notStarted: "Not started", early: "Early challenge", midway: "Midway through", nearTarget: "Near the target", funded: "Funded account",
-  none: "None", one: "One", twoToThree: "Two to three", fourPlus: "Four or more",
-  dailyLoss: "Daily loss limit", overtrading: "Overtrading", revenge: "Revenge trading", movingStops: "Moving my stop loss", oversizing: "Oversizing", inconsistent: "Inconsistent execution", targetPressure: "Profit target pressure", unknown: "Not sure",
-  lowRisk: "Under 0.5%", mediumRisk: "0.5–1%", highRisk: "Over 1%",
-  oneToTwo: "One to two", threeToFive: "Three to five", sixToTen: "Six to ten", moreThanTen: "More than ten",
-  never: "Never move it", occasionally: "Occasionally widen it", often: "Often widen it", remove: "Remove it during volatility",
-};
-
-const INSIGHT_FALLBACKS: Record<string, string> = {
-  "assessment.result.insight.overtrading": "Your biggest challenge risk: overtrading after an early loss.",
-  "assessment.result.insight.revenge": "Your biggest challenge risk: making the next trade emotional.",
-  "assessment.result.insight.movingStops": "Your biggest challenge risk: changing invalidation after entry.",
-  "assessment.result.insight.oversizing": "Your biggest challenge risk: taking more risk than your buffer can absorb.",
-  "assessment.result.insight.default": "Your biggest challenge risk needs a clearer system.",
-};
-
-const EXPLANATION_FALLBACKS: Record<string, string> = {
-  "assessment.result.explanation.dailyLoss": "Your daily loss limit needs clearer buffer and stop thresholds before the next trade.",
-  "assessment.result.explanation.overtrading": "Your trade count becomes most vulnerable after the first losing sequence.",
-  "assessment.result.explanation.movingStops": "Fixed invalidation rules can protect an otherwise passable challenge.",
-  "assessment.result.explanation.oversizing": "A defined maximum risk per trade can keep one decision from damaging the challenge.",
-  "assessment.result.explanation.default": "The biggest improvement is making risk and execution visible before the next trade.",
-};
-
-const BENEFIT_FALLBACKS: Record<string, string> = {
-  "assessment.benefit.buffer": "Know exactly how much buffer you have left",
-  "assessment.benefit.dailyLimit": "Protect your daily loss limit",
-  "assessment.benefit.target": "Track progress toward your profit target",
-  "assessment.benefit.overtrading": "Catch overtrading before it breaks the challenge",
-  "assessment.benefit.cooldown": "See when another trade becomes dangerous",
-  "assessment.benefit.decisions": "Review decisions that damage discipline",
-  "assessment.benefit.invalidation": "Set fixed invalidation for every trade",
-  "assessment.benefit.risk": "Set a maximum risk for every trade",
-};
 
 type Props = {
   phase: AcquisitionPhase;
@@ -219,7 +171,7 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
         <View style={{ width: 24 }} />
       </View>
       <Text style={styles.eyebrow}>PASS READINESS CHECK</Text>
-      <Text style={styles.questionTitle}>{copy(QUESTION_KEYS[currentQuestion], QUESTION_FALLBACKS[currentQuestion])}</Text>
+      <Text style={styles.questionTitle}>{t(QUESTION_KEYS[currentQuestion])}</Text>
       <View style={styles.options}>
         {currentOptions.map((option) => (
           <Pressable
@@ -228,7 +180,7 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
             style={[styles.option, answers[currentQuestion] === option && styles.optionSelected]}
             testID={`assessment-option-${option}`}
           >
-            <Text style={[styles.optionLabel, answers[currentQuestion] === option && styles.optionLabelSelected]}>{copy(`assessment.option.${option}`, OPTION_FALLBACKS[option] || option)}</Text>
+            <Text style={[styles.optionLabel, answers[currentQuestion] === option && styles.optionLabelSelected]}>{t(`assessment.option.${option}`)}</Text>
           </Pressable>
         ))}
       </View>
@@ -240,9 +192,9 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
       <ActivityIndicator color={C.green} size="large" />
       <Text style={styles.analysisTitle}>{copy("assessment.analysis.title", "Building your Challenge Health")}</Text>
       <Text style={styles.analysisLine}>{[
-        "Analyzing your risk pattern…",
-        "Calculating challenge pressure…",
-        "Building your Prop Pass plan…",
+        t("assessment.analysis.line1"),
+        t("assessment.analysis.line2"),
+        t("assessment.analysis.line3"),
       ][analysisLine]}</Text>
     </View>
   );
@@ -252,8 +204,8 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
       <Text style={styles.eyebrow}>YOUR PASS READINESS</Text>
       <Text style={styles.score}>{result?.overallReadiness ?? 0}</Text>
       <Text style={styles.scoreLabel}>Pass Readiness Score</Text>
-      <Text style={styles.insightTitle}>{copy(result?.insightKey || "assessment.result.insight.default", INSIGHT_FALLBACKS[result?.insightKey || "assessment.result.insight.default"] || INSIGHT_FALLBACKS["assessment.result.insight.default"])}</Text>
-      <Text style={styles.body}>{copy(result?.explanationKey || "assessment.result.explanation.default", EXPLANATION_FALLBACKS[result?.explanationKey || "assessment.result.explanation.default"] || EXPLANATION_FALLBACKS["assessment.result.explanation.default"])}</Text>
+      <Text style={styles.insightTitle}>{t(result?.insightKey || "assessment.result.insight.default")}</Text>
+      <Text style={styles.body}>{t(result?.explanationKey || "assessment.result.explanation.default")}</Text>
       <View style={styles.metrics}>
         {["Risk Control", "Discipline", "Challenge Buffer"].map((label, index) => {
           const value = [result?.riskControl, result?.discipline, result?.challengeBuffer][index] || 0;
@@ -272,7 +224,7 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
       <Text style={styles.title}>Your Prop Pass Plan Is Ready</Text>
       <Text style={styles.body}>{copy("assessment.preview.body", "You do not need more signals. You need a system that stops one emotional trade from damaging an otherwise passable challenge.")}</Text>
       <View style={styles.benefits}>
-        {benefits.map((key) => <Text key={key} style={styles.benefit}>• {copy(key, BENEFIT_FALLBACKS[key] || "Protect the decisions that matter most")}</Text>)}
+        {benefits.map((key) => <Text key={key} style={styles.benefit}>• {t(key)}</Text>)}
       </View>
       <Pressable style={styles.primaryButton} onPress={() => { if (result) { trackEvent("prop_pass_preview_viewed", { risk_category: result.primaryRisk }); onOpenPaywall(answers, result); } }} testID="assessment-unlock-prop-pass">
         <Text style={styles.primaryLabel}>Unlock My Prop Pass</Text>
