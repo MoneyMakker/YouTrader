@@ -2121,5 +2121,8 @@
   "propPass.firstAction.confirmFirm": "Select your firm",
   "propPass.firstAction.profitTarget": "Profit target ($)",
   "propPass.firstAction.dailyLoss": "Daily loss limit ($)",
-  "propPass.firstAction.overallLoss": "Overall loss limit ($)"
+  "propPass.firstAction.overallLoss": "Overall loss limit ($)",
+  "propPass.validation.selectFirm": "Select a prop firm.",
+  "propPass.validation.enterFirmName": "Enter your prop firm name.",
+  "propPass.firstAction.customFirm": "Custom firm name"
 }
