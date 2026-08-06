@@ -10998,8 +10998,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     // as the appUserID. Without a session, configure anonymously to allow
     // pre-auth purchases that are later linked via Purchases.logIn.
     if (!revenueCatConfigured) return;
-    // Visual preview mode: skip all RevenueCat configuration.
-    if (isVisualPreviewRef.current) return;
+    // Visual preview mode: skip RevenueCat configuration only when no real session.
+    // A cached/authenticated session must still configure RC and sync identity.
+    if (isVisualPreviewRef.current && !session?.user?.id) return;
     const userId = session?.user?.id;
     const hasSession = !!userId;
 
