@@ -2110,5 +2110,16 @@
   "propPass.firstAction.accountConfirmBody": "Enter your exact challenge account size so buffer limits are accurate.",
   "propPass.firstAction.confirmAndStart": "Confirm and Start Challenge",
   "propPass.firstAction.start": "Start My Challenge",
-  "propPass.firstAction.note": "Firm limits remain disabled until you confirm the challenge rules."
+  "propPass.firstAction.note": "Firm limits remain disabled until you confirm the challenge rules.",
+  "propPass.validation.accountSize": "Enter a valid account size.",
+  "propPass.validation.profitTarget": "Enter a valid profit target.",
+  "propPass.validation.dailyLoss": "Enter a valid daily loss limit.",
+  "propPass.validation.overallLoss": "Enter a valid overall loss limit.",
+  "propPass.validation.dailyBelowOverall": "Daily loss limit must be below the overall loss limit.",
+  "propPass.validation.writeFailed": "Setup could not be verified. Try again.",
+  "propPass.firstAction.propFirm": "Prop firm",
+  "propPass.firstAction.confirmFirm": "Select your firm",
+  "propPass.firstAction.profitTarget": "Profit target ($)",
+  "propPass.firstAction.dailyLoss": "Daily loss limit ($)",
+  "propPass.firstAction.overallLoss": "Overall loss limit ($)"
 }
