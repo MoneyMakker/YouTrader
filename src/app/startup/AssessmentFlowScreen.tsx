@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,6 +6,7 @@ import { ChevronLeft, Lock, ShieldCheck, TrendingUp } from "lucide-react-native"
 import type { AcquisitionPhase } from "./acquisitionState";
 import {
   ASSESSMENT_MODEL_VERSION,
+  ASSESSMENT_FUNNEL_PHASE_KEY,
   ASSESSMENT_QUESTION_IDS,
   calculateAssessmentResult,
   type AssessmentAnswers,
@@ -109,6 +110,7 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
   const [questionIndex, setQuestionIndex] = useState(0);
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const [analysisLine, setAnalysisLine] = useState(0);
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     void Promise.all([
@@ -127,7 +129,8 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
         try {
           const restoredResult = JSON.parse(resultRaw) as AssessmentResult;
           setResult(restoredResult);
-          onPhaseChange("prop_pass_preview");
+          restoredRef.current = true;
+          onPhaseChange("assessment_result");
           return;
         } catch { /* ignore malformed result */ }
       }
@@ -139,8 +142,13 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
         }
       }
       if (Object.keys(restoredAnswers).length > 0) onPhaseChange("assessment_questions");
+      restoredRef.current = true;
     });
   }, [onPhaseChange]);
+
+  useEffect(() => {
+    if (restoredRef.current) void AsyncStorage.setItem(ASSESSMENT_FUNNEL_PHASE_KEY, phase);
+  }, [phase]);
 
   useEffect(() => {
     void AsyncStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));

@@ -147,7 +147,7 @@ export function PostPurchaseAuthScreen({
   const busy = phase !== "idle" && phase !== "error_recoverable";
   const isSuccess = phase === "success";
   const isLinking =
-    phase === "linking_revenuecat" || phase === "migrating_local_data" || phase === "verifying_entitlement";
+    phase === "linking_revenuecat" || phase === "migrating_local_data" || phase === "verifying_entitlement" || phase === "configuring_prop_pass";
 
   useEffect(() => {
     void (async () => {
@@ -295,6 +295,7 @@ export function PostPurchaseAuthScreen({
                 <Text style={styles.linkingText} maxFontSizeMultiplier={1.15}>
                   {phase === "linking_revenuecat" ? t("postPurchase.linkingLinking")
                    : phase === "verifying_entitlement" ? t("postPurchase.linkingVerifying")
+                   : phase === "configuring_prop_pass" ? t("postPurchase.linkingConfiguring")
                    : t("postPurchase.linkingMigrating")}
                 </Text>
               </View>

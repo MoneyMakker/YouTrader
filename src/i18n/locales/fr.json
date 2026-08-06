@@ -892,6 +892,7 @@
   "postPurchase.entitlementUnverified": "Impossible de vérifier l'accès Pro.",
   "postPurchase.googleUnavailable": "Connexion Google indisponible.",
   "postPurchase.linkingFailed": "Échec de la liaison.",
+  "postPurchase.linkingConfiguring": "Configuration de votre Prop Pass…",
   "postPurchase.migrationFailed": "Échec de la migration.",
   "postPurchase.notAvailable": "Connexion indisponible.",
   "postPurchase.notConfigured": "Connexion email non configurée.",

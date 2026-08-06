@@ -115,6 +115,7 @@ import { AuthScreen } from "../auth/AuthScreen";
 import { PostPurchaseAuthContainer } from "../postPurchase/PostPurchaseAuthContainer";
 import { migrateGuestTradesToUser } from "../postPurchase/AnonymousDataMigrationService";
 import { POST_PURCHASE_LINKING_MARKER_KEY } from "../postPurchase/types";
+import { POST_PURCHASE_FIRST_ACTION_MARKER_KEY } from "../postPurchase/types";
 import type { AuthProvider, AuthScreenCopy, EmailAuthModalCopy } from "../auth/types";
 import { clearLocalUserCache, GUEST_TRADES_STORAGE_KEY, userTradesStorageKey } from "../auth/userCache";
 import { classifyBootstrapSession, shouldPurgeCachedSession } from "../auth/accountDeletionFlow";
@@ -188,7 +189,7 @@ import {
   type AcquisitionPhase,
   shouldClearExplicitAuthRequiredOnSessionChange,
 } from "./startup/acquisitionState";
-import type { AssessmentAnswers, AssessmentResult } from "../acquisition/assessmentModel";
+import { ASSESSMENT_FUNNEL_PHASE_KEY, type AssessmentAnswers, type AssessmentResult } from "../acquisition/assessmentModel";
 import { RevenueCatIdentitySynchronizer } from "../billing/revenueCatIdentity";
 import {
   decideEntitlementUiPhase,
@@ -10406,20 +10407,24 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     let cancelled = false;
     void (async () => {
       try {
-        const [onboarding, devicePaywall, legacyPaywall, authRequiredFlag, linkingMarker] = await Promise.all([
+        const [onboarding, devicePaywall, legacyPaywall, authRequiredFlag, linkingMarker, storedFunnelPhase] = await Promise.all([
           AsyncStorage.getItem(ACQUISITION_ONBOARDING_KEY),
           AsyncStorage.getItem(ACQUISITION_PAYWALL_DEVICE_KEY),
           AsyncStorage.getItem(POST_AUTH_PAYWALL_SEEN_KEY),
           AsyncStorage.getItem(ACQUISITION_AUTH_REQUIRED_KEY),
           AsyncStorage.getItem(POST_PURCHASE_LINKING_MARKER_KEY),
+          AsyncStorage.getItem(ASSESSMENT_FUNNEL_PHASE_KEY),
         ]);
         // Clear legacy guest flag — free/guest access is removed.
         void AsyncStorage.removeItem(ACQUISITION_GUEST_KEY);
         linkingMarkerActiveRef.current = linkingMarker === "1";
+        const userId = session?.user?.id;
+        if (!userId && storedFunnelPhase && ["assessment_intro", "assessment_questions", "assessment_analyzing", "assessment_result", "prop_pass_preview", "purchase_paywall"].includes(storedFunnelPhase)) {
+          setFunnelPhase(storedFunnelPhase as AcquisitionPhase);
+        }
         let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
         let onboardingDone = onboarding === "1";
         let authRequiredSticky = authRequiredFlag === "1";
-        const userId = session?.user?.id;
         if (userId) {
           const userPaywall = await AsyncStorage.getItem(acquisitionPaywallUserKey(userId));
           if (userPaywall === "1") paywallDone = true;
@@ -12570,6 +12575,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           onOpenPaywall={(answers, result) => {
             setAssessmentAnswers(answers);
             setAssessmentResult(result);
+            void AsyncStorage.setItem(ASSESSMENT_FUNNEL_PHASE_KEY, "purchase_paywall");
             setFunnelPhase("purchase_paywall");
           }}
         />
@@ -12627,6 +12633,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         onResetPassword={async (e) => { await requestPasswordResetHandler(e); }}
         onLinkingComplete={(result) => {
           void AsyncStorage.removeItem(POST_PURCHASE_LINKING_MARKER_KEY);
+          void AsyncStorage.removeItem(POST_PURCHASE_FIRST_ACTION_MARKER_KEY);
           linkingMarkerActiveRef.current = false;
           applyCustomerInfo(result.customerInfo, "post-purchase-linking");
           setAnonymousEntitlementStatus("inactive");

@@ -892,6 +892,7 @@
   "postPurchase.entitlementUnverified": "Impossibile verificare l'accesso Pro.",
   "postPurchase.googleUnavailable": "Accesso Google non disponibile.",
   "postPurchase.linkingFailed": "Collegamento non riuscito.",
+  "postPurchase.linkingConfiguring": "Configurazione del tuo Prop Pass…",
   "postPurchase.migrationFailed": "Migrazione non riuscita.",
   "postPurchase.notAvailable": "Accesso non disponibile.",
   "postPurchase.notConfigured": "Accesso email non configurato.",

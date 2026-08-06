@@ -1,4 +1,5 @@
 export const ASSESSMENT_MODEL_VERSION = "assessment_model_v1" as const;
+export const ASSESSMENT_FUNNEL_PHASE_KEY = "yt-assessment-funnel-phase-v1";
 
 export type AssessmentQuestionId =
   | "propFirm"

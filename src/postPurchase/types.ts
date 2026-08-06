@@ -11,6 +11,8 @@ export type PostPurchaseAuthPhase =
   | "linking_revenuecat"
   | "migrating_local_data"
   | "verifying_entitlement"
+  | "configuring_prop_pass"
+  | "first_action"
   | "success"
   | "error_recoverable";
 
@@ -36,3 +38,4 @@ export const INITIAL_POST_PURCHASE_STATE: PostPurchaseState = {
 
 /** Persisted marker so relaunch can restore the post-purchase auth screen. */
 export const POST_PURCHASE_LINKING_MARKER_KEY = "yt-post-purchase-linking-marker-v1";
+export const POST_PURCHASE_FIRST_ACTION_MARKER_KEY = "yt-post-purchase-first-action-v1";

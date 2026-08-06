@@ -9,6 +9,28 @@ import type { AssessmentAnswers, AssessmentResult } from "../acquisition/assessm
 
 const MIGRATION_MARKER_PREFIX = "yt-post-purchase-migration-v1:";
 
+function stableObject(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableObject);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stableObject(item)]));
+}
+
+function migrationId(entry: unknown, index: number, scope: string): string {
+  const normalized = JSON.stringify({ scope, index, entry: stableObject(entry) });
+  let hash = 2166136261;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash ^= normalized.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `migration-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+export function normalizeMigrationTrade(entry: unknown, index: number, scope: "guest" | "authenticated"): unknown {
+  if (!entry || typeof entry !== "object") return entry;
+  const record = entry as Record<string, unknown>;
+  return record.id ? entry : { ...record, id: migrationId(entry, index, scope) };
+}
+
 export type MigrationResult =
   | { status: "migrated"; tradesMigrated: number }
   | { status: "already_migrated" }
@@ -108,25 +130,20 @@ export async function migrateGuestTradesToUser(userId: string): Promise<Migratio
   }
 
   // Merge: guest trades first (older), then authenticated (newer). Deduplicate by id.
-  const authTradeIds = new Set<string>();
-  for (const entry of authenticatedTrades) {
-    if (entry && typeof entry === "object" && (entry as any).id) {
-      authTradeIds.add(String((entry as any).id));
-    }
-  }
-
-  const deduplicated = [...guestTrades];
-  for (const entry of authenticatedTrades) {
-    if (entry && typeof entry === "object" && (entry as any).id) {
-      deduplicated.push(entry);
-    }
-  }
+  const normalizedGuest = guestTrades.map((entry, index) => normalizeMigrationTrade(entry, index, "guest"));
+  const normalizedAuthenticated = authenticatedTrades.map((entry, index) => normalizeMigrationTrade(entry, index, "authenticated"));
+  const deduplicated = [...normalizedGuest, ...normalizedAuthenticated];
 
   // Remove duplicates, keeping the last occurrence (authenticated wins)
   const seen = new Map<string, unknown>();
   for (const entry of deduplicated) {
     if (entry && typeof entry === "object" && (entry as any).id) {
       seen.set(String((entry as any).id), entry);
+    }
+  }
+  for (const entry of deduplicated) {
+    if (entry && typeof entry === "object" && !(entry as any).id) {
+      seen.set(`unkeyed-${seen.size}`, entry);
     }
   }
   const merged = Array.from(seen.values());

@@ -915,6 +915,7 @@
   "postPurchase.googleUnavailable": "Google Sign-In is not available.",
 
   "postPurchase.linkingFailed": "Linking failed. Please try again.",
+  "postPurchase.linkingConfiguring": "Configuring your Prop Pass…",
 
   "postPurchase.migrationFailed": "Data migration failed. Your purchase and journal are preserved.",
 

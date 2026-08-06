@@ -10,6 +10,9 @@ import React, { useEffect } from "react";
 import type { CustomerInfo } from "react-native-purchases";
 import type { AuthProvider } from "../auth/types";
 import { PostPurchaseAuthScreen } from "./PostPurchaseAuthScreen";
+import { PropPassFirstActionScreen } from "../app/startup/PropPassFirstActionScreen";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { POST_PURCHASE_FIRST_ACTION_MARKER_KEY } from "./types";
 import { usePostPurchaseAuthCoordinator, type LinkingResult, type AuthCallback, type EmailAuthCallback } from "./PostPurchaseAuthCoordinator";
 
 type Props = {
@@ -39,6 +42,8 @@ export function PostPurchaseAuthContainer({
     authenticateEmail,
     retry,
     resumeLinking,
+    resumeFirstAction,
+    completeFirstAction,
   } = usePostPurchaseAuthCoordinator({
     anonymousCustomerInfo,
     onAuthenticate,
@@ -49,6 +54,14 @@ export function PostPurchaseAuthContainer({
   // On mount: if session already exists AND not in visual-preview mode,
   // auto-resume linking (relaunch after partial auth).
   // Visual preview skips all real linking — only renders the UI.
+  useEffect(() => {
+    if (sessionUserId) {
+      void AsyncStorage.getItem(POST_PURCHASE_FIRST_ACTION_MARKER_KEY).then((storedUserId) => {
+        if (storedUserId === sessionUserId) resumeFirstAction();
+      });
+    }
+  }, [sessionUserId, resumeFirstAction]);
+
   useEffect(() => {
     if (sessionUserId && phase === "idle" && anonymousCustomerInfo) {
       void resumeLinking(sessionUserId);
@@ -70,6 +83,10 @@ export function PostPurchaseAuthContainer({
       // routes to Main on the next hydration cycle.
     }
   }, [phase]);
+
+  if (phase === "first_action" && sessionUserId) {
+    return <PropPassFirstActionScreen userId={sessionUserId} onStart={completeFirstAction} />;
+  }
 
   return (
     <PostPurchaseAuthScreen

@@ -892,6 +892,7 @@
   "postPurchase.entitlementUnverified": "Pro-Zugang konnte nicht bestätigt werden. Erneut versuchen.",
   "postPurchase.googleUnavailable": "Google-Anmeldung nicht verfügbar.",
   "postPurchase.linkingFailed": "Verknüpfung fehlgeschlagen.",
+  "postPurchase.linkingConfiguring": "Prop Pass wird eingerichtet…",
   "postPurchase.migrationFailed": "Datenübertragung fehlgeschlagen.",
   "postPurchase.notAvailable": "Anmeldung nicht verfügbar.",
   "postPurchase.notConfigured": "E-Mail-Anmeldung nicht konfiguriert.",

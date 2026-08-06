@@ -892,6 +892,7 @@
   "postPurchase.entitlementUnverified": "Не удалось подтвердить Pro-доступ.",
   "postPurchase.googleUnavailable": "Вход с Google недоступен.",
   "postPurchase.linkingFailed": "Не удалось привязать покупку.",
+  "postPurchase.linkingConfiguring": "Настраиваем ваш Prop Pass…",
   "postPurchase.migrationFailed": "Перенос данных не удался.",
   "postPurchase.notAvailable": "Вход недоступен.",
   "postPurchase.notConfigured": "Вход по email не настроен.",

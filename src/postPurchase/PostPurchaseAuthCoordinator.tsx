@@ -16,6 +16,8 @@ import { linkAnonymousPurchaseToIdentity } from "./RevenueCatIdentityLinker";
 import { migrateAnonymousAssessmentToUser, migrateGuestTradesToUser } from "./AnonymousDataMigrationService";
 import { REVENUECAT_ENTITLEMENT_ID } from "../config/appConfig";
 import { t } from "../i18n";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { POST_PURCHASE_FIRST_ACTION_MARKER_KEY } from "./types";
 
 export type LinkingResult = {
   customerInfo: CustomerInfo;
@@ -47,6 +49,7 @@ export function usePostPurchaseAuthCoordinator({
   const busyRef = useRef(false);
   const failedStageRef = useRef<"auth" | "linking" | "verify" | "migrate" | null>(null);
   const retryUserIdRef = useRef<string | null>(null);
+  const linkingResultRef = useRef<LinkingResult | null>(null);
 
   const setError = useCallback((msg: string, stage: "auth" | "linking" | "verify" | "migrate") => {
     setErrorMessage(msg);
@@ -101,19 +104,36 @@ export function usePostPurchaseAuthCoordinator({
       return;
     }
 
-    // Phase: success — let animation render before navigating to Main.
-    setPhase("success");
-    busyRef.current = false;
-    const cb = callbacksRef.current.onLinkingComplete;
+    // Persisted assessment/setup writes are complete; configure the first
+    // Prop Pass surface before allowing Main.
+    setPhase("configuring_prop_pass");
+    await new Promise((resolve) => setTimeout(resolve, 120));
     const finalResult: LinkingResult = {
       customerInfo: info,
       tradesMigrated: migrationResult.status === "migrated" ? migrationResult.tradesMigrated : 0,
       migrationStatus: migrationResult.status,
     };
+    linkingResultRef.current = finalResult;
+    await AsyncStorage.setItem(POST_PURCHASE_FIRST_ACTION_MARKER_KEY, userId);
+    setPhase("first_action");
+    busyRef.current = false;
+  }, [anonymousCustomerInfo, setError]);
+
+  const completeFirstAction = useCallback(() => {
+    if (!linkingResultRef.current || busyRef.current) return;
+    busyRef.current = true;
+    setPhase("success");
+    const cb = callbacksRef.current.onLinkingComplete;
+    const finalResult = linkingResultRef.current;
     // Brief delay so the success visual is visible before the parent clears
     // the marker and acquisition routes to Main.
-    setTimeout(() => { cb(finalResult); }, 900);
-  }, [anonymousCustomerInfo, setError]);
+    setTimeout(() => {
+      cb(finalResult);
+      void AsyncStorage.removeItem(POST_PURCHASE_FIRST_ACTION_MARKER_KEY);
+      linkingResultRef.current = null;
+      busyRef.current = false;
+    }, 900);
+  }, []);
 
   const authenticate = useCallback(async (provider: AuthProvider) => {
     if (busyRef.current) return;
@@ -208,6 +228,12 @@ export function usePostPurchaseAuthCoordinator({
     await handleAuthResult(userId);
   }, [handleAuthResult]);
 
+  const resumeFirstAction = useCallback(() => {
+    if (busyRef.current) return;
+    busyRef.current = false;
+    setPhase("first_action");
+  }, []);
+
   return {
     phase,
     activeProvider,
@@ -216,6 +242,8 @@ export function usePostPurchaseAuthCoordinator({
     authenticateEmail,
     retry,
     resumeLinking,
+    resumeFirstAction,
+    completeFirstAction,
     gotoIdle,
   };
 }

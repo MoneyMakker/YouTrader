@@ -892,6 +892,7 @@
   "postPurchase.entitlementUnverified": "No se pudo verificar el acceso Pro.",
   "postPurchase.googleUnavailable": "Inicio con Google no disponible.",
   "postPurchase.linkingFailed": "Error al vincular la compra.",
+  "postPurchase.linkingConfiguring": "Configurando tu Prop Pass…",
   "postPurchase.migrationFailed": "Migración fallida.",
   "postPurchase.notAvailable": "Inicio de sesión no disponible.",
   "postPurchase.notConfigured": "Inicio por correo no configurado.",
