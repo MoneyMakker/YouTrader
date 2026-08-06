@@ -1,4 +1,4 @@
-import { calculateAssessmentResult, ASSESSMENT_MODEL_VERSION, type AssessmentAnswers } from "../../src/acquisition/assessmentModel";
+import { ASSESSMENT_QUESTION_IDS, calculateAssessmentResult, isAssessmentComplete, ASSESSMENT_MODEL_VERSION, type AssessmentAnswers } from "../../src/acquisition/assessmentModel";
 import { resolveAcquisitionPhase } from "../../src/app/startup/acquisitionState";
 
 let failures = 0;
@@ -25,6 +25,22 @@ check("scores stay within 0–100", [first, risk].every((r) => [r.overallReadine
 check("risk answer changes readiness", first.overallReadiness !== risk.overallReadiness);
 check("risk answer changes primary insight", first.insightKey !== risk.insightKey);
 check("risk answer changes Prop Pass benefits", first.propPassBenefitKeys.join() !== risk.propPassBenefitKeys.join());
+check("incomplete answers cannot complete assessment", !isAssessmentComplete({ ...disciplined, stopLossBehavior: undefined }));
+check("complete answers are accepted", isAssessmentComplete(disciplined));
+
+for (const question of ASSESSMENT_QUESTION_IDS) {
+  const changed = { ...disciplined };
+  if (question === "propFirm") changed[question] = "topstep";
+  if (question === "accountSize") changed[question] = "large";
+  if (question === "challengeStage") changed[question] = "nearTarget";
+  if (question === "previousAttempts") changed[question] = "fourPlus";
+  if (question === "failurePattern") changed[question] = "movingStops";
+  if (question === "riskPerTrade") changed[question] = "highRisk";
+  if (question === "tradesPerDay") changed[question] = "moreThanTen";
+  if (question === "stopLossBehavior") changed[question] = "remove";
+  const changedResult = calculateAssessmentResult(changed);
+  check(`${question} changes downstream output`, JSON.stringify(changedResult) !== JSON.stringify(first));
+}
 check("anonymous funnel reaches assessment intro without login", resolveAcquisitionPhase({
   hydrated: true, onboardingCompleted: false, paywallCompleted: false, authRequired: false,
   hasSession: false, isPremium: false, revenueCatReady: true, funnelPhase: "assessment_intro",

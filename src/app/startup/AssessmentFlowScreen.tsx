@@ -9,6 +9,7 @@ import {
   ASSESSMENT_FUNNEL_PHASE_KEY,
   ASSESSMENT_QUESTION_IDS,
   calculateAssessmentResult,
+  isAssessmentComplete,
   type AssessmentAnswers,
   type AssessmentQuestionId,
   type AssessmentResult,
@@ -182,7 +183,7 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
     setAnswers(next);
     trackEvent("assessment_question_answered", { question: currentQuestion });
     void AsyncStorage.setItem(QUESTION_INDEX_KEY, String(questionIndex + 1));
-    if (questionIndex === ASSESSMENT_QUESTION_IDS.length - 1) {
+    if (questionIndex === ASSESSMENT_QUESTION_IDS.length - 1 && isAssessmentComplete(next)) {
       onPhaseChange("assessment_analyzing");
     } else {
       setQuestionIndex((index) => index + 1);

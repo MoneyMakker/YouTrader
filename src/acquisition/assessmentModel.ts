@@ -37,6 +37,13 @@ export const ASSESSMENT_QUESTION_IDS: AssessmentQuestionId[] = [
   "stopLossBehavior",
 ];
 
+export function isAssessmentComplete(answers: AssessmentAnswers): boolean {
+  return ASSESSMENT_QUESTION_IDS.every((question) => {
+    const value = answers[question];
+    return typeof value === "string" && value.trim().length > 0;
+  });
+}
+
 const failureWeights: Record<string, number> = {
   dailyLoss: 42,
   overtrading: 48,
@@ -71,7 +78,7 @@ export function calculateAssessmentResult(answers: AssessmentAnswers): Assessmen
   const attempts = optionScore(answers.previousAttempts, { none: 82, one: 68, twoToThree: 52, fourPlus: 36 }, 58);
   const stage = optionScore(answers.challengeStage, { notStarted: 76, early: 68, midway: 62, nearTarget: 74, funded: 82 }, 60);
   const account = optionScore(answers.accountSize, { small: 58, medium: 66, large: 72 }, 60);
-  const firm = optionScore(answers.propFirm, { ftmo: 68, topstep: 70, fundedNext: 66, other: 58 }, 58);
+  const firm = optionScore(answers.propFirm, { ftmo: 68, topstep: 78, fundedNext: 62, other: 48 }, 58);
 
   const riskControl = clamp(stopLoss * 0.45 + risk * 0.4 + (100 - failure) * 0.15);
   const discipline = clamp(frequency * 0.4 + attempts * 0.25 + (100 - failure) * 0.35);
