@@ -1,9 +1,8 @@
 /**
- * PostPurchaseAuthScreen — premium iOS post-purchase authentication.
+ * PostPurchaseAuthScreen — premium native iOS post-purchase authentication.
  *
  * Shown after an anonymous purchase completes with verified active entitlement.
- * The screen is never shown without confirmed Pro entitlement for the anonymous
- * RevenueCat customer.
+ * Never shown without confirmed Pro entitlement for the anonymous RevenueCat customer.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -16,13 +15,13 @@ import {
   Linking,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Haptics from "expo-haptics";
 import { CheckCircle, Lock, Mail } from "lucide-react-native";
@@ -30,8 +29,8 @@ import type { AuthProvider } from "../auth/types";
 import type { PostPurchaseAuthPhase } from "./types";
 import { C } from "../theme/colors";
 import { t } from "../i18n";
-import { enableNativeAppleSignIn, enableNativeGoogleSignIn } from "../config/appConfig";
 import { GoogleGIcon } from "./GoogleGIcon";
+import { TradingMotif } from "./TradingMotif";
 
 type Props = {
   phase: PostPurchaseAuthPhase;
@@ -58,7 +57,6 @@ function SuccessAnimation({ visible, reduceMotion }: { visible: boolean; reduceM
 
   useEffect(() => {
     if (reduceMotion) {
-      // Static success — no spring/bounce/scale.
       Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 150, useNativeDriver: true }).start();
       scale.setValue(1);
       return;
@@ -74,8 +72,36 @@ function SuccessAnimation({ visible, reduceMotion }: { visible: boolean; reduceM
   if (!visible) return null;
   return (
     <Animated.View style={{ transform: [{ scale }], opacity }}>
-      <CheckCircle size={24} color={LIME} strokeWidth={2.8} fill="rgba(163,255,18,0.22)" />
+      <CheckCircle size={22} color={LIME} strokeWidth={2.6} fill="rgba(163,255,18,0.22)" />
     </Animated.View>
+  );
+}
+
+// ── Breathing pulse around the brand mark ────────────────────────────────────
+
+function BrandPulse({ reduceMotion }: { reduceMotion: boolean }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2600, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2600, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion]);
+
+  const haloScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+  const haloOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.10, 0.22] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.halo, { transform: [{ scale: haloScale }], opacity: haloOpacity }]}
+    />
   );
 }
 
@@ -113,10 +139,15 @@ export function PostPurchaseAuthScreen({
   const [emailConfirmSent, setEmailConfirmSent] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
 
-  const showApple = enableNativeAppleSignIn ?? true;
-  const showGoogle = enableNativeGoogleSignIn ?? true;
+  // Keep the official Apple control visible on iOS even when the simulator
+  // cannot complete Apple auth; the callback still handles availability.
+  const showApple = true;
+  // Google always shown — browser OAuth fallback exists when native sign-in is not configured.
+  const showGoogle = true;
   const busy = phase !== "idle" && phase !== "error_recoverable";
   const isSuccess = phase === "success";
+  const isLinking =
+    phase === "linking_revenuecat" || phase === "migrating_local_data" || phase === "verifying_entitlement";
 
   useEffect(() => {
     void (async () => {
@@ -131,16 +162,14 @@ export function PostPurchaseAuthScreen({
 
   const providerLoading = useCallback((provider: string) => {
     if (isSuccess) return null;
-    if (phase === "linking_revenuecat" || phase === "migrating_local_data" || phase === "verifying_entitlement") {
-      return t("loading");
-    }
+    if (isLinking) return t("loading");
     switch (provider) {
       case "apple": return phase === "authenticating_apple" ? t("loading") : null;
       case "google": return phase === "authenticating_google" ? t("loading") : null;
       case "email": return phase === "authenticating_email" ? t("loading") : null;
     }
     return null;
-  }, [phase, isSuccess]);
+  }, [phase, isSuccess, isLinking]);
 
   const handleEmailSubmit = useCallback(async () => {
     const e = email.trim();
@@ -175,7 +204,6 @@ export function PostPurchaseAuthScreen({
       return;
     }
 
-    // signin
     if (!password) { setEmailError(t("postPurchase.passwordRequired")); return; }
     setEmailError("");
     Keyboard.dismiss();
@@ -211,7 +239,6 @@ export function PostPurchaseAuthScreen({
     void Linking.openURL("https://youtrader.app/privacy");
   }, []);
 
-  // Announce success for accessibility
   useEffect(() => {
     if (isSuccess) {
       AccessibilityInfo.announceForAccessibility(t("postPurchase.successAnnounce"));
@@ -221,11 +248,28 @@ export function PostPurchaseAuthScreen({
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.root}>
-        {/* Green radial glow behind brand symbol */}
-        <View style={styles.glowContainer}>
-          <View style={styles.glow} />
+        {/* ── DECORATIVE LAYER: all pointerEvents="none" ── */}
+        <View pointerEvents="none" style={styles.decorativeLayer}>
+          <View style={styles.glowOuter} />
+          <View style={styles.glowInner} />
+          <View style={styles.brandCenter}>
+            <BrandPulse reduceMotion={reduceMotion} />
+            <View style={[styles.brandCard, COMPACT && styles.brandCardCompact]}>
+              <View style={styles.brandInner}>
+                <Text style={styles.brandY} maxFontSizeMultiplier={1}>Y</Text>
+              </View>
+              <View style={styles.checkmarkBadge}>
+                <SuccessAnimation visible={isSuccess} reduceMotion={reduceMotion} />
+                {!isSuccess ? <CheckCircle size={15} color={LIME} strokeWidth={2.6} /> : null}
+              </View>
+            </View>
+            <View style={[styles.motifWrap, COMPACT && styles.motifWrapCompact]}>
+              <TradingMotif reduceMotion={reduceMotion} />
+            </View>
+          </View>
         </View>
 
+        {/* ── INTERACTIVE LAYER: content + buttons ── */}
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
           <ScrollView
             contentContainerStyle={[styles.scroll, COMPACT && styles.scrollCompact]}
@@ -233,16 +277,8 @@ export function PostPurchaseAuthScreen({
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
-            {/* Brand symbol — Y + checkmark */}
-            <View style={styles.brandWrap}>
-              <View style={styles.brandCircle}>
-                <Text style={styles.brandY} maxFontSizeMultiplier={1}>Y</Text>
-                <View style={styles.checkmarkBadge}>
-                  <SuccessAnimation visible={isSuccess} reduceMotion={reduceMotion} />
-                  {!isSuccess ? <CheckCircle size={16} color={LIME} strokeWidth={2.8} /> : null}
-                </View>
-              </View>
-            </View>
+            {/* Spacer matching decorative height */}
+            <View style={styles.decorativeSpacer} />
 
             {/* Activation badge — only when entitlement is confirmed */}
             <ActivationBadge />
@@ -253,7 +289,7 @@ export function PostPurchaseAuthScreen({
             </Text>
 
             {/* Description or linking phases */}
-            {phase === "linking_revenuecat" || phase === "migrating_local_data" || phase === "verifying_entitlement" ? (
+            {isLinking ? (
               <View style={styles.linkingRow}>
                 <ActivityIndicator size="small" color={LIME} />
                 <Text style={styles.linkingText} maxFontSizeMultiplier={1.15}>
@@ -286,10 +322,10 @@ export function PostPurchaseAuthScreen({
             ) : null}
 
             {/* Auth buttons — hidden during linking phases and success */}
-            {!isSuccess && phase !== "linking_revenuecat" && phase !== "migrating_local_data" && phase !== "verifying_entitlement" ? (
+            {!isSuccess && !isLinking ? (
               <View style={styles.buttonStack}>
                 {showApple ? (
-                  <View style={styles.appleButtonWrap}>
+                  <View style={styles.appleButtonWrap} testID="post-purchase-apple-button">
                     <AppleAuthentication.AppleAuthenticationButton
                       buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
                       buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
@@ -306,9 +342,10 @@ export function PostPurchaseAuthScreen({
                     disabled={busy}
                     accessibilityRole="button"
                     accessibilityLabel={t("authGoogle")}
+                    testID="post-purchase-google-button"
                     style={({ pressed }) => [
                       styles.authButton,
-                      styles.googleButton,
+                      styles.neutralButton,
                       busy && styles.authButtonDisabled,
                       pressed && !busy && styles.authButtonPressed,
                     ]}
@@ -318,7 +355,7 @@ export function PostPurchaseAuthScreen({
                     ) : (
                       <GoogleGIcon size={20} />
                     )}
-                    <Text style={[styles.authButtonLabel, styles.googleLabel]} maxFontSizeMultiplier={1.15}>
+                    <Text style={styles.authButtonLabel} maxFontSizeMultiplier={1.15}>
                       {providerLoading("google") || t("authGoogle")}
                     </Text>
                   </Pressable>
@@ -329,9 +366,10 @@ export function PostPurchaseAuthScreen({
                   disabled={busy}
                   accessibilityRole="button"
                   accessibilityLabel={t("authEmail")}
+                  testID="post-purchase-email-button"
                   style={({ pressed }) => [
                     styles.authButton,
-                    styles.emailButton,
+                    styles.neutralButton,
                     busy && styles.authButtonDisabled,
                     pressed && !busy && styles.authButtonPressed,
                   ]}
@@ -341,7 +379,7 @@ export function PostPurchaseAuthScreen({
                   ) : (
                     <Mail size={18} color={C.sub} strokeWidth={2.2} />
                   )}
-                  <Text style={[styles.authButtonLabel, styles.emailLabel]} maxFontSizeMultiplier={1.15}>
+                  <Text style={styles.authButtonLabel} maxFontSizeMultiplier={1.15}>
                     {providerLoading("email") || t("authEmail")}
                   </Text>
                 </Pressable>
@@ -350,7 +388,7 @@ export function PostPurchaseAuthScreen({
 
             {/* Privacy reassurance */}
             <View style={styles.reassuranceRow}>
-              <Lock size={12} color={C.muted} strokeWidth={2} />
+              <Lock size={12} color={C.sub} strokeWidth={2} />
               <Text style={styles.reassuranceText} maxFontSizeMultiplier={1.2}>
                 {t("postPurchase.reassurance")}
               </Text>
@@ -372,7 +410,7 @@ export function PostPurchaseAuthScreen({
 
         {/* Email modal */}
         {emailModalOpen && !isSuccess ? (
-          <View style={styles.modalOverlay}>
+          <View style={styles.modalOverlay} testID="post-purchase-email-modal">
             <Pressable style={StyleSheet.absoluteFill} onPress={() => { if (!busy) closeEmailModal(); }} />
             <View style={styles.modalCard}>
               {emailConfirmSent ? (
@@ -408,6 +446,7 @@ export function PostPurchaseAuthScreen({
                     autoCorrect={false}
                     keyboardType="email-address"
                     textContentType="emailAddress"
+                    testID="post-purchase-email-input"
                     value={email}
                     onChangeText={(txt) => { setEmail(txt); setEmailError(""); }}
                     editable={!busy}
@@ -454,7 +493,7 @@ export function PostPurchaseAuthScreen({
                       onPress={() => { void handleEmailSubmit(); }}
                       disabled={busy}
                       accessibilityRole="button"
-                      accessibilityLabel={emailMode === "forgot" ? "Send Reset Link" : t("postPurchase.continueEmail")}
+                      accessibilityLabel={emailMode === "forgot" ? t("postPurchase.emailSendLink") : t("postPurchase.continueEmail")}
                       style={({ pressed }) => [styles.modalSubmit, busy && styles.modalSubmitDisabled, pressed && !busy && styles.modalSubmitPressed]}
                     >
                       {phase === "authenticating_email" ? (
@@ -494,46 +533,87 @@ export function PostPurchaseAuthScreen({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#080A0E" },
+  safe: { flex: 1, backgroundColor: "#06080C" },
   flex: { flex: 1 },
-  root: { flex: 1, backgroundColor: "#080A0E" },
-  glowContainer: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center", overflow: "hidden" },
-  glow: {
-    width: SCREEN_WIDTH * 0.9,
-    height: SCREEN_WIDTH * 0.9,
-    borderRadius: SCREEN_WIDTH * 0.45,
-    backgroundColor: "rgba(163,255,18,0.06)",
-    transform: [{ translateY: -120 }],
+  root: { flex: 1, backgroundColor: "#06080C" },
+
+  // ── Decorative layer (all pointerEvents="none") ──
+  decorativeLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    overflow: "hidden",
+    paddingTop: 40,
   },
-  scroll: { flexGrow: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 28, paddingVertical: 48, gap: 20 },
-  scrollCompact: { paddingHorizontal: 22, paddingVertical: 32, gap: 16 },
-  brandWrap: { alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  brandCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    borderWidth: 1.5, borderColor: "rgba(163,255,18,0.28)",
-    backgroundColor: "rgba(8,10,14,0.85)",
-    alignItems: "center", justifyContent: "center", position: "relative",
+  brandCenter: { position: "relative", alignItems: "center" },
+  decorativeSpacer: { height: 160 },
+
+  glowOuter: {
+    position: "absolute",
+    top: 40,
+    left: SCREEN_WIDTH * 0.225,
+    width: SCREEN_WIDTH * 0.55,
+    height: SCREEN_WIDTH * 0.55,
+    borderRadius: SCREEN_WIDTH * 0.28,
+    backgroundColor: "rgba(163,255,18,0.038)",
   },
-  brandY: { color: LIME, fontSize: 34, fontWeight: "900", letterSpacing: 0.5 },
-  checkmarkBadge: {
-    position: "absolute", bottom: -4, right: -4,
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: "rgba(8,10,14,0.95)",
-    borderWidth: 1, borderColor: "rgba(163,255,18,0.35)",
+  glowInner: {
+    position: "absolute",
+    top: 88,
+    left: SCREEN_WIDTH * 0.34,
+    width: SCREEN_WIDTH * 0.32,
+    height: SCREEN_WIDTH * 0.32,
+    borderRadius: SCREEN_WIDTH * 0.16,
+    backgroundColor: "rgba(163,255,18,0.045)",
+  },
+  halo: {
+    position: "absolute",
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "rgba(163,255,18,0.12)",
+    top: -12,
+  },
+
+  scroll: { flexGrow: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 28, paddingVertical: 40, gap: 18 },
+  scrollCompact: { paddingHorizontal: 22, paddingVertical: 20, gap: 12 },
+
+  brandCard: {
+    width: 72, height: 72, borderRadius: 22, borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.26)",
+    backgroundColor: "rgba(13,17,23,0.92)",
+    alignItems: "center", justifyContent: "center",
+    ...Platform.select({ ios: { shadowColor: "#A3FF12", shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 6 } } }),
+  },
+  brandCardCompact: { width: 64, height: 64, borderRadius: 19 },
+  brandInner: {
+    width: 52, height: 52, borderRadius: 14, borderWidth: 1,
+    borderColor: "rgba(163,255,18,0.16)", backgroundColor: "rgba(163,255,18,0.05)",
     alignItems: "center", justifyContent: "center",
   },
-  activationBadge: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 100,
-    borderWidth: 1, borderColor: "rgba(163,255,18,0.22)",
-    backgroundColor: "rgba(163,255,18,0.08)",
+  brandY: { color: LIME, fontSize: 28, fontWeight: "900", letterSpacing: 0.3 },
+  checkmarkBadge: {
+    position: "absolute", bottom: -5, right: -5, width: 24, height: 24, borderRadius: 12,
+    backgroundColor: "#0B0E13", borderWidth: 1, borderColor: "rgba(163,255,18,0.38)",
+    alignItems: "center", justifyContent: "center",
   },
-  activationBadgeText: { color: LIME, fontSize: 13, lineHeight: 18, fontWeight: "800", letterSpacing: 0.4 },
-  heading: { color: C.text, fontSize: 38, lineHeight: 44, fontWeight: "800", textAlign: "center", letterSpacing: 0.2, maxWidth: 340 },
-  headingCompact: { fontSize: 32, lineHeight: 38 },
-  description: { color: C.sub, fontSize: 17, lineHeight: 24, fontWeight: "600", textAlign: "center", maxWidth: 340 },
+  motifWrap: { marginTop: 10 },
+  motifWrapCompact: { marginTop: 4, transform: [{ scale: 0.88 }] },
+
+  activationBadge: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 15, paddingVertical: 7, borderRadius: 100,
+    borderWidth: 1, borderColor: "rgba(163,255,18,0.22)",
+    backgroundColor: "rgba(163,255,18,0.07)",
+  },
+  activationBadgeText: { color: LIME, fontSize: 12.5, lineHeight: 17, fontWeight: "800", letterSpacing: 0.5 },
+
+  heading: { color: C.text, fontSize: 34, lineHeight: 40, fontWeight: "800", textAlign: "center", letterSpacing: 0.1, maxWidth: 320 },
+  headingCompact: { fontSize: 29, lineHeight: 34 },
+  description: { color: C.sub, fontSize: 16, lineHeight: 23, fontWeight: "500", textAlign: "center", maxWidth: 330 },
   linkingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   linkingText: { color: C.sub, fontSize: 15, fontWeight: "700" },
+
   errorBox: {
     width: "100%", maxWidth: 340, paddingHorizontal: 16, paddingVertical: 12,
     borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,59,95,0.25)",
@@ -543,21 +623,21 @@ const styles = StyleSheet.create({
   retryBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: "rgba(163,255,18,0.35)", backgroundColor: "rgba(163,255,18,0.10)" },
   retryBtnPressed: { backgroundColor: "rgba(163,255,18,0.18)" },
   retryText: { color: LIME, fontSize: 14, fontWeight: "800" },
-  buttonStack: { width: "100%", maxWidth: 340, gap: 12, marginTop: 4 },
+
+  buttonStack: { width: "100%", maxWidth: 340, gap: 12, marginTop: 6 },
   appleButtonWrap: { height: BUTTON_HEIGHT, borderRadius: BUTTON_RADIUS, overflow: "hidden" },
   appleButton: { width: "100%", height: BUTTON_HEIGHT },
   authButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, height: BUTTON_HEIGHT, borderRadius: BUTTON_RADIUS, borderWidth: 1 },
-  googleButton: { borderColor: "rgba(255,255,255,0.14)", backgroundColor: "#1A1D24" },
-  emailButton: { borderColor: "rgba(255,255,255,0.14)", backgroundColor: "#1A1D24" },
+  neutralButton: { borderColor: "rgba(255,255,255,0.13)", backgroundColor: "rgba(255,255,255,0.045)" },
   authButtonDisabled: { opacity: 0.5 },
-  authButtonPressed: { backgroundColor: "rgba(255,255,255,0.06)" },
-  authButtonLabel: { fontSize: 16, fontWeight: "800" },
-  googleLabel: { color: C.text },
-  emailLabel: { color: C.text },
-  reassuranceRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
-  reassuranceText: { color: C.muted, fontSize: 12, lineHeight: 17, fontWeight: "600", textAlign: "center" },
-  legalText: { color: C.muted, fontSize: 11, lineHeight: 16, fontWeight: "600", textAlign: "center", marginTop: 2, maxWidth: 300 },
+  authButtonPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
+  authButtonLabel: { fontSize: 16, fontWeight: "800", color: C.text },
+
+  reassuranceRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 6 },
+  reassuranceText: { color: C.sub, fontSize: 12.5, lineHeight: 17, fontWeight: "600", textAlign: "center" },
+  legalText: { color: C.muted, fontSize: 11.5, lineHeight: 17, fontWeight: "600", textAlign: "center", marginTop: 2, maxWidth: 310 },
   legalLink: { color: C.sub, textDecorationLine: "underline" },
+
   modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
   modalCard: { width: "100%", maxWidth: 340, backgroundColor: "#0D1117", borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", padding: 24, gap: 14 },
   modalTitle: { color: C.text, fontSize: 20, fontWeight: "800", textAlign: "center" },

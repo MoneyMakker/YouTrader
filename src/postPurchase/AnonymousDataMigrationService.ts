@@ -5,6 +5,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userTradesStorageKey } from "../auth/userCache";
 import { logger } from "../lib/logger";
+import type { AssessmentAnswers, AssessmentResult } from "../acquisition/assessmentModel";
 
 const MIGRATION_MARKER_PREFIX = "yt-post-purchase-migration-v1:";
 
@@ -13,6 +14,51 @@ export type MigrationResult =
   | { status: "already_migrated" }
   | { status: "no_guest_data" }
   | { status: "failed"; message: string };
+
+export type AssessmentMigrationResult =
+  | { status: "migrated" | "already_migrated" | "no_guest_data" }
+  | { status: "failed"; message: string };
+
+const ASSESSMENT_MIGRATION_PREFIX = "yt-assessment-migration-v1:";
+
+/** Migrate raw assessment answers and derived challenge setup before journal data. */
+export async function migrateAnonymousAssessmentToUser(userId: string): Promise<AssessmentMigrationResult> {
+  const markerKey = `${ASSESSMENT_MIGRATION_PREFIX}${userId}`;
+  if (await AsyncStorage.getItem(markerKey) === "complete") return { status: "already_migrated" };
+
+  try {
+    const [answersRaw, resultRaw] = await Promise.all([
+      AsyncStorage.getItem("yt-assessment-answers-v1"),
+      AsyncStorage.getItem("yt-assessment-result-v1"),
+    ]);
+    if (!answersRaw && !resultRaw) {
+      await AsyncStorage.setItem(markerKey, "complete");
+      return { status: "no_guest_data" };
+    }
+    const answers = answersRaw ? JSON.parse(answersRaw) as AssessmentAnswers : {};
+    const result = resultRaw ? JSON.parse(resultRaw) as AssessmentResult : null;
+    const setup = result ? {
+      modelVersion: result.modelVersion,
+      primaryRisk: result.primaryRisk,
+      readinessScore: result.overallReadiness,
+      riskLevel: result.riskLevel,
+      riskControl: result.riskControl,
+      discipline: result.discipline,
+      challengeBuffer: result.challengeBuffer,
+    } : null;
+    await AsyncStorage.multiSet([
+      [`yt-assessment-answers-v1:${userId}`, JSON.stringify(answers)],
+      [`yt-assessment-result-v1:${userId}`, JSON.stringify(result)],
+      [`prop-pass-setup-v1:${userId}`, JSON.stringify(setup)],
+      [markerKey, "complete"],
+    ]);
+    await AsyncStorage.multiRemove(["yt-assessment-answers-v1", "yt-assessment-result-v1"]);
+    return { status: "migrated" };
+  } catch (error) {
+    logger.error(error, { feature: "migration", action: "assessment_setup" });
+    return { status: "failed", message: "Assessment setup migration failed" };
+  }
+}
 
 /**
  * Migrate trades from the legacy guest key to the authenticated user key.

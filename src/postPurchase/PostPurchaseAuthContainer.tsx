@@ -46,12 +46,14 @@ export function PostPurchaseAuthContainer({
     onLinkingComplete,
   });
 
-  // On mount: if session already exists (relaunch after auth), auto-resume linking.
+  // On mount: if session already exists AND not in visual-preview mode,
+  // auto-resume linking (relaunch after partial auth).
+  // Visual preview skips all real linking — only renders the UI.
   useEffect(() => {
-    if (sessionUserId && phase === "idle") {
+    if (sessionUserId && phase === "idle" && anonymousCustomerInfo) {
       void resumeLinking(sessionUserId);
     }
-  }, [sessionUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionUserId, anonymousCustomerInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On success: let animation play, then clear marker via parent callback.
   // The parent clears the marker in onLinkingComplete; the coordinator

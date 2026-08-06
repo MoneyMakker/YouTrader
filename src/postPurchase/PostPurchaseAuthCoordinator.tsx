@@ -13,7 +13,7 @@ import type { CustomerInfo } from "react-native-purchases";
 import type { AuthProvider } from "../auth/types";
 import type { PostPurchaseAuthPhase } from "./types";
 import { linkAnonymousPurchaseToIdentity } from "./RevenueCatIdentityLinker";
-import { migrateGuestTradesToUser } from "./AnonymousDataMigrationService";
+import { migrateAnonymousAssessmentToUser, migrateGuestTradesToUser } from "./AnonymousDataMigrationService";
 import { REVENUECAT_ENTITLEMENT_ID } from "../config/appConfig";
 import { t } from "../i18n";
 
@@ -88,6 +88,11 @@ export function usePostPurchaseAuthCoordinator({
 
     // Phase: migrating_local_data
     setPhase("migrating_local_data");
+    const assessmentMigration = await migrateAnonymousAssessmentToUser(userId);
+    if (assessmentMigration.status === "failed") {
+      setError(t("postPurchase.migrationFailed"), "migrate");
+      return;
+    }
     const migrationResult = await migrateGuestTradesToUser(userId);
 
     // failed migration blocks Main — user stays with retry

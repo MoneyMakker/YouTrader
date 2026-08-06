@@ -1,17 +1,26 @@
 /**
- * Account-first acquisition / startup phase resolver — unit-testable, no I/O.
+ * Acquisition funnel resolver — unit-testable, no I/O.
  *
- * Contract:
- * Splash → Onboarding (once) → Auth → RevenueCat UUID identity → Journal | Paywall
- *
- * Never: Paywall before Auth.
- * Never: anonymous purchase / anonymous RevenueCat bootstrap.
+ * New user: Promise → Assessment → Result → Prop Pass preview → Paywall →
+ * anonymous purchase → post-purchase identity linking → Main.
+ * Existing user: Auth → RevenueCat UUID identity → Journal | Paywall.
  * Explicit logout → AUTH_REQUIRED (Auth), never Paywall.
  */
 
 export type AcquisitionPhase =
   | "loading"
   | "onboarding"
+  | "assessment_intro"
+  | "assessment_questions"
+  | "assessment_analyzing"
+  | "assessment_result"
+  | "prop_pass_preview"
+  | "purchase_paywall"
+  | "purchasing"
+  | "linking_identity"
+  | "configuring_prop_pass"
+  | "existing_user_auth"
+  | "recoverable_error"
   | "paywall"
   | "auth"
   | "post_purchase_auth"
@@ -61,10 +70,12 @@ export type AcquisitionInput = {
   anonymousEntitlementActive?: boolean;
   /** Post-purchase linking marker is active — keep coordinator mounted until complete. */
   linkingMarkerActive?: boolean;
+  /** New unauthenticated assessment funnel phase. */
+  funnelPhase?: AcquisitionPhase;
 };
 
 /**
- * Pure resolver — account-first.
+ * Pure resolver for the anonymous assessment funnel and existing-user path.
  *
  * Rules:
  * - Not hydrated → loading
@@ -81,6 +92,8 @@ export type AcquisitionInput = {
 export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPhase {
   if (!input.hydrated) return "loading";
   if (input.loggingOut) return "loading";
+
+  if (!input.hasSession && input.funnelPhase) return input.funnelPhase;
 
   // Active linking marker survives session creation — keeps coordinator mounted.
   if (input.linkingMarkerActive) return "post_purchase_auth";
@@ -110,6 +123,17 @@ export function resolveReleaseGateState(input: AcquisitionInput): ReleaseGateSta
     return "STARTUP_LOADING";
   }
   if (phase === "onboarding") return "ONBOARDING_REQUIRED";
+  if (phase === "existing_user_auth" || phase === "assessment_intro" || phase === "assessment_questions") {
+    return "UNAUTHENTICATED";
+  }
+  if (phase === "assessment_analyzing" || phase === "assessment_result" || phase === "prop_pass_preview") {
+    return "STARTUP_LOADING";
+  }
+  if (phase === "purchase_paywall") return "AUTHENTICATED_NOT_ENTITLED";
+  if (phase === "purchasing" || phase === "linking_identity" || phase === "configuring_prop_pass") {
+    return "ENTITLEMENT_CHECKING";
+  }
+  if (phase === "recoverable_error") return "RECOVERABLE_ERROR";
   if (phase === "auth") {
     if (input.explicitAuthRequired) return "AUTH_REQUIRED";
     if (input.authBusy) return "AUTHENTICATING";

@@ -175,6 +175,7 @@ import { computeCalculatorResults, formatCalcUsd } from "../calc/riskCalculator"
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { ValueOnboarding } from "./startup/ValueOnboarding";
 import { AcquisitionPaywall } from "./startup/AcquisitionPaywall";
+import { AssessmentFlowScreen } from "./startup/AssessmentFlowScreen";
 import { buildSettingsSubscriptionPresentation } from "./startup/settingsSubscriptionPresentation";
 import {
   ACQUISITION_AUTH_REQUIRED_KEY,
@@ -184,8 +185,10 @@ import {
   acquisitionPaywallUserKey,
   mergeExplicitAuthRequiredFlag,
   resolveAcquisitionPhase,
+  type AcquisitionPhase,
   shouldClearExplicitAuthRequiredOnSessionChange,
 } from "./startup/acquisitionState";
+import type { AssessmentAnswers, AssessmentResult } from "../acquisition/assessmentModel";
 import { RevenueCatIdentitySynchronizer } from "../billing/revenueCatIdentity";
 import {
   decideEntitlementUiPhase,
@@ -10326,6 +10329,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [acquisitionHydrated, setAcquisitionHydrated] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [paywallCompleted, setPaywallCompleted] = useState(false);
+  const [funnelPhase, setFunnelPhase] = useState<AcquisitionPhase>("assessment_intro");
+  const [assessmentAnswers, setAssessmentAnswers] = useState<AssessmentAnswers>({});
+  const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
   /** In-flight explicit logout — suppresses acquisition paywall flash. */
   const [loggingOut, setLoggingOut] = useState(false);
   /** Sticky AUTH_REQUIRED after Settings → Log Out (persisted across restart). */
@@ -10350,6 +10356,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [anonymousEntitlementStatus, setAnonymousEntitlementStatus] = useState<"loading" | "active" | "inactive" | "unknown">("unknown");
   const anonymousCustomerInfoRef = useRef<CustomerInfo | null>(null);
   const linkingMarkerActiveRef = useRef(false);
+  // Set synchronously from env so RC configure effect sees it before first render.
+  const isVisualPreviewRef = useRef(__DEV__ && process.env.EXPO_PUBLIC_YT_VISUAL_PREVIEW === "1");
   const cloudSyncInFlight = useRef(false);
   const activeSessionUserIdRef = useRef<string | null>(null);
   const customerInfoRef = useRef<CustomerInfo | null>(null);
@@ -10429,20 +10437,20 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (cancelled) return;
         setOnboardingCompleted(onboardingDone);
         setPaywallCompleted(paywallDone);
-        // Dev-only QA: check file marker or AsyncStorage to force post-purchase screen.
+        // Dev-only visual preview: set yt-qa-post-purchase=visual to show
+        // the post-purchase UI without triggering real RevenueCat linking.
+        // REAL post-purchase is triggered only when anonymous CustomerInfo
+        // confirms active YouTrader Pro entitlement.
+        let visualPreview = false;
         if (__DEV__) {
-          let qaActive = false;
-          try { const qa = await AsyncStorage.getItem("yt-qa-post-purchase"); if (qa === "1") qaActive = true; } catch { /* noop */ }
-          if (qaActive) {
-            linkingMarkerActiveRef.current = true;
-            setAnonymousEntitlementStatus("active");
-          }
+          try {
+            const vp = await AsyncStorage.getItem("yt-qa-post-purchase");
+            if (vp === "visual") { visualPreview = true; isVisualPreviewRef.current = true; }
+            else if (vp === "1") { visualPreview = true; setAnonymousEntitlementStatus("active"); }
+          } catch { /* noop */ }
         }
-        // TEMPORARY DEV OVERRIDE for simulator visual QA — revert after QA.
-        // eslint-disable-next-line no-constant-condition
-        if (__DEV__ && false) {
+        if (visualPreview) {
           linkingMarkerActiveRef.current = true;
-          setAnonymousEntitlementStatus("active");
         }
         setExplicitAuthRequired((prev) =>
           mergeExplicitAuthRequiredFlag({
@@ -10453,6 +10461,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         );
         if (userId) {
           explicitAuthRequiredRef.current = false;
+        } else if (authRequiredSticky) {
+          setFunnelPhase("existing_user_auth");
         } else if (authRequiredSticky || explicitAuthRequiredRef.current) {
           explicitAuthRequiredRef.current = true;
         }
@@ -10532,6 +10542,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     explicitAuthRequired: explicitAuthRequired || explicitAuthRequiredRef.current,
     anonymousEntitlementActive,
     linkingMarkerActive: linkingMarkerActiveRef.current,
+    funnelPhase: purchaseBusy ? "purchasing" : funnelPhase,
   });
 
   useEffect(() => {
@@ -10926,6 +10937,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     // as the appUserID. Without a session, configure anonymously to allow
     // pre-auth purchases that are later linked via Purchases.logIn.
     if (!revenueCatConfigured) return;
+    // Visual preview mode: skip all RevenueCat configuration.
+    if (isVisualPreviewRef.current) return;
     const userId = session?.user?.id;
     const hasSession = !!userId;
 
@@ -12085,6 +12098,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       setLastCloudSyncAt(null);
       setQaPropPassPayload(null);
       setTab("journal");
+      setFunnelPhase("existing_user_auth");
       logoutCompleted = true;
     } finally {
       if (logoutCompleted) {
@@ -12222,10 +12236,6 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       Alert.alert(t("premiumAccess"), t("restoreUnavailable"));
       return;
     }
-    if (!session?.user?.id) {
-      Alert.alert(t("premiumAccess"), t("authSecureNote"));
-      return;
-    }
     // Accept any known Pro product id (weekly/monthly/yearly). Both unlock the same entitlement.
     if (!YOU_TRADER_PRO_PRODUCT_IDS.includes(productId)) {
       const message = t("subsTemporarilyUnavailable");
@@ -12238,11 +12248,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       Alert.alert(t("premiumAccess"), message);
       return;
     }
-    const identityOk = await ensureAuthenticatedRevenueCatIdentity();
-    if (!identityOk) {
-      setIdentitySyncFailed(true);
-      Alert.alert(t("premiumAccess"), t("restoreFailedTryAgain"));
-      return;
+    if (session?.user?.id) {
+      const identityOk = await ensureAuthenticatedRevenueCatIdentity();
+      if (!identityOk) {
+        setIdentitySyncFailed(true);
+        Alert.alert(t("premiumAccess"), t("restoreFailedTryAgain"));
+        return;
+      }
     }
     const isYearly =
       productId === YOU_TRADER_YEARLY_PRODUCT_ID ||
@@ -12541,6 +12553,30 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
+  if (
+    acquisitionPhase === "assessment_intro" ||
+    acquisitionPhase === "assessment_questions" ||
+    acquisitionPhase === "assessment_analyzing" ||
+    acquisitionPhase === "assessment_result" ||
+    acquisitionPhase === "prop_pass_preview"
+  ) {
+    return (
+      <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
+        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
+        <AssessmentFlowScreen
+          phase={acquisitionPhase}
+          onPhaseChange={setFunnelPhase}
+          onExistingAuth={() => setFunnelPhase("existing_user_auth")}
+          onOpenPaywall={(answers, result) => {
+            setAssessmentAnswers(answers);
+            setAssessmentResult(result);
+            setFunnelPhase("purchase_paywall");
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   if (acquisitionPhase === "onboarding") {
     return (
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
@@ -12551,7 +12587,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
-  if (acquisitionPhase === "paywall") {
+  if (acquisitionPhase === "purchase_paywall" || acquisitionPhase === "purchasing" || acquisitionPhase === "paywall") {
     return (
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
         <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
@@ -12562,7 +12598,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           purchaseBusy={purchaseBusy}
           paywallError={paywallError}
           showRestorePurchases
-          authenticatedAccountActions
+          authenticatedAccountActions={!!session?.user?.id}
           onPurchase={purchasePackage}
           onRestore={restorePurchases}
           onSignOut={() => void signOut()}
@@ -12600,7 +12636,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
-  if (acquisitionPhase === "auth") {
+  if (acquisitionPhase === "auth" || acquisitionPhase === "existing_user_auth") {
     return (
       <View style={styles.app}>
         <StatusBar style="light" backgroundColor="#000000" />

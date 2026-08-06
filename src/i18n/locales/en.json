@@ -863,12 +863,12 @@
   "prev": "PREV",
   "previousMonth": "Previous month",
    "privacyPolicy": "Privacy Policy",
-   "postPurchase.activatedBadge": "YouTrader Pro activated",
+    "postPurchase.activatedBadge": "YouTrader Pro Active",
    "postPurchase.continueEmail": "Continue",
-   "postPurchase.description": "Sign in once to link your Pro access and keep your journal and prop challenge progress synced across devices.",
-   "postPurchase.heading": "Your Pro Access Is Ready",
+    "postPurchase.description": "Sign in once to save your journal and sync your progress across devices.",
+    "postPurchase.heading": "Your Pro Access is Ready",
    "postPurchase.legalPrefix": "By continuing, you agree to our",
-   "postPurchase.reassurance": "Your journal stays private and connected to your YouTrader account.",
+    "postPurchase.reassurance": "Your journal stays private and securely linked to your account.",
 
   "postPurchase.emailBackToSignIn": "Back to sign in",
 

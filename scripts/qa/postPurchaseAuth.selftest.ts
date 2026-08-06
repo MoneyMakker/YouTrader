@@ -107,6 +107,10 @@ check(
   "GoogleGIcon component is imported in the screen",
   /GoogleGIcon/.test(screenSource),
 );
+check(
+  "Google provider remains visible without native-only configuration",
+  /const showGoogle = true/.test(screenSource),
+);
 
 const googleIconSource = readFileSync(resolve("src/postPurchase/GoogleGIcon.tsx"), "utf8");
 check(
