@@ -170,7 +170,7 @@ export function AcquisitionPaywall({
     yearly?.product || storeProducts.find((p) => p.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) || null;
 
   const offeringsUnavailable =
-    !weekly && !monthly && !yearly && !weeklyProduct && !monthlyProduct && !yearlyProduct;
+    !weekly && !monthly && !yearly && !weeklyProduct && !monthlyProduct && !yearlyProduct && !__DEV__;
 
   const [eligibilityByProductId, setEligibilityByProductId] = useState<Record<string, string>>({});
 
@@ -204,14 +204,18 @@ export function AcquisitionPaywall({
     : weeklyProduct?.priceString || PREMIUM_PRICE_WEEKLY.replace("/wk", "") || "$4.99";
   const monthlyPriceString = monthly
     ? packagePrice(monthly)
-    : monthlyProduct?.priceString || PREMIUM_PRICE;
+    : monthlyProduct?.priceString || PREMIUM_PRICE || "$12.99";
   const yearlyPriceString = yearly
     ? packagePrice(yearly)
-    : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
+    : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY || "$99.99";
 
   const plans = useMemo(() => {
     const rows: ReturnType<typeof buildPaywallPlanPresentation>[] = [];
-    if (weekly || weeklyProduct) {
+    const hasWeekly = !!(weekly || weeklyProduct || __DEV__);
+    const hasMonthly = !!(monthly || monthlyProduct || __DEV__);
+    const hasYearly = !!(yearly || yearlyProduct || __DEV__);
+
+    if (hasWeekly) {
       rows.push(
         buildPaywallPlanPresentation({
           id: "weekly",
@@ -223,7 +227,7 @@ export function AcquisitionPaywall({
         }),
       );
     }
-    if (monthly || monthlyProduct) {
+    if (hasMonthly) {
       rows.push(
         buildPaywallPlanPresentation({
           id: "monthly",
@@ -235,7 +239,7 @@ export function AcquisitionPaywall({
         }),
       );
     }
-    if (yearly || yearlyProduct) {
+    if (hasYearly) {
       rows.push(
         buildPaywallPlanPresentation({
           id: "yearly",
