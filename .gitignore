@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-
 # Environment and secrets
 .env
 .env.*
@@ -9,7 +8,6 @@ node_modules/
 .env.eas.staging
 ios/.xcode.env.staging
 scripts/market-intel-worker/.env
-
 # Expo and build output
 .expo/
 .expo-shared/
@@ -21,33 +19,28 @@ android/app/build/
 DerivedData/
 DerivedData-*/
 build/DerivedData*/
-
 # Certificates and signing secrets
 *.pem
 *.key
 *.p8
 *.mobileprovision
-
 # Build artifacts
 *.ipa
 build-*.ipa
 builds/
 bundle-check/
 artifacts/
-
 # Local agent / tooling runtime (never commit)
 .codex/
 .cursor/plans/
 *.bak
 scripts/*.bak
-
 # Transient QA screenshot dumps (approved reports stay as .md)
 docs/releases/**/phase4f-screenshots/
 docs/releases/**/first-launch-evidence/
 docs/releases/**/simulator-recovery/
 docs/releases/**/stats-redesign-evidence/
 docs/releases/**/qa-logs/
-
 # Local-only 1.6.1 Phase4F / premature build dumps (committed evidence is under evidence/*-release-20260802 + deletion-smoke)
 docs/releases/1.6.1/evidence/build115-20260801/
 docs/releases/1.6.1/evidence/build115-physical-20260801/
@@ -60,11 +53,9 @@ docs/releases/1.6.1/SIMULATOR_SERVICE_RECOVERY_*.md
 docs/releases/1.6.1/evidence-sim-*.png
 docs/releases/1.6.1/YT3_LIVE_E2E_CONTINUATION_REPORT_*.md
 docs/releases/1.6.1/YT3_PHASE4F_STALE_PHYSICAL_ARTIFACT_*.md
-
 # App Store / upload local tooling noise
 **/YouTrader_*.xcdistributionlogs/
 **/ContentDelivery/
-
 # Backups and temporary generated files
 *.before-*
 recovery-backups/
@@ -74,38 +65,29 @@ knowledge/sources/.last-import.json
 scripts/ai-platform-v2/backups/
 scripts/ai-platform-v2/reports/
 scripts/release-command-center/reports/
-
 # Local agent worktrees (not part of app releases)
 .worktrees/
 .parallel-code/
-
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 debug-storybook.log
-
 # Editor and OS files
 *.swp
 .DS_Store
-
 # Local Cursor MCP config (may contain access tokens)
 .cursor/mcp.json
 # Local Cursor IDE settings (plugin enablement; machine-local)
 .cursor/settings.json
-
 *storybook.log
 storybook-static
-
 # Maestro / Storybook capture scratch (committed baselines live in .maestro/ydl/baselines/)
 .maestro/ydl/.capture-out/
-
 .tmp/
-
 # Local agent secrets (never commit)
 .codex/secrets/
-
 # Credential / password artifacts (never commit; use Keychain or .codex/secrets/)
 **/SIM_EMAIL_PASSWORD*
 **/*PASSWORD_UNIT.txt
@@ -115,16 +97,14 @@ docs/app-review-auth.local.md
 docs/releases/**/*PASSWORD*
 docs/releases/**/*SECRET*
 docs/releases/**/*credential*.txt
-
 # Project-local tooling (JDK archives, Maestro QA logs)
 .tools/
 docs/releases/**/qa-artifacts/
 .maestro/.qa-out/
-
 # Xcode local SwiftPM workspace config (often empty / machine-local)
 ios/**/xcshareddata/swiftpm/
-
 .maestro/screenshots/
-
 # Build 117 physical QA local evidence (may contain disposable emails in screenshots)
 docs/releases/1.6.1/evidence/build117-physical-qa-*/
+qa-evidence/
+# Simulator QA evidence (screenshots, logs) - not committed

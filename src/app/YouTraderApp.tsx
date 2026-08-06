@@ -10429,9 +10429,20 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         if (cancelled) return;
         setOnboardingCompleted(onboardingDone);
         setPaywallCompleted(paywallDone);
-        // Dev-only QA: set yt-qa-post-purchase=1 to force post-purchase screen.
+        // Dev-only QA: check file marker or AsyncStorage to force post-purchase screen.
         if (__DEV__) {
-          try { const qa = await AsyncStorage.getItem("yt-qa-post-purchase"); if (qa === "1") { linkingMarkerActiveRef.current = true; setAnonymousEntitlementStatus("active"); } } catch { /* noop */ }
+          let qaActive = false;
+          try { const qa = await AsyncStorage.getItem("yt-qa-post-purchase"); if (qa === "1") qaActive = true; } catch { /* noop */ }
+          if (qaActive) {
+            linkingMarkerActiveRef.current = true;
+            setAnonymousEntitlementStatus("active");
+          }
+        }
+        // TEMPORARY DEV OVERRIDE for simulator visual QA — revert after QA.
+        // eslint-disable-next-line no-constant-condition
+        if (__DEV__ && false) {
+          linkingMarkerActiveRef.current = true;
+          setAnonymousEntitlementStatus("active");
         }
         setExplicitAuthRequired((prev) =>
           mergeExplicitAuthRequiredFlag({
