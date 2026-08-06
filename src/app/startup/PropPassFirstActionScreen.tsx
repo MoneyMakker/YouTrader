@@ -15,10 +15,30 @@ const PROP_FIRMS = [
   { id: "apex", label: "Apex Trader Funding" },
   { id: "takeProfit", label: "Take Profit Trader" },
   { id: "myFundedFutures", label: "My Funded Futures" },
-  { id: "other", label: "Other" },
+  { id: "other", label: t("propPass.firstAction.otherFirm") },
 ] as const;
 
 const CANONICAL_KEY = "prop-pass-canonical-setup-v1";
+const LEGACY_KEY = CANONICAL_KEY; // old unscoped key
+
+function scopedKey(userId: string): string {
+  return `${CANONICAL_KEY}:${userId}`;
+}
+
+async function migrateLegacySetup(userId: string): Promise<void> {
+  try {
+    const existing = await AsyncStorage.getItem(scopedKey(userId));
+    if (existing) return; // already have user-scoped data, don't overwrite
+    const legacy = await AsyncStorage.getItem(LEGACY_KEY);
+    if (!legacy) return;
+    const parsed = JSON.parse(legacy) as Partial<ConfirmedSetup>;
+    if (parsed?.version === "prop-pass-canonical-v1" && parsed.propFirm && parsed.accountSize && parsed.profitTarget) {
+      await AsyncStorage.setItem(scopedKey(userId), legacy);
+      const verify = await AsyncStorage.getItem(scopedKey(userId));
+      if (verify) await AsyncStorage.removeItem(LEGACY_KEY);
+    }
+  } catch { /* best effort */ }
+}
 
 type AssessmentSetup = {
   modelVersion?: string; readinessScore?: number; riskControl?: number;
@@ -53,7 +73,6 @@ type ConfirmedSetup = {
   confirmedAt: string;
 };
 
-function nc(k: string, f: string): string { const v = t(k); return v === k ? f : v; }
 function toNum(s: string): number | null { const n = Number(s.trim()); return Number.isFinite(n) && n > 0 ? n : null; }
 
 export function PropPassFirstActionScreen({ userId, onStart }: Props) {
@@ -70,7 +89,9 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
   const handledRef = useRef(false);
 
   useEffect(() => {
-    void AsyncStorage.getItem(CANONICAL_KEY).then((raw) => {
+    void migrateLegacySetup(userId);
+    const key = scopedKey(userId);
+    void AsyncStorage.getItem(key).then((raw) => {
       if (!raw) return;
       try { const s = JSON.parse(raw) as Partial<ConfirmedSetup>; if (s.version === "prop-pass-canonical-v1" && s.propFirm && s.accountSize && s.profitTarget) { handledRef.current = true; onStart(); return; } } catch { /* ignore */ }
     });
@@ -90,20 +111,20 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
     setError("");
 
     const selectedFirm = firm;
-    if (!selectedFirm) { setError(nc("propPass.validation.selectFirm", "Select a prop firm.")); return; }
+    if (!selectedFirm) { setError(t("propPass.validation.selectFirm")); return; }
     const isCustom = selectedFirm === "other";
     const firmName = isCustom ? customFirm.trim() : PROP_FIRMS.find((f) => f.id === selectedFirm)?.label || "";
-    if (isCustom && !firmName) { setError(nc("propPass.validation.enterFirmName", "Enter your prop firm name.")); return; }
+    if (isCustom && !firmName) { setError(t("propPass.validation.enterFirmName")); return; }
 
     const asNum = toNum(accountSize);
     const ptNum = toNum(profitTarget);
     const dlNum = toNum(dailyLoss);
     const olNum = toNum(overallLoss);
-    if (asNum === null) { setError(nc("propPass.validation.accountSize", "Enter a valid account size.")); return; }
-    if (ptNum === null) { setError(nc("propPass.validation.profitTarget", "Enter a valid profit target.")); return; }
-    if (dlNum === null) { setError(nc("propPass.validation.dailyLoss", "Enter a valid daily loss limit.")); return; }
-    if (olNum === null) { setError(nc("propPass.validation.overallLoss", "Enter a valid overall loss limit.")); return; }
-    if (dlNum >= olNum) { setError(nc("propPass.validation.dailyBelowOverall", "Daily loss limit must be below the overall loss limit.")); return; }
+    if (asNum === null) { setError(t("propPass.validation.accountSize")); return; }
+    if (ptNum === null) { setError(t("propPass.validation.profitTarget")); return; }
+    if (dlNum === null) { setError(t("propPass.validation.dailyLoss")); return; }
+    if (olNum === null) { setError(t("propPass.validation.overallLoss")); return; }
+    if (dlNum >= olNum) { setError(t("propPass.validation.dailyBelowOverall")); return; }
 
     busyRef.current = true;
     try {
@@ -131,18 +152,19 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
         propPassBenefitKeys: assessment?.propPassBenefitKeys,
         confirmedAt: new Date().toISOString(),
       };
-      await AsyncStorage.setItem(CANONICAL_KEY, JSON.stringify(confirmed));
-      const readBack = await AsyncStorage.getItem(CANONICAL_KEY);
-      if (!readBack) { setError(nc("propPass.validation.writeFailed", "Setup could not be verified. Try again.")); busyRef.current = false; return; }
+      const key = scopedKey(userId);
+      await AsyncStorage.setItem(key, JSON.stringify(confirmed));
+      const readBack = await AsyncStorage.getItem(key);
+      if (!readBack) { setError(t("propPass.validation.writeFailed")); busyRef.current = false; return; }
       let parsed: Partial<ConfirmedSetup> | null = null;
       try { parsed = JSON.parse(readBack) as Partial<ConfirmedSetup>; } catch { parsed = null; }
       if (!parsed || parsed.version !== confirmed.version || parsed.propFirm !== confirmed.propFirm || parsed.accountSize !== confirmed.accountSize || parsed.profitTarget !== confirmed.profitTarget || parsed.dailyLossLimit !== confirmed.dailyLossLimit || parsed.overallLossLimit !== confirmed.overallLossLimit) {
-        setError(nc("propPass.validation.writeFailed", "Setup verification failed. Try again.")); busyRef.current = false; return;
+        setError(t("propPass.validation.writeFailed")); busyRef.current = false; return;
       }
       handledRef.current = true;
       onStart();
     } catch {
-      setError(nc("propPass.validation.writeFailed", "Setup could not be verified. Try again."));
+      setError(t("propPass.validation.writeFailed"));
       busyRef.current = false;
     }
   }, [firm, customFirm, accountSize, profitTarget, dailyLoss, overallLoss, userId, onStart]);
@@ -152,11 +174,11 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
       <View style={[styles.root, { paddingTop: Math.max(insets.top, 18), paddingBottom: Math.max(insets.bottom, 18) }]}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <ShieldCheck color={C.green} size={38} strokeWidth={1.8} />
-          <Text style={styles.eyebrow}>{nc("propPass.firstAction.eyebrow", "PROP PASS")}</Text>
-          <Text style={styles.title}>{nc("propPass.firstAction.title", "Your Prop Pass Is Active")}</Text>
-          <Text style={styles.body}>{nc("propPass.firstAction.body", "Enter your exact challenge limits to enable accurate buffer warnings.")}</Text>
+          <Text style={styles.eyebrow}>{t("propPass.firstAction.eyebrow")}</Text>
+          <Text style={styles.title}>{t("propPass.firstAction.title")}</Text>
+          <Text style={styles.body}>{t("propPass.firstAction.body")}</Text>
 
-          <Text style={styles.sectionLabel}>{nc("propPass.firstAction.propFirm", "Prop firm")}</Text>
+          <Text style={styles.sectionLabel}>{t("propPass.firstAction.propFirm")}</Text>
           <View style={styles.firmGrid}>
             {PROP_FIRMS.map((pf) => (
               <Pressable key={pf.id} onPress={() => { setFirm(pf.id); setError(""); }}
@@ -167,24 +189,24 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
             ))}
           </View>
           {firm === "other" ? (
-            <TextInput style={styles.input} placeholder={nc("propPass.firstAction.customFirm", "Custom firm name")} placeholderTextColor={C.muted} value={customFirm} onChangeText={(v) => { setCustomFirm(v); setError(""); }} />
+            <TextInput style={styles.input} placeholder={t("propPass.firstAction.customFirm")} placeholderTextColor={C.muted} value={customFirm} onChangeText={(v) => { setCustomFirm(v); setError(""); }} />
           ) : null}
 
           <View style={styles.fieldGroup}>
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>{nc("propPass.firstAction.accountSize", "Account size ($)")}</Text>
+              <Text style={styles.fieldLabel}>{t("propPass.firstAction.accountSize")}</Text>
               <TextInput style={styles.input} keyboardType="decimal-pad" placeholder="50000" placeholderTextColor={C.muted} value={accountSize} onChangeText={setAccountSize} />
             </View>
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>{nc("propPass.firstAction.profitTarget", "Profit target ($)")}</Text>
+              <Text style={styles.fieldLabel}>{t("propPass.firstAction.profitTarget")}</Text>
               <TextInput style={styles.input} keyboardType="decimal-pad" placeholder="3000" placeholderTextColor={C.muted} value={profitTarget} onChangeText={setProfitTarget} />
             </View>
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>{nc("propPass.firstAction.dailyLoss", "Daily loss limit ($)")}</Text>
+              <Text style={styles.fieldLabel}>{t("propPass.firstAction.dailyLoss")}</Text>
               <TextInput style={styles.input} keyboardType="decimal-pad" placeholder="1000" placeholderTextColor={C.muted} value={dailyLoss} onChangeText={setDailyLoss} />
             </View>
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>{nc("propPass.firstAction.overallLoss", "Overall loss limit ($)")}</Text>
+              <Text style={styles.fieldLabel}>{t("propPass.firstAction.overallLoss")}</Text>
               <TextInput style={styles.input} keyboardType="decimal-pad" placeholder="2500" placeholderTextColor={C.muted} value={overallLoss} onChangeText={setOverallLoss} />
             </View>
           </View>
@@ -192,7 +214,7 @@ export function PropPassFirstActionScreen({ userId, onStart }: Props) {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <Pressable style={styles.primary} onPress={handleConfirm} testID="prop-pass-first-action-confirm">
-            <Text style={styles.primaryLabel}>{nc("propPass.firstAction.confirmAndStart", "Confirm and Start Challenge")}</Text>
+            <Text style={styles.primaryLabel}>{t("propPass.firstAction.confirmAndStart")}</Text>
           </Pressable>
         </ScrollView>
       </View>

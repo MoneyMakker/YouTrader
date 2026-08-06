@@ -2198,5 +2198,15 @@
   "assessment.benefit.cooldown": "See when another trade becomes dangerous",
   "assessment.benefit.decisions": "Review decisions that damage discipline",
   "assessment.benefit.invalidation": "Set fixed invalidation for every trade",
-  "assessment.benefit.risk": "Set a maximum risk for every trade"
+  "assessment.benefit.risk": "Set a maximum risk for every trade",
+  "assessment.question.progress": "PASS READINESS CHECK",
+  "assessment.result.eyebrow": "YOUR PASS READINESS",
+  "assessment.result.label": "Pass Readiness Score",
+  "assessment.result.riskControl": "Risk Control",
+  "assessment.result.discipline": "Discipline",
+  "assessment.result.challengeBuffer": "Challenge Buffer",
+  "assessment.result.cta": "See My Plan",
+  "assessment.preview.title": "Your Prop Pass Plan Is Ready",
+  "assessment.preview.cta": "Unlock My Prop Pass",
+  "propPass.firstAction.otherFirm": "Other"
 }

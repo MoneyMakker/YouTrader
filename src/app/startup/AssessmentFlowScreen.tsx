@@ -150,16 +150,16 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
   const renderIntro = () => (
     <>
       <View style={styles.mark}><TrendingUp size={28} color={C.green} strokeWidth={2.2} /></View>
-      <Text style={styles.eyebrow}>{copy("assessment.intro.eyebrow", "PROP CHALLENGE ASSESSMENT")}</Text>
-      <Text style={styles.title}>{copy("assessment.intro.title", "Can You Pass Your Next Prop Challenge?")}</Text>
-      <Text style={styles.body}>{copy("assessment.intro.body", "Take a 60-second assessment to uncover what could help—or prevent—you from reaching your profit target.")}</Text>
+      <Text style={styles.eyebrow}>{t("assessment.intro.eyebrow")}</Text>
+      <Text style={styles.title}>{t("assessment.intro.title")}</Text>
+      <Text style={styles.body}>{t("assessment.intro.body")}</Text>
       <Pressable style={styles.primaryButton} onPress={() => { trackEvent("assessment_started", { model_version: ASSESSMENT_MODEL_VERSION }); onPhaseChange("assessment_questions"); }} testID="assessment-start">
-        <Text style={styles.primaryLabel}>{copy("assessment.intro.cta", "Check My Pass Readiness")}</Text>
+        <Text style={styles.primaryLabel}>{t("assessment.intro.cta")}</Text>
       </Pressable>
       <Pressable onPress={onExistingAuth} testID="assessment-existing-auth">
-        <Text style={styles.secondaryLink}>{copy("assessment.intro.existing", "Already have an account? Sign in")}</Text>
+        <Text style={styles.secondaryLink}>{t("assessment.intro.existing")}</Text>
       </Pressable>
-      <View style={styles.privacyRow}><Lock size={14} color={C.muted} /><Text style={styles.privacy}>{copy("assessment.intro.privacy", "No login required. Your answers stay on this device until you choose to continue.")}</Text></View>
+      <View style={styles.privacyRow}><Lock size={14} color={C.muted} /><Text style={styles.privacy}>{t("assessment.intro.privacy")}</Text></View>
     </>
   );
 
@@ -170,7 +170,7 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
         <Text style={styles.progress}>{progress}</Text>
         <View style={{ width: 24 }} />
       </View>
-      <Text style={styles.eyebrow}>PASS READINESS CHECK</Text>
+      <Text style={styles.eyebrow}>{t("assessment.question.progress")}</Text>
       <Text style={styles.questionTitle}>{t(QUESTION_KEYS[currentQuestion])}</Text>
       <View style={styles.options}>
         {currentOptions.map((option) => (
@@ -190,7 +190,7 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
   const renderAnalysis = () => (
     <View style={styles.analysis}>
       <ActivityIndicator color={C.green} size="large" />
-      <Text style={styles.analysisTitle}>{copy("assessment.analysis.title", "Building your Challenge Health")}</Text>
+      <Text style={styles.analysisTitle}>{t("assessment.analysis.title")}</Text>
       <Text style={styles.analysisLine}>{[
         t("assessment.analysis.line1"),
         t("assessment.analysis.line2"),
@@ -201,19 +201,19 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
 
   const renderResult = () => (
     <>
-      <Text style={styles.eyebrow}>YOUR PASS READINESS</Text>
+      <Text style={styles.eyebrow}>{t("assessment.result.eyebrow")}</Text>
       <Text style={styles.score}>{result?.overallReadiness ?? 0}</Text>
-      <Text style={styles.scoreLabel}>Pass Readiness Score</Text>
+      <Text style={styles.scoreLabel}>{t("assessment.result.label")}</Text>
       <Text style={styles.insightTitle}>{t(result?.insightKey || "assessment.result.insight.default")}</Text>
       <Text style={styles.body}>{t(result?.explanationKey || "assessment.result.explanation.default")}</Text>
       <View style={styles.metrics}>
-        {["Risk Control", "Discipline", "Challenge Buffer"].map((label, index) => {
+        {[t("assessment.result.riskControl"), t("assessment.result.discipline"), t("assessment.result.challengeBuffer")].map((label, index) => {
           const value = [result?.riskControl, result?.discipline, result?.challengeBuffer][index] || 0;
           return <View key={label} style={styles.metric}><Text style={styles.metricValue}>{value}%</Text><Text style={styles.metricLabel}>{label}</Text></View>;
         })}
       </View>
       <Pressable style={styles.primaryButton} onPress={() => { trackEvent("readiness_result_viewed", { model_version: ASSESSMENT_MODEL_VERSION }); onPhaseChange("prop_pass_preview"); }} testID="assessment-see-plan">
-        <Text style={styles.primaryLabel}>See My Plan</Text>
+        <Text style={styles.primaryLabel}>{t("assessment.result.cta")}</Text>
       </Pressable>
     </>
   );
@@ -221,13 +221,13 @@ export function AssessmentFlowScreen({ phase, onPhaseChange, onOpenPaywall, onEx
   const renderPreview = () => (
     <>
       <ShieldCheck size={34} color={C.green} strokeWidth={1.8} />
-      <Text style={styles.title}>Your Prop Pass Plan Is Ready</Text>
-      <Text style={styles.body}>{copy("assessment.preview.body", "You do not need more signals. You need a system that stops one emotional trade from damaging an otherwise passable challenge.")}</Text>
+      <Text style={styles.title}>{t("assessment.preview.title")}</Text>
+      <Text style={styles.body}>{t("assessment.preview.body")}</Text>
       <View style={styles.benefits}>
         {benefits.map((key) => <Text key={key} style={styles.benefit}>• {t(key)}</Text>)}
       </View>
       <Pressable style={styles.primaryButton} onPress={() => { if (result) { trackEvent("prop_pass_preview_viewed", { risk_category: result.primaryRisk }); onOpenPaywall(answers, result); } }} testID="assessment-unlock-prop-pass">
-        <Text style={styles.primaryLabel}>Unlock My Prop Pass</Text>
+        <Text style={styles.primaryLabel}>{t("assessment.preview.cta")}</Text>
       </Pressable>
     </>
   );
