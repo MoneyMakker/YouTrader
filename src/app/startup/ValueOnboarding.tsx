@@ -53,19 +53,19 @@ export function ValueOnboarding({ phase, onPhaseChange, onComplete, onExistingAu
           <YdlText role="bodyEmphasized" color="text.secondary">{skipLabel}</YdlText>
         </Pressable>
         <View style={styles.content}>
-          <YdlText role="caption" color="text.secondary" style={styles.stepLabel}>PERSONALIZE YOUR WORKSPACE</YdlText>
-          <YdlText role="title" style={styles.title}>What best describes you?</YdlText>
-          <YdlText role="body" color="text.secondary" style={styles.body}>Choose one so your first workspace shortcuts feel relevant.</YdlText>
+          <YdlText role="caption" color="text.secondary" style={styles.stepLabel}>{t("onboarding.personalization.eyebrow")}</YdlText>
+          <YdlText role="title" style={styles.title}>{t("onboarding.personalization.title")}</YdlText>
+          <YdlText role="body" color="text.secondary" style={styles.body}>{t("onboarding.personalization.body")}</YdlText>
           <View style={styles.options}>
             {PROFILE_OPTIONS.map(([key, translationKey]) => (
               <Pressable key={key} onPress={() => { setProfile(key); onComplete(key); }} style={[styles.option, profile === key && styles.optionSelected]} testID={`onboarding-profile-${key}`}>
-                <YdlText role="bodyEmphasized" color={profile === key ? "action.primary" : "text.primary"}>{t(translationKey) === translationKey ? key : t(translationKey)}</YdlText>
+                <YdlText role="bodyEmphasized" color={profile === key ? "action.primary" : "text.primary"}>{t(translationKey)}</YdlText>
               </Pressable>
             ))}
           </View>
         </View>
         <Pressable onPress={onExistingAuth} accessibilityRole="button" testID="value-onboarding-existing-auth">
-          <YdlText role="bodyEmphasized" color="text.secondary">Already have an account? Sign In</YdlText>
+          <YdlText role="bodyEmphasized" color="text.secondary">{t("onboarding.alreadyAccount")}</YdlText>
         </Pressable>
       </View>
     );
@@ -75,18 +75,18 @@ export function ValueOnboarding({ phase, onPhaseChange, onComplete, onExistingAu
     <View style={[styles.root, { backgroundColor: theme.colors.background.primary, paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }]} testID="value-onboarding" accessibilityLabel="YouTrader value onboarding">
       <View style={styles.topRow}>
         <Pressable onPress={onExistingAuth} accessibilityRole="button" testID="value-onboarding-existing-auth">
-          <YdlText role="bodyEmphasized" color="text.secondary">Already have an account? Sign In</YdlText>
+          <YdlText role="bodyEmphasized" color="text.secondary">{t("onboarding.alreadyAccount")}</YdlText>
         </Pressable>
         <Pressable onPress={() => onComplete()} accessibilityRole="button" accessibilityLabel={skipLabel} hitSlop={12} style={styles.skip} testID="value-onboarding-skip">
           <YdlText role="bodyEmphasized" color="text.secondary">{skipLabel}</YdlText>
         </Pressable>
       </View>
       <View style={styles.content} accessibilityLiveRegion="polite">
-        <YdlText role="caption" color="action.primary" style={styles.stepLabel}>{step.key === "workspace" ? "YOUR TRADING WORKSPACE" : step.key === "futures" ? "BUILT FOR FUTURES" : step.key === "context" ? "MARKET CONTEXT" : "IMPROVE YOUR EDGE"}</YdlText>
+        <YdlText role="caption" color="action.primary" style={styles.stepLabel}>{t(`onboarding.value.${step.key}Eyebrow`)}</YdlText>
         <YdlText role="title" style={styles.title}>{title}</YdlText>
         <YdlText role="body" color="text.secondary" style={styles.body}>{body}</YdlText>
         <View style={styles.previewCard}>
-          <YdlText role="caption" color="text.secondary">{step.key === "workspace" ? "VOICE NOTES  ·  SCREENSHOTS  ·  SESSION NOTES" : step.key === "futures" ? "POSITION SIZE  ·  RISK  ·  TARGET  ·  BUFFER" : step.key === "context" ? "NEWS  ·  EVENTS  ·  MARKET CONTEXT" : "STATS  ·  HABITS  ·  PROP PASS"}</YdlText>
+          <YdlText role="caption" color="text.secondary">{t(`onboarding.value.${step.key}Preview`)}</YdlText>
           <View style={styles.previewLine} />
           <View style={styles.previewLineShort} />
         </View>
@@ -96,9 +96,9 @@ export function ValueOnboarding({ phase, onPhaseChange, onComplete, onExistingAu
       </View>
       <View style={styles.footer}>
         <Pressable onPress={() => index > 0 ? setIndex((v) => v - 1) : undefined} disabled={index === 0} style={styles.back} testID="value-onboarding-back">
-          <YdlText role="bodyEmphasized" color="text.secondary">{index > 0 ? "Back" : ""}</YdlText>
+          <YdlText role="bodyEmphasized" color="text.secondary">{index > 0 ? t("onboarding.back") : ""}</YdlText>
         </Pressable>
-        <YdlButton label={index === STEPS.length - 1 ? "Continue" : "Continue"} onPress={() => index === STEPS.length - 1 ? onPhaseChange("onboarding_personalization") : setIndex((v) => v + 1)} fullWidth testID="value-onboarding-continue" />
+        <YdlButton label={t("onboarding.continue")} onPress={() => index === STEPS.length - 1 ? onPhaseChange("onboarding_personalization") : setIndex((v) => v + 1)} fullWidth testID="value-onboarding-continue" />
       </View>
     </View>
   );
