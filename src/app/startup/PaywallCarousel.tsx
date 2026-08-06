@@ -72,7 +72,20 @@ export function PaywallCarousel({
     }
   }, [activeIndex, plans, selectedPlanId, onSelectPlan]);
 
-  const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
+  const fallbackPlan = {
+    id: selectedPlanId,
+    label: "Pro",
+    priceLine: "$12.99 / month",
+    periodUnit: "month" as const,
+    body: "",
+    trialBadge: null,
+    valueLines: [],
+    badges: [],
+    cta: "Continue",
+    supporting: "Auto-renews until canceled.",
+    trial: { eligibility: "unknown" as const, hasFreeIntro: false, periodLabel: null, introDays: null },
+  };
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0] || fallbackPlan;
   const selectedPkg = packagesMap[selectedPlanId];
 
   return (
