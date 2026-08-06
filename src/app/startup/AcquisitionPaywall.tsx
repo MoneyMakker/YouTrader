@@ -1,5 +1,6 @@
 /**
- * Acquisition paywall — final YouTrader 3.0 copy + dynamic plan CTA.
+ * Acquisition paywall — redesigned horizontal plan carousel with StoreKit pricing,
+ * trial eligibility integration, and native iOS styling.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +27,7 @@ import {
   buildPaywallPlanPresentation,
   type PaywallPlanId,
 } from "./paywallPlanCopy";
+import { PaywallCarousel } from "./PaywallCarousel";
 
 type Props = {
   packages: PurchasesPackage[];
@@ -56,9 +58,6 @@ const VALUE_CHIPS = [
   "Trading Heatmap",
   "Risk Protection",
 ] as const;
-
-const LEGAL =
-  "Payment will be charged to your Apple ID after purchase confirmation. Free trials automatically convert to the selected paid subscription unless canceled before the trial ends. Subscriptions renew automatically unless canceled at least 24 hours before the end of the current period. Manage or cancel your subscription in App Store settings.";
 
 function PaywallHeroPreview() {
   const theme = useYdlTheme("dark");
@@ -149,12 +148,6 @@ export function AcquisitionPaywall({
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<PaywallPlanId>("yearly");
   const purchaseLock = useRef(false);
-  const scrollRef = useRef<ScrollView>(null);
-  // Sticky CTA (primary + restore + optional account actions) must not cover plan cards.
-  const stickyReserve =
-    188 +
-    (authenticatedAccountActions ? 96 : 0) +
-    Math.max(insets.bottom, 10);
 
   const weekly =
     packages.find((pkg) => packageTitle(pkg) === "WEEKLY") ||
@@ -212,17 +205,15 @@ export function AcquisitionPaywall({
   const monthlyPriceString = monthly
     ? packagePrice(monthly)
     : monthlyProduct?.priceString || PREMIUM_PRICE;
+  const yearlyPriceString = yearly
+    ? packagePrice(yearly)
+    : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY;
 
   const plans = useMemo(() => {
-    const rows: Array<{
-      presentation: ReturnType<typeof buildPaywallPlanPresentation>;
-      productId: string;
-      pkg: PurchasesPackage | null;
-      emphasis: "low" | "mid" | "high";
-    }> = [];
+    const rows: ReturnType<typeof buildPaywallPlanPresentation>[] = [];
     if (weekly || weeklyProduct) {
-      rows.push({
-        presentation: buildPaywallPlanPresentation({
+      rows.push(
+        buildPaywallPlanPresentation({
           id: "weekly",
           priceString: weeklyPriceString,
           product: weeklyProduct,
@@ -230,14 +221,11 @@ export function AcquisitionPaywall({
             ? eligibilityByProductId[weeklyProduct.identifier]
             : undefined,
         }),
-        productId: YOU_TRADER_WEEKLY_PRODUCT_ID,
-        pkg: weekly,
-        emphasis: "low",
-      });
+      );
     }
     if (monthly || monthlyProduct) {
-      rows.push({
-        presentation: buildPaywallPlanPresentation({
+      rows.push(
+        buildPaywallPlanPresentation({
           id: "monthly",
           priceString: monthlyPriceString,
           product: monthlyProduct,
@@ -245,26 +233,20 @@ export function AcquisitionPaywall({
             ? eligibilityByProductId[monthlyProduct.identifier]
             : undefined,
         }),
-        productId: YOU_TRADER_MONTHLY_PRODUCT_ID,
-        pkg: monthly,
-        emphasis: "mid",
-      });
+      );
     }
     if (yearly || yearlyProduct) {
-      rows.push({
-        presentation: buildPaywallPlanPresentation({
+      rows.push(
+        buildPaywallPlanPresentation({
           id: "yearly",
-          priceString: yearly ? packagePrice(yearly) : yearlyProduct?.priceString || PREMIUM_PRICE_YEARLY,
+          priceString: yearlyPriceString,
           product: yearlyProduct,
           weeklyPriceString,
           eligibilityStatus: yearlyProduct?.identifier
             ? eligibilityByProductId[yearlyProduct.identifier]
             : undefined,
         }),
-        productId: YOU_TRADER_YEARLY_PRODUCT_ID,
-        pkg: yearly,
-        emphasis: "high",
-      });
+      );
     }
     return rows;
   }, [
@@ -276,44 +258,45 @@ export function AcquisitionPaywall({
     yearlyProduct,
     weeklyPriceString,
     monthlyPriceString,
-    packagePrice,
+    yearlyPriceString,
     eligibilityByProductId,
   ]);
 
-  useEffect(() => {
-    if (offeringsUnavailable || !plans.length) return;
-    const hasSelected = plans.some((p) => p.presentation.id === selected);
-    if (!hasSelected) {
-      const yearlyResolved = plans.find((p) => p.presentation.id === "yearly" && p.pkg);
-      setSelected(yearlyResolved?.presentation.id || plans.find((p) => p.pkg)?.presentation.id || plans[0].presentation.id);
-    }
-  }, [plans, selected, offeringsUnavailable]);
+  const packagesMap = useMemo(() => ({
+    weekly: weekly || null,
+    monthly: monthly || null,
+    yearly: yearly || null,
+  }), [weekly, monthly, yearly]);
 
-  useEffect(() => {
-    if (offeringsUnavailable || !plans.length) return;
-    const timer = setTimeout(() => {
-      if (selected === "yearly") {
-        scrollRef.current?.scrollToEnd({ animated: false });
-      } else if (selected === "weekly") {
-        scrollRef.current?.scrollTo({ y: 0, animated: false });
-      }
-    }, 80);
-    return () => clearTimeout(timer);
-  }, [selected, plans.length, offeringsUnavailable]);
+  const activePlan = plans.find((p) => p.id === selected) || plans[0] || null;
+  const activePkg =
+    activePlan?.id === "weekly" ? weekly
+    : activePlan?.id === "monthly" ? monthly
+    : activePlan?.id === "yearly" ? yearly
+    : null;
+  const activeProductId =
+    activePlan?.id === "weekly" ? YOU_TRADER_WEEKLY_PRODUCT_ID
+    : activePlan?.id === "monthly" ? YOU_TRADER_MONTHLY_PRODUCT_ID
+    : activePlan?.id === "yearly" ? YOU_TRADER_YEARLY_PRODUCT_ID
+    : YOU_TRADER_YEARLY_PRODUCT_ID;
 
-  const active = plans.find((p) => p.presentation.id === selected) || plans[0] || null;
-  const canPurchase = !!active?.pkg && !purchaseBusy;
-
-  const selectPlan = (id: PaywallPlanId) => {
-    setSelected(id);
-    void Haptics.selectionAsync().catch(() => undefined);
-  };
-
-  const handlePurchase = () => {
-    if (!active?.pkg || purchaseBusy || purchaseLock.current) return;
+  const handleContinue = (_pkg?: PurchasesPackage | null, planId?: PaywallPlanId) => {
+    if (purchaseBusy || purchaseLock.current) return;
     purchaseLock.current = true;
+    const targetPlan = plans.find((p) => p.id === planId) || activePlan;
+    const targetPkg =
+      targetPlan?.id === "weekly" ? weekly
+      : targetPlan?.id === "monthly" ? monthly
+      : targetPlan?.id === "yearly" ? yearly
+      : activePkg;
+    const targetProdId =
+      targetPlan?.id === "weekly" ? YOU_TRADER_WEEKLY_PRODUCT_ID
+      : targetPlan?.id === "monthly" ? YOU_TRADER_MONTHLY_PRODUCT_ID
+      : targetPlan?.id === "yearly" ? YOU_TRADER_YEARLY_PRODUCT_ID
+      : activeProductId;
+
     try {
-      onPurchase(active.pkg, active.productId);
+      onPurchase(targetPkg, targetProdId);
     } finally {
       setTimeout(() => {
         purchaseLock.current = false;
@@ -322,255 +305,38 @@ export function AcquisitionPaywall({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background.primary }} testID="acquisition-paywall">
-      <ScrollView
-        ref={scrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={[styles.body, { paddingBottom: stickyReserve }]}
-        keyboardShouldPersistTaps="handled"
-        testID="paywall-scroll"
-      >
-        {onClose ? (
-          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
-            <YdlText role="body" color="text.secondary">
-              ×
-            </YdlText>
-          </Pressable>
-        ) : (
-          <View style={styles.close} />
-        )}
+    <View style={[styles.root, { backgroundColor: theme.colors.background.primary, paddingTop: Math.max(insets.top, 8) }]} testID="acquisition-paywall">
+      {onClose ? (
+        <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={styles.close} testID="paywall-close">
+          <YdlText role="body" color="text.secondary">×</YdlText>
+        </Pressable>
+      ) : <View style={{ height: 24 }} />}
 
-        <PaywallHeroPreview />
+      <PaywallCarousel
+        plans={plans}
+        packagesMap={packagesMap}
+        selectedPlanId={selected}
+        onSelectPlan={(id) => setSelected(id)}
+        purchaseBusy={purchaseBusy}
+        onContinue={handleContinue}
+        onRestore={onRestore}
+        onRetry={onRetryOfferings}
+        catalogLoading={false}
+        catalogError={offeringsUnavailable ? "Plans are temporarily unavailable" : null}
+      />
 
-        <YdlText role="title" testID="paywall-headline">
-          Build a Trading System You Can Actually Trust
-        </YdlText>
-        <YdlText role="body" color="text.secondary">
-          Track every futures trade, protect your prop challenge limits, and understand exactly which
-          decisions improve or hurt your performance.
-        </YdlText>
-
-        <View style={styles.chipRow}>
-          {VALUE_CHIPS.map((line) => (
-            <View key={line} style={[styles.chip, { backgroundColor: theme.colors.surface.card }]}>
-              <YdlText role="caption">{line}</YdlText>
-            </View>
-          ))}
-        </View>
-
-        {offeringsUnavailable ? (
-          <View
-            style={[styles.inlineError, { backgroundColor: theme.colors.surface.card }]}
-            testID="paywall-offerings-unavailable"
-          >
-            <YdlText role="bodyEmphasized">Plans are temporarily unavailable</YdlText>
-            <YdlText role="body" color="text.secondary">
-              We couldn’t load the latest App Store subscription options. Check your connection and try
-              again.
-            </YdlText>
-            <YdlButton label="Try Again" onPress={onRetryOfferings} disabled={purchaseBusy} />
-            <YdlButton
-              label={t("restorePurchases")}
-              variant="secondary"
-              onPress={onRestore}
-              disabled={purchaseBusy}
-              testID="paywall-restore"
-            />
-          </View>
-        ) : (
-          <View style={styles.plans} testID="paywall-plan-list">
-            {plans.map((row) => {
-              const plan = row.presentation;
-              const activePlan = plan.id === (active?.presentation.id || selected);
-              const borderColor =
-                activePlan
-                  ? theme.colors.action.primary
-                  : row.emphasis === "high"
-                    ? "rgba(184,242,85,0.35)"
-                    : "rgba(255,255,255,0.08)";
-              return (
-                <Pressable
-                  key={plan.id}
-                  onPress={() => selectPlan(plan.id)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: activePlan }}
-                  accessibilityLabel={`${plan.label} ${plan.priceLine}${activePlan ? ", selected" : ""}`}
-                  testID={`paywall-plan-${plan.id}`}
-                  style={[
-                    styles.plan,
-                    row.emphasis === "high" ? styles.planHigh : null,
-                    {
-                      minHeight: YDL_MIN_TOUCH_TARGET + 36,
-                      backgroundColor: activePlan
-                        ? "rgba(184,242,85,0.09)"
-                        : row.emphasis === "high"
-                          ? "rgba(139,124,255,0.08)"
-                          : theme.colors.surface.card,
-                      borderColor,
-                      opacity: 1,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.check,
-                      {
-                        borderColor: activePlan ? theme.colors.action.primary : "rgba(255,255,255,0.25)",
-                        backgroundColor: activePlan ? theme.colors.action.primary : "transparent",
-                      },
-                    ]}
-                  >
-                    {activePlan ? (
-                      <YdlText role="caption" style={{ color: theme.colors.action.primaryText }}>
-                        ✓
-                      </YdlText>
-                    ) : null}
-                  </View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <View style={styles.planLabelRow}>
-                      <YdlText role="bodyEmphasized">{plan.label}</YdlText>
-                      {plan.badges.map((badge) => (
-                        <View
-                          key={badge}
-                          style={[
-                            styles.badge,
-                            {
-                              backgroundColor: badge.startsWith("SAVE")
-                                ? "rgba(184,242,85,0.16)"
-                                : "rgba(139,124,255,0.2)",
-                            },
-                          ]}
-                        >
-                          <YdlText
-                            role="caption"
-                            style={{ color: badge.startsWith("SAVE") ? LIME : "#D6CFFF" }}
-                          >
-                            {badge}
-                          </YdlText>
-                        </View>
-                      ))}
-                    </View>
-                    {plan.trialBadge ? (
-                      <YdlText role="caption" style={{ color: LIME }} testID={`paywall-trial-badge-${plan.id}`}>
-                        {plan.trialBadge}
-                      </YdlText>
-                    ) : null}
-                    <YdlText role="title">{plan.priceLine}</YdlText>
-                    <YdlText role="caption" color="text.secondary">
-                      {plan.body}
-                    </YdlText>
-                    {plan.valueLines
-                      .filter((line) => line !== plan.body)
-                      .slice(0, 2)
-                      .map((line) => (
-                        <YdlText key={line} role="caption" color="text.secondary">
-                          {line}
-                        </YdlText>
-                      ))}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-
-        {paywallError && !offeringsUnavailable ? (
-          <YdlText role="caption" color="text.secondary" testID="paywall-inline-error">
-            {paywallError}
-          </YdlText>
-        ) : null}
-
-        <View style={styles.legalLinks}>
-          <Pressable
-            onPress={() => void Linking.openURL("https://youtrader.app/privacy")}
-            accessibilityRole="link"
-            accessibilityLabel="Privacy Policy"
-            style={styles.legalLink}
-          >
-            <YdlText role="caption" color="text.tertiary">
-              Privacy Policy
-            </YdlText>
-          </Pressable>
-          <YdlText role="caption" color="text.tertiary">
-            ·
-          </YdlText>
-          <Pressable
-            onPress={() => void Linking.openURL("https://youtrader.app/terms")}
-            accessibilityRole="link"
-            accessibilityLabel="Terms of Use"
-            style={styles.legalLink}
-          >
-            <YdlText role="caption" color="text.tertiary">
-              Terms of Use
-            </YdlText>
-          </Pressable>
-        </View>
-
-        <YdlText role="caption" color="text.tertiary" testID="paywall-legal-disclosure">
-          {LEGAL}
-        </YdlText>
-      </ScrollView>
-
-      {!offeringsUnavailable && active ? (
-        <View
-          style={[
-            styles.stickyCta,
-            {
-              backgroundColor: theme.colors.background.primary,
-              paddingBottom: Math.max(insets.bottom, 12),
-            },
-          ]}
-          testID="paywall-sticky-cta"
-        >
-          <YdlButton
-            label={purchaseBusy ? t("connecting") : active.presentation.cta}
-            onPress={handlePurchase}
-            disabled={!canPurchase}
-            testID="paywall-primary-cta"
-          />
-          <YdlText
-            role="caption"
-            color="text.secondary"
-            style={{ textAlign: "center" }}
-            testID="paywall-cta-supporting"
-          >
-            {active.presentation.supporting}
-          </YdlText>
-          <YdlButton
-            label={purchaseBusy ? t("checking") : t("restorePurchases")}
-            variant="secondary"
-            onPress={onRestore}
-            disabled={purchaseBusy}
-            testID="paywall-restore"
-          />
-          {authenticatedAccountActions ? (
-            <View style={styles.accountActions} testID="paywall-account-actions">
-              <Pressable
-                onPress={onSignOut}
-                accessibilityRole="button"
-                accessibilityLabel={t("signOut")}
-                style={styles.accountAction}
-                testID="paywall-sign-out"
-              >
-                <YdlText role="caption" color="text.secondary">
-                  {t("signOut")}
-                </YdlText>
-              </Pressable>
-              <YdlText role="caption" color="text.tertiary">
-                ·
-              </YdlText>
-              <Pressable
-                onPress={onDeleteAccount}
-                accessibilityRole="button"
-                accessibilityLabel={t("deleteAccount")}
-                style={styles.accountAction}
-                testID="paywall-delete-account"
-              >
-                <YdlText role="caption" color="text.secondary">
-                  {t("deleteAccount")}
-                </YdlText>
-              </Pressable>
-            </View>
+      {authenticatedAccountActions ? (
+        <View style={[styles.accountActions, { paddingBottom: Math.max(insets.bottom, 12) }]} testID="paywall-account-actions">
+          {onSignOut ? (
+            <Pressable onPress={onSignOut} accessibilityRole="button" accessibilityLabel={t("signOut")} style={styles.accountAction} testID="paywall-sign-out">
+              <YdlText role="caption" color="text.secondary">{t("signOut")}</YdlText>
+            </Pressable>
+          ) : null}
+          {onSignOut && onDeleteAccount ? <YdlText role="caption" color="text.tertiary">·</YdlText> : null}
+          {onDeleteAccount ? (
+            <Pressable onPress={onDeleteAccount} accessibilityRole="button" accessibilityLabel={t("deleteAccount")} style={styles.accountAction} testID="paywall-delete-account">
+              <YdlText role="caption" color="text.secondary">{t("deleteAccount")}</YdlText>
+            </Pressable>
           ) : null}
         </View>
       ) : null}
@@ -579,8 +345,8 @@ export function AcquisitionPaywall({
 }
 
 const styles = StyleSheet.create({
-  body: { padding: 20, gap: 12, paddingBottom: 24 },
-  close: { alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
+  root: { flex: 1, backgroundColor: "#06080C" },
+  close: { alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 20 },
   hero: {
     borderRadius: 18,
     padding: 14,
@@ -600,50 +366,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bufferFill: { height: 8, borderRadius: 4 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  inlineError: { borderRadius: 16, padding: 16, gap: 10 },
-  plans: { gap: 10 },
-  plan: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  planHigh: { borderWidth: 2 },
-  check: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 2,
-  },
-  planLabelRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
-  badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  legalLinks: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 },
-  legalLink: { minHeight: 44, justifyContent: "center" },
-  stickyCta: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    gap: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.08)",
-  },
-  accountActions: {
-    minHeight: YDL_MIN_TOUCH_TARGET,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  accountAction: {
-    minHeight: YDL_MIN_TOUCH_TARGET,
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
+  accountActions: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 20 },
+  accountAction: { minHeight: 40, justifyContent: "center", paddingHorizontal: 6 },
 });

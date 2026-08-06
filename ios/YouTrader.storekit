@@ -1,0 +1,101 @@
+{
+  "identifier" : "E2B7B342",
+  "subscriptions" : [
+    {
+      "id" : "youtrader_pro_group",
+      "localizations" : [
+
+      ],
+      "name" : "YouTrader Pro Group",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "YT001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Weekly Pro Subscription",
+              "displayName" : "YouTrader Pro Weekly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "youtrader_pro_weekly",
+          "recurringSubscriptionPeriod" : "P1W",
+          "referenceName" : "Weekly",
+          "subscriptionGroupID" : "youtrader_pro_group",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "12.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "YT002",
+          "introductoryOffer" : {
+            "internalID" : "INTRO01",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D"
+          },
+          "localizations" : [
+            {
+              "description" : "Monthly Pro Subscription with 3-day trial",
+              "displayName" : "YouTrader Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "youtrader_pro_monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Monthly",
+          "subscriptionGroupID" : "youtrader_pro_group",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "99.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "YT003",
+          "introductoryOffer" : {
+            "internalID" : "INTRO02",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P7D"
+          },
+          "localizations" : [
+            {
+              "description" : "Yearly Pro Subscription with 7-day trial",
+              "displayName" : "YouTrader Pro Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "youtrader_pro_yearly__",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Yearly",
+          "subscriptionGroupID" : "youtrader_pro_group",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
