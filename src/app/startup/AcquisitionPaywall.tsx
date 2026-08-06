@@ -4,17 +4,12 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PurchasesPackage, PurchasesStoreProduct } from "react-native-purchases";
 import Purchases from "react-native-purchases";
 import { useTranslation } from "react-i18next";
-import * as Haptics from "expo-haptics";
-import Svg, { Circle, Path } from "react-native-svg";
-import { YdlButton } from "../../ydl/components/YdlButton";
 import { YdlText } from "../../ydl/components/YdlText";
-import { useYdlTheme } from "../../ydl/tokens";
-import { YDL_MIN_TOUCH_TARGET } from "../../ydl/accessibility";
 import {
   PREMIUM_PRICE,
   PREMIUM_PRICE_WEEKLY,
@@ -48,84 +43,6 @@ type Props = {
 };
 
 const LIME = "#B8F255";
-const PURPLE = "#8B7CFF";
-const RED_SOFT = "#FF4D6D";
-
-const VALUE_CHIPS = [
-  "Futures Journal",
-  "Prop Pass",
-  "Performance Radar",
-  "Trading Heatmap",
-  "Risk Protection",
-] as const;
-
-function PaywallHeroPreview() {
-  const theme = useYdlTheme("dark");
-  return (
-    <View
-      style={[styles.hero, { backgroundColor: theme.colors.surface.card }]}
-      testID="paywall-hero-preview"
-      accessibilityElementsHidden
-    >
-      <View style={styles.heroTop}>
-        <View style={styles.heroCol}>
-          <YdlText role="caption" color="text.secondary">
-            Journal
-          </YdlText>
-          <YdlText role="bodyEmphasized">MES · +$420</YdlText>
-          <View style={styles.bufferTrack}>
-            <View style={[styles.bufferFill, { width: "78%", backgroundColor: LIME }]} />
-          </View>
-          <YdlText role="caption" style={{ color: PURPLE }}>
-            Daily Risk Protected
-          </YdlText>
-        </View>
-        <Svg width={140} height={86} viewBox="0 0 140 86">
-          <Path
-            d="M6 62 C22 58, 30 44, 44 48 C58 52, 68 30, 84 26 C100 22, 114 36, 134 20"
-            stroke={LIME}
-            strokeWidth={2.4}
-            fill="none"
-          />
-          <Path
-            d="M6 54 C26 60, 42 66, 60 50 C78 34, 100 42, 134 32"
-            stroke={RED_SOFT}
-            strokeWidth={1.4}
-            fill="none"
-            opacity={0.4}
-          />
-        </Svg>
-      </View>
-      <View style={styles.heroBottom}>
-        <Svg width={70} height={54} viewBox="0 0 70 54">
-          <Circle cx="35" cy="27" r="20" stroke="rgba(255,255,255,0.12)" strokeWidth={1} fill="none" />
-          <Path
-            d="M35 8 L54 21 L48 44 L22 44 L16 21 Z"
-            fill="rgba(184,242,85,0.16)"
-            stroke={LIME}
-            strokeWidth={1.3}
-          />
-        </Svg>
-        <View style={styles.heatRow}>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <View
-              key={i}
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: 3,
-                backgroundColor: i === 5 ? LIME : `rgba(139,124,255,${0.14 + (i % 4) * 0.11})`,
-              }}
-            />
-          ))}
-        </View>
-        <YdlText role="caption" color="text.secondary" style={{ flex: 1 }}>
-          Radar · Heatmap · Prop Pass
-        </YdlText>
-      </View>
-    </View>
-  );
-}
 
 export function AcquisitionPaywall({
   packages,
@@ -144,7 +61,6 @@ export function AcquisitionPaywall({
   packagePrice,
 }: Props) {
   const { t } = useTranslation();
-  const theme = useYdlTheme("dark");
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<PaywallPlanId>("yearly");
   const purchaseLock = useRef(false);
@@ -309,7 +225,7 @@ export function AcquisitionPaywall({
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background.primary, paddingTop: Math.max(insets.top, 8) }]} testID="acquisition-paywall">
+    <View style={[styles.root, { paddingTop: Math.max(insets.top, 8) }]} testID="acquisition-paywall">
       {onClose ? (
         <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" style={styles.close} testID="paywall-close">
           <YdlText role="body" color="text.secondary">×</YdlText>

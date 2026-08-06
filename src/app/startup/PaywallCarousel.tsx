@@ -3,7 +3,7 @@
  * Center-snapping horizontal cards with scale/opacity depth, lime accent glow,
  * dynamic CTAs, StoreKit pricing, and trial eligibility integration.
  */
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -57,6 +57,15 @@ export function PaywallCarousel({
 }: Props) {
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(() => plans.findIndex((p) => p.id === selectedPlanId));
+
+  useEffect(() => {
+    const index = plans.findIndex((plan) => plan.id === selectedPlanId);
+    if (index < 0) return;
+    const timer = setTimeout(() => {
+      flatListRef.current?.scrollToOffset({ offset: index * SNAP_INTERVAL, animated: false });
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [plans, selectedPlanId]);
 
   const handleScroll = useCallback((e: any) => {
     const offsetX = e.nativeEvent.contentOffset.x;
