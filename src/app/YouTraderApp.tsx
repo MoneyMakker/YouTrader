@@ -177,7 +177,6 @@ import { computeCalculatorResults, formatCalcUsd } from "../calc/riskCalculator"
 import { ProductOnboardingScreen } from "./startup/ProductOnboardingScreen";
 import { ValueOnboarding } from "./startup/ValueOnboarding";
 import { AcquisitionPaywall } from "./startup/AcquisitionPaywall";
-import { AssessmentFlowScreen } from "./startup/AssessmentFlowScreen";
 import { buildSettingsSubscriptionPresentation } from "./startup/settingsSubscriptionPresentation";
 import {
   ACQUISITION_AUTH_REQUIRED_KEY,
@@ -190,7 +189,7 @@ import {
   type AcquisitionPhase,
   shouldClearExplicitAuthRequiredOnSessionChange,
 } from "./startup/acquisitionState";
-import { ASSESSMENT_FUNNEL_PHASE_KEY, type AssessmentAnswers, type AssessmentResult } from "../acquisition/assessmentModel";
+import { ASSESSMENT_FUNNEL_PHASE_KEY } from "../acquisition/assessmentModel";
 import { RevenueCatIdentitySynchronizer } from "../billing/revenueCatIdentity";
 import {
   decideEntitlementUiPhase,
@@ -10320,9 +10319,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [acquisitionHydrated, setAcquisitionHydrated] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [paywallCompleted, setPaywallCompleted] = useState(false);
-  const [funnelPhase, setFunnelPhase] = useState<AcquisitionPhase>("assessment_intro");
-  const [assessmentAnswers, setAssessmentAnswers] = useState<AssessmentAnswers>({});
-  const [assessmentResult, setAssessmentResult] = useState<AssessmentResult | null>(null);
+  const [funnelPhase, setFunnelPhase] = useState<AcquisitionPhase>("onboarding_slides");
   /** In-flight explicit logout — suppresses acquisition paywall flash. */
   const [loggingOut, setLoggingOut] = useState(false);
   /** Sticky AUTH_REQUIRED after Settings → Log Out (persisted across restart). */
@@ -10411,8 +10408,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         void AsyncStorage.removeItem(ACQUISITION_GUEST_KEY);
         linkingMarkerActiveRef.current = linkingMarker === "1";
         const userId = session?.user?.id;
-        if (!userId && storedFunnelPhase && ["assessment_intro", "assessment_questions", "assessment_analyzing", "assessment_result", "prop_pass_preview", "purchase_paywall"].includes(storedFunnelPhase)) {
-          setFunnelPhase(storedFunnelPhase as AcquisitionPhase);
+        if (!userId && storedFunnelPhase) {
+          const oldAssessment = ["assessment_intro", "assessment_questions", "assessment_analyzing", "assessment_result", "prop_pass_preview"].includes(storedFunnelPhase);
+          const allowed = ["onboarding_slides", "onboarding_personalization", "purchase_paywall"].includes(storedFunnelPhase);
+          if (oldAssessment) setFunnelPhase("onboarding_slides");
+          else if (allowed) setFunnelPhase(storedFunnelPhase as AcquisitionPhase);
         }
         let paywallDone = devicePaywall === "1" || legacyPaywall === "1" || isPremium;
         let onboardingDone = onboarding === "1";
@@ -12595,37 +12595,21 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     );
   }
 
-  if (
-    acquisitionPhase === "assessment_intro" ||
-    acquisitionPhase === "assessment_questions" ||
-    acquisitionPhase === "assessment_analyzing" ||
-    acquisitionPhase === "assessment_result" ||
-    acquisitionPhase === "prop_pass_preview"
-  ) {
-    return (
-      <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
-        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
-        <AssessmentFlowScreen
-          phase={acquisitionPhase}
-          onPhaseChange={setFunnelPhase}
-          onExistingAuth={() => setFunnelPhase("existing_user_auth")}
-          onOpenPaywall={(answers, result) => {
-            setAssessmentAnswers(answers);
-            setAssessmentResult(result);
-            void AsyncStorage.setItem(ASSESSMENT_FUNNEL_PHASE_KEY, "purchase_paywall");
-            setFunnelPhase("purchase_paywall");
-          }}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  if (acquisitionPhase === "onboarding") {
+  if (acquisitionPhase === "onboarding" || acquisitionPhase === "onboarding_slides" || acquisitionPhase === "onboarding_personalization") {
     return (
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
         <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
         {stagingQaResetOverlay}
-        <ValueOnboarding onComplete={() => completeProductOnboarding()} />
+        <ValueOnboarding
+          phase={acquisitionPhase}
+          onPhaseChange={setFunnelPhase}
+          onComplete={(profile) => {
+            if (profile) void AsyncStorage.setItem("yt-trader-profile-v1", profile);
+            void AsyncStorage.setItem(ASSESSMENT_FUNNEL_PHASE_KEY, "purchase_paywall");
+            setFunnelPhase("purchase_paywall");
+          }}
+          onExistingAuth={() => setFunnelPhase("existing_user_auth")}
+        />
       </SafeAreaView>
     );
   }

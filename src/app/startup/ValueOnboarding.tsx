@@ -1,8 +1,3 @@
-/**
- * Concise account-first value onboarding (3 screens).
- * No pricing, purchase, or paywall. Completes → Auth.
- */
-
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,129 +6,99 @@ import { YdlButton } from "../../ydl/components/YdlButton";
 import { YdlText } from "../../ydl/components/YdlText";
 import { useYdlTheme } from "../../ydl/tokens";
 import { YDL_MIN_TOUCH_TARGET } from "../../ydl/accessibility";
+import type { AcquisitionPhase } from "./acquisitionState";
 
 type Props = {
-  onComplete: () => void;
+  phase: AcquisitionPhase;
+  onPhaseChange: (phase: AcquisitionPhase) => void;
+  onComplete: (profile?: string) => void;
+  onExistingAuth: () => void;
 };
 
 const STEPS = [
-  {
-    key: "journal",
-    titleKey: "onboarding.value.journalTitle",
-    bodyKey: "onboarding.value.journalBody",
-    fallbackTitle: "Journal every trade",
-    fallbackBody:
-      "Keep trades, notes, and results organized in one place so your review stays clear.",
-  },
-  {
-    key: "stats",
-    titleKey: "onboarding.value.statsTitle",
-    bodyKey: "onboarding.value.statsBody",
-    fallbackTitle: "Understand what actually works",
-    fallbackBody:
-      "Stats reveal performance patterns from your journal — not memory or emotion.",
-  },
-  {
-    key: "prop",
-    titleKey: "onboarding.value.propTitle",
-    bodyKey: "onboarding.value.propBody",
-    fallbackTitle: "Protect the trading account",
-    fallbackBody:
-      "Prop Pass helps plan risk and protect challenge and funded accounts with clear guardrails.",
-  },
+  { key: "workspace", titleKey: "onboarding.value.workspaceTitle", bodyKey: "onboarding.value.workspaceBody", fallbackTitle: "More Than a Trading Journal", fallbackBody: "Your all-in-one futures workspace for trades, ideas, notes, and review." },
+  { key: "futures", titleKey: "onboarding.value.futuresTitle", bodyKey: "onboarding.value.futuresBody", fallbackTitle: "Built for Prop Futures Traders", fallbackBody: "Plan position size, risk, targets, and challenge limits before you trade." },
+  { key: "context", titleKey: "onboarding.value.contextTitle", bodyKey: "onboarding.value.contextBody", fallbackTitle: "Stay Ready for Market Moves", fallbackBody: "Keep market news and economic events in view before they change the day." },
+  { key: "edge", titleKey: "onboarding.value.edgeTitle", bodyKey: "onboarding.value.edgeBody", fallbackTitle: "See Your Edge. Improve What Matters.", fallbackBody: "Stats and Prop Pass turn your trading habits into a more repeatable process." },
 ] as const;
 
-export function ValueOnboarding({ onComplete }: Props) {
+const PROFILE_OPTIONS = [
+  ["new", "onboarding.profile.new"],
+  ["challenge", "onboarding.profile.challenge"],
+  ["funded", "onboarding.profile.funded"],
+] as const;
+
+export function ValueOnboarding({ phase, onPhaseChange, onComplete, onExistingAuth }: Props) {
   const { t, i18n } = useTranslation();
   const theme = useYdlTheme("dark");
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
+  const [profile, setProfile] = useState<string | null>(null);
   const step = STEPS[index];
-  const isLast = index === STEPS.length - 1;
-
+  const isPersonalization = phase === "onboarding_personalization";
   const title = useMemo(() => {
     const translated = t(step.titleKey);
     return translated === step.titleKey ? step.fallbackTitle : translated;
   }, [i18n.language, step, t]);
-
   const body = useMemo(() => {
     const translated = t(step.bodyKey);
     return translated === step.bodyKey ? step.fallbackBody : translated;
   }, [i18n.language, step, t]);
+  const skipLabel = t("skip") !== "skip" ? t("skip") : "Skip";
 
-  return (
-    <View
-      style={[
-        styles.root,
-        {
-          backgroundColor: theme.colors.background.primary,
-          paddingTop: Math.max(insets.top, 16),
-          paddingBottom: Math.max(insets.bottom, 16),
-        },
-      ]}
-      testID="value-onboarding"
-      accessibilityLabel="YouTrader onboarding"
-    >
-      <View style={styles.topRow}>
-        <Pressable
-          onPress={onComplete}
-          accessibilityRole="button"
-          accessibilityLabel={t("skip") !== "skip" ? t("skip") : "Skip"}
-          hitSlop={12}
-          style={styles.skip}
-          testID="value-onboarding-skip"
-        >
-          <YdlText role="bodyEmphasized" color="text.secondary">
-            {t("skip") !== "skip" ? t("skip") : "Skip"}
-          </YdlText>
+  if (isPersonalization) {
+    return (
+      <View style={[styles.root, { backgroundColor: theme.colors.background.primary, paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }]} testID="value-onboarding-personalization">
+        <Pressable onPress={() => onComplete()} style={styles.topLink} accessibilityRole="button" testID="onboarding-personalization-skip">
+          <YdlText role="bodyEmphasized" color="text.secondary">{skipLabel}</YdlText>
+        </Pressable>
+        <View style={styles.content}>
+          <YdlText role="caption" color="text.secondary" style={styles.stepLabel}>PERSONALIZE YOUR WORKSPACE</YdlText>
+          <YdlText role="title" style={styles.title}>What best describes you?</YdlText>
+          <YdlText role="body" color="text.secondary" style={styles.body}>Choose one so your first workspace shortcuts feel relevant.</YdlText>
+          <View style={styles.options}>
+            {PROFILE_OPTIONS.map(([key, translationKey]) => (
+              <Pressable key={key} onPress={() => { setProfile(key); onComplete(key); }} style={[styles.option, profile === key && styles.optionSelected]} testID={`onboarding-profile-${key}`}>
+                <YdlText role="bodyEmphasized" color={profile === key ? "action.primary" : "text.primary"}>{t(translationKey) === translationKey ? key : t(translationKey)}</YdlText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <Pressable onPress={onExistingAuth} accessibilityRole="button" testID="value-onboarding-existing-auth">
+          <YdlText role="bodyEmphasized" color="text.secondary">Already have an account? Sign In</YdlText>
         </Pressable>
       </View>
+    );
+  }
 
+  return (
+    <View style={[styles.root, { backgroundColor: theme.colors.background.primary, paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }]} testID="value-onboarding" accessibilityLabel="YouTrader value onboarding">
+      <View style={styles.topRow}>
+        <Pressable onPress={onExistingAuth} accessibilityRole="button" testID="value-onboarding-existing-auth">
+          <YdlText role="bodyEmphasized" color="text.secondary">Already have an account? Sign In</YdlText>
+        </Pressable>
+        <Pressable onPress={() => onComplete()} accessibilityRole="button" accessibilityLabel={skipLabel} hitSlop={12} style={styles.skip} testID="value-onboarding-skip">
+          <YdlText role="bodyEmphasized" color="text.secondary">{skipLabel}</YdlText>
+        </Pressable>
+      </View>
       <View style={styles.content} accessibilityLiveRegion="polite">
-        <YdlText role="caption" color="text.secondary" style={styles.stepLabel}>
-          {index + 1} / {STEPS.length}
-        </YdlText>
-        <YdlText role="title" style={styles.title}>
-          {title}
-        </YdlText>
-        <YdlText role="body" color="text.secondary" style={styles.body}>
-          {body}
-        </YdlText>
+        <YdlText role="caption" color="action.primary" style={styles.stepLabel}>{step.key === "workspace" ? "YOUR TRADING WORKSPACE" : step.key === "futures" ? "BUILT FOR FUTURES" : step.key === "context" ? "MARKET CONTEXT" : "IMPROVE YOUR EDGE"}</YdlText>
+        <YdlText role="title" style={styles.title}>{title}</YdlText>
+        <YdlText role="body" color="text.secondary" style={styles.body}>{body}</YdlText>
+        <View style={styles.previewCard}>
+          <YdlText role="caption" color="text.secondary">{step.key === "workspace" ? "VOICE NOTES  ·  SCREENSHOTS  ·  SESSION NOTES" : step.key === "futures" ? "POSITION SIZE  ·  RISK  ·  TARGET  ·  BUFFER" : step.key === "context" ? "NEWS  ·  EVENTS  ·  MARKET CONTEXT" : "STATS  ·  HABITS  ·  PROP PASS"}</YdlText>
+          <View style={styles.previewLine} />
+          <View style={styles.previewLineShort} />
+        </View>
       </View>
-
-      <View style={styles.dots} accessible accessibilityLabel={`Step ${index + 1} of ${STEPS.length}`}>
-        {STEPS.map((s, i) => (
-          <View
-            key={s.key}
-            style={[
-              styles.dot,
-              {
-                backgroundColor:
-                  i === index ? theme.colors.action.primary : theme.colors.border.subtle,
-              },
-            ]}
-          />
-        ))}
+      <View style={styles.dots} accessible accessibilityLabel={`Slide ${index + 1} of ${STEPS.length}`}>
+        {STEPS.map((s, i) => <View key={s.key} style={[styles.dot, { backgroundColor: i === index ? theme.colors.action.primary : theme.colors.border.subtle }]} />)}
       </View>
-
       <View style={styles.footer}>
-        <YdlButton
-          label={
-            isLast
-              ? t("getStarted") !== "getStarted"
-                ? t("getStarted")
-                : "Get Started"
-              : t("continue") !== "continue"
-                ? t("continue")
-                : "Continue"
-          }
-          onPress={() => {
-            if (isLast) onComplete();
-            else setIndex((v) => Math.min(STEPS.length - 1, v + 1));
-          }}
-          fullWidth
-          testID={isLast ? "value-onboarding-get-started" : "value-onboarding-continue"}
-        />
+        <Pressable onPress={() => index > 0 ? setIndex((v) => v - 1) : undefined} disabled={index === 0} style={styles.back} testID="value-onboarding-back">
+          <YdlText role="bodyEmphasized" color="text.secondary">{index > 0 ? "Back" : ""}</YdlText>
+        </Pressable>
+        <YdlButton label={index === STEPS.length - 1 ? "Continue" : "Continue"} onPress={() => index === STEPS.length - 1 ? onPhaseChange("onboarding_personalization") : setIndex((v) => v + 1)} fullWidth testID="value-onboarding-continue" />
       </View>
     </View>
   );
@@ -141,13 +106,21 @@ export function ValueOnboarding({ onComplete }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 24 },
-  topRow: { minHeight: YDL_MIN_TOUCH_TARGET, alignItems: "flex-end", justifyContent: "center" },
-  skip: { minHeight: YDL_MIN_TOUCH_TARGET, justifyContent: "center", paddingHorizontal: 4 },
+  topRow: { minHeight: YDL_MIN_TOUCH_TARGET, alignItems: "center", justifyContent: "space-between", flexDirection: "row" },
+  topLink: { minHeight: YDL_MIN_TOUCH_TARGET, justifyContent: "center", alignSelf: "flex-end" },
+  skip: { minHeight: YDL_MIN_TOUCH_TARGET, justifyContent: "center", paddingHorizontal: 4, alignSelf: "flex-end" },
   content: { flex: 1, justifyContent: "center", gap: 16 },
-  stepLabel: { letterSpacing: 0.4 },
-  title: { maxWidth: 320 },
-  body: { maxWidth: 340, lineHeight: 22 },
-  dots: { flexDirection: "row", gap: 8, justifyContent: "center", marginBottom: 20 },
+  stepLabel: { letterSpacing: 1.2 },
+  title: { maxWidth: 340 },
+  body: { maxWidth: 350, lineHeight: 22 },
+  previewCard: { borderRadius: 22, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.05)", padding: 18, gap: 14, marginTop: 8 },
+  previewLine: { height: 10, width: "78%", borderRadius: 5, backgroundColor: "rgba(163,255,18,0.26)" },
+  previewLineShort: { height: 8, width: "48%", borderRadius: 4, backgroundColor: "rgba(255,255,255,0.10)" },
+  dots: { flexDirection: "row", gap: 8, justifyContent: "center", marginBottom: 14 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  footer: { paddingBottom: 8 },
+  footer: { paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 12 },
+  back: { minWidth: 50, minHeight: 44, justifyContent: "center" },
+  options: { gap: 10, marginTop: 12 },
+  option: { minHeight: 54, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)", backgroundColor: "rgba(255,255,255,0.04)", justifyContent: "center", paddingHorizontal: 18 },
+  optionSelected: { borderColor: "#A3FF12", backgroundColor: "rgba(163,255,18,0.10)" },
 });

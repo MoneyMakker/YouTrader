@@ -49,6 +49,10 @@ check("anonymous funnel reaches purchase paywall without login", resolveAcquisit
   hydrated: true, onboardingCompleted: true, paywallCompleted: false, authRequired: false,
   hasSession: false, isPremium: false, revenueCatReady: true, funnelPhase: "purchase_paywall",
 }) === "purchase_paywall");
+check("linking marker overrides stale anonymous funnel phase", resolveAcquisitionPhase({
+  hydrated: true, onboardingCompleted: true, paywallCompleted: false, authRequired: false,
+  hasSession: false, isPremium: false, revenueCatReady: true, funnelPhase: "purchase_paywall", linkingMarkerActive: true,
+}) === "post_purchase_auth");
 check("existing authenticated user bypasses assessment", resolveAcquisitionPhase({
   hydrated: true, onboardingCompleted: false, paywallCompleted: false, authRequired: false,
   hasSession: true, isPremium: true, revenueCatReady: true, funnelPhase: "assessment_intro",

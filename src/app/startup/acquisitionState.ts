@@ -10,6 +10,8 @@
 export type AcquisitionPhase =
   | "loading"
   | "onboarding"
+  | "onboarding_slides"
+  | "onboarding_personalization"
   | "assessment_intro"
   | "assessment_questions"
   | "assessment_analyzing"
@@ -93,14 +95,13 @@ export function resolveAcquisitionPhase(input: AcquisitionInput): AcquisitionPha
   if (!input.hydrated) return "loading";
   if (input.loggingOut) return "loading";
 
-  if (!input.hasSession && input.funnelPhase) return input.funnelPhase;
-
   // Active linking marker survives session creation — keeps coordinator mounted.
   if (input.linkingMarkerActive) return "post_purchase_auth";
 
   if (!input.hasSession) {
-    if (!input.onboardingCompleted) return "onboarding";
     if (input.anonymousEntitlementActive) return "post_purchase_auth";
+    if (input.funnelPhase) return input.funnelPhase;
+    if (!input.onboardingCompleted) return "onboarding";
     return "auth";
   }
 
