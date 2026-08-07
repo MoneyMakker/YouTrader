@@ -61,6 +61,7 @@ import {
   Linking,
   LogBox,
   Modal,
+  NativeModules,
   PanResponder,
   Platform,
   Pressable,
@@ -10758,6 +10759,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   useEffect(() => {
     if (!authHydrated || !tradesHydrated) return;
+    // Notification scheduling is non-critical; the Simulator lacks the native
+    // notification module and must not crash the startup surface.
+    if (__DEV__ && Platform.OS === "ios" && !NativeModules.RNCPushNotificationIOS && !NativeModules.ExpoNotifications) return;
     let cancelled = false;
     const task = InteractionManager.runAfterInteractions(() => {
       void (async () => {
