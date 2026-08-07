@@ -1,126 +1,75 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Animated, Easing, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { AudioLines, BarChart3, Bell, BriefcaseBusiness, CalendarDays, ChartNoAxesCombined, Check, ChevronLeft, FileImage, Flag, Mic, ShieldCheck, Target, WalletCards } from "lucide-react-native";
 import { YdlButton } from "../../ydl/components/YdlButton";
 import { YdlText } from "../../ydl/components/YdlText";
 import { useYdlTheme } from "../../ydl/tokens";
 import { YDL_MIN_TOUCH_TARGET } from "../../ydl/accessibility";
 import type { AcquisitionPhase } from "./acquisitionState";
 
-type Props = {
-  phase: AcquisitionPhase;
-  onPhaseChange: (phase: AcquisitionPhase) => void;
-  onComplete: (profile?: string) => void;
-  onExistingAuth: () => void;
-};
+const SLIDE_KEY = "yt-value-onboarding-slide";
+const PROFILE_KEY = "yt-trader-profile-v1";
+const GREEN = "#A3FF12";
 
-const STEPS = [
-  { key: "workspace", titleKey: "onboarding.value.workspaceTitle", bodyKey: "onboarding.value.workspaceBody", fallbackTitle: "More Than a Trading Journal", fallbackBody: "Your all-in-one futures workspace for trades, ideas, notes, and review." },
-  { key: "futures", titleKey: "onboarding.value.futuresTitle", bodyKey: "onboarding.value.futuresBody", fallbackTitle: "Built for Prop Futures Traders", fallbackBody: "Plan position size, risk, targets, and challenge limits before you trade." },
-  { key: "context", titleKey: "onboarding.value.contextTitle", bodyKey: "onboarding.value.contextBody", fallbackTitle: "Stay Ready for Market Moves", fallbackBody: "Keep market news and economic events in view before they change the day." },
-  { key: "edge", titleKey: "onboarding.value.edgeTitle", bodyKey: "onboarding.value.edgeBody", fallbackTitle: "See Your Edge. Improve What Matters.", fallbackBody: "Stats and Prop Pass turn your trading habits into a more repeatable process." },
-] as const;
+type Props = { phase: AcquisitionPhase; onPhaseChange: (phase: AcquisitionPhase) => void; onComplete: (profile?: string) => void; onExistingAuth: () => void };
 
 const PROFILE_OPTIONS = [
-  ["new", "onboarding.profile.new"],
-  ["challenge", "onboarding.profile.challenge"],
-  ["funded", "onboarding.profile.funded"],
+  ["new", "onboarding.profile.new", "onboarding.profile.newBody", "sparkles"],
+  ["challenge", "onboarding.profile.challenge", "onboarding.profile.challengeBody", "target"],
+  ["funded", "onboarding.profile.funded", "onboarding.profile.fundedBody", "shield"],
 ] as const;
 
-export function ValueOnboarding({ phase, onPhaseChange, onComplete, onExistingAuth }: Props) {
-  const { t, i18n } = useTranslation();
-  const theme = useYdlTheme("dark");
-  const insets = useSafeAreaInsets();
-  const [index, setIndex] = useState(0);
-  const [profile, setProfile] = useState<string | null>(null);
-  const step = STEPS[index];
-  const isPersonalization = phase === "onboarding_personalization";
-  const title = useMemo(() => {
-    const translated = t(step.titleKey);
-    return translated === step.titleKey ? step.fallbackTitle : translated;
-  }, [i18n.language, step, t]);
-  const body = useMemo(() => {
-    const translated = t(step.bodyKey);
-    return translated === step.bodyKey ? step.fallbackBody : translated;
-  }, [i18n.language, step, t]);
-  const skipLabel = t("skip") !== "skip" ? t("skip") : "Skip";
+const STEPS = [
+  { key: "workspace", title: "onboarding.value.workspaceTitle", body: "onboarding.value.workspaceBody", eyebrow: "onboarding.value.workspaceEyebrow" },
+  { key: "futures", title: "onboarding.value.futuresTitle", body: "onboarding.value.futuresBody", eyebrow: "onboarding.value.futuresEyebrow" },
+  { key: "context", title: "onboarding.value.contextTitle", body: "onboarding.value.contextBody", eyebrow: "onboarding.value.contextEyebrow" },
+  { key: "edge", title: "onboarding.value.edgeTitle", body: "onboarding.value.edgeBody", eyebrow: "onboarding.value.edgeEyebrow" },
+] as const;
+const PROFILES = [
+  ["new", "onboarding.profile.new", "onboarding.profile.newBody", "sparkles"],
+  ["challenge", "onboarding.profile.challenge", "onboarding.profile.challengeBody", "target"],
+  ["funded", "onboarding.profile.funded", "onboarding.profile.fundedBody", "shield"],
+] as const;
 
-  if (isPersonalization) {
-    return (
-      <View style={[styles.root, { backgroundColor: theme.colors.background.primary, paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }]} testID="value-onboarding-personalization">
-        <Pressable onPress={() => onComplete()} style={styles.topLink} accessibilityRole="button" testID="onboarding-personalization-skip">
-          <YdlText role="bodyEmphasized" color="text.secondary">{skipLabel}</YdlText>
-        </Pressable>
-        <View style={styles.content}>
-          <YdlText role="caption" color="text.secondary" style={styles.stepLabel}>{t("onboarding.personalization.eyebrow")}</YdlText>
-          <YdlText role="title" style={styles.title}>{t("onboarding.personalization.title")}</YdlText>
-          <YdlText role="body" color="text.secondary" style={styles.body}>{t("onboarding.personalization.body")}</YdlText>
-          <View style={styles.options}>
-            {PROFILE_OPTIONS.map(([key, translationKey]) => (
-              <Pressable key={key} onPress={() => { setProfile(key); onComplete(key); }} style={[styles.option, profile === key && styles.optionSelected]} testID={`onboarding-profile-${key}`}>
-                <YdlText role="bodyEmphasized" color={profile === key ? "action.primary" : "text.primary"}>{t(translationKey)}</YdlText>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-        <Pressable onPress={onExistingAuth} accessibilityRole="button" testID="value-onboarding-existing-auth">
-          <YdlText role="bodyEmphasized" color="text.secondary">{t("onboarding.alreadyAccount")}</YdlText>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background.primary, paddingTop: Math.max(insets.top, 16), paddingBottom: Math.max(insets.bottom, 16) }]} testID="value-onboarding" accessibilityLabel="YouTrader value onboarding">
-      <View style={styles.topRow}>
-        <Pressable onPress={onExistingAuth} accessibilityRole="button" testID="value-onboarding-existing-auth">
-          <YdlText role="bodyEmphasized" color="text.secondary">{t("onboarding.alreadyAccount")}</YdlText>
-        </Pressable>
-        <Pressable onPress={() => onComplete()} accessibilityRole="button" accessibilityLabel={skipLabel} hitSlop={12} style={styles.skip} testID="value-onboarding-skip">
-          <YdlText role="bodyEmphasized" color="text.secondary">{skipLabel}</YdlText>
-        </Pressable>
-      </View>
-      <View style={styles.content} accessibilityLiveRegion="polite">
-        <YdlText role="caption" color="action.primary" style={styles.stepLabel}>{t(`onboarding.value.${step.key}Eyebrow`)}</YdlText>
-        <YdlText role="title" style={styles.title}>{title}</YdlText>
-        <YdlText role="body" color="text.secondary" style={styles.body}>{body}</YdlText>
-        <View style={styles.previewCard}>
-          <YdlText role="caption" color="text.secondary">{t(`onboarding.value.${step.key}Preview`)}</YdlText>
-          <View style={styles.previewLine} />
-          <View style={styles.previewLineShort} />
-        </View>
-      </View>
-      <View style={styles.dots} accessible accessibilityLabel={`Slide ${index + 1} of ${STEPS.length}`}>
-        {STEPS.map((s, i) => <View key={s.key} style={[styles.dot, { backgroundColor: i === index ? theme.colors.action.primary : theme.colors.border.subtle }]} />)}
-      </View>
-      <View style={styles.footer}>
-        <Pressable onPress={() => index > 0 ? setIndex((v) => v - 1) : undefined} disabled={index === 0} style={styles.back} testID="value-onboarding-back">
-          <YdlText role="bodyEmphasized" color="text.secondary">{index > 0 ? t("onboarding.back") : ""}</YdlText>
-        </Pressable>
-        <YdlButton label={t("onboarding.continue")} onPress={() => index === STEPS.length - 1 ? onPhaseChange("onboarding_personalization") : setIndex((v) => v + 1)} fullWidth testID="value-onboarding-continue" />
-      </View>
-    </View>
-  );
+function Pulse({ reduceMotion }: { reduceMotion: boolean }) {
+  const value = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(value, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(value, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion]);
+  return <Animated.View pointerEvents="none" style={[styles.pulse, { opacity: value.interpolate({ inputRange: [0,1], outputRange: [0.05,0.14] }), transform: [{ scale: value.interpolate({ inputRange: [0,1], outputRange: [1,1.08] }) }] }]} />;
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: 24 },
-  topRow: { minHeight: YDL_MIN_TOUCH_TARGET, alignItems: "center", justifyContent: "space-between", flexDirection: "row" },
-  topLink: { minHeight: YDL_MIN_TOUCH_TARGET, justifyContent: "center", alignSelf: "flex-end" },
-  skip: { minHeight: YDL_MIN_TOUCH_TARGET, justifyContent: "center", paddingHorizontal: 4, alignSelf: "flex-end" },
-  content: { flex: 1, justifyContent: "center", gap: 16 },
-  stepLabel: { letterSpacing: 1.2 },
-  title: { maxWidth: 340 },
-  body: { maxWidth: 350, lineHeight: 22 },
-  previewCard: { borderRadius: 22, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(255,255,255,0.05)", padding: 18, gap: 14, marginTop: 8 },
-  previewLine: { height: 10, width: "78%", borderRadius: 5, backgroundColor: "rgba(163,255,18,0.26)" },
-  previewLineShort: { height: 8, width: "48%", borderRadius: 4, backgroundColor: "rgba(255,255,255,0.10)" },
-  dots: { flexDirection: "row", gap: 8, justifyContent: "center", marginBottom: 14 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  footer: { paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 12 },
-  back: { minWidth: 50, minHeight: 44, justifyContent: "center" },
-  options: { gap: 10, marginTop: 12 },
-  option: { minHeight: 54, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)", backgroundColor: "rgba(255,255,255,0.04)", justifyContent: "center", paddingHorizontal: 18 },
-  optionSelected: { borderColor: "#A3FF12", backgroundColor: "rgba(163,255,18,0.10)" },
-});
+function FeatureScene({ kind, reduceMotion }: { kind: string; reduceMotion: boolean }) {
+  const progress = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) { progress.setValue(1); return; }
+    Animated.timing(progress, { toValue: 1, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [kind, reduceMotion]);
+  const rise = progress.interpolate({ inputRange: [0,1], outputRange: [16,0] });
+  if (kind === "workspace") return <Animated.View style={[styles.sceneCard, { opacity: progress, transform: [{ translateY: rise }] }]}><View style={styles.sceneHeader}><YdlText role="caption" color="text.secondary">MES · NY SESSION</YdlText><View style={styles.attachChip}><FileImage size={12} color={GREEN}/><YdlText role="caption" style={styles.greenText}>2</YdlText></View></View><View style={styles.voiceRow}><View style={styles.micCircle}><Mic size={17} color={GREEN}/></View><View style={styles.wave}>{[8,18,12,24,15,28,11,20,14,22,9].map((h,i)=><Animated.View key={i} style={[styles.waveBar,{height:h,opacity:progress}]} />)}</View><YdlText role="caption" color="text.secondary">0:18</YdlText></View><View style={styles.noteRow}><YdlText role="bodyEmphasized">London open</YdlText><YdlText role="caption" color="text.secondary">Rejection at prior high. Waited for confirmation.</YdlText></View><View style={styles.thumbRow}><View style={styles.chartThumb}><ChartNoAxesCombined size={22} color={GREEN}/></View><View style={styles.chartThumb}><FileImage size={21} color="rgba(255,255,255,0.55)"/></View><YdlText role="caption" color="text.secondary">Trade notes saved</YdlText></View></Animated.View>;
+  if (kind === "futures") return <Animated.View style={[styles.sceneCard, { opacity: progress, transform: [{ translateY: rise }] }]}><View style={styles.sceneHeader}><YdlText role="bodyEmphasized">$50K Challenge</YdlText><YdlText role="caption" color="text.secondary">Phase 1</YdlText></View><View style={styles.targetTrack}><Animated.View style={[styles.targetFill,{width:progress.interpolate({inputRange:[0,1],outputRange:["0%","54%"]})}]} /></View><View style={styles.metricGrid}>{[["Target","$3,000"],["Daily Buffer","$1,000"],["Risk / Trade","$150"],["Contracts","3 MES"]].map(([a,b])=><View key={a} style={styles.metric}><YdlText role="caption" color="text.secondary">{a}</YdlText><YdlText role="bodyEmphasized">{b}</YdlText></View>)}</View><View style={styles.calcRow}><WalletCards size={17} color={GREEN}/><YdlText role="caption" color="text.secondary">Position size calculator</YdlText><YdlText role="bodyEmphasized" style={styles.greenText}>3 MES</YdlText></View></Animated.View>;
+  if (kind === "context") return <Animated.View style={[styles.sceneCard, { opacity: progress, transform: [{ translateY: rise }] }]}><View style={styles.sceneHeader}><YdlText role="bodyEmphasized">Market context</YdlText><View style={styles.alertChip}><Bell size={12} color="#FFD166"/><YdlText role="caption" style={styles.yellowText}>Alert</YdlText></View></View><View style={styles.eventRow}><View style={[styles.eventDot,{backgroundColor:"#FF5C5C"}]}/><View style={styles.eventText}><YdlText role="caption" color="text.secondary">8:30 AM · HIGH IMPACT</YdlText><YdlText role="bodyEmphasized">CPI</YdlText></View><CalendarDays size={18} color="rgba(255,255,255,0.5)"/></View><View style={styles.eventRow}><View style={[styles.eventDot,{backgroundColor:"#FFD166"}]}/><View style={styles.eventText}><YdlText role="caption" color="text.secondary">10:00 AM · MEDIUM</YdlText><YdlText role="bodyEmphasized">Consumer Sentiment</YdlText></View></View><View style={styles.newsRow}><TrendingLine/><YdlText role="caption" color="text.secondary">US futures move ahead of inflation data</YdlText></View></Animated.View>;
+  return <Animated.View style={[styles.sceneCard, { opacity: progress, transform: [{ translateY: rise }] }]}><View style={styles.statTop}><View><YdlText role="caption" color="text.secondary">Win Rate</YdlText><YdlText role="title">61%</YdlText></View><View><YdlText role="caption" color="text.secondary">Avg. R</YdlText><YdlText role="title">1.8</YdlText></View><View style={styles.onTrack}><ShieldCheck size={15} color={GREEN}/><YdlText role="caption" style={styles.greenText}>On Track</YdlText></View></View><EquityLine/><View style={styles.weakness}><YdlText role="caption" color="text.secondary">MAIN PATTERN</YdlText><YdlText role="bodyEmphasized">Overtrading after a loss</YdlText><View style={styles.discipline}><YdlText role="caption" color="text.secondary">Discipline 78</YdlText><View style={styles.smallTrack}><View style={[styles.smallFill,{width:"78%"}]}/></View></View></View></Animated.View>;
+}
+function TrendingLine(){return <View style={styles.trending}><View style={styles.tinyLine}/><View style={[styles.tinyLine,{width:25,transform:[{rotate:"-8deg"}]}]}/></View>}
+function EquityLine(){return <View style={styles.equity}><View style={styles.eqSegment}/><View style={[styles.eqSegment,{width:45,transform:[{rotate:"18deg"}]}]}/><View style={[styles.eqSegment,{width:55,transform:[{rotate:"-8deg"}]}]}/><View style={[styles.eqSegment,{width:34,transform:[{rotate:"18deg"}]}]}/></View>}
+
+export function ValueOnboarding({ phase, onPhaseChange, onComplete, onExistingAuth }: Props) {
+  const { t } = useTranslation(); const theme = useYdlTheme("dark"); const insets = useSafeAreaInsets();
+  const [index,setIndex]=useState(0); const [profile,setProfile]=useState<string|null>(null); const [reduceMotion,setReduceMotion]=useState(false);
+  const step=STEPS[index]; const personalization=phase === "onboarding_personalization";
+  useEffect(()=>{ import("react-native").then(({AccessibilityInfo})=>{AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion); const s=AccessibilityInfo.addEventListener("reduceMotionChanged",setReduceMotion); return ()=>s.remove();});},[]);
+  if(personalization) return <View style={[styles.root,{backgroundColor:theme.colors.background.primary,paddingTop:Math.max(insets.top,16),paddingBottom:Math.max(insets.bottom,16)}]} testID="value-onboarding-personalization"><Pressable onPress={()=>onComplete()} style={styles.topLink}><YdlText role="bodyEmphasized" color="text.secondary">{t("skip")}</YdlText></Pressable><View style={styles.content}><YdlText role="caption" color="action.primary" style={styles.eyebrow}>{t("onboarding.personalization.eyebrow")}</YdlText><YdlText role="title" style={styles.title}>{t("onboarding.personalization.title")}</YdlText><YdlText role="body" color="text.secondary" style={styles.body}>{t("onboarding.personalization.body")}</YdlText><View style={styles.options}>{PROFILE_OPTIONS.map(([key,title,body,icon])=><Pressable key={key} onPress={()=>setProfile(key)} style={[styles.option,profile===key&&styles.optionSelected]}><View style={styles.optionIcon}>{icon === "target" ? <Target size={20} color={GREEN}/> : icon === "shield" ? <ShieldCheck size={20} color={GREEN}/> : <BarChart3 size={20} color={GREEN}/>}</View><View style={{flex:1}}><YdlText role="bodyEmphasized">{t(title)}</YdlText><YdlText role="caption" color="text.secondary">{t(body)}</YdlText></View>{profile===key?<Check size={20} color={GREEN}/>:null}</Pressable>)}</View></View><View style={styles.footer}><Pressable onPress={onExistingAuth}><YdlText role="bodyEmphasized" color="text.secondary">{t("onboarding.alreadyAccount")}</YdlText></Pressable><YdlButton label={t("onboarding.continue")} onPress={()=>onComplete(profile||undefined)} disabled={!profile} fullWidth/></View></View>;
+  return <View style={[styles.root,{backgroundColor:theme.colors.background.primary,paddingTop:Math.max(insets.top,16),paddingBottom:Math.max(insets.bottom,16)}]} testID="value-onboarding"><View style={styles.topRow}><Pressable onPress={onExistingAuth}><YdlText role="bodyEmphasized" color="text.secondary">{t("onboarding.alreadyAccount")}</YdlText></Pressable><Pressable onPress={()=>onComplete()} style={styles.skip}><YdlText role="bodyEmphasized" color="text.secondary">{t("skip")}</YdlText></Pressable></View><View style={styles.content}><YdlText role="caption" color="action.primary" style={styles.eyebrow}>{t(`onboarding.value.${step.key}Eyebrow`)}</YdlText><YdlText role="title" style={styles.title}>{t(step.title)}</YdlText><YdlText role="body" color="text.secondary" style={styles.body}>{t(step.body)}</YdlText><FeatureScene kind={step.key} reduceMotion={reduceMotion}/></View><View style={styles.dots}>{STEPS.map((s,i)=><View key={s.key} style={[styles.dot,{backgroundColor:i===index?theme.colors.action.primary:theme.colors.border.subtle}]}/>)}</View><View style={styles.footer}>{index>0?<Pressable onPress={()=>setIndex(v=>v-1)} style={styles.back}><ChevronLeft size={22} color={theme.colors.text.secondary}/></Pressable>:<View style={styles.back}/>}<YdlButton label={index===STEPS.length-1?t("onboarding.seePlans"):t("onboarding.continue")} onPress={()=>index===STEPS.length-1?onPhaseChange("onboarding_personalization"):setIndex(v=>v+1)} fullWidth/></View></View>;
+}
+
+const styles=StyleSheet.create({pulse:{position:"absolute",width:260,height:260,borderRadius:130,backgroundColor:"rgba(163,255,18,0.05)"},alertChip:{flexDirection:"row",alignItems:"center",gap:4,paddingHorizontal:8,paddingVertical:4,borderRadius:10,backgroundColor:"rgba(255,209,102,0.08)"},root:{flex:1,paddingHorizontal:20},topRow:{minHeight:YDL_MIN_TOUCH_TARGET,alignItems:"center",justifyContent:"space-between",flexDirection:"row"},topLink:{minHeight:YDL_MIN_TOUCH_TARGET,justifyContent:"center",alignSelf:"flex-end"},skip:{minHeight:YDL_MIN_TOUCH_TARGET,justifyContent:"center",paddingHorizontal:4,alignSelf:"flex-end"},content:{flex:1,justifyContent:"center",gap:14,transform:[{translateY:-12}]},eyebrow:{letterSpacing:1.3},title:{maxWidth:360},body:{maxWidth:370,lineHeight:22},sceneCard:{borderRadius:22,borderWidth:1,borderColor:"rgba(255,255,255,0.12)",backgroundColor:"rgba(255,255,255,0.045)",padding:18,gap:14,overflow:"hidden"},sceneHeader:{flexDirection:"row",alignItems:"center",justifyContent:"space-between"},attachChip:{flexDirection:"row",alignItems:"center",gap:4},greenText:{color:GREEN},yellowText:{color:"#FFD166"},voiceRow:{flexDirection:"row",alignItems:"center",gap:10},micCircle:{width:32,height:32,borderRadius:16,backgroundColor:"rgba(163,255,18,0.1)",alignItems:"center",justifyContent:"center"},wave:{flex:1,height:30,flexDirection:"row",alignItems:"center",gap:3},waveBar:{width:3,borderRadius:2,backgroundColor:GREEN},noteRow:{gap:3},thumbRow:{flexDirection:"row",alignItems:"center",gap:8},chartThumb:{width:42,height:34,borderRadius:8,borderWidth:1,borderColor:"rgba(255,255,255,0.14)",backgroundColor:"rgba(0,0,0,0.3)",alignItems:"center",justifyContent:"center"},targetTrack:{height:8,borderRadius:4,backgroundColor:"rgba(255,255,255,0.1)",overflow:"hidden"},targetFill:{height:8,borderRadius:4,backgroundColor:GREEN},metricGrid:{flexDirection:"row",flexWrap:"wrap",gap:8},metric:{width:"47%",gap:3},calcRow:{flexDirection:"row",alignItems:"center",gap:8,paddingTop:8,borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.08)"},eventRow:{flexDirection:"row",alignItems:"center",gap:10,paddingVertical:5},eventDot:{width:8,height:8,borderRadius:4},eventText:{flex:1,gap:2},newsRow:{flexDirection:"row",alignItems:"center",gap:8,paddingTop:8,borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.08)"},trending:{flexDirection:"row",alignItems:"center",gap:3,width:40},tinyLine:{width:14,height:2,backgroundColor:GREEN,transform:[{rotate:"14deg"}]},statTop:{flexDirection:"row",alignItems:"center",justifyContent:"space-between"},onTrack:{flexDirection:"row",alignItems:"center",gap:4},equity:{height:34,flexDirection:"row",alignItems:"center",gap:3},eqSegment:{height:2,width:40,backgroundColor:GREEN,transform:[{rotate:"-12deg"}]},weakness:{gap:4,paddingTop:8,borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.08)"},discipline:{marginTop:3,gap:3},smallTrack:{height:5,borderRadius:3,backgroundColor:"rgba(255,255,255,0.1)"},smallFill:{height:5,width:"78%",borderRadius:3,backgroundColor:GREEN},dots:{flexDirection:"row",gap:6,justifyContent:"center",marginBottom:10},dot:{width:22,height:4,borderRadius:2},footer:{paddingBottom:8,gap:8,flexDirection:"row",alignItems:"center"},back:{width:42,minHeight:44,justifyContent:"center",alignItems:"center"},options:{gap:10,marginTop:10},option:{minHeight:68,borderRadius:17,borderWidth:1,borderColor:"rgba(255,255,255,0.14)",backgroundColor:"rgba(255,255,255,0.04)",paddingHorizontal:14,paddingVertical:10,flexDirection:"row",alignItems:"center",gap:12},optionSelected:{borderColor:GREEN,backgroundColor:"rgba(163,255,18,0.1)",transform:[{scale:1.01}]},optionIcon:{width:38,height:38,borderRadius:12,backgroundColor:"rgba(163,255,18,0.08)",alignItems:"center",justifyContent:"center"}});

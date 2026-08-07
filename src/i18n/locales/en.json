@@ -797,9 +797,9 @@
   "paywallBenefitLeaksTitle": "Find Hidden Leaks",
   "paywallBenefitMarketBody": "Stay ahead with Market Pulse, economic calendar, and smart event alerts—not noise.",
   "paywallBenefitMarketTitle": "Market Pulse",
-   "paywall.heading": "Trade With a System\nYou Can Trust",
-   "paywall.subtitle": "Journal every futures trade, protect your prop limits, and understand what actually improves your performance.",
-   "paywallBenefitPatternsBody": "See your best setups, symbols, sessions, and trading hours—the patterns that actually pay you.",
+  "paywall.heading": "Trade With a System\nYou Can Trust",
+  "paywall.subtitle": "Journal every futures trade, protect your prop limits, and understand what actually improves your performance.",
+  "paywallBenefitPatternsBody": "See your best setups, symbols, sessions, and trading hours—the patterns that actually pay you.",
   "paywallBenefitPatternsTitle": "Trading Patterns",
   "paywallBenefitProgressBody": "Track achievements, Trader Score, missions, and your profile as you level up with discipline.",
   "paywallBenefitProgressTitle": "Trader Progression",
@@ -2239,5 +2239,9 @@
   "onboarding.value.edgeEyebrow": "IMPROVE YOUR EDGE",
   "onboarding.value.edgeTitle": "See Your Edge. Improve What Matters.",
   "onboarding.value.edgeBody": "Stats and Prop Pass turn your trading habits into a more repeatable process.",
-  "onboarding.value.edgePreview": "STATS  ·  HABITS  ·  PROP PASS"
+  "onboarding.value.edgePreview": "STATS  ·  HABITS  ·  PROP PASS",
+  "onboarding.seePlans": "See Plans",
+  "onboarding.profile.newBody": "Build better habits from your first futures session.",
+  "onboarding.profile.challengeBody": "Protect your challenge with clearer limits, risk, and discipline.",
+  "onboarding.profile.fundedBody": "Stay aligned with your rules and understand your performance."
 }

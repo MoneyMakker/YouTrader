@@ -2241,5 +2241,9 @@
   "onboarding.value.edgeBody": "Статистика и Prop Pass превращают торговые привычки в повторяемый процесс.",
   "onboarding.value.edgePreview": "СТАТИСТИКА  ·  ПРИВЫЧКИ  ·  PROP PASS",
   "paywall.heading": "Trade With a System You Can Trust",
-  "paywall.subtitle": "Journal every futures trade, protect your prop limits, and understand what actually improves your performance."
+  "paywall.subtitle": "Journal every futures trade, protect your prop limits, and understand what actually improves your performance.",
+  "onboarding.seePlans": "See Plans",
+  "onboarding.profile.newBody": "Build better habits from your first futures session.",
+  "onboarding.profile.challengeBody": "Protect your challenge with clearer limits, risk, and discipline.",
+  "onboarding.profile.fundedBody": "Stay aligned with your rules and understand your performance."
 }
