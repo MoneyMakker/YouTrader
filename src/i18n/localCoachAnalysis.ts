@@ -6,6 +6,8 @@ type DetectiveAgentFinding = {
   action: string;
 };
 
+type PerformanceGroupRow = { label: string; pnl: number; count: number; wins: number; wr: number };
+
 type LocalCoachStats = {
   count: number;
   wr: number;
@@ -14,9 +16,9 @@ type LocalCoachStats = {
   pnl: number;
   maxDd: number;
   avgLossStreak: number;
-  session: { label: string }[];
-  weekday: { label: string }[];
-  bySetup: { label: string }[];
+  session: PerformanceGroupRow[];
+  weekday: PerformanceGroupRow[];
+  bySetup: PerformanceGroupRow[];
 };
 
 type LocalCoachResult = {
@@ -40,7 +42,7 @@ export function buildLocalizedLocalCoachAnalysis(
   stats: LocalCoachStats,
   patterns: string[],
   moneyCompact: (value: number) => string,
-  lowToHighPerformance: (groups: { label: string }[]) => { label: string }[],
+  lowToHighPerformance: (groups: PerformanceGroupRow[]) => PerformanceGroupRow[],
 ): LocalCoachResult {
   const weakestSession = lowToHighPerformance(stats.session)[0]?.label || t("localCoachWeakestSession");
   const bestSession = stats.session[0]?.label || t("localCoachBestSession");

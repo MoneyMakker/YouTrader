@@ -76,7 +76,7 @@ export function PremiumLockOverlay({
 
 const styles = StyleSheet.create({
   wrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
     padding: 18,

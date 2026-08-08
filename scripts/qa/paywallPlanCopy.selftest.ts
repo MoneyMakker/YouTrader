@@ -118,12 +118,12 @@ const unknownMonthly = buildPaywallPlanPresentation({
 assert.equal(unknownMonthly.trialBadge, null);
 assert.equal(unknownMonthly.cta, "Start Monthly · $12.99");
 
-// Source guards in AcquisitionPaywall
+// Source guards
 const root = path.resolve(__dirname, "../..");
 const paywallSrc = fs.readFileSync(path.join(root, "src/app/startup/AcquisitionPaywall.tsx"), "utf8");
-assert.ok(paywallSrc.includes("Build a Trading System You Can Actually Trust"));
-assert.ok(paywallSrc.includes("Futures Journal"));
+const carouselSrc = fs.readFileSync(path.join(root, "src/app/startup/PaywallCarousel.tsx"), "utf8");
 assert.ok(paywallSrc.includes("buildPaywallPlanPresentation"));
+assert.ok(carouselSrc.includes("Trade With a System"));
 assert.ok(!paywallSrc.includes("Start My 7-Day Free Trial"));
 assert.ok(!/Weekly[\s\S]{0,200}7 days free/i.test(paywallSrc) || true);
 

@@ -38,15 +38,18 @@ export function simulateWhatIf(input: WhatIfInput): TradingOsResult<WhatIfValues
   const blank: WhatIfValues = { projectedEquityMinor: null, projectedBalanceMinor: null, projectedDailyRoomMinor: null, projectedDrawdownRoomMinor: null, projectedMaximumLossRoomMinor: null, projectedWeeklyRoomMinor: null, remainingTargetMinor: input.remainingTargetMinor, health: null, anotherTradePermitted: null };
   if (!input.account) return response("needs_input", blank, [], ["account_context"]);
   const rooms = input.riskRooms;
-  if ([rooms.dailyLossRemainingMinor, rooms.drawdownRemainingMinor, rooms.maximumLossRemainingMinor].some((value) => !isMinor(value))) {
+  const dailyLossRoom = rooms.dailyLossRemainingMinor;
+  const drawdownRoom = rooms.drawdownRemainingMinor;
+  const maximumLossRoom = rooms.maximumLossRemainingMinor;
+  if (!isMinor(dailyLossRoom) || !isMinor(drawdownRoom) || !isMinor(maximumLossRoom)) {
     return response("needs_input", blank, ["hard_risk_limit_missing"], ["risk_rooms"]);
   }
   const delta = scenarioDelta(input.scenario);
   if (delta == null) return response("needs_input", blank, ["invalid_scenario_amount"], []);
   const dailyDelta = input.scenario.kind === "next_trading_day" ? 0 : Math.min(delta, 0);
-  const daily = input.scenario.kind === "next_trading_day" ? rooms.dailyLossRemainingMinor : moneyAdd(rooms.dailyLossRemainingMinor, dailyDelta);
-  const drawdown = moneyAdd(rooms.drawdownRemainingMinor, delta);
-  const maximum = moneyAdd(rooms.maximumLossRemainingMinor, delta);
+  const daily = input.scenario.kind === "next_trading_day" ? dailyLossRoom : moneyAdd(dailyLossRoom, dailyDelta);
+  const drawdown = moneyAdd(drawdownRoom, delta);
+  const maximum = moneyAdd(maximumLossRoom, delta);
   const weekly = rooms.weeklyLossRemainingMinor == null ? null : moneyAdd(rooms.weeklyLossRemainingMinor, Math.min(delta, 0));
   const projectedEquityMinor = moneyAdd(input.account.currentEquityMinor, delta);
   const projectedBalanceMinor = moneyAdd(input.account.currentBalanceMinor, delta);

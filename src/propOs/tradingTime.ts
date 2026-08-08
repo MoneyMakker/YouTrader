@@ -127,7 +127,7 @@ function findActiveSession(now: ZonedParts, sessions: TradingSessionRule[]): Tra
 }
 
 function localBoundaryToUtc(date: string, minute: number, timezone: string, policy: "earlier" | "later"): string {
-  const [year, month, day] = date.split("-").map(Number);
+  const { year, month, day } = dateParts(date);
   const target = { year, month, day, hour: Math.floor(minute / 60), minute: minute % 60 };
   const guess = Date.UTC(year, month - 1, day, target.hour, target.minute);
   const matches: number[] = [];
@@ -140,12 +140,18 @@ function localBoundaryToUtc(date: string, minute: number, timezone: string, poli
   return new Date(policy === "earlier" ? Math.min(...matches) : Math.max(...matches)).toISOString();
 }
 
+function dateParts(date: string): { year: number; month: number; day: number } {
+  const [year, month, day] = date.split("-").map(Number);
+  if (year == null || month == null || day == null || !Number.isSafeInteger(month)) throw new TradingTimeError("invalid_timestamp");
+  return { year, month, day };
+}
+
 function sameMinute(left: ZonedParts, right: ZonedParts): boolean {
   return left.year === right.year && left.month === right.month && left.day === right.day && left.hour === right.hour && left.minute === right.minute;
 }
 
 function weekday(date: string): number {
-  const [year, month, day] = date.split("-").map(Number);
+  const { year, month, day } = dateParts(date);
   return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
 }
 

@@ -140,7 +140,7 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
   const drawdownAfter = subtractRoom(input.riskRooms.drawdownRemainingMinor, totalPlannedRiskMinor);
   const weeklyAfter = context === "live" ? subtractRoom(input.riskRooms.weeklyLossRemainingMinor ?? null, totalPlannedRiskMinor) : null;
   const recommendedContracts =
-    lossPerContractMinor > 0 && allowed.values.allowedRiskMinor != null
+    lossPerContractMinor != null && lossPerContractMinor > 0 && allowed.values.allowedRiskMinor != null
       ? Math.max(0, contractFloor(allowed.values.allowedRiskMinor, lossPerContractMinor))
       : null;
   const values: PreTradeValues = {
@@ -162,7 +162,7 @@ export function assessPreTrade(input: PreTradeAssessmentInput): TradingOsResult<
     return result("stop_trading", values, ["profit_lock_reached"], [], hardLimits, relatedRuleIds);
   }
   const maximumContracts = challengeRules?.maximumContracts ?? input.plan.instrument?.maximumSupportedContracts ?? null;
-  if (maximumContracts != null && contracts > maximumContracts) {
+  if (contracts != null && maximumContracts != null && contracts > maximumContracts) {
     hardLimits.push(limit("contract_limit", "Maximum contracts", null, true));
     return result("rule_violation", values, ["contract_limit_exceeded"], [], hardLimits, relatedRuleIds);
   }

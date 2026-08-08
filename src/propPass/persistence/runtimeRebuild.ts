@@ -183,7 +183,7 @@ export function rebuildPropPassRuntime(
           generatedAt: bundle.asOfUtc,
           preferredInstrument: null,
           intendedSessionId: null,
-          recentLossStreak: killSwitch.consecutiveLosses,
+          recentLossStreak: killSwitch.consecutiveLosses ?? 0,
         },
     proposedTradePlan: null,
     proposedInterventionTrade: null,
@@ -253,7 +253,7 @@ export function rebuildPropPassRuntime(
       : legacyRules.drawdown.amountMinor,
     dailyRiskBudgetMinor: context === "live"
       ? bundle.liveRiskSettings?.rules.dailyRiskBudgetMinor ?? null
-      : riskRooms.configuredDailyRiskBudgetMinor,
+      : riskRooms.configuredDailyRiskBudgetMinor ?? null,
     dailyRiskUsedMinor,
     weeklyLossLimitMinor: weeklyLimit,
     weeklyLossUsedMinor: weeklyUsed,

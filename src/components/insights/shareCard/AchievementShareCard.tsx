@@ -37,6 +37,7 @@ export function AchievementShareCard({
   const journal = journalStats ?? stats;
   const copy = buildAchievementRewardOverlay(reward, journal);
   const layout = useMemo(() => buildAchievementShareTextLayout(copy), [copy]);
+  const descriptionLayout = layout.description;
   const textTheme = ACHIEVEMENT_SHARE_EXPORT_THEME;
 
   return (
@@ -74,17 +75,17 @@ export function AchievementShareCard({
               </Text>
             ))}
           </View>
-          {copy.description && layout.description ? (
+          {copy.description && descriptionLayout ? (
             <View style={styles.descriptionBlock}>
-              {layout.description.lines.map((line, index) => (
+              {descriptionLayout.lines.map((line, index) => (
                 <Text
                   key={`desc-line-${index}`}
                   style={[
                     styles.description,
                     {
                       color: textTheme.description,
-                      fontSize: layout.description.fontSize,
-                      lineHeight: layout.description.lineHeight,
+                      fontSize: descriptionLayout.fontSize,
+                      lineHeight: descriptionLayout.lineHeight,
                       marginTop: index === 0 ? achievementScaledFont(8) : 0,
                     },
                   ]}

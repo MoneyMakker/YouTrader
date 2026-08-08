@@ -245,7 +245,7 @@ export function AuthScreen({
           testID="auth.loading"
           accessibilityLabel="auth.loading"
           pointerEvents="none"
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
         />
       ) : null}
       {authReady ? (
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     height: 8,
     opacity: 0.01,
   },
-  terminalLayer: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
+  terminalLayer: { ...StyleSheet.absoluteFill, zIndex: 1 },
   flex: { flex: 1, zIndex: 2 },
   scroll: {
     flexGrow: 1,

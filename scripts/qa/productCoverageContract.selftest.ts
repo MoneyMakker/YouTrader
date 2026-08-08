@@ -49,7 +49,7 @@ assert.ok(app.includes("MoreScreen") || app.includes('id: "more"'), "More nav");
 assert.ok(!new RegExp("Continue without an " + "account", "i").test(app));
 
 const acq = fs.readFileSync(path.join(root, "src/app/startup/acquisitionState.ts"), "utf8");
-assert.ok(acq.includes("no free plan") || acq.includes("no guest"));
+assert.ok(acq.includes('if (!input.isPremium) return "paywall"'), "non-premium routes to paywall (no free plan)");
 
 const storekit = JSON.parse(fs.readFileSync(path.join(root, "ios/YouTraderStaging.storekit"), "utf8"));
 const byId = Object.fromEntries(

@@ -6410,7 +6410,7 @@ export const styles = StyleSheet.create({
     textShadowRadius: 12,
   },
   lockedNewsBlurOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(4,0,8,0.46)",
     borderRadius: 18,
     borderWidth: 1,

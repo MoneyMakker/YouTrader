@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   actions: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "flex-end",
     justifyContent: "center",
   },

@@ -402,15 +402,15 @@ function scoreKillSwitch(input: CapitalPreservationEvidenceInput): PreservationC
     return ready(id, 100, "high", refs);
   }
   const dailyCap = ks.configuration.maximumDailyLossMinor;
-  if (dailyCap != null && ks.currentDailyLossMinor > dailyCap) {
+  if (dailyCap != null && ks.currentDailyLossMinor != null && ks.currentDailyLossMinor > dailyCap) {
     return ready(id, 0, "high", [...refs, ref(id, "kill_switch", `daily_loss_breach:${ks.currentDailyLossMinor}>${dailyCap}`)]);
   }
   const tradeCap = ks.configuration.maximumTradeCount;
-  if (tradeCap != null && ks.currentTradeCount > tradeCap) {
+  if (tradeCap != null && ks.currentTradeCount != null && ks.currentTradeCount > tradeCap) {
     return ready(id, 0, "high", [...refs, ref(id, "kill_switch", `trade_count_breach:${ks.currentTradeCount}>${tradeCap}`)]);
   }
   const lossCap = ks.configuration.consecutiveLossLimit;
-  if (lossCap != null && ks.consecutiveLosses > lossCap) {
+  if (lossCap != null && ks.consecutiveLosses != null && ks.consecutiveLosses > lossCap) {
     return ready(id, 0, "high", [...refs, ref(id, "kill_switch", `loss_streak_breach:${ks.consecutiveLosses}>${lossCap}`)]);
   }
   return ready(id, 100, "high", refs);

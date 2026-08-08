@@ -103,20 +103,22 @@ function getInsightsLearningState(input: {
 
 {
   const app = read("src/app/YouTraderApp.tsx");
-  const outcomeStart = app.indexOf("journalFormTradeResult");
-  const outcomeEnd = app.indexOf("journalDetailExecution", outcomeStart);
+  const outcomeStart = app.indexOf("journalDetailResultBoxNeutral");
+  const outcomeEnd = app.indexOf('testID="journal.trade.edit.pnl"', outcomeStart);
   const formSlice = app.slice(outcomeStart, outcomeEnd);
-  assert.ok(formSlice.includes("journal.trade.edit.pnl.mode"), "Calculate/Manual selector present");
-  assert.ok(formSlice.includes("journal.trade.edit.pnl.manual"), "Manual amount field present");
-  assert.ok(formSlice.includes("pnlPreview === 0") || formSlice.includes("journalDetailResultBoxNeutral"), "zero/neutral styling path");
-  assert.ok(formSlice.includes("symbolIsCustom"), "custom symbol mode");
-  assert.ok(formSlice.includes("customSymbolOption"), "Custom option present");
+  assert.ok(formSlice.includes('testID="journal.trade.edit.pnl.sign"'), "signed P&L selector present");
+  assert.ok(formSlice.includes('testID="journal.trade.edit.pnl.manual"'), "Manual amount field present");
+  assert.ok(formSlice.includes("journalDetailResultBoxNeutral"), "zero/neutral styling path");
+  assert.ok(app.includes("symbolIsCustom"), "custom symbol mode");
   assert.ok(app.includes('t("microContracts")'), "Micro contracts label used");
 }
 
 {
   const prop = read("src/propPass/PropPassInternalScreen.tsx");
-  assert.ok(prop.includes("BufferHealthSection") || prop.includes("PropPassTargetProgress"), "Prop Pass dashboard cards remain");
+  assert.ok(
+    prop.includes("PropPassMultiAccountCommandCenter") || prop.includes("PropPassSessionCockpit"),
+    "Prop Pass dashboard cards remain",
+  );
   const primitive = read("src/ydl/tokens/color.primitive.ts");
   assert.ok(primitive.includes('neutral900: "#F4F7F5"'), "primary light text token present");
 }

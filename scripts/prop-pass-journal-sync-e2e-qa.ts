@@ -9,6 +9,7 @@ import { hashPropOsCommandPayload } from "../src/propOs/commands/hash";
 import {
   processPropPassJournalEvent,
   PropPassPersistenceError,
+  type CompleteJournalEvent,
   type JournalPersistenceEvent,
   type PropPassPersistenceAdapter,
   type PropPassJournalRebuild,
@@ -200,7 +201,7 @@ function createStatefulAdapter(store: Store, ownerUserId = user): PropPassPersis
     async listInstrumentVersions() {
       return [];
     },
-    async listRuntimeStates() {
+    async listRuntimeStates(this: PropPassPersistenceAdapter) {
       const state = await this.getRuntimeState(account);
       return state ? [state] : [];
     },
@@ -249,7 +250,7 @@ function createStatefulAdapter(store: Store, ownerUserId = user): PropPassPersis
         resultDigest: null,
       };
     },
-    async completeJournalEvent(input) {
+    async completeJournalEvent(input: CompleteJournalEvent) {
       const existing = store.events.get(input.eventKey);
       if (!existing) throw new PropPassPersistenceError("invalid_input", "unknown event");
       if (existing.processingState === "applied") return "already_applied";

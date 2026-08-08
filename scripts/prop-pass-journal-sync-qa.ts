@@ -5,7 +5,7 @@ import type { PropPassCalculationPipelineOutput } from "../src/propPass/tradingO
 import { publishPropPassJournalMutation, subscribeToPropPassJournalMutations } from "../src/propPass/journalRefreshBus";
 
 const event = { userId: "user", accountId: "account", challengeId: "challenge", eventKey: "account:trade:2:trade_edited", eventType: "trade_edited" as const, journalTradeId: null, tradeClientId: "trade", tradeRevision: 2, calculationVersion: PROP_PASS_CALCULATION_VERSION, priorEventKey: "account:trade:1:trade_assigned", inputDigest: "input" };
-const output = { calculationVersion: PROP_PASS_CALCULATION_VERSION, status: "safe_to_take", journalApplication: { appliedTradeIds: ["trade"], duplicateTradeIds: [], latestTradeId: "trade", persistenceRequired: true } } as PropPassCalculationPipelineOutput;
+const output = { calculationVersion: PROP_PASS_CALCULATION_VERSION, status: "safe_to_take", journalApplication: { appliedTradeIds: ["trade"], duplicateTradeIds: [], latestTradeId: "trade", persistenceRequired: true } } as unknown as PropPassCalculationPipelineOutput;
 
 function harness(claimKind: "claimed" | "already_applied" = "claimed") {
   const calls: string[] = [];

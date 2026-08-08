@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     backgroundColor: ydlStatusSkeleton.baseFill,
   },
   baseTint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.44,
   },
   shimmer: {

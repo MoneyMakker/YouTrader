@@ -89,10 +89,10 @@ export const GlassCard = memo(function GlassCard({
   if (Platform.OS === "ios") {
     return (
       <View style={[shellStyle, layoutStyle]} {...rest}>
-        <BlurView intensity={blurIntensity} tint={tint} style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={blurIntensity} tint={tint} style={StyleSheet.absoluteFill} />
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, compact ? styles.iosTintCompact : styles.iosTint]}
+          style={[StyleSheet.absoluteFill, compact ? styles.iosTintCompact : styles.iosTint]}
         />
         <View style={contentPaddingStyle} pointerEvents="box-none">
           {children}

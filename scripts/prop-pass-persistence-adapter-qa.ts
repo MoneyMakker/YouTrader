@@ -24,7 +24,7 @@ function fakeClient(rows: RowMap, rpcResponses: Record<string, Record<string, un
   const upserts: Array<{ table: string; row: Record<string, unknown> }> = [];
   const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
   const client = {
-    from(table) {
+    from(table: string) {
       return {
         select() {
           let selected = [...(rows[table] ?? [])];
@@ -35,11 +35,11 @@ function fakeClient(rows: RowMap, rpcResponses: Record<string, Record<string, un
           };
           return query;
         },
-        insert(row) { inserts.push({ table, row }); return Promise.resolve({ data: null, error: null }); },
-        upsert(row) { upserts.push({ table, row }); return Promise.resolve({ data: null, error: null }); },
+        insert(row: Record<string, unknown>) { inserts.push({ table, row }); return Promise.resolve({ data: null, error: null }); },
+        upsert(row: Record<string, unknown>) { upserts.push({ table, row }); return Promise.resolve({ data: null, error: null }); },
       };
     },
-    rpc(fn, args) { rpcCalls.push({ fn, args }); return Promise.resolve({ data: rpcResponses[fn] ?? { kind: "claimed", eventId: "event-1", processingState: "pending", resultDigest: null }, error: null }); },
+    rpc(fn: string, args: Record<string, unknown>) { rpcCalls.push({ fn, args }); return Promise.resolve({ data: rpcResponses[fn] ?? { kind: "claimed", eventId: "event-1", processingState: "pending", resultDigest: null }, error: null }); },
   } as unknown as PropPassPersistenceSupabaseClient;
   return { client, inserts, upserts, rpcCalls };
 }

@@ -75,7 +75,7 @@ const compliance = { risk_per_trade: 100, allowed_session: 100, maximum_trades: 
 assert.ok((calculateRulesComplianceScore({ components: compliance }).values.score ?? 100) < 90); // 20 profit cannot mask Kill Switch noncompliance
 
 const payout = calculatePayoutReadiness({ currentEquityMinor: 1_200_000, startingBalanceMinor: 1_000_000, eligibleProfitMinor: 200_000, completedTradingDays: 10, minimumTradingDays: 8, consistencyPassed: true, payoutThresholdMinor: 50_000, maximumLossFloorMinor: 1_000_000, postPayoutReserveMinor: 50_000 });
-assert.ok(payout.values.recommendedMaximumPayoutMinor <= payout.values.eligibleProfitMinor); // 21
+assert.ok(payout.values.recommendedMaximumPayoutMinor <= (payout.values.eligibleProfitMinor ?? 0)); // 21
 assert.ok((payout.values.safetyBufferAfterPayoutMinor ?? -1) >= 0); // 22
 const withdrawal = calculateMaximumSafeWithdrawal({ currentEquityMinor: 1_200_000, equityHighMinor: 1_200_000, realizedEligibleProfitMinor: 200_000, staticLossFloorMinor: 950_000, trailingDrawdownFloorMinor: 1_000_000, postWithdrawalReserveMinor: 50_000, dailyRiskReserveMinor: 25_000, weeklyRiskReserveMinor: 50_000, recoverySafetyReserveMinor: 75_000, recoveryModeActive: false, priorWithdrawalsMinor: 0 });
 assert.ok(withdrawal.values.recommendedMaximumWithdrawalMinor <= withdrawal.values.eligibleAmountMinor); // 23

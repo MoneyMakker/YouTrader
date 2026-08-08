@@ -7430,7 +7430,7 @@ function JournalScreen({
         publishPropPassJournalMutation({
           tradeClientId: item.id,
           kind: previousTrade ? "updated" : "created",
-          occurredAt: new Date(item.updatedAt).toISOString(),
+          occurredAt: new Date(item.updatedAt ?? now).toISOString(),
         });
       }
       successHaptic();
@@ -11371,6 +11371,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       setAuthHydrated(true);
       return;
     }
+    const sb = supabase;
     let cancelled = false;
     const safety = setTimeout(() => {
       if (!cancelled) {
@@ -11396,18 +11397,18 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       }
       if (cancelled) return;
       try {
-        const { data } = await supabase.auth.getSession();
+        const { data } = await sb.auth.getSession();
         if (cancelled) return;
         let cachedSession = data.session;
         if (cachedSession) {
           // A cached session can outlive its account: validate before trusting it.
-          const { error: userError } = await supabase.auth.getUser();
+          const { error: userError } = await sb.auth.getUser();
           if (cancelled) return;
           const verdict = classifyBootstrapSession(userError as { status?: number } | null);
           if (shouldPurgeCachedSession(verdict)) {
             const staleUserId = cachedSession.user.id;
             try {
-              await supabase.auth.signOut({ scope: "local" });
+              await sb.auth.signOut({ scope: "local" });
             } catch {
               // Local purge is best-effort; state below still routes to Auth.
             }
@@ -11480,9 +11481,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   useEffect(() => {
     if (!supabase || Platform.OS === "web") return;
+    const sb = supabase;
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") supabase.auth.startAutoRefresh();
-      else supabase.auth.stopAutoRefresh();
+      if (state === "active") sb.auth.startAutoRefresh();
+      else sb.auth.stopAutoRefresh();
     });
     return () => subscription.remove();
   }, []);
@@ -11934,7 +11936,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   useEffect(() => {
     if (!cloudSyncEnabled || !supabase || !session?.user.id) return;
-    const channel = supabase
+    const sb = supabase;
+    const channel = sb
       .channel(`trade-journal-${session.user.id}`)
       .on(
         "postgres_changes",
@@ -11950,7 +11953,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      sb.removeChannel(channel);
     };
   }, [cloudSyncEnabled, session?.user.id, syncTradesWithCloud]);
 
@@ -12022,7 +12025,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   // the supabase auth listener confirms the new session.
 
   /** Wait up to 15s for a new Supabase session after Apple/Google sign-in. */
-  const waitForNextSession = useCallback((client: typeof supabase): Promise<string | null> => {
+  const waitForNextSession = useCallback((client: NonNullable<typeof supabase>): Promise<string | null> => {
     return new Promise<string | null>((resolve) => {
       // If session already exists (sync sign-in), resolve immediately.
       client.auth.getSession().then(({ data }) => {
@@ -12561,7 +12564,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         setPurchaseFlowStage("pending");
         setPaywallError(t("purchasePending"));
         const verifiedInfo = await refreshCurrentEntitlements("purchase-pending", [1500, 3000, 6000, 10000]);
-        if (customerHasPro(verifiedInfo)) {
+        if (verifiedInfo != null && customerHasPro(verifiedInfo)) {
           const result: MakePurchaseResult = {
             productIdentifier: productId,
             customerInfo: verifiedInfo,
@@ -12570,6 +12573,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               productIdentifier: productId,
               purchaseDate: new Date().toISOString(),
               purchaseToken: null,
+              originalJson: null,
+              signature: null,
             },
           };
           await finishPurchaseFlow(result, "purchasePending");
@@ -12582,7 +12587,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         // a purchase may still have completed while the dialog stayed open.
         setPurchaseFlowStage("verifying");
         const verifiedInfo = await refreshCurrentEntitlements("purchase-timeout", [0, 1200, 2400]);
-        if (customerHasPro(verifiedInfo)) {
+        if (verifiedInfo != null && customerHasPro(verifiedInfo)) {
           const result: MakePurchaseResult = {
             productIdentifier: productId,
             customerInfo: verifiedInfo,
@@ -12591,6 +12596,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
               productIdentifier: productId,
               purchaseDate: new Date().toISOString(),
               purchaseToken: null,
+              originalJson: null,
+              signature: null,
             },
           };
           await finishPurchaseFlow(result, "purchaseTimeout");
@@ -12776,7 +12783,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   if (!appReady) {
     return (
       <SafeAreaView style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
+        <StatusBar style="light" />
         <View style={styles.lockScreen}>
           <StartupLoadingScreen status={t("startup.preparingWorkspace")} />
         </View>
@@ -12790,7 +12797,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     if (startupStuck) {
       return (
         <SafeAreaView style={styles.app}>
-          <StatusBar style="light" backgroundColor="#000000" />
+          <StatusBar style="light" />
           <View style={styles.lockScreen}>
             <StartupLoadingScreen error onRetry={() => setStartupStuck(false)} onSignOut={() => { setStartupStuck(false); void signOut({ force: true }); }} />
           </View>
@@ -12799,7 +12806,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     }
     return (
       <SafeAreaView style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
+        <StatusBar style="light" />
         <View style={styles.lockScreen}>
           <StartupLoadingScreen error={identitySyncFailed} status={identitySyncFailed ? t("tryAgain") : t("startup.preparingWorkspace")} onRetry={identitySyncFailed ? () => {
             setIdentitySyncFailed(false);
@@ -12823,7 +12830,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   if (acquisitionPhase === "onboarding" || acquisitionPhase === "onboarding_slides" || acquisitionPhase === "onboarding_personalization") {
     return (
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
-        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
+        <StatusBar style="light" />
         {stagingQaResetOverlay}
         <ValueOnboarding
           phase={acquisitionPhase}
@@ -12842,7 +12849,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   if (acquisitionPhase === "purchase_paywall" || acquisitionPhase === "purchasing" || acquisitionPhase === "paywall") {
     return (
       <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
-        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
+        <StatusBar style="light" />
         {stagingQaResetOverlay}
         <AcquisitionPaywall
           packages={packages}
@@ -12897,7 +12904,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   if (acquisitionPhase === "auth" || acquisitionPhase === "existing_user_auth") {
     return (
       <View style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
+        <StatusBar style="light" />
         {stagingQaResetOverlay}
         {qaResetPhase === "reset_complete" ? (
           <View
@@ -12946,7 +12953,7 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const locked = !isPremium && premiumTabs.includes(tab);
   return (
     <SafeAreaView style={[styles.app, { backgroundColor: shellTheme.colors.background.primary }]}>
-        <StatusBar style="light" backgroundColor={shellTheme.colors.background.primary} />
+        <StatusBar style="light" />
         {stagingQaResetOverlay}
         <View style={styles.body}>
           <YdlFade key={tab} style={{ flex: 1 }} enter>

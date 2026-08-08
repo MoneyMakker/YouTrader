@@ -265,7 +265,7 @@ function buildCommandItem(
       ? requiredNullableMinor(live.weeklyLossRoomMinor, "weekly room")
       : optionalMinor(rooms?.weeklyLossRemainingMinor, "weekly room"),
     drawdownRoomMinor: rooms ? requiredNullableMinor(rooms.drawdownRemainingMinor, "drawdown room") : null,
-    mode: plan ? enumValue(plan.mode, ["calm", "balanced", "gambler"], "risk mode") : null,
+    mode: plan ? enumValue(plan.mode, ["calm", "balanced", "gambler"] as const, "risk mode") : null,
     health,
     readinessStatus,
     payoutReady: output?.payoutReadiness?.status === "safe_to_take" && payoutMaximum != null && payoutMaximum > 0,

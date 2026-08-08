@@ -35,7 +35,7 @@ function allowlistPrefixes(env: NodeJS.ProcessEnv): string[] {
   if (!raw) return [];
   return raw
     .split(/[,\s]+/)
-    .map((s) => s.trim().toLowerCase())
+    .map((s: string) => s.trim().toLowerCase())
     .filter(Boolean);
 }
 

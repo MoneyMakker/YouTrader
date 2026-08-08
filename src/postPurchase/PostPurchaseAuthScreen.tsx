@@ -540,7 +540,7 @@ const styles = StyleSheet.create({
 
   // ── Decorative layer (all pointerEvents="none") ──
   decorativeLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "flex-start",
     alignItems: "center",
     overflow: "hidden",
@@ -639,7 +639,7 @@ const styles = StyleSheet.create({
   legalText: { color: C.muted, fontSize: 11.5, lineHeight: 17, fontWeight: "600", textAlign: "center", marginTop: 2, maxWidth: 310 },
   legalLink: { color: C.sub, textDecorationLine: "underline" },
 
-  modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
+  modalOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.75)", justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
   modalCard: { width: "100%", maxWidth: 340, backgroundColor: "#0D1117", borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", padding: 24, gap: 14 },
   modalTitle: { color: C.text, fontSize: 20, fontWeight: "800", textAlign: "center" },
   emailErrorText: { color: C.sub, fontSize: 13, fontWeight: "700", textAlign: "center", paddingHorizontal: 4 },

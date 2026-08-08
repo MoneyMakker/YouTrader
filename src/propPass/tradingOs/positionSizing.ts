@@ -72,7 +72,7 @@ export function calculatePositionSize(input: PositionSizingInput): TradingOsResu
 }
 
 function minPositive(...values: Array<number | null | undefined>): number | null {
-  const valid = values.filter((value): value is number => Number.isSafeInteger(value) && value > 0);
+  const valid = values.filter((value): value is number => value != null && Number.isSafeInteger(value) && value > 0);
   return valid.length ? Math.min(...valid) : null;
 }
 

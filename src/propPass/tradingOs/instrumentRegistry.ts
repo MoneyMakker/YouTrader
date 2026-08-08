@@ -106,7 +106,12 @@ function validateInstrumentVersion(item: InstrumentSpecificationVersion): string
 function overlaps(history: InstrumentSpecificationVersion[]): boolean {
   const grouped = new Map<string, InstrumentSpecificationVersion[]>();
   for (const item of history) { const key = `${item.symbol}:${item.source}`; grouped.set(key, [...(grouped.get(key) ?? []), item]); }
-  return [...grouped.values()].some((items) => items.sort(compareVersions).some((item, index) => index > 0 && Date.parse(item.effectiveFrom) < (items[index - 1].effectiveTo == null ? Infinity : Date.parse(items[index - 1].effectiveTo))));
+  return [...grouped.values()].some((items) => items.sort(compareVersions).some((item, index) => {
+    if (index === 0) return false;
+    const prior = items[index - 1];
+    const priorEffectiveTo = prior.effectiveTo;
+    return Date.parse(item.effectiveFrom) < (priorEffectiveTo == null ? Infinity : Date.parse(priorEffectiveTo));
+  }));
 }
 
 function compareVersions(left: InstrumentSpecificationVersion, right: InstrumentSpecificationVersion): number { return Date.parse(left.effectiveFrom) - Date.parse(right.effectiveFrom) || left.specificationVersion.localeCompare(right.specificationVersion); }
