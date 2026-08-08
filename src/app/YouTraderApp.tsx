@@ -364,6 +364,42 @@ import {
 import { PropFirmRiskDashboard } from "../components/propFirm/PropFirmRiskDashboard";
 import { PropFirmRiskCoachScreen } from "../components/propFirm/PropFirmRiskCoachScreen";
 
+function isUserCancelledLog(message: string): boolean {
+  const text = message.toLowerCase();
+  return text.includes("purchase was cancelled") || text.includes("purchase was canceled");
+}
+
+function isUserCancelledError(error: any): boolean {
+  return (
+    error?.userCancelled === true ||
+    error?.code === Purchases.PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR
+  );
+}
+
+function isPendingPurchaseError(error: any): boolean {
+  if (!error) return false;
+  if (error.code === Purchases.PURCHASES_ERROR_CODE.PAYMENT_PENDING_ERROR) return true;
+  const text = String(error.message || "").toLowerCase();
+  return text.includes("pending") && text.includes("purchase");
+}
+
+function isPurchaseTimeoutError(error: any): boolean {
+  if (!error) return false;
+  const text = String(error.message || "").toLowerCase();
+  return text.includes("timed out") || text.includes("timeout");
+}
+
+/**
+ * Fine-grained StoreKit purchase flow stage. Drives the paywall CTA label and
+ * diagnostics without adding a second global "busy" flag.
+ */
+type PurchaseStage = "idle" | "begin" | "processing" | "verifying" | "pending" | "success" | "error" | "cancelled";
+
+function purchaseDiag(label: string, details?: Record<string, unknown>): void {
+  if (!__DEV__) return;
+  logger.info(`[purchase:diag] ${label}`, { feature: "revenuecat", action: "purchase_diag", ...details });
+}
+
 const LazyStatCardExportHost = React.lazy(() =>
   import("../components/insights/shareCard/StatCardExportHost").then((mod) => ({
     default: mod.StatCardExportHost,
@@ -414,6 +450,7 @@ import {
   YOU_TRADER_PRO_PRODUCT_IDS,
   BILLING_DEBUG_LOGS,
   ENTITLEMENT_RETRY_DELAYS_MS,
+  PURCHASE_FLOW_TIMEOUT_MS,
   TRADES_STORAGE_KEY,
   LANG_STORAGE_KEY,
   FREE_JOURNAL_DAYS,
@@ -1000,16 +1037,30 @@ function packageTitle(pkg: PurchasesPackage) {
   return pkg.packageType || "PRO";
 }
 
+/**
+ * Exact plan → product identifier mapping for the paywall. Plans are never
+ * derived from package order/array index — only from the StoreKit/RevenueCat
+ * identifiers. The yearly id must never be normalized/rewritten.
+ */
+function planFromProductId(productId: string): "weekly" | "monthly" | "yearly" | null {
+  if (productId === YOU_TRADER_WEEKLY_PRODUCT_ID || productId === "youtrader_pro_weekly") return "weekly";
+  if (productId === YOU_TRADER_MONTHLY_PRODUCT_ID || productId === "youtrader_pro_monthly") return "monthly";
+  if (
+    productId === YOU_TRADER_YEARLY_PRODUCT_ID ||
+    productId === "youtrader_pro_yearly" ||
+    productId === "youtrader_pro_yearly__"
+  ) {
+    return "yearly";
+  }
+  return null;
+}
+
 function findProPackage(packages: PurchasesPackage[], productId: string) {
   const yearlyAliases = new Set(["youtrader_pro_yearly", "youtrader_pro_yearly__", YOU_TRADER_YEARLY_PRODUCT_ID]);
-  const isYearlyRequest = yearlyAliases.has(productId);
+  const plan = planFromProductId(productId);
   return (
     packages.find((pkg) => pkg.product.identifier === productId) ||
-    packages.find((pkg) =>
-      isYearlyRequest
-        ? yearlyAliases.has(pkg.product.identifier) || packageTitle(pkg) === "YEARLY"
-        : pkg.product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID || packageTitle(pkg) === "MONTHLY",
-    ) ||
+    (plan === "yearly" ? packages.find((pkg) => yearlyAliases.has(pkg.product.identifier)) : null) ||
     null
   );
 }
@@ -10311,6 +10362,9 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [revenueCatReady, setRevenueCatReady] = useState(false);
   const [purchaseBusy, setPurchaseBusy] = useState(false);
+  const [purchaseStage, setPurchaseStage] = useState<PurchaseStage>("idle");
+  const purchaseInFlightRef = useRef(false);
+  const [purchaseVerificationPending, setPurchaseVerificationPending] = useState(false);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [proAccess, setProAccess] = useState<ProAccessState>(() => emptyProAccessState());
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
@@ -10548,6 +10602,11 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   const appReady = tradesHydrated && authHydrated;
   const anonymousEntitlementActive = anonymousEntitlementStatus === "active";
+  const purchaseLabel =
+    purchaseStage === "begin" || purchaseStage === "processing" ? t("purchaseProcessing")
+    : purchaseStage === "verifying" ? t("purchaseActivating")
+    : purchaseStage === "pending" ? t("purchasePending")
+    : "";
   const acquisitionPhase = resolveAcquisitionPhase({
     hydrated: appReady && acquisitionHydrated,
     onboardingCompleted,
@@ -11010,6 +11069,32 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       try {
         if (!purchasesConfigured.current) {
           Purchases.setLogLevel(LOG_LEVEL.ERROR);
+          Purchases.setLogHandler((logLevel, message) => {
+            const text = typeof message === "string" ? message : String(message);
+            if (logLevel === LOG_LEVEL.ERROR && isUserCancelledLog(text)) {
+              // Expected user cancellation of an Apple/StoreKit sheet: log
+              // neutrally so it never surfaces as an app error / LogBox.
+              console.log(`[RevenueCat] ${text}`);
+              return;
+            }
+            if (logLevel === LOG_LEVEL.DEBUG) {
+              console.debug(`[RevenueCat] ${text}`);
+              return;
+            }
+            if (logLevel === LOG_LEVEL.INFO) {
+              console.info(`[RevenueCat] ${text}`);
+              return;
+            }
+            if (logLevel === LOG_LEVEL.WARN) {
+              console.warn(`[RevenueCat] ${text}`);
+              return;
+            }
+            if (logLevel === LOG_LEVEL.ERROR) {
+              console.error(`[RevenueCat] ${text}`);
+              return;
+            }
+            console.log(`[RevenueCat] ${text}`);
+          });
           if (hasSession) {
             Purchases.configure({ apiKey: REVENUECAT_API_KEY, appUserID: userId });
           } else {
@@ -12174,7 +12259,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
   const refreshCurrentEntitlements = useCallback(async (reason: string, retryDelays = ENTITLEMENT_RETRY_DELAYS_MS) => {
     if (!purchasesConfigured.current) return null;
-    if (!sessionRef.current?.user?.id) return null;
+    // Works for anonymous users too: anonymous purchases are detected via
+    // customerHasPro on the raw CustomerInfo (applyCustomerInfo ignores it
+    // while signed out to avoid exposing a previous user's entitlement).
+    const anonymous = !sessionRef.current?.user?.id;
     let latestInfo: CustomerInfo | null = null;
     for (const [attempt, delay] of retryDelays.entries()) {
       if (delay > 0) await sleep(delay);
@@ -12189,10 +12277,13 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         });
       }
       latestInfo = await Purchases.getCustomerInfo();
-      const hasPro = applyCustomerInfo(latestInfo, `${reason}:attempt-${attempt + 1}`);
+      const hasPro = anonymous
+        ? customerHasPro(latestInfo)
+        : applyCustomerInfo(latestInfo, `${reason}:attempt-${attempt + 1}`);
       billingDebugLog("entitlement refresh result", {
         reason,
         attempt: attempt + 1,
+        anonymous,
         ...summarizeCustomerInfo(latestInfo),
         finalIsPro: hasPro,
       });
@@ -12201,8 +12292,19 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
     return latestInfo;
   }, [applyCustomerInfo]);
 
+  const setPurchaseFlowStage = useCallback((next: PurchaseStage) => {
+    setPurchaseStage(next);
+    setPurchaseBusy(next === "begin" || next === "processing" || next === "verifying" || next === "pending");
+  }, []);
+
   const finishPurchaseFlow = useCallback(async (result: MakePurchaseResult, reason: string) => {
     const resultProductId = result.productIdentifier || result.transaction?.productIdentifier || "";
+    purchaseDiag("finish_purchase_flow", {
+      reason,
+      productId: resultProductId,
+      anonymous: !session?.user?.id,
+      hasPro: customerHasPro(result.customerInfo),
+    });
     await claimRemoteIdempotency("subscription:purchase-verify", session?.user.id, {
       productId: resultProductId,
       entitlement: REVENUECAT_ENTITLEMENT_ID,
@@ -12239,6 +12341,23 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       return;
     }
 
+    // Anonymous: the immediate result may be stale while StoreKit/RC propagate.
+    // Poll with bounded retries before giving up, then route to post-purchase auth.
+    if (!session?.user?.id) {
+      const verifiedInfo = await refreshCurrentEntitlements(reason, [0, 1200, 2400, 4000]);
+      if (customerHasPro(verifiedInfo)) {
+        anonymousCustomerInfoRef.current = verifiedInfo;
+        void AsyncStorage.setItem(POST_PURCHASE_LINKING_MARKER_KEY, "1");
+        linkingMarkerActiveRef.current = true;
+        setAnonymousEntitlementStatus("active");
+        logger.info("post_purchase_auth pending", { feature: "revenuecat", action: "anonymous_purchase_after_verification", reason });
+        purchaseDiag("post_purchase_auth_triggered", { reason, productId: resultProductId });
+        trackEvent("pro_purchased", { reason });
+        successHaptic();
+        return;
+      }
+    }
+
     if (resultProductId && !YOU_TRADER_PRO_PRODUCT_IDS.includes(resultProductId)) {
       billingDebugLog("purchase product id not in known Pro list", {
         resultProductId,
@@ -12246,7 +12365,8 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       });
     }
 
-    const refreshedInfo = await refreshCurrentEntitlements(reason);
+    // Generic refresh for authenticated users; anonymous already polled above.
+    const refreshedInfo = session?.user?.id ? await refreshCurrentEntitlements(reason) : null;
     if (customerHasPro(refreshedInfo)) {
       logger.info("RevenueCat entitlement refresh unlocked Pro", { feature: "revenuecat", action: "purchase_success_after_refresh", reason });
       trackEvent("purchase_success", { reason });
@@ -12264,15 +12384,40 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       return;
     }
 
+    // The transaction completed but the entitlement is not readable yet. Do not
+    // dismiss it as a hard failure: surface a "still confirming access" state with
+    // a Verify retry action instead of a blocking alert.
     setShowRestorePurchases(true);
-    setPaywallError(t("purchaseUnreadable"));
-    logger.warn("RevenueCat purchase completed without readable entitlement", { feature: "revenuecat", action: "entitlement_unreadable" });
+    setPurchaseVerificationPending(true);
+    setPaywallError(t("purchaseConfirming"));
+    logger.warn("RevenueCat purchase completed without readable entitlement", { feature: "revenuecat", action: "entitlement_unreadable", reason });
     trackEvent("purchase_failed", { reason: "entitlement_unreadable" });
-    Alert.alert(
-      t("purchaseComplete"),
-      t("purchaseUnreadable"),
-    );
-  }, [applyCustomerInfo, lang, refreshCurrentEntitlements, session?.user.id]);
+  }, [applyCustomerInfo, lang, refreshCurrentEntitlements, session?.user?.id]);
+
+  const retryPurchaseVerification = useCallback(async () => {
+    if (!purchasesConfigured.current || purchaseInFlightRef.current) return;
+    setPaywallError("");
+    purchaseDiag("verify_retry_started", {});
+    const verifiedInfo = await refreshCurrentEntitlements("paywall-verify", [0, 400, 1200]);
+    if (customerHasPro(verifiedInfo)) {
+      setPurchaseVerificationPending(false);
+      setPaywallError("");
+      setShowRestorePurchases(false);
+      if (!sessionRef.current?.user?.id) {
+        anonymousCustomerInfoRef.current = verifiedInfo;
+        void AsyncStorage.setItem(POST_PURCHASE_LINKING_MARKER_KEY, "1");
+        linkingMarkerActiveRef.current = true;
+        setAnonymousEntitlementStatus("active");
+      }
+      logger.info("entitlement verified from paywall", { feature: "revenuecat", action: "paywall_verify_success" });
+      purchaseDiag("verify_retry_success", {});
+      successHaptic();
+    } else {
+      setPurchaseVerificationPending(true);
+      setPaywallError(t("purchaseConfirming"));
+      purchaseDiag("verify_retry_still_unconfirmed", {});
+    }
+  }, [refreshCurrentEntitlements]);
 
   const ensureAuthenticatedRevenueCatIdentity = useCallback(async (): Promise<boolean> => {
     const userId = sessionRef.current?.user?.id;
@@ -12292,6 +12437,10 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
   }, [applyCustomerInfo]);
 
   const purchasePackage = useCallback(async (pkg?: PurchasesPackage | null, productId = YOU_TRADER_MONTHLY_PRODUCT_ID) => {
+    if (purchaseInFlightRef.current) {
+      purchaseDiag("purchase_rejected_double_tap", { productId });
+      return;
+    }
     if (!revenueCatConfigured || !purchasesConfigured.current) {
       Alert.alert(t("premiumAccess"), t("restoreUnavailable"));
       return;
@@ -12316,22 +12465,31 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         return;
       }
     }
-    const isYearly =
-      productId === YOU_TRADER_YEARLY_PRODUCT_ID ||
-      productId === "youtrader_pro_yearly" ||
-      productId === "youtrader_pro_yearly__";
+    const plan = planFromProductId(productId);
 
-    setPurchaseBusy(true);
+    purchaseInFlightRef.current = true;
+    setPurchaseVerificationPending(false);
+    setPaywallError("");
     setShowRestorePurchases(true);
+    setPurchaseFlowStage("begin");
     try {
-      const limit = await checkClientRateLimit("purchase", session?.user.id || "local");
+      const limit = await checkClientRateLimit("purchase", session?.user?.id || "local");
       if (!limit.allowed) {
         Alert.alert(t("premiumAccess"), SECURITY_MESSAGES.rateLimited);
         return;
       }
       logger.info("RevenueCat purchase started", { feature: "revenuecat", action: "purchase_started" });
-      trackEvent("subscribe_pressed", { plan: isYearly ? "yearly" : "monthly" });
+      purchaseDiag("plan_mapping_verify", {
+        selectedPlan: plan,
+        selectedProductIdentifier: productId,
+        purchaseProductId: productId,
+        packageRequestedProductIdentifier: pkg?.product?.identifier ?? null,
+        packageMatchesProduct: !!pkg && pkg.product.identifier === productId,
+        ctaLabel: null,
+      });
+      trackEvent("subscribe_pressed", { plan: plan ?? "unknown" });
       billingDebugLog("purchase started", { productId });
+      setPurchaseFlowStage("processing");
       let catalogPackages = packages;
       let catalogProducts = storeProducts;
       const needsCatalog =
@@ -12350,13 +12508,15 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
 
       if (selectedPackage) {
         const trialEligible = !!(selectedPackage.product as any)?.introPrice;
-        const result = await withTimeout(Purchases.purchasePackage(selectedPackage));
+        const result = await withTimeout(Purchases.purchasePackage(selectedPackage), PURCHASE_FLOW_TIMEOUT_MS);
         if (trialEligible) {
-          logger.info("[YouTrader:trial] started", { plan: isYearly ? "yearly" : "monthly" });
-          trackEvent("trial_started", { plan: isYearly ? "yearly" : "monthly" });
+          logger.info("[YouTrader:trial] started", { plan });
+          trackEvent("trial_started", { plan });
         }
         logger.info("[YouTrader:subscription] purchase_package_success", { productId });
+        setPurchaseFlowStage("verifying");
         await finishPurchaseFlow(result, "purchasePackage");
+        setPurchaseFlowStage("success");
         return;
       }
 
@@ -12366,12 +12526,14 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
       const selectedProduct =
         catalogProducts.find((product) => product.identifier === productId) || null;
       if (selectedProduct) {
-        const result = await withTimeout(Purchases.purchaseStoreProduct(selectedProduct));
+        const result = await withTimeout(Purchases.purchaseStoreProduct(selectedProduct), PURCHASE_FLOW_TIMEOUT_MS);
+        setPurchaseFlowStage("verifying");
         await finishPurchaseFlow(result, "purchaseStoreProduct");
+        setPurchaseFlowStage("success");
         return;
       }
 
-      if (isYearly) {
+      if (plan === "yearly") {
         const message = "Yearly plan temporarily unavailable. Please try again later.";
         setPaywallError(message);
         trackEvent("purchase_failed", { reason: "yearly_product_unavailable" });
@@ -12384,21 +12546,76 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
         return;
       }
 
-      const result = await withTimeout(Purchases.purchaseProduct(productId));
+      const result = await withTimeout(Purchases.purchaseProduct(productId), PURCHASE_FLOW_TIMEOUT_MS);
+      setPurchaseFlowStage("verifying");
       await finishPurchaseFlow(result, "purchaseProduct");
+      setPurchaseFlowStage("success");
     } catch (error: any) {
-      if (!error?.userCancelled) {
+      if (isUserCancelledError(error)) {
+        // User dismissed the StoreKit dialog / sandbox auth: neutral exit.
+        setPurchaseFlowStage("cancelled");
+        purchaseDiag("purchase_cancelled", { productId });
+      } else if (isPendingPurchaseError(error)) {
+        // Deferred payment (Ask to Buy / family / SCA). Keep the CTA disabled while
+        // we poll for confirmation; the RC customer-info listener resolves the phase.
+        setPurchaseFlowStage("pending");
+        setPaywallError(t("purchasePending"));
+        const verifiedInfo = await refreshCurrentEntitlements("purchase-pending", [1500, 3000, 6000, 10000]);
+        if (customerHasPro(verifiedInfo)) {
+          const result: MakePurchaseResult = {
+            productIdentifier: productId,
+            customerInfo: verifiedInfo,
+            transaction: {
+              transactionIdentifier: `synthesized-pending-${Date.now()}`,
+              productIdentifier: productId,
+              purchaseDate: new Date().toISOString(),
+              purchaseToken: null,
+            },
+          };
+          await finishPurchaseFlow(result, "purchasePending");
+          setPurchaseFlowStage("success");
+          return;
+        }
+        purchaseDiag("purchase_pending_no_confirmation", { productId });
+      } else if (isPurchaseTimeoutError(error)) {
+        // The generous StoreKit cap was hit. Verify before surfacing any error —
+        // a purchase may still have completed while the dialog stayed open.
+        setPurchaseFlowStage("verifying");
+        const verifiedInfo = await refreshCurrentEntitlements("purchase-timeout", [0, 1200, 2400]);
+        if (customerHasPro(verifiedInfo)) {
+          const result: MakePurchaseResult = {
+            productIdentifier: productId,
+            customerInfo: verifiedInfo,
+            transaction: {
+              transactionIdentifier: `synthesized-timeout-${Date.now()}`,
+              productIdentifier: productId,
+              purchaseDate: new Date().toISOString(),
+              purchaseToken: null,
+            },
+          };
+          await finishPurchaseFlow(result, "purchaseTimeout");
+          setPurchaseFlowStage("success");
+          return;
+        }
+        setPurchaseFlowStage("error");
+        const message = userFacingBillingError("Purchase didn't complete in time. Please try again.");
+        setPaywallError(message);
+        trackEvent("purchase_failed", { reason: "purchase_timeout" });
+        Alert.alert(t("purchaseFailed"), message);
+      } else {
         logger.error(error, { feature: "revenuecat", action: "purchase" });
         const message = userFacingBillingError(error?.message || "Purchase failed. Please try again.");
+        setPurchaseFlowStage("error");
         setPaywallError(message);
         trackEvent("purchase_failed", { reason: "purchase_error" });
         Alert.alert(t("purchaseFailed"), message);
       }
       await refreshRevenueCat();
     } finally {
-      setPurchaseBusy(false);
+      purchaseInFlightRef.current = false;
+      setPurchaseFlowStage("idle");
     }
-  }, [ensureAuthenticatedRevenueCatIdentity, finishPurchaseFlow, packages, refreshRevenueCat, revenueCatConfigured, session?.user.id, storeProducts]);
+  }, [ensureAuthenticatedRevenueCatIdentity, finishPurchaseFlow, packages, refreshCurrentEntitlements, refreshRevenueCat, revenueCatConfigured, session?.user?.id, storeProducts]);
 
   const restorePurchases = useCallback(async () => {
     if (!revenueCatConfigured || !purchasesConfigured.current) {
@@ -12631,7 +12848,12 @@ function App({ onVisibleShell }: { onVisibleShell?: () => void } = {}) {
           packages={packages}
           storeProducts={storeProducts}
           purchaseBusy={purchaseBusy}
+          purchaseLabel={purchaseLabel}
           paywallError={paywallError}
+          purchaseVerificationPending={purchaseVerificationPending}
+          onVerifyPurchase={() => {
+            void retryPurchaseVerification();
+          }}
           showRestorePurchases
           authenticatedAccountActions={!!session?.user?.id}
           onPurchase={purchasePackage}

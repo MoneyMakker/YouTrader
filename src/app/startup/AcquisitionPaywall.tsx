@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PurchasesPackage, PurchasesStoreProduct } from "react-native-purchases";
 import Purchases from "react-native-purchases";
@@ -28,7 +28,12 @@ type Props = {
   packages: PurchasesPackage[];
   storeProducts: PurchasesStoreProduct[];
   purchaseBusy: boolean;
+  /** Contextual label shown on the CTA while a purchase is in flight. */
+  purchaseLabel?: string;
   paywallError: string;
+  /** True while a completed transaction is still confirming access (Verify retry). */
+  purchaseVerificationPending?: boolean;
+  onVerifyPurchase?: () => void;
   showRestorePurchases: boolean;
   /** Authenticated paywall: Sign Out + Delete Account (required when Main Settings unreachable). */
   authenticatedAccountActions?: boolean;
@@ -48,7 +53,10 @@ export function AcquisitionPaywall({
   packages,
   storeProducts,
   purchaseBusy,
+  purchaseLabel,
   paywallError,
+  purchaseVerificationPending = false,
+  onVerifyPurchase,
   showRestorePurchases,
   authenticatedAccountActions = false,
   onPurchase,
@@ -66,16 +74,17 @@ export function AcquisitionPaywall({
   const purchaseLock = useRef(false);
 
   const weekly =
-    packages.find((pkg) => packageTitle(pkg) === "WEEKLY") ||
     packages.find((pkg) => pkg.product.identifier === YOU_TRADER_WEEKLY_PRODUCT_ID) ||
+    packages.find((pkg) => packageTitle(pkg) === "WEEKLY") ||
     null;
   const monthly =
-    packages.find((pkg) => packageTitle(pkg) === "MONTHLY") ||
     packages.find((pkg) => pkg.product.identifier === YOU_TRADER_MONTHLY_PRODUCT_ID) ||
+    packages.find((pkg) => packageTitle(pkg) === "MONTHLY") ||
     null;
   const yearly =
-    packages.find((pkg) => packageTitle(pkg) === "YEARLY") ||
     packages.find((pkg) => pkg.product.identifier === YOU_TRADER_YEARLY_PRODUCT_ID) ||
+    packages.find((pkg) => pkg.product.identifier === "youtrader_pro_yearly") ||
+    packages.find((pkg) => packageTitle(pkg) === "YEARLY") ||
     null;
 
   const weeklyProduct =
@@ -188,7 +197,12 @@ export function AcquisitionPaywall({
     yearly: yearly || null,
   }), [weekly, monthly, yearly]);
 
-  const activePlan = plans.find((p) => p.id === selected) || plans[0] || null;
+  const activePlan =
+    plans.find((p) => p.id === selected) ||
+    plans.find((p) => p.id === "yearly") ||
+    plans.find((p) => p.id === "monthly") ||
+    plans.find((p) => p.id === "weekly") ||
+    null;
   const activePkg =
     activePlan?.id === "weekly" ? weekly
     : activePlan?.id === "monthly" ? monthly
@@ -216,6 +230,30 @@ export function AcquisitionPaywall({
       : activeProductId;
 
     try {
+      if (__DEV__) {
+        const uiAgrees =
+          !!targetPlan &&
+          !!targetPkg &&
+          targetPkg.product.identifier === targetProdId &&
+          (targetProdId === YOU_TRADER_WEEKLY_PRODUCT_ID ||
+            targetProdId === YOU_TRADER_MONTHLY_PRODUCT_ID ||
+            targetProdId === YOU_TRADER_YEARLY_PRODUCT_ID);
+        console.info("[purchase:diag] plan_mapping_ui", {
+          selectedPlan: targetPlan?.id ?? null,
+          selectedPackageIdentifier: targetPkg?.product?.identifier ?? null,
+          selectedProductIdentifier: targetProdId,
+          ctaLabel: targetPlan?.cta ?? null,
+          purchaseFunctionProductId: targetProdId,
+          uiAgrees,
+        });
+        if (!uiAgrees) {
+          console.warn("[purchase:diag] plan_mapping_ui MISMATCH", {
+            targetPlanId: targetPlan?.id ?? null,
+            targetPkgProductIdentifier: targetPkg?.product?.identifier ?? null,
+            targetProdId,
+          });
+        }
+      }
       onPurchase(targetPkg, targetProdId);
     } finally {
       setTimeout(() => {
@@ -238,12 +276,31 @@ export function AcquisitionPaywall({
         selectedPlanId={selected}
         onSelectPlan={(id) => setSelected(id)}
         purchaseBusy={purchaseBusy}
+        purchaseLabel={purchaseLabel}
         onContinue={handleContinue}
         onRestore={onRestore}
         onRetry={onRetryOfferings}
         catalogLoading={false}
         catalogError={offeringsUnavailable ? "Plans are temporarily unavailable" : null}
       />
+
+      {paywallError ? (
+        <View style={styles.errorRow} testID="paywall-error">
+          <Text style={styles.errorText} maxFontSizeMultiplier={1.2}>{paywallError}</Text>
+          {purchaseVerificationPending && onVerifyPurchase ? (
+            <Pressable
+              onPress={onVerifyPurchase}
+              disabled={purchaseBusy}
+              accessibilityRole="button"
+              accessibilityLabel={t("purchaseVerifyAction")}
+              style={({ pressed }) => [styles.verifyBtn, pressed && styles.verifyBtnPressed]}
+              testID="paywall-verify"
+            >
+              <Text style={styles.verifyBtnText} maxFontSizeMultiplier={1.15}>{t("purchaseVerifyAction")}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {authenticatedAccountActions ? (
         <View style={[styles.accountActions, { paddingBottom: Math.max(insets.bottom, 12) }]} testID="paywall-account-actions">
@@ -288,4 +345,9 @@ const styles = StyleSheet.create({
   bufferFill: { height: 8, borderRadius: 4 },
   accountActions: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 20 },
   accountAction: { minHeight: 40, justifyContent: "center", paddingHorizontal: 6 },
+  errorRow: { alignItems: "center", gap: 8, paddingHorizontal: 24, paddingBottom: 4 },
+  errorText: { color: "#FF6B7A", fontSize: 13, lineHeight: 18, fontWeight: "700", textAlign: "center" },
+  verifyBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 12, borderWidth: 1, borderColor: "rgba(184,242,85,0.35)", backgroundColor: "rgba(184,242,85,0.10)" },
+  verifyBtnPressed: { backgroundColor: "rgba(184,242,85,0.18)" },
+  verifyBtnText: { color: LIME, fontSize: 14, fontWeight: "800" },
 });

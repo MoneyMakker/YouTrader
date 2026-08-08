@@ -28,6 +28,8 @@ type Props = {
   selectedPlanId: PaywallPlanId;
   onSelectPlan: (id: PaywallPlanId) => void;
   purchaseBusy: boolean;
+  /** Contextual label shown on the CTA while a purchase is in flight. */
+  purchaseLabel?: string;
   onContinue: (pkg?: PurchasesPackage | null, planId?: PaywallPlanId) => void;
   onRestore: () => void;
   onRetry: () => void;
@@ -48,6 +50,7 @@ export function PaywallCarousel({
   selectedPlanId,
   onSelectPlan,
   purchaseBusy,
+  purchaseLabel,
   onContinue,
   onRestore,
   onRetry,
@@ -94,7 +97,12 @@ export function PaywallCarousel({
     supporting: "Auto-renews until canceled.",
     trial: { eligibility: "unknown" as const, hasFreeIntro: false, periodLabel: null, introDays: null },
   };
-  const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0] || fallbackPlan;
+  const selectedPlan =
+    plans.find((p) => p.id === selectedPlanId) ||
+    plans.find((p) => p.id === "yearly") ||
+    plans.find((p) => p.id === "monthly") ||
+    plans.find((p) => p.id === "weekly") ||
+    fallbackPlan;
   const selectedPkg = packagesMap[selectedPlanId];
 
   return (
@@ -220,7 +228,12 @@ export function PaywallCarousel({
           accessibilityLabel={selectedPlan.cta}
         >
           {purchaseBusy ? (
-            <ActivityIndicator size="small" color="#05070A" />
+            <View style={styles.ctaBusyRow}>
+              <ActivityIndicator size="small" color="#05070A" />
+              {purchaseLabel ? (
+                <Text style={styles.ctaLabel} maxFontSizeMultiplier={1.15}>{purchaseLabel}</Text>
+              ) : null}
+            </View>
           ) : (
             <Text style={styles.ctaLabel} maxFontSizeMultiplier={1.15}>{selectedPlan.cta}</Text>
           )}
@@ -367,6 +380,7 @@ const styles = StyleSheet.create({
   ctaDisabled: { opacity: 0.5 },
   ctaPressed: { opacity: 0.9 },
   ctaLabel: { color: "#05070A", fontSize: 16, fontWeight: "800" },
+  ctaBusyRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   disclosure: { color: C.muted, fontSize: 11, lineHeight: 15, textAlign: "center", paddingHorizontal: 8 },
   footerLinks: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8, marginTop: 4 },
   footerLinkText: { color: C.sub, fontSize: 12, fontWeight: "700" },

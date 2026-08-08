@@ -41,6 +41,13 @@ export const YOU_TRADER_PRO_PRODUCT_IDS = Array.from(
 );
 export const BILLING_DEBUG_LOGS = __DEV__ || process.env.EXPO_PUBLIC_BILLING_DEBUG_LOGS === "true";
 export const ENTITLEMENT_RETRY_DELAYS_MS = [0, 900, 1800, 3200];
+/**
+ * Upper bound for the whole StoreKit purchase flow. StoreKit keeps the dialog
+ * open across an Apple sign-in sheet for many seconds, so this must comfortably
+ * exceed the generic API request timeout (SECURITY_LIMITS.requestTimeoutMs).
+ * On timeout the app verifies the entitlement before surfacing any error.
+ */
+export const PURCHASE_FLOW_TIMEOUT_MS = 300000;
 export const TRADES_STORAGE_KEY = GUEST_TRADES_STORAGE_KEY;
 export const LANG_STORAGE_KEY = "lang-v1";
 /** @deprecated Journal day limit removed — free users log unlimited days; Pro unlocks media/sync/analytics. */
