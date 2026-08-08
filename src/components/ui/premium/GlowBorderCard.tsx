@@ -78,11 +78,11 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   glowBorder: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 1,
   },
   innerTint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.34,
   },
 });

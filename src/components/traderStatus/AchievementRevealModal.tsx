@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.88)",
   },
   cardWrap: {

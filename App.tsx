@@ -13132,7 +13132,7 @@ function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={styles.app}>
-          <StatusBar style="light" backgroundColor="#000000" />
+          <StatusBar style="light" />
           <View style={styles.lockScreen}>
             <AppStartupSkeleton />
             <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
@@ -13145,7 +13145,7 @@ function App() {
   if (authRequired && !session?.user) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="light" backgroundColor="#000000" />
+        <StatusBar style="light" />
         <AuthScreen
           busy={authBusy}
           copy={authScreenCopy}
@@ -13174,7 +13174,7 @@ function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
+        <StatusBar style="light" />
         <View style={styles.body}>
           {locked ? (
             <PremiumScreen
@@ -18720,7 +18720,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 12,
   },
   lockedNewsBlurOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(4,0,8,0.46)",
     borderRadius: 18,
     borderWidth: 1,

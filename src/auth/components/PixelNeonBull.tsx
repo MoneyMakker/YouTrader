@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
     overflow: "visible",
   },
   tailLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   dustWrap: {
     position: "absolute",

@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.055)",
   },
   baseTint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.44,
   },
   shimmer: {

@@ -52,7 +52,7 @@ export function AuthScreenBackground() {
 }
 
 const styles = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000000" },
+  root: { ...StyleSheet.absoluteFill, backgroundColor: "#000000" },
   centerGlow: {
     position: "absolute",
     alignSelf: "center",

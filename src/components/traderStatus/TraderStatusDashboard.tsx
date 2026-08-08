@@ -186,7 +186,7 @@ function ScoreRing({ score, label, topLabel }: { score: number; label: string; t
   return (
     <View style={styles.ringWrap}>
       <View style={styles.ringGraphic}>
-        <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFillObject}>
+        <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
           <Circle
             cx={RING_SIZE / 2}
             cy={RING_SIZE / 2}
@@ -778,7 +778,7 @@ const styles = StyleSheet.create({
   },
   missionFill: { height: 9, borderRadius: 999, backgroundColor: C.green },
   missionFillGlow: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(163,255,18,0.16)",
   },
   missionPct: { color: C.green, fontSize: 15, fontWeight: "900", minWidth: 42, textAlign: "right" },
