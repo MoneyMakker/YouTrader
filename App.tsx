@@ -13132,7 +13132,7 @@ function App() {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={styles.app}>
-          <StatusBar style="light" backgroundColor="#000000" />
+          <StatusBar style="light" />
           <View style={styles.lockScreen}>
             <AppStartupSkeleton />
             <Text style={[styles.sub, styles.startupSkeletonCaption]}>{t("loadingJournal")}</Text>
@@ -13145,7 +13145,7 @@ function App() {
   if (authRequired && !session?.user) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="light" backgroundColor="#000000" />
+        <StatusBar style="light" />
         <AuthScreen
           busy={authBusy}
           copy={authScreenCopy}
@@ -13174,7 +13174,7 @@ function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
-        <StatusBar style="light" backgroundColor="#000000" />
+        <StatusBar style="light" />
         <View style={styles.body}>
           {locked ? (
             <PremiumScreen
