@@ -613,6 +613,24 @@ This reconciliation does not reopen completed deterministic engines and does
 not mark release-only evidence as passed before it runs against the final
 source. Build 116 remains immutable; build 118 is not authorized.
 
+**Build 119 validation note (2026-08-09):** the validated TestFlight candidate
+is now **Build 119** (`1.6.1`), superseding the earlier 117/118 build references
+in this epic. Product Owner approval recorded for commit `d58c19a` (Expo SDK 57
+/ Xcode 26 build restoration; `CFBundleVersion` bumped to 119).
+
+- Source: `d58c19a`, pushed to `origin/feature/prop-pass-trading-os-build117`
+  (`HEAD == origin HEAD == d58c19a`).
+- Clean-worktree validation passed on the pushed commit: Expo Doctor 19/19,
+  `npx tsc --noEmit`, release-readiness 9/9, purchase/paywall QA, post-purchase
+  auth, Apple lifecycle, email auth, translation quality, `security:check`,
+  Semgrep/SAST (91 rules, 0 findings).
+- Fresh Release device archive: `build/YouTrader-1.6.1-119.xcarchive`
+  (MARKETING VERSION 1.6.1, BUILD 119, BUNDLE `com.youtrader.pro`, MIN iOS
+  16.4, `main.jsbundle` embedded, production RevenueCat/Supabase config, no
+  Metro/staging/dev StoreKit/QA-surface or toolchain patch bundled).
+- TestFlight 119 upload remains Product Owner–performed; this note is the
+  documentation-only follow-up authorized with the Build 119 approval.
+
 ## Deferred scope
 
 The following are intentionally not backlog tasks for the current 2.0 critical
