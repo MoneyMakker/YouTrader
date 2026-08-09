@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 90;
+	objectVersion = 100;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -155,6 +155,8 @@
 			);
 			buildRules = (
 			);
+			dependencies = (
+			);
 			name = YouTrader;
 			productName = YouTrader;
 			productReference = 13B07F961A680F5B00A75B9A /* YouTrader.app */;
@@ -194,7 +196,7 @@
 				Base,
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
-			preferredProjectObjectVersion = 90;
+			preferredProjectObjectVersion = 100;
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -220,6 +222,8 @@
 		00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
+			files = (
+			);
 			inputPaths = (
 				"$(SRCROOT)/.xcode.env",
 				"$(SRCROOT)/.xcode.env.local",
@@ -227,80 +231,12 @@
 			);
 			name = "Bundle React Native code and images";
 			shellPath = /bin/sh;
-			shellScript = (
-				"if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then",
-				"  source \"$PODS_ROOT/../.xcode.env\"",
-				"fi",
-				"if [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then",
-				"  source \"$PODS_ROOT/../.xcode.env.local\"",
-				"fi",
-				"if [[ \"$CONFIGURATION\" = *Staging* ]]; then",
-				"  if [[ -f \"$PODS_ROOT/../.xcode.env.staging\" ]]; then",
-				"    source \"$PODS_ROOT/../.xcode.env.staging\"",
-				"  else",
-				"    echo \"error: ios/.xcode.env.staging not found; Release-Staging builds require staging env vars (copy from .xcode.env.staging.example)\" >&2",
-				"    exit 1",
-				"  fi",
-				"fi",
-				"",
-				"# The project root by default is one level up from the ios directory",
-				"export PROJECT_ROOT=\"$PROJECT_DIR\"/..",
-				"",
-				"# Debug configs rely on Metro. Never skip embedding for Release / Release-Staging.",
-				"if [[ \"$CONFIGURATION\" = *Debug* ]]; then",
-				"  export SKIP_BUNDLING=1",
-				"else",
-				"  unset SKIP_BUNDLING",
-				"  export FORCE_BUNDLING=1",
-				"fi",
-				"if [[ -z \"$ENTRY_FILE\" ]]; then",
-				"  # Set the entry JS file using the bundler's entry resolution.",
-				"  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"",
-				"fi",
-				"",
-				"if [[ -z \"$CLI_PATH\" ]]; then",
-				"  # Use Expo CLI",
-				"  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"",
-				"fi",
-				"if [[ -z \"$BUNDLE_COMMAND\" ]]; then",
-				"  # Default Expo CLI command for bundling",
-				"  export BUNDLE_COMMAND=\"export:embed\"",
-				"fi",
-				"",
-				"# Source .xcode.env.updates if it exists to allow",
-				"# SKIP_BUNDLING to be unset if needed",
-				"if [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then",
-				"  source \"$PODS_ROOT/../.xcode.env.updates\"",
-				"fi",
-				"# Source local changes to allow overrides",
-				"# if needed",
-				"if [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then",
-				"  source \"$PODS_ROOT/../.xcode.env.local\"",
-				"fi",
-				"",
-				"# Re-assert non-Debug embedding after local overrides (prevents accidental SKIP_BUNDLING).",
-				"if [[ \"$CONFIGURATION\" != *Debug* ]]; then",
-				"  unset SKIP_BUNDLING",
-				"  export FORCE_BUNDLING=1",
-				"fi",
-				"",
-				"echo \"note: Bundle RN phase CONFIGURATION=$CONFIGURATION SKIP_BUNDLING=${SKIP_BUNDLING:-} FORCE_BUNDLING=${FORCE_BUNDLING:-} NODE_BINARY=$NODE_BINARY\"",
-				"",
-				"`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`",
-				"",
-				"if [[ \"$CONFIGURATION\" != *Debug* ]]; then",
-				"  EMBEDDED_BUNDLE=\"$CONFIGURATION_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/main.jsbundle\"",
-				"  if [[ ! -f \"$EMBEDDED_BUNDLE\" ]]; then",
-				"    echo \"error: main.jsbundle missing after embed for CONFIGURATION=$CONFIGURATION (expected $EMBEDDED_BUNDLE). Release-Staging/Release must embed JS; do not rely on Metro.\" >&2",
-				"    exit 1",
-				"  fi",
-				"  echo \"note: embedded main.jsbundle OK ($(wc -c < \"$EMBEDDED_BUNDLE\" | tr -d ' ') bytes) path=$EMBEDDED_BUNDLE\"",
-				"fi",
-				"",
-			);
+			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\nif [[ \"$CONFIGURATION\" = *Staging* ]]; then\n  if [[ -f \"$PODS_ROOT/../.xcode.env.staging\" ]]; then\n    source \"$PODS_ROOT/../.xcode.env.staging\"\n  else\n    echo \"error: ios/.xcode.env.staging not found; Release-Staging builds require staging env vars (copy from .xcode.env.staging.example)\" >&2\n    exit 1\n  fi\nfi\n\n# The project root by default is one level up from the ios directory\nexport PROJECT_ROOT=\"$PROJECT_DIR\"/..\n\n# Debug configs rely on Metro. Never skip embedding for Release / Release-Staging.\nif [[ \"$CONFIGURATION\" = *Debug* ]]; then\n  export SKIP_BUNDLING=1\nelse\n  unset SKIP_BUNDLING\n  export FORCE_BUNDLING=1\nfi\nif [[ -z \"$ENTRY_FILE\" ]]; then\n  # Set the entry JS file using the bundler's entry resolution.\n  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"\nfi\n\nif [[ -z \"$CLI_PATH\" ]]; then\n  # Use Expo CLI\n  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"\nfi\nif [[ -z \"$BUNDLE_COMMAND\" ]]; then\n  # Default Expo CLI command for bundling\n  export BUNDLE_COMMAND=\"export:embed\"\nfi\n\n# Source .xcode.env.updates if it exists to allow\n# SKIP_BUNDLING to be unset if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.updates\"\nfi\n# Source local changes to allow overrides\n# if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n# Re-assert non-Debug embedding after local overrides (prevents accidental SKIP_BUNDLING).\nif [[ \"$CONFIGURATION\" != *Debug* ]]; then\n  unset SKIP_BUNDLING\n  export FORCE_BUNDLING=1\nfi\n\necho \"note: Bundle RN phase CONFIGURATION=$CONFIGURATION SKIP_BUNDLING=${SKIP_BUNDLING:-} FORCE_BUNDLING=${FORCE_BUNDLING:-} NODE_BINARY=$NODE_BINARY\"\n\n`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`\n\nif [[ \"$CONFIGURATION\" != *Debug* ]]; then\n  EMBEDDED_BUNDLE=\"$CONFIGURATION_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/main.jsbundle\"\n  if [[ ! -f \"$EMBEDDED_BUNDLE\" ]]; then\n    echo \"error: main.jsbundle missing after embed for CONFIGURATION=$CONFIGURATION (expected $EMBEDDED_BUNDLE). Release-Staging/Release must embed JS; do not rely on Metro.\" >&2\n    exit 1\n  fi\n  echo \"note: embedded main.jsbundle OK ($(wc -c < \"$EMBEDDED_BUNDLE\" | tr -d ' ') bytes) path=$EMBEDDED_BUNDLE\"\nfi\n";
 		};
 		08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
+			files = (
+			);
 			inputPaths = (
 				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
 				"${PODS_ROOT}/Manifest.lock",
@@ -310,22 +246,14 @@
 				"$(DERIVED_FILE_DIR)/Pods-YouTrader-checkManifestLockResult.txt",
 			);
 			shellPath = /bin/sh;
-			shellScript = (
-				"diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null",
-				"if [ $? != 0 ] ; then",
-				"    # print error to STDERR",
-				"    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2",
-				"    exit 1",
-				"fi",
-				"# This output is used by Xcode 'outputs' to avoid re-running this script phase.",
-				"echo \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"",
-				"",
-			);
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
 		1EF8CE295567FE215D260CC9 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
+			files = (
+			);
 			inputPaths = (
 				"$(SRCROOT)/.xcode.env",
 				"$(SRCROOT)/.xcode.env.local",
@@ -337,97 +265,36 @@
 				"$(SRCROOT)/Pods/Target Support Files/Pods-YouTrader/ExpoModulesProvider.swift",
 			);
 			shellPath = /bin/sh;
-			shellScript = (
-				"# This script configures Expo modules and generates the modules provider file.",
-				"# Load staging overlay before Expo reads dotenv / generates provider.",
-				"if [[ -f \"$SRCROOT/source-xcode-env.sh\" ]]; then",
-				"  # shellcheck disable=SC1091",
-				"  source \"$SRCROOT/source-xcode-env.sh\"",
-				"fi",
-				"bash -l -c \"./Pods/Target\\ Support\\ Files/Pods-YouTrader/expo-configure-project.sh\"",
-				"",
-			);
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-YouTrader/expo-configure-project.sh\"\n";
 		};
 		257328D1DFFB497DF7FA862E /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
 			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-frameworks-${CONFIGURATION}-output-files.xcfilelist",
 			);
 			shellPath = /bin/sh;
-			shellScript = (
-				"\"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-frameworks.sh\"",
-				"",
-			);
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-resources.sh",
-				"${PODS_CONFIGURATION_BUILD_DIR}/AppAuth/AppAuthCore_Privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXApplication/ExpoApplication_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXNotifications/ExpoNotifications_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoLocalization/ExpoLocalization_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoMediaLibrary/ExpoMediaLibrary_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/GTMAppAuth/GTMAppAuth_Privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/GTMSessionFetcher/GTMSessionFetcher_Core_Privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/GoogleSignIn/GoogleSignIn.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/GoogleUtilities/GoogleUtilities_Privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/PromisesObjC/FBLPromises_Privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/PromisesSwift/Promises_Privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/PurchasesHybridCommon/PurchasesHybridCommon.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/RNCAsyncStorage/RNCAsyncStorage_resources.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/RNSVG/RNSVGFilters.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCat/RevenueCat.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/Sentry/Sentry.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/lottie-ios/LottiePrivacyInfo.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/lottie-react-native/Lottie_React_Native_Privacy.bundle",
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
 			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/AppAuthCore_Privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoApplication_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoConstants_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoNotifications_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoLocalization_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoMediaLibrary_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GTMAppAuth_Privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GTMSessionFetcher_Core_Privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleSignIn.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleUtilities_Privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/FBLPromises_Privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Promises_Privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PurchasesHybridCommon.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNCAsyncStorage_resources.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNSVGFilters.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Sentry.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LottiePrivacyInfo.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Lottie_React_Native_Privacy.bundle",
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-resources-${CONFIGURATION}-output-files.xcfilelist",
 			);
 			shellPath = /bin/sh;
-			shellScript = (
-				"\"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-resources.sh\"",
-				"",
-			);
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-YouTrader/Pods-YouTrader-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -443,7 +310,7 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		13B07F941A680F5B00A75B9A /* Debug configuration for PBXNativeTarget "YouTrader" */ = {
+		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0CA66BB40C784D9C9E0EF3A1 /* Pods-YouTrader.debug.xcconfig */;
 			buildSettings = {
@@ -452,7 +319,7 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 117;
+				CURRENT_PROJECT_VERSION = 119;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -462,7 +329,7 @@
 				INFOPLIST_FILE = YouTrader/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = YouTrader;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -484,7 +351,7 @@
 			};
 			name = Debug;
 		};
-		13B07F951A680F5B00A75B9A /* Release configuration for PBXNativeTarget "YouTrader" */ = {
+		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = BC84BD69A7AE83313A1596C3 /* Pods-YouTrader.release.xcconfig */;
 			buildSettings = {
@@ -493,12 +360,12 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 117;
+				CURRENT_PROJECT_VERSION = 119;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				INFOPLIST_FILE = YouTrader/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = YouTrader;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -519,7 +386,7 @@
 			};
 			name = Release;
 		};
-		83CBBA201A601CBA00E9B192 /* Debug configuration for PBXProject "YouTrader" */ = {
+		83CBBA201A601CBA00E9B192 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -566,7 +433,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					/usr/lib/swift,
 					"$(inherited)",
@@ -574,6 +441,15 @@
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -582,7 +458,7 @@
 			};
 			name = Debug;
 		};
-		83CBBA211A601CBA00E9B192 /* Release configuration for PBXProject "YouTrader" */ = {
+		83CBBA211A601CBA00E9B192 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -622,13 +498,22 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					/usr/lib/swift,
 					"$(inherited)",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = NO;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
@@ -637,7 +522,7 @@
 			};
 			name = Release;
 		};
-		A7C3E1F92D4B8A6500123456 /* Release-Staging configuration for PBXNativeTarget "YouTrader" */ = {
+		A7C3E1F92D4B8A6500123456 /* Release-Staging */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C69729405AAAC7FFD66A09E5 /* Pods-YouTrader.release-staging.xcconfig */;
 			buildSettings = {
@@ -646,12 +531,12 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 117;
+				CURRENT_PROJECT_VERSION = 119;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				INFOPLIST_FILE = YouTrader/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = YouTrader;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -673,7 +558,7 @@
 			};
 			name = "Release-Staging";
 		};
-		B8D4F2A03E5C9B7600234567 /* Release-Staging configuration for PBXProject "YouTrader" */ = {
+		B8D4F2A03E5C9B7600234567 /* Release-Staging */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -713,13 +598,22 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					/usr/lib/swift,
 					"$(inherited)",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = NO;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
@@ -729,7 +623,7 @@
 			};
 			name = "Release-Staging";
 		};
-		D9E5G3B14F6D0C8700345678 /* Debug-Staging configuration for PBXNativeTarget "YouTrader" */ = {
+		D9E5G3B14F6D0C8700345678 /* Debug-Staging */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = D1E2F3A45B6C7D8E9F0A1B2C /* Pods-YouTrader.debug-staging.xcconfig */;
 			buildSettings = {
@@ -738,7 +632,7 @@
 				CODE_SIGN_ENTITLEMENTS = YouTrader/YouTrader.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 117;
+				CURRENT_PROJECT_VERSION = 119;
 				DEVELOPMENT_TEAM = L6M4U8G8RC;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -748,7 +642,7 @@
 				INFOPLIST_FILE = YouTrader/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = YouTrader;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -771,7 +665,7 @@
 			};
 			name = "Debug-Staging";
 		};
-		E0F6H4C25G7E1D9800456789 /* Debug-Staging configuration for PBXProject "YouTrader" */ = {
+		E0F6H4C25G7E1D9800456789 /* Debug-Staging */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -818,7 +712,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				LD_RUNPATH_SEARCH_PATHS = (
 					/usr/lib/swift,
 					"$(inherited)",
@@ -826,6 +720,15 @@
 				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-DRCT_REMOVE_LEGACY_ARCH=1",
+				);
+				PODFILE_DIR = "$(SRCROOT)";
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
@@ -841,20 +744,20 @@
 		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "YouTrader" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				13B07F941A680F5B00A75B9A /* Debug configuration for PBXNativeTarget "YouTrader" */,
-				D9E5G3B14F6D0C8700345678 /* Debug-Staging configuration for PBXNativeTarget "YouTrader" */,
-				13B07F951A680F5B00A75B9A /* Release configuration for PBXNativeTarget "YouTrader" */,
-				A7C3E1F92D4B8A6500123456 /* Release-Staging configuration for PBXNativeTarget "YouTrader" */,
+				13B07F941A680F5B00A75B9A /* Debug */,
+				D9E5G3B14F6D0C8700345678 /* Debug-Staging */,
+				13B07F951A680F5B00A75B9A /* Release */,
+				A7C3E1F92D4B8A6500123456 /* Release-Staging */,
 			);
 			defaultConfigurationName = Release;
 		};
 		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "YouTrader" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				83CBBA201A601CBA00E9B192 /* Debug configuration for PBXProject "YouTrader" */,
-				E0F6H4C25G7E1D9800456789 /* Debug-Staging configuration for PBXProject "YouTrader" */,
-				83CBBA211A601CBA00E9B192 /* Release configuration for PBXProject "YouTrader" */,
-				B8D4F2A03E5C9B7600234567 /* Release-Staging configuration for PBXProject "YouTrader" */,
+				83CBBA201A601CBA00E9B192 /* Debug */,
+				E0F6H4C25G7E1D9800456789 /* Debug-Staging */,
+				83CBBA211A601CBA00E9B192 /* Release */,
+				B8D4F2A03E5C9B7600234567 /* Release-Staging */,
 			);
 			defaultConfigurationName = Release;
 		};
